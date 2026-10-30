@@ -66,9 +66,9 @@ SIEGE_SHOP_RECOMMENDED,Recommended
 SIEGE_SHOP_COUNTDOWN,Picks in {0} s
 SIEGE_SHOP_COST,{0} gold
 SIEGE_ITEM_UPGRADE,Upgrade {0}
-SIEGE_ITEM_UPGRADE_1,{0}: +40% output
-SIEGE_ITEM_UPGRADE_2,{0}: +25% range
-SIEGE_ITEM_UPGRADE_3,{0}: special
+SIEGE_ITEM_UPGRADE_1,{0} +40% output
+SIEGE_ITEM_UPGRADE_2,{0} +25% range
+SIEGE_ITEM_UPGRADE_3,{0} special
 SIEGE_ITEM_MINE,Mine level
 SIEGE_ITEM_MINE_1,Mine level 1 (+20% gold)
 SIEGE_ITEM_MINE_2,Mine level 2 (+40% gold)
@@ -121,43 +121,20 @@ SIEGE_TOAST_OVERDRIVE_REFUSED,Overdrive unavailable right now
 SIEGE_TOAST_STAGGER,The walkers stumble: spin back up
 SIEGE_TOAST_AFK,Your wheel stopped
 SIEGE_WARN_RUSH,Rush incoming
-SIEGE_WARN_RAM,Ram on the road
-SIEGE_WARN_TOWER,Siege tower on the road
 SIEGE_WARN_GATE_LOW,The gate is failing!
-SIEGE_WARN_BOARDED,Boarders on the wall: tar and gate pads stopped
 SIEGE_TEACH_1,Your watts turn your great treadwheel. Pedal steady!
 SIEGE_TEACH_2,Right or swap: couple your wheel to the next station. Up: back to the mine.
 SIEGE_TEACH_3,The mine pays gold; spend it in the breaks.
 SIEGE_TEACH_4,A station winds and fires faster the more watts reach it.
 SIEGE_TEACH_5,"In a wave, surge when Overdrive glows: 30 s of double output."
-SIEGE_PROMPT_OVERDRIVE,Surge for Overdrive!
 SIEGE_HUD_GATE,Gate
 SIEGE_HUD_GOLD,Gold
-SIEGE_HUD_CURTAIN,Tar curtain
-SIEGE_HUD_CAULDRONS,Cauldrons {0} L
-SIEGE_HUD_WAVE,Wave {0}/{1}
 SIEGE_HUD_WARMUP_WAVE,Warm-up wave
-SIEGE_HUD_ENEMIES_LEFT,Enemies left: {0}
-SIEGE_HUD_QUEUED,+{0} waiting
-SIEGE_HUD_ENEMY_COUNT,{0} {1}
 SIEGE_HUD_ROUTE,Stations
 SIEGE_HUD_CONNECTING,Coupling
-SIEGE_HUD_CAP,{0}/{1}
 SIEGE_HUD_OVERDRIVE,Overdrive
-SIEGE_HUD_OVERDRIVE_READY,Ready
-SIEGE_HUD_OVERDRIVE_ON,{0} s
-SIEGE_HUD_OVERDRIVE_COOLDOWN,Recharging {0} s
-SIEGE_HUD_TEAM_WATTS,Team {0} W
-SIEGE_HUD_RUSHES,Rushes
 SIEGE_HUD_BREACH,Breach! {0} s
-SIEGE_HUD_VICTORY,The fort stands!
-SIEGE_HUD_RAM_ON_ROAD,Ram {0} m from the gate
-SIEGE_HUD_TOWER_ON_ROAD,Siege tower {0} m from the moat
 SIEGE_HUD_RUSH_ON,Rush {0} s
-SIEGE_HUD_BTN_PREV,Previous
-SIEGE_HUD_BTN_NEXT,Next
-SIEGE_HUD_BTN_MINE,Mine
-SIEGE_HUD_BTN_HOT,Hot station
 SIEGE_HUD_MARK_OD,OD
 SIEGE_HUD_MARK_RESCUE,Rescue
 SIEGE_HUD_MARK_AFK,AFK
@@ -168,7 +145,6 @@ SIEGE_HELP_ROAD,The attackers march down this road
 SIEGE_HELP_GATE,Hold the gate; tar shields it
 SIEGE_HELP_ROUTE_CARD,Left / right: pick a station. Up: the mine
 SIEGE_HELP_SHOP,Breaks: spend your gold here
-SIEGE_STATUS_OD,Overdrive
 SIEGE_RESULTS,Castellum Rotae stands
 SIEGE_RESULTS_FALLEN,"The gate fell, but the riders rode on"
 SIEGE_STAT_MINE_GOLD,Gold from the mine
@@ -185,5 +161,58 @@ SIEGE_STAT_BREACHES,Breaches
 SIEGE_STAT_LEAKS,Leaks
 SIEGE_STAT_ENGINES_STOPPED,Siege engines stopped
 SIEGE_STAT_SHOTS,Hits / shots
-SIEGE_HUD_CAULDRONS_SHORT,{0} L tar
-SIEGE_SHOP_MORE,More items (page {0} of {1})
+SIEGE_HUD_WAVE,Wave {0} of {1}
+SIEGE_HUD_RAM_ON_ROAD,Ram {0} m
+SIEGE_HUD_TOWER_ON_ROAD,Tower {0} m
+SIEGE_HUD_TAR,Tar
+SIEGE_HUD_LITRES,{0} L
+SIEGE_HUD_COOLDOWN,Cool-down
+SIEGE_HUD_ENDS_IN,Ends in {0}
+SIEGE_HUD_OD_READY,Overdrive ready
+SIEGE_HUD_OD_SURGE,Surge to start
+SIEGE_HUD_OD_PRESS,Press to start
+SIEGE_HUD_OD_ON,Overdrive {0}
+SIEGE_HUD_OD_DOUBLE,Double output
+SIEGE_HUD_OD_RECHARGING,Recharging
+SIEGE_HUD_OD_WHY_WAVES,Waves only
+SIEGE_HUD_OD_WHY_WARMUP,Not in warm-up
+SIEGE_HUD_OD_WHY_LATE,Too late in wave
+SIEGE_HUD_OD_WHY_RESCUE,Not in rescue
+SIEGE_HUD_OD_WHY_AFK,Not while AFK
+SIEGE_HUD_OD_WHY_COASTING,Pedal first
+SIEGE_HUD_BOARDED,Boarders on the wall
+SIEGE_HUD_GATE_FAILING,The gate is failing
+SIEGE_HUD_GATE_FAILING_SHORT,Gate failing
+SIEGE_HUD_CAP_WAVE,Wave left
+SIEGE_HUD_CAP_BREAK,Break left
+SIEGE_HUD_CAP_WARMUP,Warm-up
+SIEGE_HUD_CAP_COOLDOWN,Cool-down
+SIEGE_HUD_CAP_SPRINT,Sprint left
+SIEGE_HUD_TARGET,Target {0} W
+SIEGE_HUD_TARGET_NONE,Target --
+SIEGE_HUD_TARGET_RAMP,Ramp {0}-{1}
+SIEGE_HUD_TARGET_RESCUE,Rescue {0} W
+SIEGE_HUD_TARGET_SPRINT,Sprint {0}-{1}
+SIEGE_HUD_RPM_BAND,RPM {0}-{1}
+SIEGE_HUD_RPM_RESCUE,RPM {0}+
+SIEGE_HUD_BPM,BPM
+SIEGE_HUD_ERG,ERG
+SIEGE_HUD_SIM,SIM: you shift
+SIEGE_HUD_GEAR,Gear
+SIEGE_HUD_WPRIME,W'
+SIEGE_HUD_LINE_SPIN,Spin {0}-{1}
+SIEGE_HUD_LINE_LOAD_UP,"Load up in {0}, spin up"
+SIEGE_HUD_LINE_LOW,Spin up: rescue at {0}
+SIEGE_HUD_LINE_RESCUE,Rescue: spin {0}+
+SIEGE_HUD_LINE_COAST,Pedal: load dropped
+SIEGE_HUD_LINE_SPRINT,"Sprint {0}-{1} W, shift up"
+SIEGE_HUD_LINE_COOL,Spin it out
+SIEGE_HUD_LINE_WARMUP,"Settle in, spin {0}-{1}"
+SIEGE_HUD_NEXT_PHASE,"Next: {0}, {1} at {2} W"
+SIEGE_HUD_NEXT_RESULTS,Next: results
+SIEGE_HUD_THEN_ERG,Then: ERG at {0} W
+SIEGE_HUD_THEN_RAMP,Then: ramp back to {0} W
+SIEGE_HUD_NAME_BREAK,Break
+SIEGE_SHOP_BEST,Best
+SIEGE_SHOP_SHORT,{0} more
+SIEGE_SHOP_MORE,More items: {0} of {1}

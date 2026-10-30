@@ -90,8 +90,6 @@ func test_a_client_applies_the_fixture_snapshot() -> void:
 	assert_eq(g.state.wave_no, 2)
 	assert_eq(g.state.rider_at(1).raw_w, 110.0)
 	assert_eq(g.state.enemies.size(), 43)
-	var reads := (ctx.hud as F.Hud).of("readout")
-	assert_eq(reads[0], ["readout", SiegeHud.READOUT_GATE, "72 / 155"])
 	F.free_game(g)
 
 
@@ -106,7 +104,8 @@ func test_the_view_and_hud_build_headless_from_the_fixture() -> void:
 	var ctx := F.make_ctx(1, 1, "short")
 	var g := F.make_game(ctx)
 	var spec := g.hud_spec()
-	assert_true(spec.has_widget(HudSpec.TIMELINE))
+	assert_eq(spec.widgets, [], "Siege draws its own HUD")
+	assert_true(spec.shows_power)
 	var keys: Array[String] = []
 	for h: Dictionary in spec.help:
 		keys.append(str(h["text"]))

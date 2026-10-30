@@ -107,7 +107,10 @@ func test_a_solo_drill_with_a_bot_completes() -> void:
 	)
 	assert_eq(game_events.count(SiegeIds.EV_WAVE_START), 1, "the drill's wave 1")
 	assert_eq(game_events.count(SiegeIds.EV_WAVE_END), 1)
-	assert_eq(r.get("directives", []), [], "no directive in the drill (WARMUP kind: no Overdrive)")
+	var requests: Array = r.get("directives", []).filter(
+		func(d: Dictionary) -> bool: return str(d["kind"]) != "cadence_band"
+	)
+	assert_eq(requests, [], "no load directive in the drill (WARMUP kind: no Overdrive)")
 	assert_true(["S", "A", "B", "C", "D"].has(str(r["results"]["grade"])))
 	assert_gt(int(r.get("max_snapshot_bytes", 0)), 0)
 	assert_lte(int(r.get("max_snapshot_bytes", 0)), SiegeSnapshotSchema.MAX_BYTES)

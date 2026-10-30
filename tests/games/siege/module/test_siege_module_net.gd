@@ -335,64 +335,26 @@ func test_shot_events_replay_identically_on_two_clients() -> void:
 	_free(host)
 
 
-# --- the teammate strip -----------------------------------------------------------------------
+# --- the cadence band -------------------------------------------------------------------------
 
 
-func test_a_clients_teammate_strip_comes_from_the_snapshot() -> void:
+func test_the_host_publishes_the_cadence_band_once_for_every_rider() -> void:
+	var g := K.game(2, 1, "short", Wl.HOST, 1)
+	K.run_to(g, 0, 2.0)
+	var bands: Array = (g.ctx.directives as F.Directives).cadence_bands
+	assert_eq(bands.size(), 3, "two humans and a bot, once")
+	for b: Array in bands:
+		assert_eq(b[1], float(SiegeHudModel.CADENCE_LO))
+		assert_eq(b[2], float(SiegeHudModel.CADENCE_HI))
+	assert_eq((g.ctx.directives as F.Directives).requests, [], "it asks for no load")
+	_free(g)
+
+
+func test_a_client_publishes_no_band() -> void:
 	var client := K.game(3, 1, "vo2", Wl.CLIENT, 2)
 	client.apply_snapshot(_wire(FIX.snapshot(), client.int_fields()["snapshot"]))
-	var strip := client.teammate_strip()
-	assert_eq(strip.size(), 4)
-	var raw := [240, 110, 252, 250]
-	var pct := [120, 50, 105, 96]
-	for i in 4:
-		assert_eq(strip[i]["slot"], i)
-		assert_eq(strip[i]["raw_w"], raw[i], "slot %d raw W from the snapshot" % i)
-		assert_eq(strip[i]["ftp_pct"], pct[i], "slot %d %%FTP" % i)
-	assert_eq(strip[0]["target"], SiegeIds.STATION_BALLISTA)
-	assert_eq(strip[0]["target_text"], "Tree ballista")
-	assert_true(strip[0]["od"], "slot 0 is in Overdrive")
-	assert_ne(strip[0]["marker"], "")
-	assert_eq(strip[1]["target"], SiegeIds.STATION_MINE)
-	assert_true(strip[1]["rescue"])
-	assert_eq(strip[1]["marker"], "")
-	assert_eq(strip[3]["name"], "Bot 1")
-	assert_true(strip[3]["is_bot"])
-	assert_ne(strip[0]["color"], strip[1]["color"], "each rider keeps the slot colour")
-	assert_ne(strip[0]["pattern"], strip[1]["pattern"], "and pattern")
+	assert_eq((client.ctx.directives as F.Directives).cadence_bands, [])
 	_free(client)
-
-
-func test_the_host_feeds_the_teammate_chips_with_station_and_overdrive() -> void:
-	var g := K.game(2, 0, "short", Wl.HOST, 1)
-	var tick := K.run_to(g, 0, 430.0)
-	g.state.rider(2).target = SiegeIds.STATION_ARROWS
-	K.step(g, tick, {1: [SiegeIntents.overdrive("action")]})
-	K.step(g, tick + 1)
-	K.step(g, tick + 2)
-	var chips := {}
-	for c: Array in K.hud(g).of("teammate_status"):
-		chips[c[1]] = c[2]
-	assert_true(chips.has(1) and chips.has(2))
-	for peer: int in chips:
-		var chip: Dictionary = chips[peer]
-		assert_eq(chip.keys().size(), 3)
-		assert_true(chip.has("in_band") and chip.has("icon") and chip.has("text"))
-	assert_true(str(chips[1]["text"]).contains("Overdrive"), "the Overdrive marker")
-	assert_true(str(chips[2]["text"]).contains("Arrow organ"), "the station's name")
-	_free(g)
-
-
-func test_the_hud_readouts_show_the_gate_and_gold() -> void:
-	var g := K.game(1, 0, "short")
-	K.run_to(g, 0, 2.0)
-	var reads := {}
-	for c: Array in K.hud(g).of("readout"):
-		reads[c[1]] = c[2]
-	assert_eq(reads[SiegeHud.READOUT_GATE], "130 / 130")
-	assert_true(reads.has(SiegeHud.READOUT_GOLD))
-	assert_eq(int(reads[SiegeHud.READOUT_GOLD]), floori(g.state.rider(1).gold))
-	_free(g)
 
 
 # --- the interpolation history ----------------------------------------------------------------

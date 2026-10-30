@@ -4,8 +4,8 @@ extends GameModule
 ##
 ## Host / SOLO: sim_step validates and rate-limits intents (SiegeIntentLimiter, 5 a second per
 ## peer, only peers in ctx.players), runs SiegeRules.step, sends the Overdrive directive round
-## trip and every event (send_event), emits phase_changed and finished("complete"), and feeds
-## the HUD. Clients: apply_snapshot / apply_event rebuild the state, client_predict moves the
+## trip and every event (send_event), emits phase_changed and finished("complete"), and publishes
+## the cadence band. Clients: apply_snapshot / apply_event rebuild the state, client_predict moves the
 ## local rider ahead of the next snapshot. Every toast and cue that follows a host-side rule is
 ## raised from the events: on the host right where it sends them (its own rider only, with
 ## ctx.local_peer), on each client in apply_event.
@@ -40,8 +40,6 @@ const LEAK_TOAST_GAP_S := 4.0
 ## The gate warning shows below this fraction and re-arms above REARM.
 const GATE_LOW_FRAC := 0.3
 const GATE_REARM_FRAC := 0.5
-## The host refreshes the teammate chips this often (ticks; 2 Hz).
-const STATUS_EVERY_TICKS := 10
 ## Session ids kept in the progress file (a restarted client sees the same results twice).
 const PROGRESS_SESSIONS_KEPT := 32
 
@@ -69,6 +67,9 @@ var _last_leak_tick: int = -100000
 var _pred_target: int = -1
 var _pred_age_s: float = 0.0
 var _progress_sessions: Array[String] = []
+var _cadence_published: bool = false
+## peer -> the rider's plan as the HUD reads it (hud_plan).
+var _hud_plans: Dictionary = {}
 
 
 func configure(p_ctx: GameContext) -> void:
@@ -102,6 +103,7 @@ func build_effort_plans() -> Dictionary:
 func sim_step(dt: float, frame: InputFrame) -> void:
 	if state == null:
 		return
+	_publish_cadence_band()
 	var events: Array[Dictionary] = _drain_applied()
 	var inp := SiegeInputs.from_frame(
 		frame, ctx.players, plans, _collect_intents(frame), _rescue, _afk
@@ -118,10 +120,16 @@ func sim_step(dt: float, frame: InputFrame) -> void:
 		finished.emit("complete")
 	_teach_check()
 	_gate_watch()
-	if frame.tick % STATUS_EVERY_TICKS == 0:
-		_feed_status(inp)
-	if frame.tick % Wl.SIM_HZ == 0:
-		_feed_hud()
+
+
+## The cadence Siege asks for, published once at the session's start: the rider's metronome, a
+## MockTrainer `band` rider and every bot follow it. It never changes load (GAME_SDK 8).
+func _publish_cadence_band() -> void:
+	if _cadence_published or ctx.directives == null:
+		return
+	_cadence_published = true
+	for p in ctx.players:
+		ctx.directives.cadence_band(p.peer_id, SiegeHudModel.CADENCE_LO, SiegeHudModel.CADENCE_HI)
 
 
 ## Autopilot runs inside the host rules for every rider in a fallback (ADR "Autopilot runs
@@ -255,7 +263,6 @@ func apply_snapshot(snap: Dictionary) -> void:
 	_sync_band()
 	_teach_check()
 	_gate_watch()
-	_feed_hud()
 
 
 ## Clients: the phase fields the snapshot leaves out, from the shift's phase list.
@@ -369,11 +376,11 @@ func client_predict(dt: float, local: Telemetry) -> void:
 
 
 ## Clients: shows a route the local rider just asked for at once, before the host's route event or
-## the next snapshot. `to` is the route intent ({"k": "route", "to": ...}, as the controls and the
-## HUD route card send it) or just its target: "mine", "next", "prev", "hot", a station 0..4 or a
-## normalized SiegeIds.ROUTE_*. local_intents() calls it for the control routes; the HUD route
-## card calls it for its buttons so both predict alike. Returns true when a prediction was set
-## (never on the host or in SOLO, whose rules route at once, nor for a route that changes nothing).
+## the next snapshot. `to` is the route intent ({"k": "route", "to": ...}, as the controls send it)
+## or just its target: "mine", "next", "prev", "hot", a station 0..4 or a normalized
+## SiegeIds.ROUTE_*. local_intents() calls it for the control routes. Returns true when a prediction
+## was set (never on the host or in SOLO, whose rules route at once, nor for a route that changes
+## nothing).
 func predict_route(to: Variant) -> bool:
 	if state == null or ctx == null or ctx.role != Wl.CLIENT:
 		return false
@@ -417,40 +424,20 @@ func hud_spec() -> HudSpec:
 	return SiegeHud.spec(self)
 
 
-## The teammate strip's rows from the replicated state, so a client's numbers come from the
-## snapshot (raw W, %FTP of the slot's FTP, station, Overdrive): [{slot, peer, name, color,
-## pattern, is_bot, raw_w, p_eff_w, ftp_pct, target, target_text, marker, od, rescue, afk}] in
-## slot order (target: the station 0..4). The HUD's own Control beside the kit strip reads it.
-func teammate_strip() -> Array[Dictionary]:
-	var out: Array[Dictionary] = []
-	if state == null:
-		return out
-	for rd in state.riders:
-		var p := ctx.player(rd.peer)
-		var od := rd.od_state == SiegeIds.OD_ACTIVE
-		(
-			out
-			. append(
-				{
-					"slot": rd.slot,
-					"peer": rd.peer,
-					"name": p.name if p != null else "",
-					"color": p.color if p != null else Color.WHITE,
-					"pattern": p.pattern if p != null else "solid",
-					"is_bot": rd.is_bot,
-					"raw_w": roundi(rd.raw_w),
-					"p_eff_w": roundi(rd.p_eff_w),
-					"ftp_pct": roundi(rd.raw_w / maxf(rd.ftp, 1.0) * 100.0),
-					"target": rd.target,
-					"target_text": _target_name(rd.target),
-					"marker": ctx.strings.t("SIEGE_STATUS_OD") if od else "",
-					"od": od,
-					"rescue": rd.rescue,
-					"afk": rd.afk,
-				}
-			)
-		)
-	return out
+## The rider's whole plan as the HUD reads it, on every peer: this slot's targets (its wave offset)
+## and the appended cool-down. Cached per peer: the shift never changes in a session.
+func hud_plan(peer: int) -> EffortPlan:
+	var plan: Variant = _hud_plans.get(peer, null)
+	if plan is EffortPlan:
+		return plan
+	var built := EffortPlan.new()
+	var slot := ctx.player(peer) if ctx != null else null
+	if slot != null and state != null and state.content != null:
+		built = SiegePlanBuilder.build(state.content.shift, slot, ctx.content_id)
+		built.add(PlanValidator.cooldown_phase())
+		built.cooldown_appended = true
+		_hud_plans[peer] = built
+	return built
 
 
 func _target_name(target: int) -> String:
@@ -463,43 +450,6 @@ static func station_key(id: int) -> String:
 		"SIEGE_STATION_"
 		+ SiegeIds.STATION_NAMES[clampi(id, 0, SiegeIds.STATION_COUNT - 1)].to_upper()
 	)
-
-
-## The host's teammate chips (2 Hz, reach every peer through the roster): the target and the
-## Overdrive marker; in band = delivering power at its plan (±5%) or inside the sprint band.
-func _feed_status(inp: SiegeInputs) -> void:
-	if ctx.hud == null:
-		return
-	for rd in state.riders:
-		var ri := inp.rider(rd.peer)
-		if ri == null:
-			continue
-		var text := _target_name(rd.target)
-		if rd.od_state == SiegeIds.OD_ACTIVE:
-			text += " · " + ctx.strings.t("SIEGE_STATUS_OD")
-		var planned_w := ri.planned_pct / 100.0 * rd.ftp
-		var in_band := (
-			rd.connected
-			and not rd.afk
-			and not rd.rescue
-			and planned_w > 0.0
-			and absf(ri.power_w - planned_w) <= 0.05 * planned_w
-		)
-		if rd.od_state == SiegeIds.OD_ACTIVE:
-			var band := SiegeOverdrive.band_w(content, rd.ftp)
-			in_band = ri.power_w >= band.x and ri.power_w <= band.y
-		ctx.hud.teammate_status(rd.peer, {"in_band": in_band, "icon": "", "text": text})
-
-
-func _feed_hud() -> void:
-	if state == null or ctx.hud == null:
-		return
-	ctx.hud.readout(
-		SiegeHud.READOUT_GATE, "%d / %d" % [ceili(state.gate_hp), roundi(state.gate_max)]
-	)
-	var me := state.rider(ctx.local_peer)
-	if me != null:
-		ctx.hud.readout(SiegeHud.READOUT_GOLD, str(floori(me.gold)))
 
 
 ## The sprint band on the rider's own peer while its Overdrive is ACTIVE, cleared after.

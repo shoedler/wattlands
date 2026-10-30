@@ -222,13 +222,15 @@ func test_siege_scenes_and_resources_never_name_the_trainer_stack() -> void:
 	assert_true(count >= 0, "%d scene/resource files scanned" % count)
 
 
-func test_the_only_ctx_directives_call_is_request() -> void:
+func test_the_only_ctx_directives_calls_are_request_and_the_cadence_band() -> void:
 	var re := RegEx.create_from_string("directives\\s*\\.\\s*(\\w+)")
 	var seen := {}
 	for path in files(GAME_DIR, ["gd"]):
 		for m in re.search_all(lex(read(path))["code"]):
 			seen[m.get_string(1)] = path
-	assert_eq(seen.keys(), ["request"], str(seen))
+	var calls: Array = seen.keys()
+	calls.sort()
+	assert_eq(calls, ["cadence_band", "request"], str(seen))
 
 
 func test_host_code_uses_no_wall_clock_and_no_global_randomness() -> void:
