@@ -28,7 +28,7 @@ const STRING_KEYS: Array[String] = [
 	"SIEGE_HUD_GATE",
 	"SIEGE_HUD_GOLD",
 	"SIEGE_HUD_CURTAIN",
-	"SIEGE_HUD_CAULDRONS",
+	"SIEGE_HUD_CAULDRONS_SHORT",
 	"SIEGE_HUD_WAVE",
 	"SIEGE_HUD_WARMUP_WAVE",
 	"SIEGE_HUD_ENEMIES_LEFT",
@@ -329,4 +329,4 @@ static func curtain_text(state: SiegeState) -> String:
 static func cauldron_text(state: SiegeState, strings: GameStrings) -> String:
 	if state == null:
 		return ""
-	return strings.t("SIEGE_HUD_CAULDRONS", [floori(state.tar.cauldron_l)])
+	return strings.t("SIEGE_HUD_CAULDRONS_SHORT", [floori(state.tar.cauldron_l)])

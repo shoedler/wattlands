@@ -3,26 +3,45 @@ extends RefCounted
 ## Siege's HudSpec (docs/games/siege.md 3 "HUD"). The module's hud_spec() returns
 ## SiegeHud.spec(game).
 ##
-## Layout (1080p px; the 960 x 540 art is 2x):
-##   top left      the kit's phase timeline, Siege's rush-marker strip, then the wave info
-##                 ("Wave 2/3", enemies left by type, the engine and siege-tower warnings);
-##   top right     the gate HP (kit readout, fed by the module: READOUT_GATE), the tar curtain
-##                 (SiegeCurtainCard) and the rider's own gold (READOUT_GOLD), all >= 48 px;
-##                 toasts below them;
-##   bottom left   power gauge (watts >= 48 px), cadence, W' bar;
-##   bottom centre Siege's teammate strip (SiegeStripOverlay; the kit's card strip is left out);
-##   bottom right  the gear (SIM only), the Overdrive button and the route card (the five
-##                 stations, caps, who is where, the 2 s coupling bar);
-##   right middle  the break shop (SHOP_RECT, text >= 32 px) over the vicus, only in breaks,
-##                 when the route card and the Overdrive button step aside.
-## The centre (the fort, the junction and the road's last loop) stays clear during waves.
+## Every entry sits in a Rect2i (art pixels, 2x at 1080p) off the field: the road runs down the
+## left edge (screen x < 280), loops along the bottom (y > 830 left of x 900) and climbs to the
+## bridge (about 700, 650); the fort spans x 480..1474, y 120..760. What is left is the top band
+## over the camp and the mountain, the right edge over the quarry, and the bottom right over the
+## wadi:
+##   top left band   the kit's timeline (x 300..900), the wave line (enemies left, the urgent
+##                   warning), the banners (above the north-west tower's ballista);
+##   top band        Siege's compact teammate strip over the mountain, the rush strip
+##                   (endurance) and the toasts below it, above the wheels;
+##   right column    the gate (kit readout, fed by the module: READOUT_GATE), the tar curtain,
+##                   the gold (READOUT_GOLD), all >= 48 px; the route card (five stations with
+##                   cap pips and the coupling bar) and the Overdrive button;
+##   bottom right    power gauge (watts >= 48 px), cadence, W' and the gear in one low row;
+##   breaks          the shop (4 rows at 32 px) east of the fort where the route card and the
+##                   Overdrive button step aside.
+## The centre, the road loops, the bridge and the plaza stay clear.
 
 const READOUT_GATE := "siege_gate"
 const READOUT_GOLD := "siege_gold"
-## The shop's place in art pixels (2x on screen): east of the fort, below the top-right stack.
-const SHOP_RECT := Rect2i(604, 264, 336, 196)
+const TIMELINE_RECT := Rect2i(150, 8, 300, 75)
+const WAVE_RECT := Rect2i(150, 85, 300, 18)
+const RUSH_RECT := Rect2i(465, 50, 352, 24)
+const BANNER_RECT := Rect2i(150, 105, 300, 28)
+const STRIP_RECT := Rect2i(465, 8, 352, 40)
+const TOAST_RECT := Rect2i(470, 76, 330, 26)
+const GATE_RECT := Rect2i(818, 12, 130, 58)
+const CURTAIN_RECT := Rect2i(818, 73, 130, 52)
+const GOLD_RECT := Rect2i(818, 128, 130, 58)
+const ROUTE_RECT := Rect2i(818, 190, 130, 118)
+const OD_RECT := Rect2i(818, 312, 130, 32)
+const POWER_RECT := Rect2i(460, 466, 160, 62)
+const CADENCE_RECT := Rect2i(624, 466, 146, 62)
+const WBAL_RECT := Rect2i(774, 466, 174, 20)
+const GEAR_RECT := Rect2i(774, 490, 174, 38)
+## The shop's place in breaks (no attackers then): east of the plaza over the aqueduct and the
+## vicus, clipping the fort's south-east corner; it never covers the road or the bridge.
+const SHOP_RECT := Rect2i(600, 326, 348, 138)
 ## Where the help panels point at the HUD's own cards (art pixels).
-const ROUTE_CARD_AT := Vector2(856, 410)
+const ROUTE_CARD_AT := Vector2(838, 249)
 
 
 static func spec(game: SiegeGame) -> HudSpec:
@@ -40,33 +59,27 @@ static func spec(game: SiegeGame) -> HudSpec:
 	route.game = game
 	var shop := SiegeShopPanel.new()
 	shop.game = game
+	var gate := {"source": "custom", "id": READOUT_GATE, "label": "SIEGE_HUD_GATE"}
+	var gold := {"source": "custom", "id": READOUT_GOLD, "label": "SIEGE_HUD_GOLD"}
 	var s := (
 		HudSpec
 		. new()
-		. add(HudSpec.TIMELINE, HudSpec.TOP_LEFT)
-		. add_control(rush, HudSpec.TOP_LEFT)
-		. add_control(wave, HudSpec.TOP_LEFT)
-		. add(
-			HudSpec.READOUT,
-			HudSpec.TOP_RIGHT,
-			{"source": "custom", "id": READOUT_GATE, "label": "SIEGE_HUD_GATE"}
-		)
-		. add_control(curtain, HudSpec.TOP_RIGHT)
-		. add(
-			HudSpec.READOUT,
-			HudSpec.TOP_RIGHT,
-			{"source": "custom", "id": READOUT_GOLD, "label": "SIEGE_HUD_GOLD"}
-		)
-		. add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT)
-		. add(HudSpec.CADENCE, HudSpec.BOTTOM_LEFT)
-		. add(HudSpec.WBAL, HudSpec.BOTTOM_LEFT)
-		. add_control(strip, HudSpec.BOTTOM)
-		. add(HudSpec.GEAR, HudSpec.BOTTOM_RIGHT)
-		. add_control(od, HudSpec.BOTTOM_RIGHT)
-		. add_control(route, HudSpec.BOTTOM_RIGHT)
+		. add(HudSpec.TIMELINE, TIMELINE_RECT)
+		. add_control(wave, WAVE_RECT)
+		. add_control(rush, RUSH_RECT)
+		. add_control(strip, STRIP_RECT)
+		. add(HudSpec.READOUT, GATE_RECT, gate)
+		. add_control(curtain, CURTAIN_RECT)
+		. add(HudSpec.READOUT, GOLD_RECT, gold)
+		. add_control(route, ROUTE_RECT)
+		. add_control(od, OD_RECT)
+		. add(HudSpec.POWER_GAUGE, POWER_RECT)
+		. add(HudSpec.CADENCE, CADENCE_RECT)
+		. add(HudSpec.WBAL, WBAL_RECT)
+		. add(HudSpec.GEAR, GEAR_RECT)
 		. add_control(shop, SHOP_RECT)
-		. toasts_at(HudSpec.TOP_RIGHT)
-		. banners_at(HudSpec.TOP_LEFT)
+		. toasts_at(TOAST_RECT)
+		. banners_at(BANNER_RECT)
 	)
 	s.help = help(game)
 	return s
@@ -98,7 +111,7 @@ static func help(game: SiegeGame) -> Array[Dictionary]:
 	out.append(entry("SIEGE_HELP_STATIONS", onager + Vector2(-60, 70), onager))
 	out.append(entry("SIEGE_HELP_ROAD", road + Vector2(70, -40), road))
 	out.append(entry("SIEGE_HELP_GATE", gate + Vector2(-40, 90), gate))
-	out.append(entry("SIEGE_HELP_ROUTE_CARD", ROUTE_CARD_AT + Vector2(-230, 40), ROUTE_CARD_AT))
+	out.append(entry("SIEGE_HELP_ROUTE_CARD", ROUTE_CARD_AT + Vector2(-200, 10), ROUTE_CARD_AT))
 	out.append(entry("SIEGE_HELP_SHOP", shop + Vector2(-210, -70), shop))
 	return out
 

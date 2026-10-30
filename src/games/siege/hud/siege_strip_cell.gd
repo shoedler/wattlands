@@ -4,10 +4,11 @@ extends PanelContainer
 ## rider drives, raw watts and %FTP from the state (the snapshot's on a client), and markers:
 ## Overdrive on or recharging, rescue, AFK. The local rider's cell has an accent border.
 
-## Four cells and their gaps fit between the corner stacks.
-const SIZE := Vector2(240, 0)
-const WATTS_PX := 24
-const STATUS_PX := 20
+## Four compact cells and their gaps fit the top band over the mountain (704 px at 1080p).
+const SIZE := Vector2(172, 0)
+const TARGET_PX := 20
+const WATTS_PX := 20
+const STATUS_PX := 18
 
 var slot: int = 0
 var chip: SlotChip = null
@@ -34,13 +35,14 @@ func _init(p_slot: int = 0) -> void:
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_child(top)
 	chip = SlotChip.new()
-	chip.custom_minimum_size = Vector2(30, 30)
+	chip.custom_minimum_size = Vector2(22, 22)
 	chip.set_slot(slot)
 	top.add_child(chip)
-	target_label = SiegeHudPanel.make_label(WlTheme.LABEL_PX, WlTheme.TEXT, true)
+	target_label = SiegeHudPanel.make_label(TARGET_PX, WlTheme.TEXT, true)
+	target_label.clip_text = true
+	target_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(target_label)
-	top.add_child(_spacer())
-	od_label = SiegeHudPanel.make_label(WlTheme.SMALL_PX, WlTheme.ACCENT, true)
+	od_label = SiegeHudPanel.make_label(STATUS_PX, WlTheme.ACCENT, true)
 	top.add_child(od_label)
 	var bottom := HBoxContainer.new()
 	bottom.add_theme_constant_override("separation", 6)
@@ -74,8 +76,10 @@ func set_local(on: bool) -> void:
 static func _style(local: bool) -> StyleBoxFlat:
 	var border := WlTheme.ACCENT if local else WlTheme.PANEL_BORDER
 	var sb := WlTheme.panel_style(WlTheme.PANEL, border, 4 if local else 2)
-	sb.content_margin_left = 10.0
-	sb.content_margin_right = 10.0
+	sb.content_margin_left = 6.0
+	sb.content_margin_right = 6.0
+	sb.content_margin_top = 3.0
+	sb.content_margin_bottom = 3.0
 	return sb
 
 

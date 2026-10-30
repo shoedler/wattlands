@@ -11,7 +11,7 @@ var cells: Array[SiegeStripCell] = []
 func _init() -> void:
 	name = "SiegeStripOverlay"
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_theme_constant_override("separation", 8)
+	add_theme_constant_override("separation", 6)
 	alignment = BoxContainer.ALIGNMENT_CENTER
 	for slot in 4:
 		var c := SiegeStripCell.new(slot)
