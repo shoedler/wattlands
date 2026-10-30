@@ -76,6 +76,7 @@ func test_event_types_are_the_brief_s() -> void:
 			"rush",
 			"push",
 			"dock",
+			"reach",
 			"shot",
 			"kill",
 			"leak",

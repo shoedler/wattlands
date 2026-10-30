@@ -339,7 +339,7 @@ func test_a_rush_kill_pays_double_to_a_rider_in_overdrive() -> void:
 	r1.od_state = SiegeIds.OD_ACTIVE
 	var g := r1.gold
 	var e := _at(SiegeIds.ENEMY_SPEAR, Vector3(50, 120, 0), 5.0)
-	e.rush = true
+	_s.wave.rush_s = 10.0
 	var p := _proj(SiegeIds.SHOT_ARROW, SiegeIds.STATION_ARROWS, e.pos, Vector3.ZERO, 8.0)
 	p.peers = [1]
 	p.shares = [1.0]

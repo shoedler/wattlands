@@ -26,7 +26,8 @@ var routed_t: float = -1000.0
 var p_eff_w: float = 0.0
 var raw_w: float = 0.0
 var cadence_rpm: float = 0.0
-## WKG's r = p_eff_w / power_w from the latest telemetry with power >= 50 W (1 before).
+## WKG's r = p_eff_w / power_w from the latest telemetry with power >= 50 W (before that the
+## slot's p_eff_per_w).
 var r_wkg: float = 1.0
 ## [snap] Safety states from on_rescue / on_afk (a dropped client is AFK).
 var rescue: bool = false

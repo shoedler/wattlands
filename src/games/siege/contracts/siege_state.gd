@@ -127,6 +127,9 @@ static func create(
 		r.autopilot = p.autopilot or p.is_bot
 		r.ftp = p.ftp
 		r.ftp_verified = p.ftp_verified
+		# WKG's r before any telemetry of >= 50 W: the slot's own ratio (the host has every
+		# rider's), not 1.0 (ADR "WKG warm-up budget").
+		r.r_wkg = p.p_eff_per_w if p.p_eff_per_w > 0.0 else 1.0
 		r.gold = start
 		s.riders.append(r)
 	s.init_fixed()

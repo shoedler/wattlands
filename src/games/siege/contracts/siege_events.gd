@@ -13,6 +13,7 @@ extends RefCounted
 ## push           id (the engine), et (SiegeIds.ENEMY_RAM or ENEMY_TOWER), prog_dm (where it
 ##                entered): a siege engine entered the road
 ## dock           id: the siege tower docked at the moat edge (its boarders are on the wall)
+## reach          id, et: a ram reached the gate (it batters from now on)
 ## shot           tk (tick), src (a station 1..3, or 10 + pad), kind (SiegeIds.SHOT_*),
 ##                o [x_cm, y_cm, z_cm], v [vx_mms, vy_mms, vz_mms] (before spread), n (count:
 ##                a rack of arrows is one event with 12), sd (the spread seed)
@@ -35,6 +36,7 @@ const INT_FIELDS := {
 	SiegeIds.EV_RUSH: ["on", "i"],
 	SiegeIds.EV_PUSH: ["id", "et", "prog_dm"],
 	SiegeIds.EV_DOCK: ["id"],
+	SiegeIds.EV_REACH: ["id", "et"],
 	SiegeIds.EV_SHOT: ["tk", "src", "kind", "o[]", "v[]", "n", "sd"],
 	SiegeIds.EV_KILL: ["id", "et", "src", "x2"],
 	SiegeIds.EV_LEAK: ["id", "et", "dmg"],
@@ -126,6 +128,10 @@ static func push(id: int, et: int, prog_m: float) -> Dictionary:
 
 static func dock(id: int) -> Dictionary:
 	return {"type": SiegeIds.EV_DOCK, "id": id}
+
+
+static func reach(id: int, et: int) -> Dictionary:
+	return {"type": SiegeIds.EV_REACH, "id": id, "et": et}
 
 
 ## A shot from already quantized origin (cm) and velocity (mm/s) ints.

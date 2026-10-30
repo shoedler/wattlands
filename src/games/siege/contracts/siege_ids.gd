@@ -176,6 +176,8 @@ const EV_WAVE_END := "wave_end"
 const EV_RUSH := "rush"
 const EV_PUSH := "push"
 const EV_DOCK := "dock"
+## A ram reached the gate and starts battering (ADR "reach event").
+const EV_REACH := "reach"
 const EV_SHOT := "shot"
 const EV_KILL := "kill"
 const EV_LEAK := "leak"
@@ -190,6 +192,7 @@ const EVENT_TYPES: Array[String] = [
 	EV_RUSH,
 	EV_PUSH,
 	EV_DOCK,
+	EV_REACH,
 	EV_SHOT,
 	EV_KILL,
 	EV_LEAK,

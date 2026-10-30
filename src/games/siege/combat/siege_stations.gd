@@ -28,10 +28,24 @@ static func step(
 ) -> void:
 	var mine := state.station(SiegeIds.STATION_MINE)
 	mine.level = state.mine_level
-	mine.m = output(state, tb, mine, dt, false) if tb.live else 0.0
+	mine.m = 0.0
+	if tb.live:
+		mine.m = output(state, tb, mine, dt, false)
+	elif state.shop_open() and state.breach_s <= 0.0:
+		mine.m = break_output(state, tb)
 	mine.arm = fmod(mine.arm + dt * mine.m, 1.0)
 	for id in SiegeIds.WEAPONS:
 		_weapon(state, tb, state.station(id), dt, events)
+
+
+## The mine's m in a break, when every delivering rider's output goes to it (brief 2.4): the
+## sum of their P_eff / 250 W, capped. Shown only; SiegeEconomy pays by P_eff.
+static func break_output(state: SiegeState, tb: SiegeCombatTable) -> float:
+	var sum := 0.0
+	for r in state.riders:
+		if r.delivering():
+			sum += maxf(r.p_eff_w, 0.0)
+	return minf(sum / tb.ref_w, tb.m_cap)
 
 
 ## The output multiplier m of station `st` this tick (also keeps the Reserve flywheel's hold).

@@ -25,6 +25,8 @@ static func encode(state: SiegeState) -> Dictionary:
 					roundi(rd.cadence_rpm),
 					int(rd.rescue),
 					int(rd.afk),
+					int(rd.connected),
+					int(rd.shop_fallback),
 				]
 			)
 		)
@@ -105,6 +107,8 @@ static func encode(state: SiegeState) -> Dictionary:
 	}
 	if state.wave.rush_s > 0.0:
 		snap["ru"] = [1, maxi(state.wave.rush_next - 1, 0), _ms(state.wave.rush_s)]
+	if state.wave.rush_next > 0:
+		snap["rn"] = state.wave.rush_next
 	var rack := state.station(SiegeIds.STATION_ARROWS).rack
 	if rack != 0:
 		snap["rk"] = rack
@@ -138,6 +142,7 @@ static func apply(state: SiegeState, snap: Dictionary) -> void:
 	state.queue_len = int(snap.get("q", 0))
 	state.wave.gate_damage = int(snap.get("gd", 0)) / 10.0
 	state.station(SiegeIds.STATION_ARROWS).rack = int(snap.get("rk", 0))
+	state.wave.rush_next = int(snap.get("rn", 0))
 	var ru: Variant = snap.get("ru")
 	if ru is Array and (ru as Array).size() > SiegeSnapshotSchema.RU_INDEX:
 		var left_ms := (
@@ -155,7 +160,7 @@ static func apply(state: SiegeState, snap: Dictionary) -> void:
 
 static func _riders(state: SiegeState, rows: Variant) -> void:
 	for row: Variant in rows if rows is Array else []:
-		if not (row is Array) or (row as Array).size() < SiegeSnapshotSchema.R_LEN:
+		if not (row is Array) or (row as Array).size() < SiegeSnapshotSchema.R_LEN_BRIEF:
 			continue
 		var rd := state.rider_at(int(row[SiegeSnapshotSchema.R_SLOT]))
 		if rd == null:
@@ -175,6 +180,9 @@ static func _riders(state: SiegeState, rows: Variant) -> void:
 		rd.cadence_rpm = float(int(row[SiegeSnapshotSchema.R_CADENCE]))
 		rd.rescue = int(row[SiegeSnapshotSchema.R_RESCUE]) != 0
 		rd.afk = int(row[SiegeSnapshotSchema.R_AFK]) != 0
+		if (row as Array).size() >= SiegeSnapshotSchema.R_LEN:
+			rd.connected = int(row[SiegeSnapshotSchema.R_CONNECTED]) != 0
+			rd.shop_fallback = int(row[SiegeSnapshotSchema.R_SHOP_FALLBACK]) != 0
 
 
 static func _stations(state: SiegeState, rows: Variant, dw: Variant) -> void:

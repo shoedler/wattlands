@@ -5,7 +5,7 @@ extends RefCounted
 ## per tick after routing and the mine.
 ##
 ## One tick, in order:
-##   1. the Breach clock (at its end the gate is restored and unspent gold is cut)
+##   1. the Breach clock (at its end the gate is restored)
 ##   2. SiegeSpawner: warm-up toast, groups from the staging grounds, siege engines, rushes
 ##   3. movement: walkers advance (the bridge coat slows them; chariots change speed), reach the
 ##      gate (a leak: damage to the curtain, then the gate, then gone) or, during a Breach,
@@ -38,8 +38,9 @@ static func step(state: SiegeState, inputs: SiegeInputs, dt: float) -> Array[Dic
 
 
 ## Gate damage `dmg`: the curtain takes it first, then the gate, with the warm-up wave's floor
-## applied; starts a Breach when the gate reaches 0. No damage lands during a Breach. Returns the
-## damage taken by curtain and gate together.
+## applied; starts a Breach when the gate reaches 0 (every rider loses 30% of their unspent gold,
+## rounded down, at once: ADR "Breach gold cut at the start"). No damage lands during a Breach.
+## Returns the damage taken by curtain and gate together.
 static func damage_gate(state: SiegeState, dmg: float, events: Array[Dictionary]) -> float:
 	if state.breach_s > 0.0 or dmg <= 0.0:
 		return 0.0
@@ -62,22 +63,23 @@ static func damage_gate(state: SiegeState, dmg: float, events: Array[Dictionary]
 		state.breach_s = state.content.num("gate.breach_s", 10.0)
 		for st in state.stations:
 			st.hold_s = 0.0
+		var loss := state.content.num("gate.breach_loss", 0.3)
+		for r in state.riders:
+			r.gold -= floorf(floorf(r.gold) * loss + 1e-9)
 		events.append(SiegeEvents.breach(state.breaches))
 	return soak + lost
 
 
-## The Breach clock; at its end the gate is back at restore_hp and every rider loses 30% of
-## their unspent gold (rounded down).
+## The Breach clock; at its end the gate is back at restore_hp (30), or keeps more when repairs
+## and Iron bands bought in a break the Breach ran into already raised it.
 static func _breach_clock(state: SiegeState, dt: float, events: Array[Dictionary]) -> void:
 	if state.breach_s <= 0.0:
 		return
 	state.breach_s = maxf(snappedf(state.breach_s - dt, 0.001), 0.0)
 	if state.breach_s > 0.0:
 		return
-	state.gate_hp = minf(state.content.num("gate.restore_hp", 30.0), state.gate_max)
-	var loss := state.content.num("gate.breach_loss", 0.3)
-	for r in state.riders:
-		r.gold -= floorf(floorf(r.gold) * loss + 1e-9)
+	var restore := minf(state.content.num("gate.restore_hp", 30.0), state.gate_max)
+	state.gate_hp = maxf(state.gate_hp, restore)
 	events.append(SiegeEvents.gate_restored(state.gate_hp))
 
 
@@ -167,6 +169,7 @@ static func _arrive(
 		e.st = SiegeIds.EN_BATTER
 		e.retreat_s = 0.0
 		e.reached = true
+		events.append(SiegeEvents.reach(e.id, e.type))
 		return
 	var applied := damage_gate(state, tb.gate_hp[e.type], events)
 	events.append(SiegeEvents.leak(e.id, e.type, roundi(applied)))

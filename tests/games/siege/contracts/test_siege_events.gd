@@ -10,6 +10,7 @@ func _all() -> Array[Dictionary]:
 		SiegeEvents.rush(true, 0),
 		SiegeEvents.push(17, SiegeIds.ENEMY_RAM, 183.42),
 		SiegeEvents.dock(18),
+		SiegeEvents.reach(19, SiegeIds.ENEMY_RAM),
 		SiegeEvents.shot(
 			100, 2, SiegeIds.SHOT_STONE, [100, 200, 1720], [5000, -3000, 16000], 1, 99
 		),
