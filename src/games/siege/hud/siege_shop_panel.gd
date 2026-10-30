@@ -42,14 +42,16 @@ func _init() -> void:
 	box.add_theme_constant_override("separation", 2)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(box)
+	# the gold shows in the readout above; the title stays for tests and screen readers, hidden
 	title_label = SiegeHudPanel.make_label(WlTheme.BODY_PX, WlTheme.TEXT, true)
+	title_label.visible = false
 	box.add_child(title_label)
 	countdown_label = SiegeHudPanel.make_label(WlTheme.LABEL_PX, WlTheme.WARN, true)
 	box.add_child(countdown_label)
 	list = PedalScanList.new()
 	list.name = "Items"
 	list.item_font_px = ITEM_PX
-	list.add_theme_constant_override("separation", 2)
+	list.add_theme_constant_override("separation", 0)
 	list.follow_local_mode = true
 	list.erg_auto_confirm = true
 	list.item_picked.connect(_on_item_picked)
@@ -73,6 +75,10 @@ func refresh() -> void:
 	visible = true
 	var me := game.ctx.local_player() if game.ctx != null else null
 	list.pedal_nav = me != null and me.pedal_nav
+	# the scan hint (with the ERG auto-pick countdown) is for pedal navigation; it wraps inside
+	# the shop's rect instead of widening it
+	list.show_hint = list.pedal_nav
+	_style_hint()
 	var tx := SiegeHudModel.strings_of(game)
 	title_label.text = (
 		"%s   %s %d" % [tx.t("SIEGE_SHOP_TITLE"), tx.t("SIEGE_HUD_GOLD"), floori(r.gold)]
@@ -84,6 +90,15 @@ func refresh() -> void:
 	if _since >= REFRESH_EVERY_S or entries.is_empty():
 		_since = 0.0
 		rebuild(tx, r)
+
+
+func _style_hint() -> void:
+	var hint := list.get_node_or_null("Hint") as Label
+	if hint == null or hint.autowrap_mode == TextServer.AUTOWRAP_WORD_SMART:
+		return
+	hint.label_settings = WlTheme.label_settings(WlTheme.SMALL_PX - 2, WlTheme.TEXT_DIM)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.custom_minimum_size = Vector2(10, 0)
 
 
 ## Seconds until Autopilot buys for a rider still on the zero-input shop fallback (0: never).

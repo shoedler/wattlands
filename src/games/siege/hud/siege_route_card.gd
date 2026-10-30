@@ -1,139 +1,133 @@
 class_name SiegeRouteCard
-extends SiegeHudPanel
-## The route card (docs/games/siege.md 3 HUD, bottom right): the five stations, each with its
-## riders' slot chips and its cap ("1/2"), the local rider's own station marked, the hot station
-## (Autopilot's pick) starred, the 2 s coupling bar while a change reconnects, and four buttons
-## that send the same route intents as the controls (previous, mine, next, hot). Hidden while
-## the shop is open: the shop's list owns the directions then.
+extends Control
+## The route card (docs/games/siege.md 3 HUD), a compact column at the right edge: the five
+## stations, each row with its icon, its name and its cap as pips (filled in the colour of each
+## rider on it, hollow for the room left), the local rider's station marked, the hot station
+## (Autopilot's pick) starred, and the 2 s coupling bar while the local rider's change
+## reconnects. Routing itself stays on the controls (left / right / up / down, swap). Hidden while
+## the shop is open (the shop's list owns the directions then) and in the cool-down.
 
 const CONNECT_S := 2.0
-const BUTTON_SIZE := Vector2(96, 48)
-const ROW_PX := 28
-const CHIP := Vector2(24, 24)
-## The control each button stands for (SiegeGame.local_intents maps it to the route target).
-const ACTION_OF := {"prev": &"left", "mine": &"up", "next": &"right", "hot": &"down"}
+const CAPTION_PX := 20
+const ROW_PX := 22
+const ROW_H := 36.0
+const PIP_R := 8.0
+const PAD := 10.0
+const SIZE := Vector2(260, 236)
 
-var caption_label: Label = null
-var connect_label: Label = null
-var connect_bar: ProgressBar = null
-var name_labels: Array[Label] = []
-var cap_labels: Array[Label] = []
-var chip_rows: Array[HBoxContainer] = []
-var chips: Array[Array] = []
-var buttons: Dictionary = {}
-## The rows as of the last refresh (tests read them).
+var game: SiegeGame = null
+## The rows and the coupling fill (0..1, -1 when not coupling) as of the last refresh.
 var rows: Array[Dictionary] = []
+var coupling: float = -1.0
+var _looks: Array[Dictionary] = []
 
 
 func _init() -> void:
-	super._init()
 	name = "SiegeRouteCard"
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 4)
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(box)
-	caption_label = make_label(WlTheme.LABEL_PX, WlTheme.TEXT_DIM)
-	box.add_child(caption_label)
-	for id in SiegeIds.STATION_COUNT:
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 6)
-		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		box.add_child(row)
-		var nl := make_label(ROW_PX, WlTheme.TEXT)
-		nl.custom_minimum_size = Vector2(190, 0)
-		row.add_child(nl)
-		name_labels.append(nl)
-		var cr := HBoxContainer.new()
-		cr.add_theme_constant_override("separation", 3)
-		cr.custom_minimum_size = Vector2(4 * (CHIP.x + 3), CHIP.y)
-		cr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		row.add_child(cr)
-		chip_rows.append(cr)
-		var row_chips: Array = []
-		for k in 4:
-			var c := SlotChip.new()
-			c.custom_minimum_size = CHIP
-			c.visible = false
-			cr.add_child(c)
-			row_chips.append(c)
-		chips.append(row_chips)
-		var cl := make_label(ROW_PX, WlTheme.TEXT_DIM)
-		row.add_child(cl)
-		cap_labels.append(cl)
-	connect_label = make_label(WlTheme.LABEL_PX, WlTheme.ACCENT)
-	box.add_child(connect_label)
-	connect_bar = ProgressBar.new()
-	connect_bar.show_percentage = false
-	connect_bar.min_value = 0.0
-	connect_bar.max_value = 1.0
-	connect_bar.custom_minimum_size = Vector2(0, 14)
-	connect_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(connect_bar)
-	var brow := HBoxContainer.new()
-	brow.add_theme_constant_override("separation", 6)
-	box.add_child(brow)
-	for spec: Array in [
-		["prev", "SIEGE_HUD_BTN_PREV"],
-		["mine", "SIEGE_HUD_BTN_MINE"],
-		["next", "SIEGE_HUD_BTN_NEXT"],
-		["hot", "SIEGE_HUD_BTN_HOT"],
-	]:
-		var b := Button.new()
-		b.name = "Btn_%s" % spec[0]
-		b.focus_mode = Control.FOCUS_NONE
-		b.custom_minimum_size = BUTTON_SIZE
-		b.add_theme_font_size_override("font_size", 20)
-		b.pressed.connect(_on_route_pressed.bind(str(spec[0])))
-		brow.add_child(b)
-		buttons[spec[0]] = b
-		b.set_meta("text_key", spec[1])
-	custom_minimum_size = Vector2(430, 0)
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	custom_minimum_size = SIZE
 	visible = false
 
 
-## Goes through the module's local_intents, the path the keyboard and the pad take, so a client
-## also predicts the new route at once.
-func _on_route_pressed(to: String) -> void:
-	if game == null:
-		return
-	var actions: Array[StringName] = [ACTION_OF[to]]
-	var gestures: Array[StringName] = []
-	for intent: Dictionary in game.local_intents(actions, gestures):
-		intent["via"] = SiegeIds.VIA_BUTTON
-		send(intent)
+func _process(_delta: float) -> void:
+	refresh()
 
 
 func refresh() -> void:
-	var s := state()
-	var r := own_rider()
+	var s := game.state if game != null else null
+	var r := SiegeHudModel.own_rider(game)
 	if s == null or r == null or s.shop_open() or s.in_cooldown():
 		visible = false
 		return
 	visible = true
-	var tx := strings()
-	caption_label.text = tx.t("SIEGE_HUD_ROUTE")
-	rows = SiegeHudModel.station_rows(s, tx, r)
-	for row: Dictionary in rows:
-		var id := int(row["id"])
-		var mark := "> " if bool(row["mine"]) else ("* " if bool(row["hot"]) else "  ")
-		name_labels[id].text = mark + str(row["name"])
-		var col := WlTheme.ACCENT if bool(row["mine"]) else WlTheme.TEXT
-		name_labels[id].label_settings = WlTheme.label_settings(ROW_PX, col, bool(row["mine"]))
-		cap_labels[id].text = tx.t("SIEGE_HUD_CAP", [row["count"], row["cap"]])
-		cap_labels[id].modulate = WlTheme.WARN if bool(row["full"]) else Color.WHITE
-		var slots: Array = row["riders"]
-		for k in 4:
-			var c: SlotChip = chips[id][k]
-			c.visible = k < slots.size()
-			if c.visible:
-				c.set_slot(int(slots[k]))
-				c.set_look(look_of(game, int(slots[k])))
-	var connecting := r.reconnect_s > 0.0
-	connect_label.visible = connecting
-	connect_bar.visible = connecting
-	if connecting:
-		connect_label.text = tx.t("SIEGE_HUD_CONNECTING")
-		connect_bar.value = 1.0 - clampf(r.reconnect_s / CONNECT_S, 0.0, 1.0)
-	for key: String in buttons:
-		var b: Button = buttons[key]
-		b.text = tx.t(str(b.get_meta("text_key")))
+	rows = SiegeHudModel.station_rows(s, SiegeHudModel.strings_of(game), r)
+	coupling = 1.0 - clampf(r.reconnect_s / CONNECT_S, 0.0, 1.0) if r.reconnect_s > 0.0 else -1.0
+	_looks.clear()
+	for slot in 4:
+		_looks.append(SiegeHudPanel.look_of(game, slot))
+	queue_redraw()
+
+
+func _draw() -> void:
+	if rows.is_empty():
+		return
+	var font := WlTheme.font()
+	var w := size.x
+	draw_style_box(WlTheme.panel_style(), Rect2(Vector2.ZERO, size))
+	var tx := SiegeHudModel.strings_of(game)
+	var cap_y := PAD + CAPTION_PX
+	draw_string(
+		font,
+		Vector2(PAD, cap_y),
+		tx.t("SIEGE_HUD_ROUTE"),
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1,
+		CAPTION_PX,
+		WlTheme.TEXT_DIM
+	)
+	if coupling >= 0.0:
+		var bx := w * 0.45
+		var bar := Rect2(bx, cap_y - 12, w - bx - PAD, 10)
+		draw_rect(bar, WlTheme.BAR_BG)
+		draw_rect(Rect2(bar.position, Vector2(bar.size.x * coupling, bar.size.y)), WlTheme.ACCENT)
+	for i in rows.size():
+		var row: Dictionary = rows[i]
+		var y := cap_y + 8.0 + i * ROW_H
+		var mine := bool(row["mine"])
+		if mine:
+			draw_rect(Rect2(4, y, w - 8, ROW_H - 4), Color(WlTheme.ACCENT, 0.22))
+			draw_rect(Rect2(4, y, 4, ROW_H - 4), WlTheme.ACCENT)
+		_icon(
+			int(row["id"]),
+			Vector2(PAD + 10, y + ROW_H * 0.45),
+			WlTheme.ACCENT if mine else WlTheme.TEXT_DIM
+		)
+		var label := str(row["name"]) + (" *" if bool(row["hot"]) and not mine else "")
+		var col := WlTheme.TEXT if mine else Color(WlTheme.TEXT, 0.85)
+		draw_string(
+			font,
+			Vector2(PAD + 26, y + ROW_H * 0.66),
+			label,
+			HORIZONTAL_ALIGNMENT_LEFT,
+			w - 120,
+			ROW_PX,
+			col
+		)
+		_pips(row, Vector2(w - PAD - PIP_R, y + ROW_H * 0.45))
+
+
+## The cap as pips from the right edge leftwards: riders' colours first, then hollow room.
+func _pips(row: Dictionary, right: Vector2) -> void:
+	var cap := int(row["cap"])
+	var slots: Array = row["riders"]
+	for k in cap:
+		var c := right - Vector2((cap - 1 - k) * (PIP_R * 2.0 + 4.0), 0)
+		if k < slots.size():
+			var col: Color = WlTheme.TEXT
+			if int(slots[k]) < _looks.size():
+				col = _looks[int(slots[k])]["color"]
+			draw_circle(c, PIP_R, col)
+			draw_arc(c, PIP_R, 0.0, TAU, 16, WlTheme.OUTLINE, 2.0)
+		else:
+			draw_arc(c, PIP_R - 1.0, 0.0, TAU, 16, WlTheme.TEXT_DIM, 2.0)
+
+
+## A small glyph per station (shape, not colour, tells them apart).
+func _icon(id: int, c: Vector2, col: Color) -> void:
+	match id:
+		SiegeIds.STATION_MINE:
+			draw_colored_polygon(
+				PackedVector2Array([c + Vector2(-7, 6), c + Vector2(0, -7), c + Vector2(7, 6)]), col
+			)
+		SiegeIds.STATION_BALLISTA:
+			draw_line(c + Vector2(-8, 0), c + Vector2(8, 0), col, 3.0)
+			draw_line(c + Vector2(4, -5), c + Vector2(8, 0), col, 3.0)
+			draw_line(c + Vector2(4, 5), c + Vector2(8, 0), col, 3.0)
+		SiegeIds.STATION_ONAGER:
+			draw_circle(c, 6.0, col)
+		SiegeIds.STATION_ARROWS:
+			for k in 3:
+				draw_line(c + Vector2(-7 + k * 6, 6), c + Vector2(-3 + k * 6, -6), col, 2.0)
+		_:
+			draw_rect(Rect2(c - Vector2(6, 4), Vector2(12, 10)), col)
+			draw_line(c + Vector2(-2, -4), c + Vector2(-2, -8), col, 2.0)
