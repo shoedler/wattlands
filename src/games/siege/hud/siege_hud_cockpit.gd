@@ -18,7 +18,10 @@ const NUM_Y := Y + 21
 const GAUGE_Y := Y + 60
 const RULE_TOP := Y + 6
 const RULE_H := 58
-const WATTS_W := 132
+## The clock's column is 4 px wider than the mock's so COOL-DOWN clears its rule; the watts give
+## them back, so the narrow plate keeps its width.
+const CLOCK_W := 96
+const WATTS_W := 128
 const CAD_W := 86
 const CAD_FROM := 30.0
 const CAD_SPAN := 120.0
@@ -51,7 +54,7 @@ func paint() -> void:
 	_tag(w)
 	var x := 0
 	_num_cell(x + 9, "clock_cap", "clock", D.GOLD if bool(model["clock_soon"]) else D.TEXT)
-	x = 9 + 92
+	x = 9 + CLOCK_W
 	_rule(x)
 	x = _watts(x + 7)
 	_rule(x)
@@ -83,7 +86,7 @@ func _watts(x: int) -> int:
 		var under := state == HudRiderNumbers.UNDER
 		D.icon(self, "up" if under else "down", side + 34, NUM_Y + 3, D.UNDER if under else D.AMBER)
 	if str(model["wkg"]) != "":
-		var wkg := "%s WKG" % str(model["wkg"])
+		var wkg := SiegeHudModel.strings_of(game).t("SIEGE_HUD_WKG", [str(model["wkg"])])
 		SiegeHudType.draw(self, wkg, side, NUM_Y + 22, "LABEL", D.DIM)
 	# the band, flat, with a needle
 	var scale_w := maxf(float(model["scale"]), 1.0)
@@ -102,12 +105,14 @@ func _watts(x: int) -> int:
 func _cadence(x: int) -> int:
 	var low := bool(model["cad_low"])
 	var stale := bool(model["cad_stale"])
-	SiegeHudType.draw(self, str(model["cad_cap"]), x, CAP_Y, "BODY", D.DIM)
 	if low:
-		D.rect(self, x - 2, NUM_Y - 2, 66, 40, D.ALARM)
+		D.rect(self, x - 2, NUM_Y - D.GLYPH_CHIP_PAD, 66, 36 + D.GLYPH_CHIP_PAD * 2, D.ALARM)
+	SiegeHudType.draw(self, str(model["cad_cap"]), x, CAP_Y, "BODY", D.DIM)
 	SiegeHudType.draw(self, str(model["cad_text"]), x, NUM_Y, "KEY36", D.DIM if stale else D.TEXT)
 	if low:
 		D.icon(self, "up", x + 54, NUM_Y + 1, D.TEXT)
+	elif bool(model["cad_nudge"]):
+		D.icon(self, "up", x + 54, NUM_Y + 1, D.UNDER)
 	D.rect(self, x, GAUGE_Y, CAD_W, 5, D.TRACK)
 	var band: Vector2 = model["cband"]
 	var from := roundi(CAD_W * (band.x - CAD_FROM) / CAD_SPAN)
@@ -133,7 +138,9 @@ func _lower(w: int) -> void:
 	D.rect(self, 3, Y + 69, w - 6, 1, D.WAX_LINE)
 	var right := w - 9
 	var chip_w := 0
-	if bool(model["sim"]):
+	if str(model["line_kind"]) == SiegeCockpitModel.LINE_NO_DATA:
+		pass  # the mode is not known, and the long line needs the room
+	elif bool(model["sim"]):
 		chip_w = SiegeHudType.width(tx.t("SIEGE_HUD_SIM"), "LABEL") + 6
 		D.chip(self, tx.t("SIEGE_HUD_SIM"), right, Y + 75, "LABEL", true, D.BRONZE, D.INK)
 	else:

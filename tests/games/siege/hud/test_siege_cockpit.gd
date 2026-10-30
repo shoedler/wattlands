@@ -185,12 +185,138 @@ func test_overdrive_reads_the_real_band() -> void:
 	K.ride(c, 4.05, 5.0, 262.0, 96.0, 0, 0, Wl.SIM)
 	var f := c.face(g)
 	assert_eq(f["target_cap"].to_upper(), "SPRINT 240-280")
-	assert_eq(f["line"].to_upper(), "SPRINT 240-280 W, SHIFT UP")
 	assert_eq(f["band"], SiegeOverdrive.band_w(g.state.content, 200.0))
 	assert_eq(f["next"].to_upper(), "THEN: ERG AT 190 W")
 	g.state.rider(1).ftp = 300.0
 	var f2 := c.face(g)
 	assert_eq(f2["line"].to_upper(), "SPRINT 360-420 W, SHIFT UP", "from the rider's FTP")
+
+
+func _od_face(w: float) -> Dictionary:
+	var g := _plain()
+	_od(g, 22.0)
+	var c := K.cockpit(1.0, w, 96.0, 0)
+	K.ride(c, 1.05, 6.0, w, 96.0, 0, 0, Wl.SIM)
+	return c.face(g)
+
+
+func test_overdrive_under_the_band_says_sprint_and_shift_up() -> void:
+	var f := _od_face(200.0)
+	assert_eq(f["state"], HudRiderNumbers.UNDER)
+	assert_eq(f["line"].to_upper(), "SPRINT 240-280 W, SHIFT UP")
+	assert_eq(f["line_kind"], SiegeCockpitModel.LINE_SPRINT)
+	assert_false(f["line_alarm"])
+
+
+func test_overdrive_in_the_band_says_hold() -> void:
+	var f := _od_face(260.0)
+	assert_eq(f["state"], HudRiderNumbers.IN_BAND)
+	assert_eq(f["line"].to_upper(), "HOLD 240-280 W")
+	assert_eq(f["line_kind"], SiegeCockpitModel.LINE_HOLD)
+
+
+func test_overdrive_over_the_band_says_ease() -> void:
+	var f := _od_face(320.0)
+	assert_eq(f["state"], HudRiderNumbers.OVER)
+	assert_eq(f["line"].to_upper(), "EASE TO 240-280 W")
+	assert_eq(f["line_kind"], SiegeCockpitModel.LINE_EASE)
+
+
+# --- no trainer data -------------------------------------------------------------------------------
+
+
+func _silent(t: float, coasting: bool, mode: String = Wl.ERG) -> Telemetry:
+	var x := K.tm(t, 0.0, 0.0, 190, mode)
+	x.cadence_age_s = 3.5
+	x.coasting = coasting
+	return x
+
+
+func test_a_silent_stream_with_the_link_up_never_says_pedal() -> void:
+	# the governor counts a silent stream as a stopped rider, so coasting reads true
+	var c := K.cockpit()
+	c.feed(_silent(4.1, true))
+	var f := c.face(_plain())
+	assert_eq(f["line"].to_upper(), "NO TRAINER DATA: KEEP PEDALLING")
+	assert_eq(f["line_kind"], SiegeCockpitModel.LINE_NO_DATA)
+	assert_true(f["line_alarm"], "on the red chip")
+	assert_eq(f["target_cap"].to_upper(), "TARGET --")
+	assert_eq(f["applied_w"], 0)
+	assert_eq(f["band"], Vector2.ZERO, "no band to ride without a target")
+	assert_eq(f["w_text"], "--")
+
+
+func test_a_dead_link_says_the_same() -> void:
+	var c := K.cockpit()
+	c.feed(_silent(4.1, false, Wl.OFF))
+	var f := c.face(_plain())
+	assert_eq(f["line_kind"], SiegeCockpitModel.LINE_NO_DATA)
+	assert_eq(f["target_cap"].to_upper(), "TARGET --")
+
+
+func test_no_data_wins_over_rescue_and_the_sprint() -> void:
+	var g := _plain()
+	_od(g, 20.0)
+	var c := K.cockpit()
+	var x := _silent(4.1, false)
+	x.rescue = true
+	c.feed(x)
+	var f := c.face(g)
+	assert_eq(f["line_kind"], SiegeCockpitModel.LINE_NO_DATA)
+	assert_eq(f["target_cap"].to_upper(), "TARGET --")
+
+
+func test_data_coming_back_ends_it() -> void:
+	var g := _plain()
+	var c := K.cockpit()
+	c.feed(_silent(4.1, true))
+	K.ride(c, 4.2, 5.0, 190.0)
+	var f := c.face(g)
+	assert_eq(f["line_kind"], SiegeCockpitModel.LINE_SPIN)
+	assert_eq(f["target_cap"].to_upper(), "TARGET 190 W")
+	assert_ne(f["band"], Vector2.ZERO)
+
+
+func test_a_real_coast_with_live_data_still_says_pedal() -> void:
+	var c := K.cockpit()
+	var x := K.tm(4.1, 0.0, 0.0, 60)
+	x.coasting = true
+	c.feed(x)
+	assert_eq(c.face(_plain())["line_kind"], SiegeCockpitModel.LINE_COAST)
+
+
+func test_the_long_no_data_line_fits_the_narrow_plate() -> void:
+	var line := "NO TRAINER DATA: KEEP PEDALLING"
+	assert_lte(SiegeHudType.width(line, "LINE"), SiegeHudCockpit.NARROW - 30)
+
+
+# --- the cadence nudge ------------------------------------------------------------------------------
+
+
+func test_cadence_seventy_to_seventy_nine_in_a_wave_gets_an_arrow_and_no_chip() -> void:
+	var g := _plain()
+	for rpm: float in [70.0, 75.0, 79.0]:
+		var f := K.cockpit(4.0, 190.0, rpm, 190).face(g)
+		assert_true(f["cad_nudge"], str(rpm))
+		assert_false(f["cad_low"], str(rpm))
+		assert_false(f["line_alarm"], str(rpm))
+	assert_false(K.cockpit(4.0, 190.0, 80.0, 190).face(g)["cad_nudge"], "in the band")
+	var low := K.cockpit(4.0, 190.0, 60.0, 190).face(g)
+	assert_false(low["cad_nudge"], "the chip has it")
+	assert_true(low["cad_low"])
+
+
+func test_no_cadence_nudge_in_a_break() -> void:
+	assert_false(K.cockpit(4.0, 100.0, 75.0, 100).face(_plain(1, 10.0))["cad_nudge"])
+
+
+func test_the_columns_fit_the_narrow_plate() -> void:
+	var end := (
+		9 + SiegeHudCockpit.CLOCK_W + 7 + SiegeHudCockpit.WATTS_W + 5 + 7 + SiegeHudCockpit.CAD_W
+	)
+	assert_lte(end, SiegeHudCockpit.NARROW - 3, "inside the frame")
+	var cap := SiegeHudType.width("COOL-DOWN", "BODY")
+	assert_lte(cap, SiegeHudCockpit.CLOCK_W - 1, "the caption clears its rule")
 
 
 # --- the instruction line ------------------------------------------------------------------------
@@ -360,7 +486,7 @@ func test_mock_overdrive() -> void:
 	assert_eq(f["target_cap"].to_upper(), "SPRINT 240-280")
 	assert_eq(f["w_text"], "262")
 	assert_eq(f["pct_text"], "131%")
-	assert_eq(f["line"].to_upper(), "SPRINT 240-280 W, SHIFT UP")
+	assert_eq(f["line"].to_upper(), "HOLD 240-280 W", "the review's wording: 262 W is in the band")
 	assert_eq(f["next"].to_upper(), "THEN: ERG AT 190 W")
 	assert_true(f["sim"])
 

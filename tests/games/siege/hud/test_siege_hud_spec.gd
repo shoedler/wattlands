@@ -76,7 +76,7 @@ func test_the_placements_match_the_mock() -> void:
 	var shop := _rect_of(spec, SiegeShopPanel)
 	assert_eq(shop.position.x, 8)
 	assert_eq(shop.end.y - 2, 532)
-	assert_eq(spec.banner_area, Rect2i(411, 71, 380, 27))
+	assert_eq(spec.banner_area, Rect2i(411, 69, 380, 27))
 
 
 func test_banners_and_toasts_sit_clear_of_the_plates() -> void:
@@ -203,6 +203,46 @@ func test_the_help_panels_do_not_cover_each_other() -> void:
 	for i in boxes.size():
 		for j in range(i + 1, boxes.size()):
 			assert_false(boxes[i].intersects(boxes[j]), "help panels %d and %d" % [i, j])
+
+
+func test_the_stations_leader_ends_at_the_plate_edge() -> void:
+	var help := SiegeHud.help(_g())
+	assert_eq((help[5]["arrow_to"] as Vector2).x, float(SiegeHudColumn.RECT.position.x))
+
+
+## A help panel as the kit draws it, in 1080p px.
+func _help_box(h: Dictionary) -> Rect2:
+	var size := Vector2(SiegeHudType.width(tr(str(h["text"])), "BODY") * 2.0 + 12.0, 40.0)
+	return Rect2((h["at"] as Vector2) * 2.0 - size * 0.5, size)
+
+
+func test_the_two_long_panels_sit_on_the_sand_inside_the_road_loop() -> void:
+	var help := SiegeHud.help(_g())
+	var sand := Rect2(420, 860, 480, 100)
+	for i in [1, 2]:
+		var box := _help_box(help[i])
+		assert_lte(box.size.x, 480.0, str(help[i]["text"]))
+		assert_true(sand.encloses(box), "%s %s" % [help[i]["text"], box])
+
+
+func test_the_route_panel_clears_the_blue_wheel_and_the_stations_card() -> void:
+	var box := _help_box(SiegeHud.help(_g())[5])
+	assert_almost_eq(box.position.x, 1070.0, 4.0)
+	assert_lt(box.end.x, 1608.0)
+
+
+func test_the_short_help_stays_one_line_in_the_kit() -> void:
+	for h: Dictionary in SiegeHud.help(_g()):
+		if str(h["text"]) in ["SIEGE_HELP_PATH", "SIEGE_HELP_STATIONS", "SIEGE_HELP_ROUTE_CARD"]:
+			assert_lt(SiegeHudType.width(tr(str(h["text"])), "BODY") * 2.0, HudHelp.MAX_PANEL_W)
+
+
+func test_a_comma_has_a_tail_in_every_face() -> void:
+	for f: String in SiegeHudType.manifest()["faces"]:
+		var face: Dictionary = SiegeHudType.face(f)
+		var g: Array = face["glyphs"][","]
+		var below := int(g[3]) - int(g[5]) - int(face["cap"])
+		assert_gte(below, 2, f)
 
 
 func _string_keys() -> Dictionary:

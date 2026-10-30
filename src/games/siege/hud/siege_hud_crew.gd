@@ -5,7 +5,7 @@ extends SiegeHudCtl
 ## icon, and a lamp for in band or out, or a mark (OD, a RESCUE chip, AFK). Numbers come from the
 ## state (the snapshot's on a client).
 
-const RECT := Rect2i(470, 8, 278, 62)
+const RECT := Rect2i(470, 8, 278, 61)
 const CARD_W := 90
 const CARD_H := 60
 const CARD_STEP := 92

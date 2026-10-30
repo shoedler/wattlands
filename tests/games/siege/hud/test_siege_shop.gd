@@ -246,15 +246,20 @@ func test_rows_say_what_is_best_and_what_is_short() -> void:
 	assert_eq(last["cost"], -1)
 
 
-func test_a_long_row_is_cut_to_fit() -> void:
+func test_every_name_clears_its_note_with_the_coin_in_its_column() -> void:
 	var g := _break_game(500.0, 2.0)
 	var panel := _panel(g)
 	await wait_physics_frames(2)
 	assert_gt(panel.draws, 0)
+	assert_eq(SiegeShopPanel.W, 364)
+	var note := SiegeHudType.width("100 MORE", "LABEL")
+	var room := SiegeShopPanel.COIN_X - 6 - note - 6 - SiegeShopPanel.TEXT_X
 	for e in panel.entries:
-		var room := SiegeShopPanel.W - 50 - 20 - 6 - 46
-		var cut := SiegeHudType.fit(str(e["name"]), "BODY", room)
-		assert_lte(SiegeHudType.width(cut, "BODY"), room, str(e["name"]))
+		assert_lte(SiegeHudType.width(str(e["name"]), "BODY"), room, str(e["name"]))
+
+
+func test_the_wider_plate_still_clears_the_cockpit() -> void:
+	assert_lt(SiegeShopPanel.RECT.end.x, SiegeHudCockpit.RECT.position.x)
 
 
 func test_the_highlight_redraws_at_once() -> void:

@@ -33,6 +33,8 @@ const PITCH := Color("#a0663a")
 const WARM := Color("#7d5f86")
 const LIT := Color("#3a2412")
 const PLATE_SHADOW := Color(0.0, 0.0, 0.0, 0.42)
+## A generated face's strokes reach one row over its cap; a chip keeps 2 px clear beyond that.
+const GLYPH_CHIP_PAD := 3
 const FIXED_WHITE := Color.WHITE
 
 static var _plates: Dictionary = {}
@@ -173,7 +175,8 @@ static func chip(
 	var w := SiegeHudType.width(text, face) + 6
 	var cap := int(SiegeHudType.face(face).get("cap", 9))
 	var lx := x - w if right else x
-	c.draw_rect(Rect2(lx, y - 2, w, cap + 4), bg)
+	var pad := GLYPH_CHIP_PAD if face != "LABEL" else 2
+	c.draw_rect(Rect2(lx, y - pad, w, cap + pad * 2), bg)
 	SiegeHudType.draw(c, text, lx + 3, y, face, fg, false)
 	return lx + w
 

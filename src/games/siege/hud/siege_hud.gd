@@ -19,7 +19,7 @@ extends RefCounted
 
 const BASE := Vector2i(960, 540)
 ## The platform's banners, between the session plate and the right column, under the crew.
-const BANNER_RECT := Rect2i(411, 71, 380, 27)
+const BANNER_RECT := Rect2i(411, 69, 380, 27)
 const TOAST_RECT := Rect2i(411, 100, 380, 40)
 ## The palette for the platform's toasts, game banner and help, from the mock.
 const PALETTE := {
@@ -43,16 +43,16 @@ const PALETTE := {
 	"text_outline": false,
 }
 ## Where the help panels point at the HUD's own cards (art pixels).
-const ROUTE_CARD_AT := Vector2(878, 150)
+const ROUTE_CARD_AT := Vector2(804, 150)
 const SHOP_AT := Vector2(178, 458)
 ## Where the help panels sit (art pixels), clear of each other, the title and most plates.
 const HELP_AT := {
 	"SIEGE_HELP_WHEEL": Vector2(660, 112),
-	"SIEGE_HELP_PATH": Vector2(440, 198),
-	"SIEGE_HELP_STATIONS": Vector2(345, 262),
+	"SIEGE_HELP_PATH": Vector2(330, 442),
+	"SIEGE_HELP_STATIONS": Vector2(330, 468),
 	"SIEGE_HELP_ROAD": Vector2(160, 326),
 	"SIEGE_HELP_GATE": Vector2(470, 362),
-	"SIEGE_HELP_ROUTE_CARD": Vector2(650, 158),
+	"SIEGE_HELP_ROUTE_CARD": Vector2(651, 158),
 	"SIEGE_HELP_SHOP": Vector2(178, 368),
 }
 

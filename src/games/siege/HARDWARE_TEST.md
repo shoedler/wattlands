@@ -188,8 +188,8 @@ The HUD is Siege's own (`docs/games/siege.md` 3). Run `short` with the real trai
 | 72 | In a break, ride at 60 rpm | No red chip: rescue is not armed at 50% FTP | |
 | 73 | Trigger rescue (under 45 rpm for 3 s) | The caption reads RESCUE and the watts really applied (compare with the trainer), RPM 70+, RESCUE: SPIN 70+, THEN: RAMP BACK TO the plan's watts. The platform's rescue banner shows in its own colours | |
 | 74 | Stop pedaling | PEDAL: LOAD DROPPED on the chip within about 3 s; the target caption shows the floor | |
-| 75 | Start an Overdrive | SPRINT LEFT with its clock, SPRINT and the real band for your FTP, the SIM chip and the gear, and SHIFT UP; the gear changes with your shifting. Back in ERG, ERG shows and the gear is gone | |
-| 76 | Pull the trainer's power for 10 s during a wave | The platform's trainer notice shows, and the watts read `--`, not 0, until data returns | |
+| 75 | Start an Overdrive | SPRINT LEFT with its clock, SPRINT and the real band for your FTP, the SIM chip and the gear. Under the band: SPRINT ..., SHIFT UP; in it: HOLD ...; over it: EASE TO .... The gear changes with your shifting. Back in ERG, ERG shows and the gear is gone | |
+| 76 | Pull the trainer's power for 10 s during a wave | The platform's trainer notice shows, the watts read `--`, not 0, the caption reads TARGET --, and the chip says NO TRAINER DATA: KEEP PEDALLING until data returns; never PEDAL: LOAD DROPPED | |
 | 77 | Check W/kg with the opt-in off, then on (Settings) | Off: none anywhere. On: the W/kg under the %FTP | |
 | 78 | The last 30 s of a break before a wave | The clock turns gold, LOAD UP IN 0:30, SPIN UP counts down; the NEXT line's watts match what the trainer then applies | |
 | 79 | Ride a whole `short` on an integrated-graphics PC at 1080p with four riders | 60 fps with the HUD up, also with the shop open. Log any dropped frames | |

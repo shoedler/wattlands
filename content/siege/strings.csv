@@ -139,11 +139,11 @@ SIEGE_HUD_MARK_OD,OD
 SIEGE_HUD_MARK_RESCUE,Rescue
 SIEGE_HUD_MARK_AFK,AFK
 SIEGE_HELP_WHEEL,Your watts turn your treadwheel
-SIEGE_HELP_PATH,The lit shaft shows where your watts go
-SIEGE_HELP_STATIONS,"Five stations: mine, ballista, onager, arrows, tar"
+SIEGE_HELP_PATH,The lit shaft is your watts
+SIEGE_HELP_STATIONS,Five stations use your watts
 SIEGE_HELP_ROAD,The attackers march down this road
 SIEGE_HELP_GATE,Hold the gate; tar shields it
-SIEGE_HELP_ROUTE_CARD,Left / right: pick a station. Up: the mine
+SIEGE_HELP_ROUTE_CARD,"Left, right: station. Up: mine"
 SIEGE_HELP_SHOP,Breaks: spend your gold here
 SIEGE_RESULTS,Castellum Rotae stands
 SIEGE_RESULTS_FALLEN,"The gate fell, but the riders rode on"
@@ -206,6 +206,10 @@ SIEGE_HUD_LINE_LOW,Spin up: rescue at {0}
 SIEGE_HUD_LINE_RESCUE,Rescue: spin {0}+
 SIEGE_HUD_LINE_COAST,Pedal: load dropped
 SIEGE_HUD_LINE_SPRINT,"Sprint {0}-{1} W, shift up"
+SIEGE_HUD_LINE_HOLD,Hold {0}-{1} W
+SIEGE_HUD_LINE_EASE,Ease to {0}-{1} W
+SIEGE_HUD_LINE_NO_DATA,No trainer data: keep pedalling
+SIEGE_HUD_WKG,{0} W/KG
 SIEGE_HUD_LINE_COOL,Spin it out
 SIEGE_HUD_LINE_WARMUP,"Settle in, spin {0}-{1}"
 SIEGE_HUD_NEXT_PHASE,"Next: {0}, {1} at {2} W"

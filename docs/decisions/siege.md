@@ -405,3 +405,8 @@ Short ADRs for the siege game: date, decision, alternatives, reason. Game sessio
 ## 2026-10-31 The cadence band is a second directive call (v0.3.0)
 - Decision: the host publishes `cadence_band(peer, 80, 100)` once at the first step, for every rider. `test_siege_static`, `test_siege_package` and S5 now allow exactly that beside the Overdrive request; a band of other values fails S5.
 - Reason: the HUD asks for 80-100 rpm and the metronome should click at its centre. It never changes load, and bots already rode 90 rpm without a band.
+
+## 2026-10-31 Live review of the HUD (v0.3.0)
+- Decision: stale power shows NO TRAINER DATA: KEEP PEDALLING ahead of coasting, with no target; Overdrive's line follows the band state (SPRINT, HOLD, EASE TO); the shop plate is 364 art px with the coin in a fixed column; the clock column is 4 px wider and the watts 4 narrower; chips keep 2 px clear of digits, so the gate number moves down 2 px and its bar is 3 px tall; three help strings are one line so their panels stay under 480 px (the kit fixes a wrapped panel at 560).
+- Alternatives: keep the mock's 340 px shop (OUTPUT runs into the note); a platform option for a help panel's width.
+- Reason: the governor counts a silent stream as coasting, so "pedal" would be a false instruction to a rider who is pedalling, and so is SHIFT UP to one already in the band.

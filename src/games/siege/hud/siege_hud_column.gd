@@ -80,9 +80,9 @@ func _fort() -> void:
 	var gate := str(int(model["gate"]))
 	if low:
 		var gw := SiegeHudType.width(gate, "KEY28")
-		D.rect(self, gr - gw - 3, 3, gw + 6, 30, D.ALARM)
-	SiegeHudType.draw_r(self, gate, gr, 4, "KEY28", D.TEXT)
-	D.bar(self, 7, 34, W - 14, 4, float(model["gate_frac"]), D.ALARM if low else D.STONE)
+		D.rect(self, gr - gw - 3, 3, gw + 6, 28 + D.GLYPH_CHIP_PAD * 2, D.ALARM)
+	SiegeHudType.draw_r(self, gate, gr, 3 + D.GLYPH_CHIP_PAD, "KEY28", D.TEXT)
+	D.bar(self, 7, 37, W - 14, 3, float(model["gate_frac"]), D.ALARM if low else D.STONE)
 	var tx := SiegeHudModel.strings_of(game)
 	SiegeHudType.draw(self, tx.t("SIEGE_HUD_TAR"), 7, 44, "LABEL", D.BRONZE_HI)
 	var curtain := int(model["curtain"])

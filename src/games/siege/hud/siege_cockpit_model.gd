@@ -7,7 +7,7 @@ extends RefCounted
 ##   "target_cap", "applied_w"                    the applied target from telemetry, never the plan
 ##   "w_text", "w" (-1: stale), "pct_text", "state", "wkg" ("" unless opted in)
 ##   "band" (Vector2, ZERO: none), "scale"        the watts gauge
-##   "cad_text", "cad", "cad_cap", "cad_low", "cad_stale", "cband"
+##   "cad_text", "cad", "cad_cap", "cad_low", "cad_nudge", "cad_stale", "cband"
 ##   "hr": HudRiderNumbers.HR_*, "hr_text"        no cell at HR_NONE, the plate narrows ("wide")
 ##   "line", "line_kind" (LINE_*), "line_alarm"   the one instruction, by state
 ##   "sim", "gear"                                the chip and the gear only in SIM
@@ -21,6 +21,9 @@ const LINE_LOW := "low"
 const LINE_RESCUE := "rescue"
 const LINE_COAST := "coast"
 const LINE_SPRINT := "sprint"
+const LINE_HOLD := "hold"
+const LINE_EASE := "ease"
+const LINE_NO_DATA := "no_data"
 const LINE_COOL := "cool"
 ## The last seconds before a step up, and how much higher the next target must be to be one.
 const LOAD_UP_S := 30.0
@@ -67,7 +70,7 @@ func face(game: SiegeGame) -> Dictionary:
 	_clock(out, s, r, tx, od_on, soon)
 	_target(out, s, r, tx, ph, rescue, od_on, applied, sprint)
 	_watts(out, r)
-	_cadence(out, r, tx, rescue)
+	_cadence(out, s, r, tx, rescue)
 	_heart(out)
 	_line(out, s, tx, rescue, coasting, od_on, soon, sprint)
 	_next(out, s, r, tx, ph, next, rescue, od_on)
@@ -86,7 +89,9 @@ func face(game: SiegeGame) -> Dictionary:
 
 
 func _feed_band(sim: bool, od_on: bool, applied: int, sprint: Vector2) -> void:
-	if od_on:
+	if numbers.is_stale():
+		numbers.set_band(0.0, 0.0)
+	elif od_on:
 		numbers.set_band(sprint.x, sprint.y)
 	elif applied > 0 and not sim:
 		var a := float(applied)
@@ -141,8 +146,10 @@ func _target(
 	applied: int,
 	sprint: Vector2
 ) -> void:
-	out["applied_w"] = applied
-	if od_on:
+	out["applied_w"] = 0 if numbers.is_stale() else applied
+	if numbers.is_stale():
+		out["target_cap"] = tx.t("SIEGE_HUD_TARGET_NONE")
+	elif od_on:
 		out["target_cap"] = tx.t("SIEGE_HUD_TARGET_SPRINT", [roundi(sprint.x), roundi(sprint.y)])
 	elif applied <= 0:
 		out["target_cap"] = tx.t("SIEGE_HUD_TARGET_NONE")
@@ -171,7 +178,9 @@ func _watts(out: Dictionary, r: SiegeRiderState) -> void:
 		out["wkg"] = "%.1f" % (mean / weight)
 
 
-func _cadence(out: Dictionary, r: SiegeRiderState, tx: GameStrings, rescue: bool) -> void:
+func _cadence(
+	out: Dictionary, s: SiegeState, r: SiegeRiderState, tx: GameStrings, rescue: bool
+) -> void:
 	var stale := numbers.cadence_stale()
 	var rpm := tm.cadence_rpm if tm != null else r.cadence_rpm
 	out["cad"] = rpm
@@ -187,6 +196,14 @@ func _cadence(out: Dictionary, r: SiegeRiderState, tx: GameStrings, rescue: bool
 			"SIEGE_HUD_RPM_BAND", [SiegeHudModel.CADENCE_LO, SiegeHudModel.CADENCE_HI]
 		)
 		out["cad_low"] = numbers.low_cadence()
+	# under the band in a wave but no alarm: a small up arrow, no chip
+	out["cad_nudge"] = (
+		s.in_wave()
+		and not stale
+		and not bool(out["cad_low"])
+		and rpm >= HudRiderNumbers.LOW_CADENCE_RPM
+		and rpm < float(SiegeHudModel.CADENCE_LO)
+	)
 
 
 func _heart(out: Dictionary) -> void:
@@ -195,9 +212,10 @@ func _heart(out: Dictionary) -> void:
 	out["hr_text"] = str(numbers.heart_bpm()) if hr == HudRiderNumbers.HR_LIVE else "--"
 
 
-## The one instruction line. Coasting first (its floor wins over rescue, BRIEF 4.6.12), then rescue,
-## the sprint, the low-cadence warning while rescue is armed, the cool-down, the step up, the
-## warm-up, and the steady band.
+## The one instruction line. No trainer data first: a rider who is pedalling must not be told to
+## pedal, and the governor counts a silent stream as coasting. Then coasting (its floor wins over
+## rescue, BRIEF 4.6.12), rescue, the sprint by where the 3 s power sits in its band, the low-cadence
+## warning while rescue is armed, the cool-down, the step up, the warm-up, and the steady band.
 func _line(
 	out: Dictionary,
 	s: SiegeState,
@@ -212,7 +230,10 @@ func _line(
 	var hi := SiegeHudModel.CADENCE_HI
 	var kind := LINE_SPIN
 	var text := tx.t("SIEGE_HUD_LINE_SPIN", [lo, hi])
-	if coasting:
+	if numbers.is_stale():
+		kind = LINE_NO_DATA
+		text = tx.t("SIEGE_HUD_LINE_NO_DATA")
+	elif coasting:
 		kind = LINE_COAST
 		text = tx.t("SIEGE_HUD_LINE_COAST")
 	elif rescue:
@@ -220,7 +241,14 @@ func _line(
 		text = tx.t("SIEGE_HUD_LINE_RESCUE", [roundi(HudRiderNumbers.RESCUE_RECOVER_RPM)])
 	elif od_on:
 		kind = LINE_SPRINT
-		text = tx.t("SIEGE_HUD_LINE_SPRINT", [roundi(sprint.x), roundi(sprint.y)])
+		var line_key := "SIEGE_HUD_LINE_SPRINT"
+		if numbers.band_state() == HudRiderNumbers.IN_BAND:
+			kind = LINE_HOLD
+			line_key = "SIEGE_HUD_LINE_HOLD"
+		elif numbers.band_state() == HudRiderNumbers.OVER:
+			kind = LINE_EASE
+			line_key = "SIEGE_HUD_LINE_EASE"
+		text = tx.t(line_key, [roundi(sprint.x), roundi(sprint.y)])
 	elif numbers.low_cadence():
 		kind = LINE_LOW
 		text = tx.t("SIEGE_HUD_LINE_LOW", [roundi(HudRiderNumbers.RESCUE_LOW_RPM)])
@@ -237,7 +265,9 @@ func _line(
 		text = tx.t("SIEGE_HUD_LINE_WARMUP", [lo, hi])
 	out["line"] = text
 	out["line_kind"] = kind
-	out["line_alarm"] = kind == LINE_COAST or kind == LINE_RESCUE or kind == LINE_LOW
+	out["line_alarm"] = (
+		kind == LINE_NO_DATA or kind == LINE_COAST or kind == LINE_RESCUE or kind == LINE_LOW
+	)
 
 
 func _next(

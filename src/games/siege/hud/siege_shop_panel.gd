@@ -18,13 +18,15 @@ extends SiegeHudCtl
 ## countdown) sits under the rows and the plate grows upward for it.
 
 ## The plate's rect in breaks; RECT holds its shadow and the hint row above it.
-const RECT := Rect2i(8, 368, 342, 166)
-const W := 340
+const RECT := Rect2i(8, 368, 366, 166)
+const W := 364
 const H := 150
 const HINT_H := 14
 const ROW_STEP := 24
 const ROW_H := 22
 const TEXT_X := 20
+## The coin's fixed column on every priced row.
+const COIN_X := W - 44
 const LIST_REFRESH_S := 0.25
 
 var list: PedalScanList = null
@@ -167,17 +169,10 @@ func _row(ry: int, index: int, row: Dictionary) -> void:
 	var cost := int(row["cost"])
 	var col := D.GOLD if ok else D.DIM
 	var note := str(row["note"])
-	var name_w := SiegeHudType.width(str(row["text"]), "BODY")
 	if cost >= 0:
-		var digits := str(cost)
-		var left := SiegeHudType.draw_r(self, digits, right, ry + 5, "BODY", col)
-		# a long name beside a note takes the coin's place, so neither is cut
-		var note_w := SiegeHudType.width(note, "LABEL") + 6 if note != "" else 0
-		if TEXT_X + name_w + note_w <= W - 50:
-			D.icon(self, "denarius", W - 44, ry + 6, col)
-			right = W - 50
-		else:
-			right = left - 5
+		SiegeHudType.draw_r(self, str(cost), right, ry + 5, "BODY", col)
+		D.icon(self, "denarius", COIN_X, ry + 6, col)
+		right = COIN_X - 6
 	if note != "":
 		right = SiegeHudType.draw_r(self, note, right, ry + 7, "LABEL", col) - 6
 	var text := SiegeHudType.fit(str(row["text"]), "BODY", right - TEXT_X)
