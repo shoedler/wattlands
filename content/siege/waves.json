@@ -2,7 +2,8 @@
   "group_every_s": [6, 12],
   "first_group_s": 3,
   "stop_before_end_s": 60,
-  "budget_factor": {"sweetspot": 0.85, "endurance": 0.75},
+  "budget_factor": {"short": 0.92, "vo2": 1.1, "sweetspot": 0.85, "endurance": 0.7},
+  "slot_factor": [0.62, 0.58, 0.8, 1.0],
   "group_var": [0.8, 1.2],
   "mix": {
     "standard": [[0.7, 0.1, 0.2], [0.5, 0.25, 0.25], [0.4, 0.3, 0.3]],

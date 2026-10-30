@@ -50,7 +50,7 @@
     "band_hi_ftp": 1.4
   },
   "rush": {
-    "budget_frac": 0.08,
+    "budget_frac": 0.056,
     "duration_s": 30,
     "od_bounty_mult": 2
   },
