@@ -96,7 +96,7 @@ Numbers are the current content in `content/siege/*.json` (committed state). Whe
 - `B = c_budget x budget_factor[shift] x slot_factor[slots] x sum over slots (planned P_eff / 250 W) x (wave_s - 60) / 60`.
 - `c_budget` is 50.
 - `slot_factor` by slot count 1-4, bots included: 0.62, 0.58, 0.8, 1.0. One rider mans one station, so a small team covers fewer range bands. Total B still grows with every slot (0.62, 1.16, 2.4, 4.0 slot units).
-- `budget_factor` by shift: short 0.92, vo2 1.1, sweetspot 0.85, endurance 0.7. Long waves saturate the defense while short ones reset.
+- `budget_factor` by shift: short 0.92, vo2 1.0, sweetspot 0.85, endurance 0.72. Long waves saturate the defense while short ones reset.
 - A slot's planned P_eff = planned % FTP x FTP x u x r. u is 0.85 for an unverified FTP. r is 250 / FTP in FAIR_FTP, 1 in RAW, and the slot's latest P_eff / power (power ≥ 50 W) in WKG. No weight is ever read.
 - Example: `short`, 4 verified riders in FAIR_FTP, offset 0: each slot plans 0.95 x 250 W, so B = 50 x 0.92 x 1.0 x 3.8 x 4 = about 699 threat a wave. A solo rider: 50 x 0.92 x 0.62 x 0.95 x 4 = about 108.
 
@@ -153,7 +153,7 @@ The first four start with a 300 s warm-up wave (ERG 50% ramping to 65%) and a 12
 - T2: a weapon-only rider earns 40-60% of a mine-only rider's gold per minute.
 - T3: leaks per wave-minute stay within ±30% across the four shifts.
 - T4: at least 70% of rams and siege towers are destroyed before they reach the gate (a docked tower counts as reaching it).
-- Status (round 3 ADRs): T1 met (`short` mean 82.1). T2 was 0.53 in round 2. T3 is not met (see "Known gaps"). S4's scores fall strictly with compliance: 82.11, 70.86, 61.76 at 100%, 90%, 80%.
+- Status (final matrix, 2026-10-30, all of S1-S10 passing): T1 met (`short` mean 82.1); T2 0.44 (rules sim); T3 met (leaks per wave-minute: short 0.82, vo2 0.72, sweetspot 0.79, endurance 0.64); T4 met (75/75 siege engines stopped). S4's scores fall strictly with compliance: 82.11, 70.86, 61.76 at 100%, 90%, 80%.
 
 ### Where the numbers differ from the brief
 
@@ -330,7 +330,7 @@ In PowerShell: `tools/godot.ps1 --path . -- --mock-trainer=erg`. Other profiles 
 
 ## Known gaps
 
-- **T3 is not met.** Round 3 (platform matrix, 4 compliant riders, seeds 1-3) gave leaks per wave-minute of short 0.82, vo2 1.22, sweetspot 0.79, endurance 0.55. vo2 is 44% above the mean and endurance 35% below; the limit is 30%. vo2's leaks are noisy over three seeds (ADR "T3: per-shift budget factors, round 3").
+- **Endurance is uneven for a compliant team.** At `budget_factor` 0.72 seeds 1-3 grade D (one Breach), A and B. 0.70 gave B, B, B but put endurance 35% under the T3 mean; 0.74 kept T3 but graded D, C, D (ADR "Final T3 factors").
 - **Untested on hardware.** Every run used MockTrainer. The ERG targets, the 50 to 117% step, the Overdrive switches, rescue, coasting and panic have not met a KICKR CORE (`HARDWARE_TEST.md`).
 - **The renderer is unmeasured on integrated graphics.** The view has only been measured on an NVIDIA GPU. 60 fps at 1080p on integrated graphics with 150 enemies, and the depth test (the anchor depth travels in the modulate colour), need a real check (`HARDWARE_TEST.md` sections 12 and 13).
 - **The synthesized audio is unheard.** The sounds are generated and tested for their triggers, never listened to on speakers.

@@ -371,3 +371,10 @@ Short ADRs for the siege game: date, decision, alternatives, reason. Game sessio
 ## 2026-10-30 WKG warm-up budget (review, unconfirmed item)
 - Decision: a rider's WKG ratio r starts at its slot's `p_eff_per_w` instead of 1.0, until telemetry of >= 50 W replaces it.
 - Reason: a real defect. Brief 2.4: r in WKG is the latest p_eff_w / power_w; GAME_SDK 6: `p_eff_per_w` is that ratio (75 / weight) and the host has every rider's value. The warm-up wave's B is computed on its first tick, before any telemetry of >= 50 W, so every WKG rider counted at r = 1.0.
+
+## 2026-10-30: Final T3 factors (lead)
+
+- Decision: `budget_factor` vo2 1.0 and endurance 0.72 (round 3 had 1.1 and 0.7). On the final matrix every check S1-S10 passes; leaks per wave-minute are short 0.82, vo2 0.72, sweetspot 0.79, endurance 0.64.
+- Alternatives: endurance 0.70 (B, B, B, but 35% under the T3 mean, so S9 fails); 0.74 (T3 passes, grades D, C, D with one Breach in two seeds); 0.80 (51% over the mean).
+- Reason: 0.72 is the only tried value that passes T3 with at most one Breach per run (seeds 1-3: D with one Breach, A, B). The lead's extra bar of "C or better" for a compliant endurance team is missed on seed 1; listed as a known gap in the README.
+
