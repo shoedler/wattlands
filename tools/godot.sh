@@ -15,8 +15,8 @@
 #   - refuses -d and --debug (an automated run would hang at the debugger prompt);
 #   - resolves the binary: $GODOT, tools/godot_bin.local in this checkout, the same file in the main
 #     checkout (so git worktrees work), then godot or godot4 on PATH;
-#   - points Godot's user dir at <checkout>/.userdata (APPDATA on Windows, XDG_DATA_HOME on Linux),
-#     except for export runs, which need the installed export templates;
+#   - points Godot's user dir at $WATTLANDS_USERDATA_DIR, else <checkout>/.userdata (APPDATA on Windows,
+#     XDG_DATA_HOME on Linux), except for export runs, which need the installed export templates;
 #   - runs Godot through tools/lib/godot_lock.mjs: machine-wide slot lock, stdin closed, run timeout.
 #   Everything from the first -- on is passed to Godot untouched.
 set -u
@@ -167,14 +167,19 @@ checkout_root() {
 if [ "$is_export" = 0 ]; then
   root="$(checkout_root)" || root=""
   if [ -n "$root" ] && [ -d "$root" ]; then
-    mkdir -p "$root/.userdata" 2>/dev/null || true
+    userdata="${WATTLANDS_USERDATA_DIR:-$root/.userdata}"
+    case "$userdata" in
+      /* | [A-Za-z]:*) ;;
+      *) userdata="$PWD/$userdata" ;; # Godot changes directory to --path; this must not follow it
+    esac
+    mkdir -p "$userdata" 2>/dev/null || true
     if [ "$is_windows" = 1 ]; then
       if command -v cygpath >/dev/null 2>&1; then
-        root="$(cygpath -m "$root")"
+        userdata="$(cygpath -m "$userdata")"
       fi
-      export APPDATA="$root/.userdata"
+      export APPDATA="$userdata"
     else
-      export XDG_DATA_HOME="$root/.userdata"
+      export XDG_DATA_HOME="$userdata"
     fi
   fi
 fi

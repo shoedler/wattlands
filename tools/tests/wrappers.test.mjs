@@ -47,6 +47,7 @@ after(() => {
 });
 
 const skipNoGodot = !GODOT && 'no Godot binary (tools/godot_bin.local or GODOT)';
+const norm = (x) => (IS_WIN ? x.replaceAll(path.sep, '/').toLowerCase() : x);
 
 /** Copies the wrapper files into <root>/tools so a test can run them outside this checkout. */
 function copyWrappers(root) {
@@ -72,7 +73,6 @@ for (const sh of shells) {
       assert.equal(p.WATTLANDS_NO_NETWORK_INTEGRATIONS, '1');
       assert.equal(p.WATTLANDS_PROBE_PASSTHROUGH, 'pass-through-ok', 'other variables pass through unchanged');
       assert.deepEqual(JSON.parse(p.USER_ARGS), userArgs);
-      const norm = (x) => (IS_WIN ? x.replaceAll(path.sep, '/').toLowerCase() : x);
       assert.ok(
         norm(p.USER_DATA_DIR).startsWith(norm(`${path.join(project, '.userdata')}/`)),
         `user dir ${p.USER_DATA_DIR} is under the checkout's .userdata`,
@@ -173,6 +173,90 @@ for (const sh of shells) {
       const r = await runWrapper(sh.id, ['--headless', '--version'], { env: minimalEnv(), cwd: wt, tools: path.join(wt, 'tools') });
       assert.equal(r.code, 0, r.stderr);
       assert.match(r.stdout, /^4\.7\.\d+/m);
+    });
+
+    test('WATTLANDS_USERDATA_DIR moves the user dir out of the checkout, creating it', { skip: skipNoGodot }, async () => {
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wattlands-userdata-'));
+      scratch.push(tmp);
+      const dir = path.join(tmp, 'shard_1', 'userdata');
+      const r = await runWrapper(sh.id, probeArgs(), { env: minimalEnv({ GODOT, WATTLANDS_USERDATA_DIR: dir }) });
+      assert.equal(r.code, 0, r.stderr);
+      const seen = norm(parseProbe(r.stdout).USER_DATA_DIR);
+      assert.ok(seen.startsWith(norm(`${dir}/`)), `user dir ${seen} is under ${dir}`);
+      assert.ok(fs.statSync(dir).isDirectory());
+    });
+
+    // These use node as a stand-in for Godot (the first "Godot argument" is its script): no Godot process,
+    // and the exact variables the wrapper exports, export runs included, which a probe can't reach.
+    describe('the user dir variable', () => {
+      const variable = IS_WIN ? 'APPDATA' : 'XDG_DATA_HOME';
+      let root = null;
+      let probe = null;
+      let lockDir = null;
+
+      before(() => {
+        root = fs.mkdtempSync(path.join(os.tmpdir(), 'wattlands-userdata-var-'));
+        scratch.push(root);
+        lockDir = path.join(root, 'lock');
+        probe = path.join(root, 'print_var.cjs');
+        fs.writeFileSync(probe, `process.stdout.write('VAR=' + (process.env.${variable} ?? '<unset>') + '\\n');\n`);
+      });
+
+      const runStandIn = (extraEnv, godotArgs, opts = {}) =>
+        runWrapper(sh.id, [probe, ...godotArgs], {
+          env: minimalEnv({
+            GODOT: process.execPath,
+            WATTLANDS_GODOT_LOCK_DIR: lockDir,
+            WATTLANDS_GODOT_LOCK_CAP: '4',
+            [variable]: 'outer-value',
+            ...extraEnv,
+          }),
+          ...opts,
+        });
+      const varOf = (r) => /^VAR=(.*?)\r?$/m.exec(r.stdout)?.[1];
+
+      test('unset or empty: <checkout>/.userdata, as before', async () => {
+        const project = path.join(root, 'project');
+        fs.mkdirSync(project, { recursive: true });
+        for (const extra of [{}, { WATTLANDS_USERDATA_DIR: '' }]) {
+          const r = await runStandIn(extra, ['--path', project]);
+          assert.equal(r.code, 0, r.stderr);
+          assert.equal(norm(varOf(r)), norm(path.join(project, '.userdata')));
+        }
+      });
+
+      test('set: that dir, created, and the checkout gets no .userdata', async () => {
+        const project = path.join(root, 'project_set');
+        fs.mkdirSync(project, { recursive: true });
+        const dir = path.join(root, 'set dir', 'userdata');
+        const r = await runStandIn({ WATTLANDS_USERDATA_DIR: dir }, ['--path', project]);
+        assert.equal(r.code, 0, r.stderr);
+        assert.equal(norm(varOf(r)), norm(dir));
+        assert.ok(fs.statSync(dir).isDirectory());
+        assert.equal(fs.existsSync(path.join(project, '.userdata')), false);
+      });
+
+      test('relative: resolved against the caller, not against --path', async () => {
+        const project = path.join(root, 'project_rel');
+        const cwd = path.join(root, 'caller');
+        fs.mkdirSync(project, { recursive: true });
+        fs.mkdirSync(cwd, { recursive: true });
+        const r = await runStandIn({ WATTLANDS_USERDATA_DIR: 'build/shard/userdata' }, ['--path', project], { cwd });
+        assert.equal(r.code, 0, r.stderr);
+        const want = path.join(cwd, 'build', 'shard', 'userdata');
+        assert.equal(norm(varOf(r)), norm(want));
+        assert.ok(fs.statSync(want).isDirectory());
+      });
+
+      test('export runs keep the real user dir, whatever the variable says', async () => {
+        const dir = path.join(root, 'never_made');
+        for (const flag of ['--export-release', '--export-debug', '--export-pack', '--export-patch']) {
+          const r = await runStandIn({ WATTLANDS_USERDATA_DIR: dir }, [flag, 'Windows Desktop', 'x.exe']);
+          assert.equal(r.code, 0, r.stderr);
+          assert.equal(varOf(r), 'outer-value', flag);
+        }
+        assert.equal(fs.existsSync(dir), false);
+      });
     });
 
     test('called directly from a PowerShell prompt: keeps --, rejoins -x=res://y, leaves the session env alone', {
