@@ -1,12 +1,9 @@
-extends GutTest
+extends TestGameSessionSuite
 ## The game through the real platform runtime: GameRegistry, PlanValidator and GameSimRunner
 ## (sdk-runtime) on top of the trainer stack.
 
 const F := preload("res://tests/games/fishing/fishing_fakes.gd")
 
-var _dirs: Array[String] = []
-## Runners made by a test: cleanup() deletes each one's temp root (W3 QT-4).
-var _runners: Array[GameSimRunner] = []
 ## The last runner _run made (its hosts stay alive until after_each).
 var _runner: GameSimRunner = null
 ## Event types each peer's fx_event raised in the last run, by local peer (connected after setup).
@@ -15,30 +12,10 @@ var _fx: Dictionary = {}
 var _snaps: Dictionary = {}
 
 
-func before_each() -> void:
-	var d := Paths.make_temp_dir("fishing_session")
-	_dirs.append(d)
-	Paths.set_override(d)
-
-
-func after_each() -> void:
-	for r in _runners:
-		if is_instance_valid(r):
-			r.cleanup()
-	_runners.clear()
-	Paths.set_override("")
-	for d in _dirs:
-		GameSimCli.remove_tree(d)
-	_dirs.clear()
-
-
 ## The installed games, plus the template itself (never listed, so the GameRegistry autoload
 ## does not know it; the conformance test loads it the same way).
 func _registry() -> WlGameRegistry:
-	var reg := WlGameRegistry.new()
-	reg.scan_on_ready = false
-	add_child_autofree(reg)
-	reg.scan()
+	var reg := super()
 	if not _is_scaffolded_game():
 		assert_eq(reg.add_game(F.manifest(), F.GAME_DIR, true), "")
 	return reg
