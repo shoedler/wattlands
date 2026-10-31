@@ -6,6 +6,12 @@ extends GutTest
 
 const BUDGET_US := 1000.0
 const ROUNDS := 3
+## GitHub's runners are about 2x this budget's reference machine (docs/decisions/lead.md).
+const CI_BUDGET_US := 2500.0
+
+
+func _budget_us() -> float:
+	return CI_BUDGET_US if OS.has_environment("CI") else BUDGET_US
 
 
 ## vo2 wave 2 with 150 enemies in reach, every station manned at m ~ 1.5, four Scorpions.
@@ -78,7 +84,7 @@ func test_a_step_at_the_cap_with_every_station_firing_is_under_a_millisecond() -
 			% [mean, rig.state.projectiles.size()]
 		)
 	)
-	assert_lt(mean, BUDGET_US, "mean %.0f us" % mean)
+	assert_lt(mean, _budget_us(), "mean %.0f us" % mean)
 
 
 func test_an_idle_field_at_the_cap_is_cheap_too() -> void:
@@ -87,7 +93,7 @@ func test_an_idle_field_at_the_cap_is_cheap_too() -> void:
 		r.target = SiegeIds.STATION_MINE
 	var mean := _best_mean_us(rig, 200)
 	gut.p("mean rules step at the cap, stations idle: %.0f us" % mean)
-	assert_lt(mean, BUDGET_US)
+	assert_lt(mean, _budget_us())
 
 
 func test_a_cap_sized_burst_of_spawns_drains_within_the_cap() -> void:

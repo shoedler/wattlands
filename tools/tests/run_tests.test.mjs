@@ -200,7 +200,7 @@ describe('tools/run_tests (bash)', { skip: skipNoGodot }, () => {
     assert.equal(green(), 3);
     assert.match(fs.readFileSync(path.join(project, 'build', 'gut.log'), 'utf8'), /Run Summary/);
     const seen = JSON.parse(fs.readFileSync(path.join(project, 'build', 'fake_gut_args.json'), 'utf8'));
-    assert.deepEqual(seen.args, ['-gdir=res://tests', '-ginclude_subdirs', '-gexit', '-gjunit_xml_file=build/junit.xml']);
+    assert.deepEqual(seen.args, ['-gconfig=', '-gdir=res://tests', '-ginclude_subdirs', '-gexit', '-gjunit_xml_file=build/junit.xml']);
   });
 
   test('fewer tests than the green count fail; --min-count accepts and records the new count', async () => {
@@ -248,7 +248,8 @@ describe('tools/run_tests (bash)', { skip: skipNoGodot }, () => {
     assert.equal(r.code, 0, r.stdout);
     assert.equal(green(), 2);
     const seen = JSON.parse(fs.readFileSync(path.join(project, 'build', 'fake_gut_args.json'), 'utf8'));
-    assert.equal(seen.args[0], '-gdir=res://tests/unit');
+    assert.equal(seen.args[0], '-gconfig=', 'a .gutconfig.json never reaches a gate');
+    assert.equal(seen.args[1], '-gdir=res://tests/unit');
   });
 
   test('static: check_scripts passes clean scripts and fails a broken one', async () => {
