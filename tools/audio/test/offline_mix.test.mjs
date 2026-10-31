@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { BankAudio, MIX_RATE, PROMPT_VOICE_DB, SAFETY_DUCK, limit, mixdown, simulate, toInt16 } from '../lib/offline_mix.mjs';
+import { BankAudio, MIX_RATE, PROMPT_UI_DUCK, PROMPT_UI_SPARED, PROMPT_VOICE_DB, SAFETY_DUCK, limit, mixdown, simulate, toInt16 } from '../lib/offline_mix.mjs';
 import { FIXTURE_BANK, REPO, bankOf, readJson } from './helpers.mjs';
 
 const TICK = { dur: 0.04, seed: 1, locked: true, norm: { peak: -6 }, layers: [{ src: 'noise', env: { a: 0.0003, d: 0.03 } }] };
@@ -131,11 +131,11 @@ test('a duck pulls its bus down and lets go; the deepest of several wins', () =>
   assert.ok(Math.abs(rms(1.5) - open) < 0.5, 'released');
 });
 
-test('a safety prompt plays on Master and ducks Machines, Ambience, Sfx', () => {
+test('a safety prompt plays on Master and ducks Machines, Ambience, Sfx, and the UI but for what it spares', () => {
   const shared = new BankAudio(readJson(`${FIXTURE_BANK.replace(/tools[\\/]audio.*$/, '')}assets/_shared/audio/audio.json`), null);
   const b = bank({ machines: { m: { loops: [{ sound: 'hum', db: -6 }] } } });
   const sim = simulate(b, { segments: [{ rpm: 60, s: 2, params: {} }], machines: [{ id: 'a', machine: 'm', lead: true }], prompts: [{ t: 1, name: 'warning' }], shared });
-  assert.deepEqual(sim.ducks.map((d) => [d.bus, d.db]), [['Machines', -14], ['Ambience', -14], ['Sfx', -20]]);
+  assert.deepEqual(sim.ducks.map((d) => [d.bus, d.db]), [['Machines', -14], ['Ambience', -14], ['Sfx', -20], ['UI', -10]]);
   const mix = mixdown(b, sim, { shared });
   assert.ok(firstLoud(mix.stems.Master[0]) > 0);
 });
@@ -152,6 +152,39 @@ test('the preview ducks a safety prompt as WlSfx does', () => {
     assert.equal(attack, SAFETY_DUCK[i].attack_s);
     assert.equal(release, SAFETY_DUCK[i].release_s);
   }
+});
+
+test('the preview trims the UI under a safety prompt as WlSfx does', () => {
+  const src = fs.readFileSync(path.join(REPO, 'addons', 'wattlands', 'audio', 'sfx.gd'), 'utf8');
+  assert.equal(Number(src.match(/SAFETY_UI_DB := (-?[\d.]+)/)[1]), PROMPT_UI_DUCK.db);
+  assert.equal(Number(src.match(/SAFETY_DUCK_ATTACK_S := ([\d.]+)/)[1]), PROMPT_UI_DUCK.attack_s);
+  assert.equal(Number(src.match(/SAFETY_DUCK_RELEASE_S := ([\d.]+)/)[1]), PROMPT_UI_DUCK.release_s);
+  const spared = src.match(/SAFETY_UI_SPARED: Array\[String\] = \[(.*)\]/)[1].match(/"[^"]+"/g).map((q) => q.slice(1, -1));
+  assert.deepEqual(spared.sort(), [...PROMPT_UI_SPARED].sort());
+});
+
+test('preview.hud: the UI sounds on its bus, a prompt takes it down, and spares the count', () => {
+  const shared = new BankAudio(readJson(path.join(REPO, 'assets', '_shared', 'audio', 'audio.json')), null);
+  const scene = (hud, prompts, withShared) => ({ segments: [{ rpm: 0, s: 3, params: {} }], machines: [], hud, prompts, shared: withShared ? shared : null });
+  const render = (hud, prompts) => mixdown(bank({}), simulate(bank({}), scene(hud, prompts, true)), { shared }).stems.UI[0];
+  const energy = (x) => x.reduce((a, v) => a + v * v, 0);
+  assert.equal(energy(mixdown(bank({}), simulate(bank({}), scene([{ t: 1, sound: 'phase' }], [], false))).stems.UI[0]), 0, 'no _shared bank, no HUD');
+  const phase = energy(render([{ t: 1, sound: 'phase' }], []));
+  const count = energy(render([{ t: 1, sound: 'countdown' }], []));
+  assert.ok(phase > 0 && count > 0);
+  const downBy = (sound, alone) => 10 * Math.log10(energy(render([{ t: 1, sound }], [{ t: 0.98, name: 'warning' }])) / alone);
+  assert.ok(downBy('phase', phase) < -8, `phase ${downBy('phase', phase).toFixed(2)} dB`);
+  assert.ok(Math.abs(downBy('countdown', count)) < 0.01, `countdown ${downBy('countdown', count).toFixed(2)} dB`);
+});
+
+test('a loops id keeps one track across its entries: no restart, no dip at the join', () => {
+  const b = bank({ loops: { l: { bus: 'Sfx', layers: [{ sound: 'hum', db: -6, db_by: [{ param: 'v', points: [[0, -6], [1, 0]] }] }] } } });
+  const loops = [{ id: 'l', t0: 0, t1: 1, params: { v: 1 } }, { id: 'l', t0: 1, t1: 2, params: { v: 1 } }];
+  const sim = simulate(b, { segments: [{ rpm: 0, s: 2, params: {} }], machines: [], loops });
+  assert.equal(sim.tracks.length, 1);
+  const at = (s) => sim.tracks[0].db[Math.round(s * 60)];
+  assert.ok(Math.abs(at(1.0) - at(0.9)) < 0.01, `${at(0.9)} to ${at(1.0)}`);
+  assert.ok(Math.abs(at(1.05) - at(0.9)) < 0.01, `${at(0.9)} to ${at(1.05)}`);
 });
 
 test('a safety prompt plays at the level HudLayer asks for', () => {

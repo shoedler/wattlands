@@ -2,7 +2,8 @@ class_name AudioBuses
 extends RefCounted
 ## The audio buses (SPEC_AUDIO 1.4): Master, Machines, Ambience, Sfx, UI. Created in code, so no project.godot edit and
 ## no default_bus_layout.tres. Static over AudioServer. WlSfx calls ensure() in _ready and tick() in _process.
-## Master and UI are never ducked: a safety prompt plays on Master and no sub-slider or duck can hide it.
+## Master and UI are never ducked: a safety prompt plays on Master and no sub-slider or duck can hide it. WlSfx trims
+## the UI's own voices under a prompt, one by one, because the start count on UI must keep its level.
 const MASTER := "Master"
 const MACHINES := "Machines"
 const AMBIENCE := "Ambience"

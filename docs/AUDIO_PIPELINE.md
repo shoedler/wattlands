@@ -99,6 +99,7 @@ Repo WAV caps, `tools/audio/test/budget.test.mjs`: tank 7.0, fishing 4.5, siege 
   "segments": [{"rpm": 60, "s": 20, "params": {"power": 0.8}}, {"rpm": 0, "s": 3, "params": {"power": 0}}],
   "events": [{"t": 4.0, "cue": "shot_main", "vars": {}}],
   "loops": [{"id": "drag_scream", "t0": 30, "t1": 34, "params": {"tension": 0.9}}],
+  "hud": [{"t": 4.0, "sound": "toast"}],
   "checks": {"a6": {"param": "power", "from": 0.5, "to": 1.2}, "a7": {"param": "power", "from": 0.5, "to": 1.3}, "a14": {"cue": "shot_main"}},
   "waive": {"A10": "the stated musical reason, with the number"}
 }
@@ -113,7 +114,9 @@ Levels add up tightly: Machines at -22 and Ambience at -32 sum to about -21.5 LU
 How a row reads the audio, where the name alone doesn't say:
 
 - D1, D2: each event entry of the lead machine, rendered alone over 10 revolutions, against the pattern: a sharp rise of the fast envelope, 20 ms apart at least. A stroke with no attack of its own, ringing into the next, fails.
-- D5: `warning` and `rescue` momentary against every other bus in the same 600 ms, the prompt's own ducks counted (`SAFETY_DUCK`, `WlSfx`'s -14 dB on Machines and Ambience and -20 dB on Sfx, back over 2 s), and the prompt at the -4 dB `HudLayer` plays it (`PROMPT_VOICE_DB`). It plays the prompts at the mix's midpoint and on and just before the mix's loudest moment (0, 0.2 and 0.4 s ahead of the loudest 400 ms): a prompt can fire in a sprint, and one fired just before a stinger meets it with its duck already releasing. The worst of these is the row's value, with the prompt and time in its note. A preview's loudest moment should be the game's real one.
+- D5: `warning` and `rescue` momentary against every other bus in the same 600 ms, the prompt's own ducks counted (`SAFETY_DUCK`, `WlSfx`'s -14 dB on Machines and Ambience and -20 dB on Sfx, back over 2 s), and the prompt at the -4 dB `HudLayer` plays it (`PROMPT_VOICE_DB`). It plays the prompts at the mix's midpoint and on and just before the mix's loudest moment (0, 0.2 and 0.4 s ahead of the loudest 400 ms): a prompt can fire in a sprint, and one fired just before a stinger meets it with its duck already releasing. The worst of these is the row's value, with the prompt and time in its note. A preview's loudest moment should be the game's real one. The UI is in it when a bank says what `HudLayer` plays over that moment: `preview.hud`, `[{"t": 93.7, "sound": "phase"}, ...]`, any `_shared` sound, at `HudLayer`'s -4 dB on UI, and in the mix `preview.mjs` writes too. D5 then also plays the prompts on and 0.2 and 0.4 s ahead of each of them. `WlSfx` trims the UI's own voices 10 dB under a prompt on the ducks' envelope (`SAFETY_UI_DB`, `PROMPT_UI_DUCK`), except `countdown` and the metronome: the UI bus itself is never ducked.
+- D4: the Machines bus's loudest 20 ms from 400 ms after the preview's stop. With `preview.checks.d4_sweep` it also reads every stroke's own ring from 400 ms after the worst stop for it (the one just before it), at each moving cadence under the last moving segment's load, so the row does not rest on where the preview happens to stop.
+- D6, D7: seven other riders at 88-112 rpm with the lead's own `lead: true` machines, the bed, every `preview.loops` id held open, the cues folded into 30 s, then a coast if the preview has a stop.
 - A3: spectral flux, stdev over mean plus 2 % of the frame magnitude, from the second revolution on, with a 2048 window. A steady drone reads near 0.2, and an engine with strokes above 1.
 - A5: the correlation of a 4 ms envelope between successive revolutions.
 - A12: the bed's 50 ms envelope, autocorrelated at each layer's own length. A second layer of a co-prime length and the spots are what bring it down.
