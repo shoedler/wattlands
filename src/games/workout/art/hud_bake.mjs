@@ -81,15 +81,15 @@ function crankImage() {
   for (let k = 0; k < CRANK_FRAMES; k++) {
     const frame = new Canvas(ICON, ICON);
     const c = (ICON - 1) / 2;
-    frame.ring(c, c, 3, GREY);
+    frame.ring(c, c, 3, WHITE, 2);
     const a = crankTheta(k);
     const tip = (r, sign) => [c + sign * r * Math.cos(a), c + sign * r * Math.sin(a)];
     const far = tip(5, -1);
     frame.line(c, c, far[0], far[1], GREY);
     const near = tip(5, 1);
-    frame.line(c, c, near[0], near[1], WHITE);
-    frame.rect(Math.round(near[0]) - 1, Math.round(near[1]), 3, 1, WHITE);
-    frame.px(c, c, WHITE);
+    frame.thick(c, c, near[0], near[1], 2, WHITE);
+    frame.rect(Math.round(near[0]) - 2, Math.round(near[1]), 5, 1, WHITE);
+    frame.px(c, c, GREY);
     for (let y = 0; y < ICON; y++) {
       for (let x = 0; x < ICON; x++) {
         const v = frame.get(x, y);

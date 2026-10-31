@@ -178,6 +178,8 @@ static func _line(key: String, args: Array = [], urgent: bool = false) -> Dictio
 ## own), so it has its own key; a warm-up sprint reads as what it is there, a free ride.
 static func next_text(game: WorkoutGame, index: int) -> String:
 	var state := game.state
+	if state.phases.is_empty():
+		return ""  # a client before its timeline arrives
 	var p := state.phase(index)
 	if p == null:
 		return tx(game, "WORKOUT_HUD_NEXT_END")
@@ -444,10 +446,17 @@ static func score(game: WorkoutGame, t: Telemetry, peak_w: float) -> Dictionary:
 	var f := tib(game, r)
 	var sprint := WorkoutSession.is_sprint(p) and not WorkoutHud.band_for(state, i, r).is_empty()
 	var graded := state.is_course_phase(i) and t != null
+	# the cool-down isn't scored (WorkoutRules): no block number to show there
+	var cooling := p != null and p.kind == Wl.COOLDOWN
 	return {
 		"tib": str(roundi(clampf(f, 0.0, 1.0) * 100.0)),
 		"grade": GameResults.grade_from_fraction(f),
-		"block": tx(game, "WORKOUT_HUD_BLOCK", [WorkoutHud.pct_text(block_tib(game, r))]),
+		"block":
+		tx(
+			game,
+			"WORKOUT_HUD_BLOCK",
+			["-" if cooling else WorkoutHud.pct_text(block_tib(game, r))],
+		),
 		"group":
 		(
 			tx(game, "WORKOUT_HUD_GROUP", [WorkoutHud.pct_text(group_tib(game))])

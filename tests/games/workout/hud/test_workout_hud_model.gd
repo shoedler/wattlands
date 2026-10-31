@@ -359,6 +359,22 @@ func test_score_in_a_sprint_and_on_a_course() -> void:
 	assert_eq(M.score(road, t, 0.0)["grade_pct"], "-3.0%")
 
 
+func test_the_cool_down_has_no_block_number() -> void:
+	var g := _game_at("easy_30", 0.0)
+	var cool := _game_at("easy_30", cool_start(g) + 10.0)
+	assert_eq(M.score(cool, null, 0.0)["block"], "BLOCK -", "it is not scored")
+
+
+func test_a_client_before_its_timeline_shows_no_next_and_does_not_crash() -> void:
+	var g := _game_at("easy_30", 0.0)
+	g.state.phases = []
+	var tl := M.timeline(g, null)
+	assert_eq(tl["next"], "")
+	assert_eq(tl["label"], "")
+	assert_eq(tl["now_x"], 0)
+	assert_eq(M.timeline_runs(g.state, M.TIMELINE_COLUMNS).size(), 0)
+
+
 func test_score_speed_and_distance() -> void:
 	var g := _game_at("easy_30", 400.0)
 	var r := g.state.rider(1)

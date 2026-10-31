@@ -107,7 +107,7 @@ func _cadence() -> void:
 	var col := D.DIM if dim else D.NUM
 	var cw := D.big(self, 117, 19, str(m["cadence"]), col)
 	D.tall(self, 117 + cw + 3, 32, tx("WORKOUT_HUD_RPM"), D.DIM)
-	D.crank(self, int(m["crank_frame"]), Vector2(W - 6 - D.CRANK_CELL, 20), col)
+	D.crank(self, int(m["crank_frame"]), Vector2(W - 6 - D.CRANK_CELL, 30), col)
 	D.gauge(
 		self,
 		Rect2(117, 47, W - 6 - 117, 5),

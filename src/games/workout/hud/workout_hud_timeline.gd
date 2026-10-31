@@ -17,7 +17,6 @@ var _cached_total: float = -1.0
 
 
 func _init() -> void:
-	super._init()
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 
 

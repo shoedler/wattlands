@@ -276,12 +276,13 @@ static func gauge(
 	var x1 := r.position.x + roundf(r.size.x * clampf(hi, 0.0, 1.0))
 	if x1 > x0:
 		c.draw_rect(Rect2(x0, r.position.y, x1 - x0, r.size.y), BAND)
-		c.draw_rect(Rect2(x0, r.position.y - 1, 1, r.size.y + 2), AMBER)
-		c.draw_rect(Rect2(x1 - 1, r.position.y - 1, 1, r.size.y + 2), AMBER)
 	if tick_n > 1:
 		for i in range(1, tick_n):
 			var tx := r.position.x + roundf(r.size.x * float(i) / tick_n)
 			c.draw_rect(Rect2(tx, r.end.y - 2, 1, 2), PANEL)
+	if x1 > x0:
+		c.draw_rect(Rect2(x0, r.position.y - 1, 1, r.size.y + 2), AMBER)
+		c.draw_rect(Rect2(x1 - 1, r.position.y - 1, 1, r.size.y + 2), AMBER)
 	if v < 0.0:
 		return
 	var nx := r.position.x + roundf((r.size.x - 1.0) * clampf(v, 0.0, 1.0))

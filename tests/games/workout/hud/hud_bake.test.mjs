@@ -60,4 +60,5 @@ test('the crank icon has one frame per rider frame and its near crank follows th
   assert.equal(crank.get(c, 1)[0], 255);
   assert.equal(crank.get(c, 11)[3], 255, 'the far crank points down');
   assert.notEqual(crank.get(c, 11)[0], 255, 'and is dimmer');
+  assert.equal(crank.get(c, 3)[0], 255, 'the chainring is solid white');
 });
