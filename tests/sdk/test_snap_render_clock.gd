@@ -1,6 +1,6 @@
 extends GutTest
 ## SnapRenderClock: the time a view draws at, behind the newest entry by the mean spacing (BRIEF
-## 5.1). The cases come from test_tank_snap_history.gd, which still runs against TankRenderClock.
+## 5.1). The cases come from test_tank_snap_history.gd, which still runs them through the view.
 
 
 class Rows:
