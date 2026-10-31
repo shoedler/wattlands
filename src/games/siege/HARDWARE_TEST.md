@@ -159,19 +159,19 @@ Every moving sprite is drawn with a shader that hides its pixels behind the bake
 | 57 | Watch the onager throw | Its arm passes behind its own frame and comes back in front | |
 | 58 | Four riders (or one rider and three bots) on different stations | Each wheel, powered path and station part shows its rider's colour (orange, blue, yellow, green). Parts nobody drives show timber, rope, bronze or dark stone. No magenta pixels anywhere (magenta is the key colour; it shows if the recolour fails) | |
 
-## 14. Listening check of the synthesized audio
+## 14. Listening check of the audio
 
-All sounds are synthesized with `Sfx.synth` (coins and the Breach boom are the platform's built-in ones). None was heard on speakers during the build. Use normal listening volume.
+Every sound is rendered from `assets/siege/audio/audio.json` by `tools/audio`. None was heard on speakers during the build: the bank passed its numbers only. First **listen** to `build/audio_preview/siege.mp3` (`node tools/audio/preview.mjs --game=siege`), then ride at normal listening volume.
 
 | # | Step | Expected | Result |
 | --- | --- | --- | --- |
-| 59 | Spin up and slow down | A wheel creak and a junction clatter that both rise in pitch with watts (creak with the mean rider P_eff, clatter with the team watts) and stop when nobody pedals. Neither loop is harsh, buzzy or clipping | |
-| 60 | Each weapon firing: ballista, onager, arrow organ, a Scorpion | A bolt thunk, the onager's release and its stone's impact on landing, an arrow-volley hiss, a quick Scorpion click. At most 3 shot sounds per tick, so a busy defence does not smear into noise | |
-| 61 | The tar works pumping | A tar-pour loop while the pump runs | |
-| 62 | Chariots, a ram at the gate, gate hits, a Breach | Hooves are audible but quiet; the ram is a slow low knock; gate hits are clear; a Breach is a boom | |
-| 63 | A wave start, a siege engine's push, a rush | A horn for each; readable, not startling | |
-| 64 | Earn gold (the mine or kills) | A coin sound when your own gold goes up, at most about 3 a second, not tiring over a long shift | |
-| 65 | Overall mix | Nothing drowns the others at normal volume; the loops stay under the effects | |
+| 59 | Listen: the preview mp3, then 60 s of riding at 60, 90 and 110 rpm | A timber treadwheel: pawl and footfall twice a revolution, a creak, a knock of the axle, a groan under them. Not a machine gun, not a drone. Tell whether the creak reads as wood and not as a bird | |
+| 60 | Watch your wheel while you change cadence | The walkers' stride and the strokes move together, one walk cycle per revolution; they follow the reported cadence about once a second. Stop pedalling: strokes end at once, the groan is gone within a blink | |
+| 61 | Each weapon firing: ballista, onager, arrow organ, a Scorpion | A ballista's twang and whoosh, the onager's release, a tumbling stone and its landing, three arrows whistling then a patter on landing, a quick Scorpion snap. At most 3 shot sounds per tick | |
+| 62 | The tar works and the mine working; chariots, a ram at the gate, a walking tower, gate hits, a Breach | The pump's stroke with its drawn cycle, tar bubbling and pouring, a hiss when the curtain or coat changes, the mine's picks. Hooves quiet, the ram a slow low knock, the tower creaks and docks with a thud, a Breach is a crash that ducks the rest. A warning or rescue prompt still cuts through all of it | |
+| 63 | A wave start, a siege engine's push, a rush, a wave's end | A horn for each, and a bell at the end; readable, not startling | |
+| 64 | Earn gold, buy, switch a route, Overdrive | A coin when your own gold goes up, a hammer on a purchase, a lever on a route, a horn call on Overdrive. Another rider's lever is quieter than your own | |
+| 65 | The hill and the whole mix | Gusting wind, crows and banners now and then, a far anvil, a lark in the warm-up only, the far crowd growing with the enemies. Nothing drowns the others at normal volume; the Settings bus sliders each do what they say. Pleasant over a whole shift? Note anything tiring | |
 
 ## 15. The HUD with and without a heart rate sensor
 

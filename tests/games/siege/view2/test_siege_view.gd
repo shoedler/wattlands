@@ -186,7 +186,7 @@ func test_shot_cues_replay_in_the_view() -> void:
 	assert_eq(v.shots.shots.size(), 1)
 	v.update(0.02)
 	assert_eq(v.shots.in_flight(), 1)
-	assert_true(v.audio.played.has("siege_bolt"))
+	assert_true(v.audio.played.has("ballista_twang"))
 	F.free_game(g)
 
 
