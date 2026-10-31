@@ -239,6 +239,23 @@ func test_bed_spot_when_gates_and_loops_run() -> void:
 	assert_gt(_bed_run(bed, 10.0, {"night": 1.0}).size(), 0)
 
 
+## Split in two by a `when`, one sound keeps one round: no variant twice running at the switch.
+func test_bed_sound_split_by_when_keeps_its_round_robin() -> void:
+	var spec := {
+		"spots":
+		[
+			{"sound": "a", "gap_s": 1.0, "when": {"param": "x", "max": 0.5}},
+			{"sound": "a", "gap_s": 1.0, "when": {"param": "x", "min": 0.5}},
+		]
+	}
+	var bed := AmbienceBed.new(spec, 3)
+	var out := _bed_run(bed, 5.0, {"x": 0.0})
+	out.append_array(_bed_run(bed, 5.0, {"x": 1.0}))
+	assert_gte(out.size(), 8)
+	for i in out.size():
+		assert_eq(int(out[i]["variant"]), i)
+
+
 ## The bank has no gap_by: a gap that follows speed is one spot per band (hull_slap, SPEC_AUDIO 4.2).
 func test_bed_gap_by_speed_is_one_spot_per_band() -> void:
 	var spec := {

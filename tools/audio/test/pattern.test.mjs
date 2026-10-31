@@ -226,6 +226,15 @@ test('AmbienceBed: spot_min_gap_s keeps details apart, bursts counted, and leave
   assert.ok(tex.length > 300, `a texture keeps its pace: ${tex.length}`);
 });
 
+test('AmbienceBed: a sound split into two spots by `when` keeps its round-robin across the switch', () => {
+  const spec = { spots: [{ sound: 'a', gap_s: 1, when: { param: 'x', max: 0.5 } }, { sound: 'a', gap_s: 1, when: { param: 'x', min: 0.5 } }] };
+  const bed = new AmbienceBed(spec, 3, () => 3);
+  const out = [];
+  for (let i = 0; i < 60 * 10; i++) out.push(...bed.update({ x: i < 60 * 5 ? 0 : 1 }, 1 / 60));
+  assert.ok(out.length >= 8);
+  for (let i = 0; i < out.length; i++) assert.equal(out[i].variant, i % 3);
+});
+
 test('AmbienceBed: seeded spots, bursts, `when`', () => {
   const spec = { layers: [], spots: [{ sound: 'a', gap_s: [0.5, 1], db: [-20, -10], pitch: [0.9, 1.1], burst: [2, 3], burst_gap_s: 0.09 }, { sound: 'b', gap_s: 0.5, db: -5, when: { param: 'x', min: 1 } }] };
   const run = (seed, x) => {
