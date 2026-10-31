@@ -14,6 +14,7 @@
   "cards": {
     "picker": "picker_card.png",
     "card_mission": "card_mission.png",
+    "card_ambush": "card_ambush.png",
     "card_drill": "card_drill.png",
     "card_roam": "card_roam.png"
   }

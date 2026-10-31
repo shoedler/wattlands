@@ -3,9 +3,9 @@ extends SubViewport
 ## v4: the far panel (SPEC_TANK 4.2, 4.3): a long-lens view of the enemy, in its own SubViewport so it never
 ## runs the depth of field. `Back` is the night sky and ridge at a third of the near panel's parallax and lower
 ## (a long lens sees less sky), a glow of moonlit air on the horizon, three walls of firs with mist at their feet
-## and the ground band over them; `Base` a stage's little base (TankForest.far_base) and `BaseLight` its lamps, behind every enemy; `World`
-## the wrecks, the far enemies by lane back to front and the Behemoth; `Light` (additive) the base's lamps, slit
-## glows, telegraph pulses, the searchlight's cold pool on the target, fires, shells and impact flashes from
+## and the ground band over them; `Base` a stage's little base (TankForest.far_base) and `BaseLight` its lamps, behind
+## every enemy; `World` the wrecks, the far enemies by lane back to front and the Behemoth; `Light` (additive) slit
+## glows, the moon on each enemy, telegraph pulses, the searchlight's cold pool on the target, fires, shells and impact flashes from
 ## the panel's own TankFx; `Veil` the black a tow fades it to, with rows of noise. TankView draws its texture over
 ## the near stage.
 ##
@@ -56,7 +56,7 @@ const RECOIL_DECAY := 2.5
 const TELEGRAPH_PULSE := 30.0
 ## The veil of a shooter in its telegraph: a pulse the plates still show through (at 0.25 + 0.25 sin, the
 ## first number, TankEnemyDraw's veil made it a pale ghost for the whole telegraph). The muzzle's glow warns.
-const TELEGRAPH_FLASH := 0.07
+const TELEGRAPH_FLASH := 0.03
 const MAX_WRECKS := 8
 const WRECK_DIM := 0.25
 const COLD := Color(0.66, 0.82, 1.0)
