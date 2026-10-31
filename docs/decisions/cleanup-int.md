@@ -17,7 +17,7 @@
 
 - **Decision:** `TestGameFakes` (the recording `Hud`, `Intents`, `Stats`, `option_defaults`, `with_cooldown`, `plans_of`), `TestGameSuite` (file walk, `csv_keys`, the option-entry check, the required manifest fields), `TestGameStaticSuite` (the trainer name list, the clock and RNG patterns, the lexer and determinism proofs) and `TestGameSessionSuite` (temp dirs, runner cleanup, `run_session`). Tank, Siege, Fishing and the template extend them, so a new game starts without these copies. Tank's extra `Hud` fields (`t`, `power_band_at`) are now on the shared one: the others ignore them. Every test function stays in its game's file, and each game's scans still run on its own folders, so the trainer scan stays per game and no count falls.
 - **Left per game:** `frame` and `phase_at` (Fishing's and the template's match, Tank's and Siege's differ), each `Directives`, each game's `WORLD` pattern and its self-test (it names that game's classes), the real scans, Siege's `_csv_keys` (another return type), Fishing's `_run` (it watches `fx_event` during the run). `e2e_check.mjs` stays too: only one-liners match once the game's events are set aside, and `tools/e2e/lib/checks.mjs` is pinned.
-- **Reason:** 500 lines of copies, and a fix to one scanner could miss the other. These scans are the no-trainer-bypass check for games, so the list lives in one place and each suite still proves it on bad snippets.
+- **Reason:** about 900 copied lines become about 320 shared ones, and a fix to one scanner could no longer miss the other. These scans are the no-trainer-bypass check for games, so the list lives in one place and each suite still proves it on bad snippets.
 
 ## 2026-10-31: three view-only changes in this release, all sub-visible
 
