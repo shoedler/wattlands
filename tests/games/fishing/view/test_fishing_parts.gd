@@ -156,7 +156,7 @@ func test_the_sprite_writer_lays_frames_side_by_side() -> void:
 	var cards := 0
 	for e: Dictionary in art["sprites"]:
 		cards += 1 if str(e.get("background", "")) == "opaque" else 0
-	assert_eq(cards, 3)
+	assert_eq(cards, 2, "the Free Roam and workout cards")
 
 
 func test_minimap_icons_never_overlap() -> void:
