@@ -15,7 +15,7 @@ The Windows build ships `docs/THIRD_PARTY_NOTICES.txt` next to the executable.
 ## Fonts
 
 - Menus and the HUD kit: Godot's default font, part of the engine.
-- Each game's HUD type is its own, made in this repository: Diesel Domestiques `tank_stencil_5x7`, `tank_stencil_5x9` and `tank_digits_14x24` (`TankHudFont`); Workout `wo_text_5x7`, `wo_tall_5x9` and `wo_digits_14x24` (`src/games/workout/art/hud_font.mjs`); Turbo Reel `turbo_reel_5x7` (`src/games/fishing/tools/fishing_font_grids.gd`); Castellum Rotae's type is drawn in code (`src/games/siege/hud/siege_hud_type.gd`).
+- Each game's HUD type is its own, made in this repository: Torque Company `tank_stencil_5x7`, `tank_stencil_5x9` and `tank_digits_14x24` (`TankHudFont`); Workout `wo_text_5x7`, `wo_tall_5x9` and `wo_digits_14x24` (`src/games/workout/art/hud_font.mjs`); Turbo Reel `turbo_reel_5x7` (`src/games/fishing/tools/fishing_font_grids.gd`); Castellum Rotae's type is drawn in code (`src/games/siege/hud/siege_hud_type.gd`).
 
 ## Audio
 
@@ -26,4 +26,4 @@ All of it is rendered by `tools/audio` from recipes in this repository: the plat
 - **Castellum Rotae:** drawn by the game's own CPU rasterizer (`src/games/siege/art/*.mjs`, baked to `assets/siege/bake/`); the HUD shapes are code. No generated or downloaded art.
 - **Workout:** drawn by the game's own Node code (`src/games/workout/art/bake.mjs` and `src/games/workout/art/hud_bake.mjs`). No generated or downloaded art.
 - **Turbo Reel:** every sprite is original pixel art hand-authored as palette-indexed grids (`src/games/fishing/tools/fishing_art_grids.gd`), and the sky, water, floor, clouds, coast and waterfall are drawn in code. The style follows a reference image supplied for the project (Slynyrd, "Pixelblog 7: developing style"); nothing from it ships. `assets/fishing/art_manifest.json` records 53 fal requests of 2026-10-23, a first attempt whose output the hand-authored grids replaced the next day; none of it ships.
-- **Diesel Domestiques:** the landship's base art and the far and foreground planes derive from Simon's reference image, rebuilt as pixel art by the scripts in `assets/tank/v3/tools_src/`. `docs/games/tank.md` calls it Simon's image and quotes the prompt that made it; it does not record the tool. The enemies, machines, riders, HUD and effects are procedural code (`assets/tank/v4/tools_src/`, `src/games/tank/view/`, `src/games/tank/hud/`). The game and its tools make no fal or other image-model request.
+- **Torque Company:** the landship's base art and the far and foreground planes derive from Simon's reference image, rebuilt as pixel art by the scripts in `assets/tank/v3/tools_src/`. `docs/games/tank.md` calls it Simon's image and quotes the prompt that made it; it does not record the tool. The enemies, machines, riders, HUD and effects are procedural code (`assets/tank/v4/tools_src/`, `src/games/tank/view/`, `src/games/tank/hud/`). The game and its tools make no fal or other image-model request.

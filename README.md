@@ -9,7 +9,7 @@
 | [**Turbo Reel**](#turbo-reel) | 1-4 | Sport fishing on one shared ocean. Pedal your boat out, cast at the fish you see, fight them on the trainer. The first-run game. |
 | [**Castellum Rotae**](#castellum-rotae) | 1-4 | Co-op tower defense at a Roman wheel fort. Your watts turn a great treadwheel that drives a mine or a siege weapon. |
 | [**Workout**](#workout) | 1-8 | Group interval rides on a country road: sprints, a rolling road and `.zwo` import. |
-| [**Diesel Domestiques**](#diesel-domestiques) | 1-4 | Crew a pedal-powered landship at night. Six seats, three difficulty levels, a 15-minute Ambush. |
+| [**Torque Company**](#torque-company) | 1-4 | Crew a pedal-powered landship at night. Six seats, three difficulty levels, a 15-minute Ambush. |
 
 Bots can fill the empty places in every game.
 
@@ -58,9 +58,9 @@ Everyone rides the same timeline at their own % of FTP, in one morning on a coun
 - Put your own `.zwo` files in the `workouts/` folder of your profile and pick them in the lobby.
 - A crowd and a gantry come out for scored sprints.
 
-### Diesel Domestiques
+### Torque Company
 
-![Diesel Domestiques: the split screen, with the landship in a cutaway on the left, enemy tanks far off on the right, a shell in flight and a SURGE TO EVADE warning](assets/readme/screen_diesel_domestiques.png)
+![Torque Company: the split screen, with the landship in a cutaway on the left, enemy tanks far off on the right, a shell in flight and a SURGE TO EVADE warning](assets/readme/screen_torque_company.png)
 
 One to four riders crew a pedal-powered landship through a starry forest night. The enemy stands 800 to 2400 m off, so the screen splits: your tank and the near road on one side, a long-lens view of the enemy on the other.
 
@@ -78,13 +78,13 @@ One to four riders crew a pedal-powered landship through a starry forest night. 
 
 **Riders of different strength ride together.** Targets are set in % of each rider's own FTP.
 
-**Multiplayer with no accounts.** Up to four riders in Turbo Reel, Castellum Rotae and Diesel Domestiques, and eight in Workout, over a small relay you can run yourself. A rider who drops can rejoin within two minutes. Bots fill out a solo ride or a small group.
+**Multiplayer with no accounts.** Up to four riders in Turbo Reel, Castellum Rotae and Torque Company, and eight in Workout, over a small relay you can run yourself. A rider who drops can rejoin within two minutes. Bots fill out a solo ride or a small group.
 
 **Your rides are yours.** Every ride is saved as a FIT file in your profile's `rides/` folder. Uploading to your own Strava account is optional and uses your own API application.
 
 **Art and sound come from this repository.** No game calls an image or audio service, and there are no sample packs.
 
-- The art is baked by scripts and code in the repository. The one exception to "drawn from code" is Diesel Domestiques' landship and forest, which scripts rebuild as pixel art from a reference image made for this project and kept in the repository.
+- The art is baked by scripts and code in the repository. The one exception to "drawn from code" is Torque Company's landship and forest, which scripts rebuild as pixel art from a reference image made for this project and kept in the repository.
 - The sound is rendered from recipes in the repository by `tools/audio`: a diesel with three unequal cylinders, a treadwheel's pawl and creak, a chain and a freewheel, a boat's engine, a night forest. Nobody has heard it yet.
 - Each rider's machine runs on that rider's cadence, in picture and sound: legs and cranks in Workout, the walkers in a treadwheel, a boat's crank, the landship's pistons and rivet hammer. Stop pedaling and the strokes stop. Wheels and tracks follow speed and distance, and a treadwheel itself turns by watts.
 - The trainer reports cadence about once a second, not crank angle. So the sound locks exactly to the crank on screen, and to your feet in rate only.

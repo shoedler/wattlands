@@ -1,6 +1,6 @@
 class_name TankHudCtl
 extends HudArtControl
-## Base of Diesel Domestiques' own HUD Controls (brief 3.6; the way Turbo Reel's FishingHudControl
+## Base of Torque Company's own HUD Controls (brief 3.6; the way Turbo Reel's FishingHudControl
 ## works). Each sits alone in a Rect2i of the HudSpec (`art_rect`, art px of the 960 x 540 base,
 ## TankHud.LAYOUT); the HudLayer anchors that rect on the current art canvas
 ## (PixelViewport.anchor_art_rect) and sizes the Control to it on screen. It draws in art px under

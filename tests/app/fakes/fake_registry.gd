@@ -148,7 +148,7 @@ static func siege() -> Dictionary:
 static func tank() -> Dictionary:
 	return {
 		"id": "tank",
-		"title": "Diesel Domestiques",
+		"title": "Torque Company",
 		"summary": "Crew the beast",
 		"version": "0.2.0",
 		"min_players": 1,

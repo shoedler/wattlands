@@ -1,6 +1,6 @@
 class_name TankIds
 extends RefCounted
-## Every id and wire code Diesel Domestiques uses (G0 contract; docs/games/tank.md). String ids
+## Every id and wire code Torque Company uses (G0 contract; docs/games/tank.md). String ids
 ## are what content, intents and plan metas carry; the int codes are what snapshots and events
 ## carry (TankSnapshotSchema, TankEvents). Codes never change once shipped: add new ones at the end.
 

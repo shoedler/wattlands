@@ -1,6 +1,6 @@
 # Art pipeline
 
-A 2D game can make its pixel art with `tools/art` (BRIEF 3.10): `generate.mjs` asks fal.ai's GPT Image 2.5 for one picture per sprite, and `pixelate.gd` turns each picture into a small sprite in the game's palette. The art is animated by parts in the `world2d` kit, not by drawn frames. No shipped game uses this today: Castellum Rotae, Diesel Domestiques and Workout bake their art with their own scripts, and Turbo Reel draws it from grids in code. Turbo Reel tried the pipeline first; `assets/fishing/art_manifest.json` is the record of that, and none of its output ships.
+A 2D game can make its pixel art with `tools/art` (BRIEF 3.10): `generate.mjs` asks fal.ai's GPT Image 2.5 for one picture per sprite, and `pixelate.gd` turns each picture into a small sprite in the game's palette. The art is animated by parts in the `world2d` kit, not by drawn frames. No shipped game uses this today: Castellum Rotae, Torque Company and Workout bake their art with their own scripts, and Turbo Reel draws it from grids in code. Turbo Reel tried the pipeline first; `assets/fishing/art_manifest.json` is the record of that, and none of its output ships.
 
 ```
 assets/<id>/art.json ──► node tools/art/generate.mjs ──► .art_cache/<id>/<request id>.png   (raw, gitignored)

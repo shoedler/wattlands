@@ -22,7 +22,7 @@ tools/screenshot --game=siege --content=short --players=2 --bots=2 --seed=5 --at
 tools/godot.sh --timeout=300 --path . -s src/games/workout/tools/render_frames.gd -- \
   "--out=$out/workout" --only=sprint_4
 
-# Diesel Domestiques: an Ambush session, one rider and three bots, holding force and a shell coming in.
+# Torque Company: an Ambush session, one rider and three bots, holding force and a shell coming in.
 tools/screenshot --game=tank --content=ambush_15 --players=1 --bots=3 --seed=2 --at=430 --sim-speed=20 \
   --options='{"difficulty":"normal"}' "--out=$out/tank" --timeout=300
 

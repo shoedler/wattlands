@@ -1,4 +1,4 @@
-# Diesel Domestiques (`tank`)
+# Torque Company (`tank`)
 
 One to four riders crew a pedal-powered landship through a starry forest night, one seat each of six. The enemy stands far off, so the screen splits: our tank and the near road on one side, a long-lens view of the enemy on the other, and a small screen in the far panel shows the shells in flight. Bots fill the empty seats.
 

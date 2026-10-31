@@ -1,6 +1,6 @@
 class_name TankGame
 extends GameModule
-## Diesel Domestiques' GameModule (docs/games/tank.md; GAME_SDK 4). Owner: module.
+## Torque Company's GameModule (docs/games/tank.md; GAME_SDK 4). Owner: module.
 ##
 ## Host / SOLO, every tick (sim_step): intents are normalized, ownership-filtered and rate-limited
 ## (TankIntentLimiter, 5 a second per peer, only peers in ctx.players) -> TankInputs.from_frame ->

@@ -93,7 +93,7 @@ Each game keeps its own real-trainer checklist; this plan only links to it.
 
 - Workout: `src/games/workout/HARDWARE_TEST.md` (its game checks; the platform checks in sections 4-9 above ride Workout too).
 - Castellum Rotae: `src/games/siege/HARDWARE_TEST.md` (written by the Siege session).
-- Diesel Domestiques: `src/games/tank/HARDWARE_TEST.md` (written by the Diesel Domestiques session).
+- Torque Company: `src/games/tank/HARDWARE_TEST.md` (written by the Torque Company session).
 - Turbo Reel: `src/games/fishing/HARDWARE_TEST.md` (written by the Fishing session).
 
 ## Checks only a real trainer can confirm (from the build)

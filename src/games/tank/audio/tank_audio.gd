@@ -1,6 +1,6 @@
 class_name TankAudio
 extends Node
-## Diesel Domestiques' sound on the platform's audio kit: the view's crank revolutions drive the machines' strokes, the
+## Torque Company's sound on the platform's audio kit: the view's crank revolutions drive the machines' strokes, the
 ## game's events pick cues, and the numbers live in assets/tank/audio/audio.json. It maps state to parameters and events
 ## to cue names, and nothing else: the bank says what plays, this says when.
 ##
