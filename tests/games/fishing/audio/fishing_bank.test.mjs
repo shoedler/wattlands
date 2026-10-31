@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { loadBank, renderFile, soundFiles } from '../../../../tools/audio/lib/bank.mjs';
 import { bandShareDb } from '../../../../tools/audio/lib/dsp.mjs';
 import { integratedLufs, momentaryMaxLufs } from '../../../../tools/audio/lib/lufs.mjs';
-import * as offlineMix from '../../../../tools/audio/lib/offline_mix.mjs';
+import { BankAudio, MIX_RATE, mixdown, simulate } from '../../../../tools/audio/lib/offline_mix.mjs';
 import { previewScenario } from '../../../../tools/audio/lib/score.mjs';
 import { decodeWav, deinterleave } from '../../../../tools/audio/lib/wav.mjs';
 
@@ -17,13 +17,11 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const BANK = path.join(REPO, 'assets', 'fishing', 'audio', 'audio.json');
 const doc = loadBank(BANK);
 const machine = doc.machines.drivetrain;
-const { BankAudio, MIX_RATE, mixdown, simulate } = offlineMix;
 const bank = new BankAudio(doc, path.dirname(BANK));
 const SHARED = path.join(REPO, 'assets', '_shared', 'audio');
 const shared = new BankAudio(loadBank(path.join(SHARED, 'audio.json')), SHARED);
-// D5's row is +6 LU. WlSfx's duck on main (-6, -6, -4) cannot reach it at this game's loud moments, so each floor below pins
-// what that duck gives and rises by itself to +6 when the deeper duck lands: offline_mix then exports SAFETY_DUCK (see the ADR).
-const floorLu = (today) => (offlineMix.SAFETY_DUCK ? 6 : today);
+// D5's row, everywhere: BRIEF 4.6's safety prompts stand +6 LU over all of this game's moments, not only the scorecard's.
+const PROMPT_FLOOR_LU = 6;
 
 const VARIANTS = { gear_tick: 3, outboard_chug: 3, reel_ratchet: 3, line_creak: 4, hull_slap: 5, gull: 4 };
 const LIST = [
@@ -90,10 +88,12 @@ test('the loops open as the spec says, and rise with what drives them', () => {
   assert.deepEqual(layerOf('rod_groan').when, { param: 'tension', min: 0.6 });
   assert.equal(doc.loops.drag_scream.layers[0].sound, 'drag_scream');
   assert.equal(doc.loops.drag_scream.bus, 'Sfx');
-  // Fishing: 3 others x at most 2 layers + lead at most 6 + bed 4 + 2 named loops stay in the pool.
+  // Fishing: 3 others x at most 2 layers + lead at most 6 + the bed + the named loops' layers stay in the pool.
   assert.ok(machine.loops.length <= 6);
   assert.ok(machine.loops.filter((l) => l.other).length <= 3);
-  assert.ok(machine.loops.length + 3 * 2 + doc.beds.open_sea.layers.length + 2 <= doc.mix.max_loop_players);
+  const named = Object.values(doc.loops).reduce((n, l) => n + l.layers.length, 0);
+  assert.equal(named, 3, 'the drag, and the wash in two layers');
+  assert.ok(machine.loops.length + 3 * 2 + doc.beds.open_sea.layers.length + named <= doc.mix.max_loop_players);
 });
 
 test('a locked stroke above 2 kHz stays 16 dB under the main stroke: an hour of ticking is a texture', () => {
@@ -114,7 +114,7 @@ test('a locked stroke above 2 kHz stays 16 dB under the main stroke: an hour of 
   assert.ok(seen.length >= 5, seen.join(', '));
 });
 
-test('the bed has its gulls near the dock, a far one at sea, and a hull slap per speed band', () => {
+test('the bed has its gulls near the dock, a far one at sea, and a resting hull slap; under way the swell slaps', () => {
   const spots = doc.beds.open_sea.spots;
   const near = spots.find((s) => s.sound === 'gull');
   assert.deepEqual(near.when, { param: 'near_dock', min: 0.03 });
@@ -123,15 +123,96 @@ test('the bed has its gulls near the dock, a far one at sea, and a hull slap per
   assert.equal(far.when, undefined);
   assert.ok(far.gap_s[0] > near.gap_s[1], 'the far ones are rare');
   const slaps = spots.filter((s) => s.sound === 'hull_slap');
-  assert.equal(slaps.length, 3);
-  assert.ok(slaps[0].gap_s[0] > slaps[1].gap_s[0] && slaps[1].gap_s[0] > slaps[2].gap_s[0], 'faster with speed');
+  assert.equal(slaps.length, 1, 'only at rest: under power the spots were masked, and the swell slap (the cue) is the one heard');
+  assert.equal(slaps[0].when.param, 'speed');
+  assert.equal(slaps[0].when.min, undefined);
   const buoy = spots.find((s) => s.sound === 'buoy_bell');
   assert.deepEqual(buoy.gap_s, [40, 90]);
+  assert.deepEqual(buoy.when, { param: 'offshore', max: 0.4 }, 'buoys stay near land');
   assert.equal(spots.find((s) => s.sound === 'rigging_tick').when.param, 'near_dock');
   // Loop lengths co-prime in tenths of a second: the bed takes minutes to repeat. The second wash is the same file at another pitch.
   const layers = [...new Set(doc.beds.open_sea.layers.map((l) => l.sound))].map((id) => Math.round(doc.sounds[id].dur * 10));
   const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b));
   for (let i = 0; i < layers.length; i++) for (let j = i + 1; j < layers.length; j++) assert.ok(gcd(layers[i], layers[j]) <= 10, `${layers}`);
+});
+
+test('the sea changes on the way out, and nothing moves at the shallows the preview is scored in', () => {
+  const layers = doc.beds.open_sea.layers;
+  const lo = layers.find((l) => l.sound === 'waves_lo').db_by.find((c) => c.param === 'offshore');
+  assert.deepEqual(lo.points, [[0, 0], [1, 4]], 'the swell comes up');
+  const wash = layers.filter((l) => l.sound === 'waves_wash');
+  assert.equal(wash.length, 2);
+  for (const l of wash) assert.deepEqual(l.db_by.find((c) => c.param === 'offshore').points, [[0, 0], [1, -3]], 'the foam goes down');
+});
+
+/** The swell's own curve at x, as FishingAudio.swell computes it. */
+const swellAt = (x) => 0.6 * Math.sin((2 * Math.PI * x) / 110) + 0.4 * Math.sin((2 * Math.PI * x) / 71);
+
+test('the swell moves the crossing, and reads nothing at 0', () => {
+  const on = [
+    eventOf('outboard_chug'),
+    layerOf('outboard_body'),
+    layerOf('prop_churn'),
+    layerOf('drive_whine'),
+    ...doc.loops.plane_wash.layers,
+  ];
+  for (const e of on) {
+    const db = e.db_by.find((c) => c.param === 'swell');
+    assert.ok(db, e.sound);
+    assert.equal(db.points.find((p) => p[0] === 0)[1], 0, `${e.sound}: 0 dB on still water`);
+    assert.ok(db.points[0][1] < 0 && db.points.at(-1)[1] > 0, e.sound);
+  }
+  for (const e of [eventOf('outboard_chug'), layerOf('prop_churn')]) {
+    const p = e.pitch_by.find((c) => c.param === 'swell').points;
+    assert.ok(p[0][1] > 1 && p.at(-1)[1] < 1, `${e.sound}: labours up the wave`);
+    assert.ok(Math.abs((p[0][1] + p.at(-1)[1]) / 2 - 1) < 1e-9, `${e.sound}: 1 at swell 0`);
+  }
+});
+
+test('the plane wash is two layers of one file, out of step, so its 2 s tile does not read as a tape', () => {
+  const [a, b] = doc.loops.plane_wash.layers;
+  assert.equal(a.sound, 'plane_wash');
+  assert.equal(b.sound, 'plane_wash');
+  assert.equal(a.db, b.db);
+  const ratio = (l) => l.pitch_by[0].points.map((p) => p[1]);
+  const [a6, a16] = ratio(a);
+  const [b6, b16] = ratio(b);
+  assert.ok(Math.abs(a6 / b6 - a16 / b16) < 0.01, 'one interval at every speed');
+  assert.ok(a16 / b16 > 1.1, 'far enough apart to come out of step');
+});
+
+test('the preview slaps where a boat on its course meets the swell', () => {
+  // The rule in FishingAudio._swell_slap, run over the preview's speeds.
+  const expected = [];
+  let x = 0;
+  let t = 0;
+  let armed = false;
+  const dt = 0.01;
+  for (const seg of doc.preview.segments) {
+    const v = seg.params.speed ?? 0;
+    for (let i = 0; i < seg.s / dt; i++) {
+      x += v * dt;
+      t += dt;
+      const s = swellAt(x);
+      if (s > 0.1) armed = true;
+      else if (s < -0.2 && armed && v >= 1.5) {
+        armed = false;
+        expected.push(t);
+      }
+    }
+  }
+  const slaps = doc.preview.events.filter((e) => e.cue === 'hull_slap').map((e) => e.t);
+  assert.equal(slaps.length, expected.length, `${slaps} against ${expected.map((v) => v.toFixed(1))}`);
+  slaps.forEach((s, i) => assert.ok(Math.abs(s - expected[i]) < 0.2, `${s} against ${expected[i].toFixed(2)}`));
+});
+
+test('no crack after a putt that is not there', () => {
+  const crack = eventOf('exhaust_crack');
+  assert.deepEqual(crack.when, { param: 'prop', min: 0.05 }, 'the clutch on the winch silences it');
+  const load = crack.db_by.find((c) => c.param === 'load').points;
+  assert.ok(load[0][1] <= -40 && load[0][0] < 0.6, 'and it fades in with load, no step');
+  // The preview holds what a rider holds while fishing, or none of this is scored.
+  for (const seg of doc.preview.segments.filter((s) => s.params.fishing === 1)) assert.ok(seg.params.load >= 0.6, `${seg.rpm} rpm`);
 });
 
 test('the cues keep their spec delays and ducks', () => {
@@ -152,11 +233,11 @@ test('the fanfare and the bells sit on C major pentatonic', () => {
   }
 });
 
-test('routine cues carry the distance of the boat they come from; a catch and the bells do not', () => {
-  for (const id of ['cast', 'hookup', 'thrown', 'run', 'jump', 'jump_1', 'jump_3', 'snap', 'turn']) {
+test('routine cues carry the distance of the boat they come from; the news of a catch does not', () => {
+  for (const id of ['cast', 'bite', 'hookup', 'landing', 'thrown', 'run', 'jump', 'jump_1', 'jump_3', 'snap', 'turn']) {
     for (const h of doc.cues[id].hits) assert.equal(h.db_var, 'far_db', `${id}: ${h.sound}`);
   }
-  for (const id of ['bite', 'double_hookup', 'landed', 'landed_trophy', 'time_up', 'trip_over', 'clutch']) {
+  for (const id of ['double_hookup', 'landed', 'landed_trophy', 'time_up', 'trip_over', 'clutch']) {
     for (const h of doc.cues[id].hits) assert.equal(h.db_var, undefined, `${id}: ${h.sound}`);
   }
 });
@@ -206,9 +287,9 @@ test('a safety prompt clears steady riding, alone and among seven boats', () => 
   const ts = [2, 6, 10, 14, 18, 22];
   for (const [rpm, load, speed] of [[60, 0.45, 3.2], [90, 1, 12], [110, 1.15, 15], [110, 1.4, 16], [140, 1.4, 16]]) {
     const seg = { rpm, s: 24, params: { ...DRIVE, load, speed, near_dock: 0 } };
-    for (const [who, machines, today] of [['alone', [LEAD], 4.7], ['with 7', [LEAD, ...bots(DRIVE)], 3.7]]) {
+    for (const [who, machines] of [['alone', [LEAD]], ['with 7', [LEAD, ...bots(DRIVE)]]]) {
       const worst = Math.min(...promptMargins({ segments: [seg], machines, bed: 'open_sea', bed_params: {}, seed: 8 }, ts));
-      assert.ok(worst >= floorLu(today), `${rpm} rpm, load ${load}, ${who}: ${worst.toFixed(2)} LU`);
+      assert.ok(worst >= PROMPT_FLOOR_LU, `${rpm} rpm, load ${load}, ${who}: ${worst.toFixed(2)} LU`);
     }
   }
 });
@@ -220,7 +301,7 @@ test('a safety prompt clears every cue, on it and around it', () => {
   const scenario = { segments: [seg], machines: [LEAD], bed: 'open_sea', bed_params: {}, cues, seed: 8 };
   for (const off of [-0.4, -0.2, 0, 0.16, 0.32, 0.48]) {
     promptMargins(scenario, names.map((_, i) => 3 + i * 5 + off)).forEach((d, i) => {
-      assert.ok(d >= floorLu(1.2), `${names[i]}, prompt at ${off} s: ${d.toFixed(2)} LU`);
+      assert.ok(d >= PROMPT_FLOOR_LU, `${names[i]}, prompt at ${off} s: ${d.toFixed(2)} LU`);
     });
   }
 });
@@ -230,7 +311,7 @@ test('a safety prompt clears the preview at its worst moments, not only at the m
   for (const off of [0, 1.5, 3]) {
     const ts = [];
     for (let t = 1 + off; t < 107; t += 4) ts.push(t);
-    promptMargins(scenario, ts).forEach((d, i) => assert.ok(d >= floorLu(1.6), `at ${ts[i]} s: ${d.toFixed(2)} LU`));
+    promptMargins(scenario, ts).forEach((d, i) => assert.ok(d >= PROMPT_FLOOR_LU, `at ${ts[i]} s: ${d.toFixed(2)} LU`));
   }
 });
 

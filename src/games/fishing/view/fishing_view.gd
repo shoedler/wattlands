@@ -209,7 +209,7 @@ func advance(delta: float) -> void:
 	if not events_connected:
 		for c in cues.diff(st):
 			_pending.append(c)
-	for c in _pending:
+	for c in FishingCues.merged(_pending):
 		_handle(c)
 	_pending.clear()
 	effects.tick(delta, cam_m)

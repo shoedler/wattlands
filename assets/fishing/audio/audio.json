@@ -320,7 +320,7 @@
           "gain": 0.55
         },
         {"src": "sine", "f": 1064.7, "gain": 0.38},
-        {"src": "sine", "f": 2161.8, "gain": 0.16, "fx": [{"trem": {"hz": 7, "depth": 0.5}}]},
+        {"src": "sine", "f": 2161.8, "gain": 0.09, "fx": [{"trem": {"hz": 7, "depth": 0.5}}]},
         {
           "src": "saw",
           "f": 347.06,
@@ -1306,19 +1306,20 @@
           "db_by": [
             {"param": "load", "points": [[0, -4], [0.45, -0.5], [1, 0], [1.4, 0]]},
             {"param": "rpm", "points": [[60, 1.5], [90, -0.2], [110, -2.6], [140, -3.8]]},
-            {"param": "near", "points": [[0, -26], [1, 0]]}
+            {"param": "near", "points": [[0, -26], [1, 0]]},
+            {"param": "swell", "points": [[-1, -2], [0, 0], [1, 1]]}
           ],
-          "pitch_by": [{"param": "load", "points": [[0, 0.93], [1, 1], [1.4, 1.05]]}],
+          "pitch_by": [{"param": "load", "points": [[0, 0.93], [1, 1], [1.4, 1.05]]}, {"param": "swell", "points": [[-1, 1.02], [1, 0.98]]}],
           "priority": 5
         },
         {
           "at": [0.04, 0.54],
           "sound": "exhaust_crack",
           "db": -10.4,
-          "when": {"param": "load", "min": 0.6},
+          "when": {"param": "prop", "min": 0.05},
           "lead_only": true,
           "priority": 4,
-          "db_by": [{"param": "load", "points": [[0.6, -15], [1.2, -7]]}]
+          "db_by": [{"param": "load", "points": [[0.55, -40], [0.6, -15], [1.2, -7]]}]
         },
         {
           "at": [0],
@@ -1374,7 +1375,7 @@
       "loops": [
         {
           "sound": "outboard_body",
-          "db": -8.6,
+          "db": -8.1,
           "min_rpm": 8,
           "other": true,
           "when": {"param": "prop", "min": 0.02},
@@ -1382,21 +1383,23 @@
           "db_by": [
             {"param": "prop", "points": [[0, -10], [1, 0]]},
             {"param": "load", "points": [[0, -3], [1, 0]]},
-            {"param": "near", "points": [[0, -26], [1, 0]]}
+            {"param": "near", "points": [[0, -26], [1, 0]]},
+            {"param": "swell", "points": [[-1, -2], [0, 0], [1, 1]]}
           ]
         },
         {
           "sound": "prop_churn",
-          "db": -9.9,
+          "db": -9.4,
           "min_rpm": 8,
           "other": true,
           "slew_s": 0.5,
           "when": {"param": "prop", "min": 0.02},
-          "pitch_by": [{"param": "prop", "points": [[0, 0.72], [1.5, 1.22]]}],
+          "pitch_by": [{"param": "prop", "points": [[0, 0.72], [1.5, 1.22]]}, {"param": "swell", "points": [[-1, 1.04], [1, 0.96]]}],
           "db_by": [
             {"param": "prop", "points": [[0, -14], [1.5, 0]]},
             {"param": "load", "points": [[0.3, -8], [1.2, 0.5]]},
-            {"param": "near", "points": [[0, -26], [1, 0]]}
+            {"param": "near", "points": [[0, -26], [1, 0]]},
+            {"param": "swell", "points": [[-1, -4], [0, 0], [1, 2]]}
           ]
         },
         {
@@ -1406,7 +1409,7 @@
           "slew_s": 0.6,
           "when": {"param": "prop", "min": 0.1},
           "pitch_by": [{"param": "rpm", "ratio": 90}, {"param": "load", "points": [[0.3, 0.88], [1.3, 1.14]]}],
-          "db_by": [{"param": "load", "points": [[0.3, -26], [0.8, -7], [1.3, 12]]}]
+          "db_by": [{"param": "load", "points": [[0.3, -26], [0.8, -7], [1.3, 12]]}, {"param": "swell", "points": [[-1, -3], [0, 0], [1, 2]]}]
         },
         {
           "sound": "winch_gear",
@@ -1458,21 +1461,35 @@
       "layers": [
         {
           "sound": "plane_wash",
-          "db": -10.8,
+          "db": -13.6,
           "slew_s": 0.6,
           "when": {"param": "plane", "min": 0.03},
           "pitch_by": [{"param": "speed", "points": [[6, 0.9], [16, 1.15]]}],
-          "db_by": [{"param": "plane", "points": [[0, -24], [1, 0]]}]
+          "db_by": [{"param": "plane", "points": [[0, -24], [1, 0]]}, {"param": "swell", "points": [[-1, -4], [0, 0], [1, 2]]}]
+        },
+        {
+          "sound": "plane_wash",
+          "db": -13.6,
+          "slew_s": 0.6,
+          "when": {"param": "plane", "min": 0.03},
+          "pitch_by": [{"param": "speed", "points": [[6, 0.774], [16, 0.989]]}],
+          "db_by": [{"param": "plane", "points": [[0, -24], [1, 0]]}, {"param": "swell", "points": [[-1, -4], [0, 0], [1, 2]]}]
         }
       ]
     }
   },
   "beds": {
     "open_sea": {
+      "spot_min_gap_s": 2.2,
       "layers": [
-        {"sound": "waves_lo", "db": -15.5},
-        {"sound": "waves_wash", "db": -13.2},
-        {"sound": "waves_wash", "db": -18.5, "pitch_by": [{"param": "speed", "points": [[0, 0.87], [16, 0.87]]}]},
+        {"sound": "waves_lo", "db": -15.5, "db_by": [{"param": "offshore", "points": [[0, 0], [1, 4]]}]},
+        {"sound": "waves_wash", "db": -13.2, "db_by": [{"param": "offshore", "points": [[0, 0], [1, -3]]}]},
+        {
+          "sound": "waves_wash",
+          "db": -18.5,
+          "pitch_by": [{"param": "speed", "points": [[0, 0.87], [16, 0.87]]}],
+          "db_by": [{"param": "offshore", "points": [[0, 0], [1, -3]]}]
+        },
         {
           "sound": "wind_sea",
           "db": -16.8,
@@ -1504,21 +1521,7 @@
           "pitch": [0.92, 1.1],
           "when": {"param": "speed", "max": 4}
         },
-        {
-          "sound": "hull_slap",
-          "gap_s": [2.1, 4.2],
-          "db": [-27, -21],
-          "pitch": [0.92, 1.1],
-          "when": {"param": "speed", "min": 4, "max": 10}
-        },
-        {
-          "sound": "hull_slap",
-          "gap_s": [1, 2.5],
-          "db": [-27, -20],
-          "pitch": [0.95, 1.14],
-          "when": {"param": "speed", "min": 10}
-        },
-        {"sound": "buoy_bell", "gap_s": [40, 90], "db": [-33, -26], "pitch": [0.97, 1.03]},
+        {"sound": "buoy_bell", "gap_s": [40, 90], "db": [-28, -22], "pitch": [0.97, 1.03], "when": {"param": "offshore", "max": 0.4}},
         {
           "sound": "rigging_tick",
           "gap_s": [1.9, 8],
@@ -1528,7 +1531,7 @@
           "burst_gap_s": 0.38,
           "when": {"param": "near_dock", "min": 0.25}
         },
-        {"sound": "hull_creak", "gap_s": [11, 26], "db": [-25, -18], "pitch": [0.9, 1.12]},
+        {"sound": "hull_creak", "gap_s": [11, 26], "db": [-21, -14], "pitch": [0.9, 1.12]},
         {"sound": "fish_plop", "gap_s": [19, 44], "db": [-19, -13], "pitch": [0.9, 1.15]}
       ]
     }
@@ -1541,11 +1544,17 @@
         {"sound": "plop", "db": -3.7, "bus": "Sfx", "priority": 6, "db_var": "far_db", "delay_s": 0.2}
       ]
     },
-    "bite": {"hits": [{"sound": "bite_bell", "db": -2.7, "bus": "Sfx", "priority": 7}]},
+    "bite": {"hits": [{"sound": "bite_bell", "db": -2.7, "bus": "Sfx", "priority": 7, "db_var": "far_db"}]},
     "hookup": {
       "hits": [
         {"sound": "zip", "db": -2.7, "bus": "Sfx", "priority": 6, "db_var": "far_db"},
         {"sound": "splash_small", "db": -4.7, "bus": "Sfx", "priority": 6, "db_var": "far_db"}
+      ]
+    },
+    "landing": {
+      "hits": [
+        {"sound": "zip", "db": -2.7, "bus": "Sfx", "priority": 7, "db_var": "far_db", "pitch": 1.5},
+        {"sound": "splash_small", "db": -4.7, "bus": "Sfx", "priority": 7, "db_var": "far_db"}
       ]
     },
     "thrown": {"hits": [{"sound": "splash_big", "db": -2.7, "bus": "Sfx", "priority": 6, "db_var": "far_db"}]},
@@ -1625,17 +1634,17 @@
         "params": {"near": 1, "prop": 1.5, "load": 0.9, "speed": 8, "near_dock": 0.3, "plane": 0.05}
       },
       {"rpm": 110, "s": 20, "params": {"near": 1, "prop": 1.5, "load": 1.15, "speed": 15, "near_dock": 0, "plane": 1}},
-      {"rpm": 70, "s": 18, "params": {"near": 1, "fishing": 1, "tension": 0.15, "speed": 0.6, "near_dock": 0}},
+      {"rpm": 70, "s": 18, "params": {"near": 1, "fishing": 1, "tension": 0.15, "load": 0.6, "speed": 0.6, "near_dock": 0}},
       {
         "rpm": 85,
         "s": 10,
-        "params": {"near": 1, "fishing": 1, "tension": 0.5, "reel": 2.2, "winch": 2.2, "speed": 1, "near_dock": 0}
+        "params": {"near": 1, "fishing": 1, "tension": 0.5, "reel": 2.2, "winch": 2.2, "load": 1, "speed": 1, "near_dock": 0}
       },
-      {"rpm": 95, "s": 8, "params": {"near": 1, "fishing": 1, "tension": 1, "reel": 0, "speed": 2.5, "near_dock": 0}},
+      {"rpm": 95, "s": 8, "params": {"near": 1, "fishing": 1, "tension": 1, "reel": 0, "load": 1, "speed": 2.5, "near_dock": 0}},
       {
         "rpm": 100,
         "s": 16,
-        "params": {"near": 1, "fishing": 1, "tension": 0.8, "reel": 3.5, "winch": 3.5, "speed": 1.5, "near_dock": 0}
+        "params": {"near": 1, "fishing": 1, "tension": 0.8, "reel": 3.5, "winch": 3.5, "load": 1, "speed": 1.5, "near_dock": 0}
       },
       {
         "rpm": 0,
@@ -1645,12 +1654,12 @@
     ],
     "events": [
       {"t": 7, "cue": "turn", "vars": {}},
-      {"t": 14, "cue": "hull_slap", "vars": {}},
-      {"t": 20, "cue": "hull_slap", "vars": {}},
-      {"t": 27, "cue": "hull_slap", "vars": {}},
+      {"t": 12.2, "cue": "hull_slap", "vars": {}},
+      {"t": 27.8, "cue": "hull_slap", "vars": {}},
       {"t": 31, "cue": "turn", "vars": {}},
-      {"t": 39, "cue": "hull_slap", "vars": {}},
-      {"t": 50.5, "cue": "hull_slap", "vars": {}},
+      {"t": 38, "cue": "hull_slap", "vars": {}},
+      {"t": 46, "cue": "hull_slap", "vars": {}},
+      {"t": 54.5, "cue": "hull_slap", "vars": {}},
       {"t": 55, "cue": "lift_off", "vars": {}},
       {"t": 56.6, "cue": "cast", "vars": {}},
       {"t": 72, "cue": "bite", "vars": {}},
@@ -1658,6 +1667,7 @@
       {"t": 84, "cue": "run", "vars": {}},
       {"t": 88, "cue": "jump", "vars": {}},
       {"t": 95.5, "cue": "jump_1", "vars": {}},
+      {"t": 98, "cue": "landing", "vars": {}},
       {"t": 105.5, "cue": "landed", "vars": {}},
       {"t": 106.5, "cue": "clutch", "vars": {}},
       {"t": 107.2, "cue": "time_up", "vars": {}}

@@ -65,7 +65,10 @@ No machine can judge these, so they stay open until someone has ridden with soun
 - [ ] Land a fish. Expected: a clunk as the clutch lever flips back to the prop. Pause at speed: the engine stops, and the sea does not keep slapping as if the boat still ran.
 - [ ] Reel in a fight. Expected: the ratchet and the line's creak keep time with your feet; the line sings higher as the pull rises, the rod groans near the top; on a run the clicks stop and the drag screams.
 - [ ] Ride the boat out of the harbour. Expected: gulls and rigging fade with the dock; the open sea has swell, foam, wind by speed and an occasional far gull. Do the waves read as waves and the gull as a gull?
-- [ ] Trigger a rescue (section 7) in a fight on a run, and a warning while cruising near other boats. Expected: the safety prompt is plainly over everything, and the mix dips under it. This depends on the platform's deeper safety duck: check `docs/decisions/audio-fishing.md`, and report it if the build predates it.
+- [ ] Trigger a rescue (section 7) in a fight on a run, and a warning while cruising near other boats. Expected: the safety prompt is plainly over everything, and the mix dips under it.
+- [ ] Hold 250 W for several minutes on a long crossing. Expected: the engine and the water rise and fall every few seconds with a hull slap off the waves, with no tape-like repeat in the wash, and the strokes stay on the crank.
+- [ ] Reach a Landing. Expected: a call at the start of the gaff sprint, and the catch's fanfare 15 s later. Snap a line in a fight: the new fish hooks itself aloud 5 s on.
+- [ ] Wait for a bite with another rider far off. Expected: the bell you hear loud is yours.
 - [ ] After an hour: is the tick a texture, or does it tire? Note the balance over your fan and trainer, and any setting you changed in the audio sliders.
 
 Log: date, trainer firmware, FTP (verified or not), preferred cadence, haptic intensity, pedal navigation on or off, and each step's result in the plan's template.

@@ -11,9 +11,9 @@ extends Node
 const BANK_PATH := "res://assets/fishing/audio/audio.json"
 ## The bank's mix.other_db: another rider's boat and cues against your own.
 const OTHER_DB := -10.0
-## Module events with no sound of their own: a replacement fish is only a menu change, and the
-## landing's sound is the landed cue a moment later.
-const SILENT_EVENTS: Array[String] = [FishingEvents.REPLACEMENT, FishingEvents.LANDING]
+## Module events with no sound of their own: none. A replacement fish hooks itself with the hookup
+## cue (FishingCues), and the gaff sprint's start has its own landing cue.
+const SILENT_EVENTS: Array[String] = []
 ## Gulls gather while the local boat is within this far of the dock (m).
 const GULL_RANGE_M := 250.0
 ## Another boat at full `near` up to EAR_FULL_M from you, out of earshot from EAR_ZERO_M (m).
@@ -26,8 +26,20 @@ const REEL_TAU_S := 0.15
 const SLAP_RATE_MPS := 0.05
 const HEAVE_TAU_S := 0.25
 const SLAP_MIN_MPS := 1.5
+## The long swell a boat runs over, in metres of ocean: two sines, so it does not repeat for 7810 m.
+const SWELL_A_M := 110.0
+const SWELL_B_M := 71.0
+const SWELL_A := 0.6
+const SWELL_B := 0.4
+## A slap on the swell: armed on a crest above this, fired going down into the trough under the next.
+const SLAP_SWELL_ARM := 0.1
+const SLAP_SWELL_FIRE := -0.2
+## The sea deepens from the shallows (0) to open water (1) over this stretch of the course (m).
+const OFFSHORE_FROM_M := 600.0
+const OFFSHORE_FULL_M := 12000.0
 ## What the bank's routine cues lose (dB) from another boat at the edge of earshot: the fall of its
-## machine (`near` in the bank). The news of a catch and the bells carry no `db_var`, so stay level.
+## machine (`near` in the bank). A bite is routine too: it should mean you. The news of a catch and
+## a double hookup carry no `db_var`, so stay level.
 const FAR_DB := -26.0
 ## The clutch: the prop is off once the clutch is halfway to the winch.
 const CLUTCH_K := 2.0
@@ -46,6 +58,7 @@ var _heave_seen: bool = false
 var _heave_was: float = 0.0
 var _heave_rate: float = 0.0
 var _slap_armed: bool = true
+var _swell_armed: bool = false
 var _lift: LiftOffDetector = LiftOffDetector.new()
 var _lift_armed: bool = true
 var _lift_low: float = 0.0
@@ -112,13 +125,25 @@ func update(dt: float, boats: Dictionary, state: FishingState, local_slot: int) 
 		_local_loops(me, boats[local_slot], speed, dt)
 		_clutch(boats[local_slot])
 	var hull_speed := 0.0 if _paused else speed
-	kit.bed_params({"near_dock": near_dock(me.x_m) if me != null else 0.0, "speed": hull_speed})
+	var x_m := me.x_m if me != null else 0.0
+	kit.bed_params({"near_dock": near_dock(x_m), "offshore": offshore(x_m), "speed": hull_speed})
 	kit.commit(dt)
 
 
 ## 1 over the harbour .. 0 from GULL_RANGE_M out.
 static func near_dock(x_m: float) -> float:
 	return clampf(1.0 - x_m / GULL_RANGE_M, 0.0, 1.0)
+
+
+## 0 in the shallows .. 1 on open water: the sea's weight moves down as the bottom falls away.
+static func offshore(x_m: float) -> float:
+	return clampf((x_m - OFFSHORE_FROM_M) / (OFFSHORE_FULL_M - OFFSHORE_FROM_M), 0.0, 1.0)
+
+
+## The swell under a boat at `x_m`, -1 .. 1. A place on the ocean, so a host and a client agree and a
+## boat at speed rides it at a few seconds a wave; the engine labours up and runs free down it.
+static func swell(x_m: float) -> float:
+	return SWELL_A * sin(TAU * x_m / SWELL_A_M) + SWELL_B * sin(TAU * x_m / SWELL_B_M)
 
 
 ## How well the local rider `me` hears a boat at `x_m`: 1 .. 0 (out of earshot). 1 with no rider.
@@ -159,6 +184,7 @@ func _params(r: FishingRiderState, b: FishingBoatView, near: float, dt: float) -
 		"fishing": b.fishing,
 		"tension": b.tension,
 		"near": near,
+		"swell": swell(r.x_m),
 	}
 
 
@@ -170,10 +196,11 @@ func _local_loops(me: FishingRiderState, b: FishingBoatView, speed: float, dt: f
 	if is_running(me):
 		kit.set_loop("drag_scream", {"tension": b.tension})
 	if me.plane > 0.0:
-		kit.set_loop("plane_wash", {"plane": me.plane, "speed": speed})
+		kit.set_loop("plane_wash", {"plane": me.plane, "speed": speed, "swell": swell(me.x_m)})
 	if dt <= 0.0 or _paused:
 		return
 	_hull_slap(me, speed, dt)
+	_swell_slap(me, speed)
 	_lift_off(_load_of(me), b, dt)
 
 
@@ -198,6 +225,17 @@ func _clutch(b: FishingBoatView) -> void:
 	if _clutch_in and not fishing:
 		kit.cue("clutch")
 	_clutch_in = fishing
+
+
+## The bow dropping off a swell: the slap heard on a long crossing, where the heave lies flat. One
+## per wave, so it comes faster the faster the boat goes.
+func _swell_slap(me: FishingRiderState, speed: float) -> void:
+	var s := swell(me.x_m)
+	if s > SLAP_SWELL_ARM:
+		_swell_armed = true
+	elif s < SLAP_SWELL_FIRE and _swell_armed and speed >= SLAP_MIN_MPS:
+		_swell_armed = false
+		kit.cue("hull_slap")
 
 
 ## The hull falling back onto the water: an edge on the heave's smoothed fall, the same on a host

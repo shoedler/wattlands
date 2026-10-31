@@ -162,6 +162,56 @@ func test_every_event_maps_to_a_cue_or_is_silent() -> void:
 		assert_eq(made.size(), 1, key)
 		assert_true(cues.has(FishingAudio.cue_name(made[0])), "%s has its cue in the bank" % key)
 	assert_eq(seen, 14, "every event of the contract")
+	assert_eq(FishingAudio.SILENT_EVENTS.size(), 0, "no event of this game goes unheard")
+
+
+func test_the_gaff_sprint_has_its_call_and_a_replacement_hooks_itself_aloud() -> void:
+	var land := FishingCues.from_event(FishingEvents.landing(0, 4))
+	assert_eq(str(land[0]["k"]), FishingCues.CUE_LANDING)
+	var rep := FishingCues.from_event(FishingEvents.replacement(0, 4))
+	assert_eq(str(rep[0]["k"]), FishingCues.CUE_HOOKUP)
+	var a := _audio()
+	a.cue(land[0], true)
+	assert_has(a.played, "zip")
+	assert_has(a.played, "splash_small")
+	a.kit.clear_played()
+	a.cue(rep[0], true)
+	assert_has(a.played, "zip")
+
+
+func test_a_landing_that_hooks_its_replacement_calls_once() -> void:
+	var cues: Array[Dictionary] = []
+	cues.append_array(FishingCues.from_event(FishingEvents.replacement(1, 4)))
+	cues.append_array(FishingCues.from_event(FishingEvents.landing(1, 4)))
+	var one := FishingCues.merged(cues)
+	assert_eq(one.size(), 1)
+	assert_eq(str(one[0]["k"]), FishingCues.CUE_LANDING)
+	var other: Array[Dictionary] = []
+	other.append_array(FishingCues.from_event(FishingEvents.replacement(2, 4)))
+	other.append_array(FishingCues.from_event(FishingEvents.landing(1, 4)))
+	assert_eq(FishingCues.merged(other).size(), 2, "another rider's replacement still sounds")
+	var fresh: Array[Dictionary] = []
+	fresh.append_array(FishingCues.from_event(FishingEvents.hookup(1, 4, 1, false)))
+	fresh.append_array(FishingCues.from_event(FishingEvents.landing(1, 4)))
+	assert_eq(FishingCues.merged(fresh).size(), 2, "only a replacement folds into the call")
+
+
+func test_the_state_diff_has_the_same_calls() -> void:
+	var st := _state()
+	var r: FishingRiderState = st.riders[0]
+	var cues := FishingCues.new()
+	assert_eq(cues.diff(st).size(), 0, "the first call only learns")
+	r.fish.sp = 4
+	r.action = FishingConst.A_FIGHT
+	assert_eq(str(cues.diff(st)[0]["k"]), FishingCues.CUE_HOOKUP)
+	r.fish.replacement = true
+	var rep := cues.diff(st)
+	assert_eq(rep.size(), 1)
+	assert_eq(str(rep[0]["k"]), FishingCues.CUE_HOOKUP, "the line comes back with a sound")
+	r.action = FishingConst.A_LAND
+	var land := cues.diff(st)
+	assert_eq(land.size(), 1)
+	assert_eq(str(land[0]["k"]), FishingCues.CUE_LANDING)
 
 
 func test_a_leap_is_a_splash_each_and_a_trophy_gets_its_top_note() -> void:
@@ -357,9 +407,74 @@ func test_the_bed_follows_the_seed_and_the_speed_brings_the_slaps_faster() -> vo
 	var one := _spots(7, 2.0)
 	assert_eq(one, _spots(7, 2.0), "same seed, same sea")
 	assert_ne(one, _spots(8, 2.0), "another seed, another sea")
-	var slow := one.count("hull_slap")
-	var fast := _spots(7, 14.0).count("hull_slap")
+	var slow := _crossing_slaps(6.0, 120.0)
+	var fast := _crossing_slaps(14.0, 120.0)
+	assert_gt(slow, 0)
 	assert_gt(fast, slow, "the hull hits the water more often at speed")
+
+
+## Cue slaps over `seconds` of a boat holding `speed` over the swell.
+func _crossing_slaps(speed: float, seconds: float) -> int:
+	var a := _audio()
+	var st := _state()
+	var r: FishingRiderState = st.riders[0]
+	r.v_mps = speed
+	var b := _boat(90.0)
+	var t := 0.0
+	while t < seconds:
+		r.x_m += speed * DT
+		b.advance(DT)
+		a.update(DT, {0: b}, st, 0)
+		t += DT
+	return _slaps(a)
+
+
+func test_a_steady_crossing_slaps_on_the_swell_and_rides_it() -> void:
+	# A steady ride: the heave lies flat, and the slap heard comes from the swell, one per wave.
+	var n := _crossing_slaps(16.0, 60.0)
+	assert_between(n, 7, 10, "a slap every several seconds")
+	var a := _audio()
+	var st := _state()
+	var r: FishingRiderState = st.riders[0]
+	r.v_mps = 1.0
+	var b := _boat(90.0)
+	var t := 0.0
+	while t < 120.0:
+		r.x_m += 1.0 * DT
+		a.update(DT, {0: b}, st, 0)
+		t += DT
+	assert_eq(_slaps(a), 0, "not drifting: the bed's resting knock is the sound there")
+
+
+func test_the_swell_is_a_place_on_the_ocean_and_moves_the_engine() -> void:
+	assert_almost_eq(FishingAudio.swell(0.0), 0.0, 0.001)
+	assert_almost_eq(FishingAudio.swell(3000.0), FishingAudio.swell(3000.0 + 7810.0), 0.001)
+	var seen := 0.0
+	for i in 800:
+		seen = maxf(seen, absf(FishingAudio.swell(float(i))))
+	assert_between(seen, 0.8, 1.0, "the curves in the bank span it")
+	var a := _audio()
+	var st := _state()
+	var r: FishingRiderState = st.riders[0]
+	r.p_eff_w = 250.0
+	var b := _boat(90.0)
+	b.prop_drive = 1.5
+	r.x_m = 27.5  # the crest of the long wave
+	assert_gt(FishingAudio.swell(r.x_m), 0.5)
+	_run(a, {0: b}, st, 2.0)
+	var crest: float = a.kit.machine_loop("boat0").db[0]
+	r.x_m = 7782.5  # the trough, one whole cycle less 27.5 m
+	assert_lt(FishingAudio.swell(r.x_m), -0.5)
+	_run(a, {0: b}, st, 2.0)
+	assert_lt(a.kit.machine_loop("boat0").db[0], crest - 1.0, "the body falls off a wave")
+
+
+func test_the_sea_deepens_offshore() -> void:
+	assert_eq(FishingAudio.offshore(0.0), 0.0)
+	assert_eq(FishingAudio.offshore(FishingAudio.OFFSHORE_FROM_M), 0.0)
+	assert_almost_eq(FishingAudio.offshore(6300.0), 0.5, 0.001)
+	assert_eq(FishingAudio.offshore(FishingAudio.OFFSHORE_FULL_M), 1.0)
+	assert_eq(FishingAudio.offshore(18000.0), 1.0)
 
 
 func _spots(p_seed: int, speed: float) -> Array[String]:
@@ -513,6 +628,8 @@ func test_a_far_riders_routine_cue_falls_away_and_the_news_does_not() -> void:
 		FishingCues.CUE_THROWN,
 		FishingCues.CUE_JUMP,
 		FishingCues.CUE_SNAP,
+		FishingCues.CUE_BITE,
+		FishingCues.CUE_LANDING,
 	]:
 		st.riders[1].x_m = at_me
 		_run(a, boats, st, DT)
@@ -521,9 +638,7 @@ func test_a_far_riders_routine_cue_falls_away_and_the_news_does_not() -> void:
 		_run(a, boats, st, DT)
 		var gone := _cue_db(a, {"k": routine, "l": 1})
 		assert_almost_eq(gone - close, FishingAudio.FAR_DB, 0.01, routine)
-	for news: String in [
-		FishingCues.CUE_BITE, FishingCues.CUE_DOUBLE_HOOKUP, FishingCues.CUE_LANDED
-	]:
+	for news: String in [FishingCues.CUE_DOUBLE_HOOKUP, FishingCues.CUE_LANDED]:
 		st.riders[1].x_m = at_me
 		_run(a, boats, st, DT)
 		var close := _cue_db(a, {"k": news, "l": 1})
