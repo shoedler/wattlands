@@ -48,7 +48,11 @@ static func track(
 		if sg.seg == TankIds.SEG_COOLDOWN and state.outcome == "":
 			state.outcome = _outcome(state)
 		if sg.seg == TankIds.SEG_CHECKPOINT:
-			var bonus := state.content.num("tanks", "hull.checkpoint_hp", 20.0)
+			var bonus := float(
+				state.content.mission().get(
+					"checkpoint_hp", state.content.num("tanks", "hull.checkpoint_hp", 20.0)
+				)
+			)
 			state.hull.hp_max += bonus
 			state.hull.hp = minf(state.hull.hp + bonus, state.hull.hp_max)
 		state.gun_line.active = sg.seg == TankIds.SEG_GUN_LINE

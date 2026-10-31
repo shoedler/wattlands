@@ -216,13 +216,30 @@ static func seat_intent(state: TankState, rider: TankRiderState) -> Dictionary:
 	var st := state.station(want)
 	if st == null or not st.is_empty():
 		return {}
-	if not at_end and not TankSeats.follows_now(state, rider.peer, want):
+	if (
+		not at_end
+		and not TankSeats.follows_now(state, rider.peer, want)
+		and not _solo_shells_to_fire(state, want, sit)
+	):
 		return {}
 	if not at_end and _switches_in_warmup(state, ri, want):
 		return {}
 	var out := TankIntents.seat(want, TankIds.VIA_AUTO)
 	out["auto"] = 1
 	return out
+
+
+## True for a solo rider with rounds, a target and the Gun free in a holding action: past a hold's
+## nominal end its trainer would only follow at the segment's end, but the seat lands at once and the
+## clock is the fight's, so it fires instead of sitting on a full rack until max_s.
+static func _solo_shells_to_fire(state: TankState, want: String, sit: Dictionary) -> bool:
+	return (
+		state.riders.size() == 1
+		and state.seg.seg == TankIds.SEG_GUN_LINE
+		and want == TankIds.ENGINE_DYNAMO
+		and int(sit["shells"]) > 0
+		and bool(sit["gun"])
+	)
 
 
 ## True when moving to `engine` would switch the rider's trainer ERG <-> SIM inside a warm-up
@@ -252,9 +269,25 @@ static func _crew_may_move(state: TankState, at_end: bool) -> bool:
 		var drive := state.station(TankIds.ENGINE_DIESEL)
 		if drive != null and drive.is_empty():
 			return true
+	if _gun_dry(state):
+		return true
 	if state.seg.elapsed_s < TankConst.AUTO_STAY_S - 1e-6:
 		return false
 	return at_end or (state.seg.open_ended and state.seg.elapsed_s >= state.seg.min_s - 1e-6)
+
+
+## True in a fight whose Gun has nothing to fire with nobody on the Loader: a small crew that arrives
+## with an empty rack would otherwise sit out the opening with an idle gun.
+static func _gun_dry(state: TankState) -> bool:
+	if state.seg.seg != TankIds.SEG_GUN_LINE and state.seg.seg != TankIds.SEG_BOSS:
+		return false
+	var loader := state.station(TankIds.ENGINE_STEAM)
+	return (
+		loader != null
+		and loader.is_empty()
+		and loader.rack <= 0
+		and state.hull.loaded == TankIds.SHELL_NONE
+	)
 
 
 ## v4: true while a recon car or a tankette is alive.

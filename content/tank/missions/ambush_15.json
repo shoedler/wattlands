@@ -2,6 +2,8 @@
 	"_doc": "Ambush (SPEC_TANK 3.8): the short, hard mission. 15 minutes: the 5 minute warm-up depot (BRIEF 4.6.8), about 7 minutes of fights, a 3 minute cool-down. Nominal 300 + 120 + 90 + 60 + 150 + 180 = 900 s; at the phases' min_s 780 s, at their max_s 1010 s. Defaults to Hard (difficulty_default; the host's option overrides it). One stage for the score (score_stages). Owner: rules. Schema: TankContentSchema.validate_mission; format as ashfall_road.json.",
 	"id": "ambush_15",
 	"difficulty_default": "hard",
+	"hull_hp": 90,
+	"checkpoint_hp": 20,
 	"score_stages": 1,
 	"label": "TANK_CONTENT_AMBUSH_15",
 	"plan_table": "plans",

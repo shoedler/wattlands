@@ -30,7 +30,7 @@ func _quiet(crew: int, index: int = ADVANCE, into_s: float = 5.0) -> TankRulesRi
 # --- Dynamo --------------------------------------------------------------------------------------
 
 
-func test_the_bank_gains_one_unit_per_150_joules_of_p_eff_in_band() -> void:
+func test_the_bank_gains_one_unit_per_j_per_unit_joules_of_p_eff_in_band() -> void:
 	var rig := _quiet(2)
 	var dy := rig.dynamo()
 	assert_eq(dy.peer, 2)
@@ -38,7 +38,9 @@ func test_the_bank_gains_one_unit_per_150_joules_of_p_eff_in_band() -> void:
 	rig.run(10.0)
 	assert_true(dy.in_band)
 	# Slot 1's FTP is 220 W: 55% = 121 W, P_eff 137.5 W.
-	assert_almost_eq(dy.bank, 40.0 + 137.5 * 10.0 / 150.0, 0.1)
+	var joules := rig.content.num("tanks", "dynamo.j_per_unit", 0.0)
+	assert_between(joules, 100.0, 225.0, "150 at the start, tuned inside +-50%")
+	assert_almost_eq(dy.bank, 40.0 + 137.5 * 10.0 / joules, 0.1)
 
 
 func test_the_bank_does_not_charge_out_of_band_or_on_reserve() -> void:

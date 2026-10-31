@@ -150,7 +150,7 @@ func test_the_holding_action_tables() -> void:
 			["medium", 2, [1200, 1500], 1],
 			["medium", 1, [1350], 2],
 			["light", 1, [900], 2],
-			["light", 1, [1050], 4]
+			["light", 1, [1050], 3]
 		]
 	)
 	assert_eq(_table(lines[0]["near"], "at_s"), [[15, "tankette", 3], [40, "recon", 3]])
@@ -168,7 +168,7 @@ func test_the_holding_action_tables() -> void:
 		_force(lines[2]["enemies"]),
 		[
 			["heavy", 1, [1600], 1],
-			["medium", 1, [1200], 2],
+			["light", 1, [1000], 2],
 			["destroyer", 1, [1900], 2],
 			["medium", 1, [1400], 3]
 		]
@@ -389,7 +389,7 @@ func test_the_holding_force_stands_where_the_mission_put_it() -> void:
 	var rig := TankRulesRig.new(4)
 	rig.enter(8, 0.0)
 	var holds: Array = rig.state.enemies.map(func(e: TankEnemyState) -> float: return e.hold_m)
-	assert_eq(holds, [1600.0, 1200.0, 1900.0, 1400.0])
+	assert_eq(holds, [1600.0, 1000.0, 1900.0, 1400.0])
 
 
 ## The segment's total x the crew's scale (rounded, at least 1), taken from the list in order.

@@ -491,6 +491,8 @@ func _haptics(state: TankState, inputs: TankInputs, events: Array[Dictionary]) -
 		if inputs.t + EPS < float(_haptic_end.get(ri.peer, -INF)) + cool:
 			continue  # inside the receiver's 15 s spacing: dropped, never queued
 		var d := haptic_directive(content, kind)
+		if haptic_outlasts_phase(ri, _phase(ri), float(d["duration_s"])):
+			continue  # it would still pull in what comes next, the cool-down at worst
 		if _request(ri.peer, d):
 			_haptic_end[ri.peer] = inputs.t + float(d["duration_s"])
 
@@ -517,6 +519,12 @@ static func haptic_allowed(ri: TankRiderInput, ph: PlanPhase, haptics_on: bool) 
 	if ri.phase_kind == "" or ri.phase_kind == Wl.WARMUP or ri.phase_kind == Wl.COOLDOWN:
 		return false
 	return not ri.in_first_window()
+
+
+## True when a haptic of `duration_s` (and a second of the directive's way to the trainer) could outlast
+## a phase that max_s is about to end: the next phase, the cool-down at worst, must not feel it.
+static func haptic_outlasts_phase(ri: TankRiderInput, ph: PlanPhase, duration_s: float) -> bool:
+	return ph != null and ph.max_s > 0.0 and ri.phase_elapsed_s + duration_s + 1.0 >= ph.max_s
 
 
 func _haptics_on(state: TankState, ri: TankRiderInput) -> bool:

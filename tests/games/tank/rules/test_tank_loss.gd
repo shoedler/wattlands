@@ -553,3 +553,21 @@ func test_the_brass_unlock_needs_no_loss_too() -> void:
 	assert_has(TankScore.unlocks(s, "S", true), "brass_machinery")
 	s.score.losses = 1
 	assert_does_not_have(TankScore.unlocks(s, "S", true), "brass_machinery")
+
+
+## An ambush catches the tank short of plates: ambush_15's own hull and checkpoint numbers.
+func test_a_mission_can_set_its_own_hull_and_checkpoint_plates() -> void:
+	var rig := TankRulesRig.new(3, "ambush_15", 7)
+	var mission := rig.content.mission()
+	assert_eq(rig.state.hull.hp_max, float(mission["hull_hp"]))
+	assert_lt(rig.state.hull.hp_max, rig.content.num("tanks", "hull.hp", 0.0))
+	var before := rig.state.hull.hp_max
+	for i in rig.content.segments().size():
+		if str(rig.content.segment(i).get("type", "")) == TankIds.SEG_CHECKPOINT:
+			rig.enter(i, 0.0)
+			break
+	assert_eq(rig.state.hull.hp_max, before + float(mission["checkpoint_hp"]))
+	assert_eq(
+		TankRulesRig.new(3, "ashfall_road", 7).state.hull.hp_max,
+		rig.content.num("tanks", "hull.hp", 0.0)
+	)

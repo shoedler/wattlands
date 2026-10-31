@@ -64,7 +64,7 @@
 				{"enemy": "medium", "count": 2, "hold_m": [1200, 1500]},
 				{"enemy": "medium", "count": 1, "hold_m": [1350], "min_crew": 2},
 				{"enemy": "light", "count": 1, "hold_m": [900], "min_crew": 2},
-				{"enemy": "light", "count": 1, "hold_m": [1050], "min_crew": 4}
+				{"enemy": "light", "count": 1, "hold_m": [1050], "min_crew": 3}
 			],
 			"near": [
 				{"at_s": 15, "enemy": "tankette", "count": 1, "min_crew": 3},
@@ -183,7 +183,7 @@
 			"backdrop": "forest_birches",
 			"enemies": [
 				{"enemy": "heavy", "count": 1, "hold_m": [1600]},
-				{"enemy": "medium", "count": 1, "hold_m": [1200], "min_crew": 2},
+				{"enemy": "light", "count": 1, "hold_m": [1000], "min_crew": 2},
 				{"enemy": "destroyer", "count": 1, "hold_m": [1900], "min_crew": 2},
 				{"enemy": "medium", "count": 1, "hold_m": [1400], "min_crew": 3}
 			],

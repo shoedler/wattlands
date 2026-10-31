@@ -30,14 +30,14 @@
 		"backdrop": "base"
 	},
 	"patrols": {
-		"every_s": [50, 110],
+		"every_s": [90, 110],
 		"max_alive": 6,
 		"heavy_after_s": 600,
 		"retry_s": 10,
 		"clear_ahead_m": 150,
 		"kinds": [
-			{"id": "lights", "weight": 45, "units": [{"enemy": "light", "count": [1, 2]}]},
-			{"id": "medium", "weight": 30, "units": [{"enemy": "medium", "count": [1, 1]}, {"enemy": "light", "count": [0, 1]}]},
+			{"id": "lights", "weight": 45, "units": [{"enemy": "light", "count": [1, 1]}]},
+			{"id": "medium", "weight": 30, "units": [{"enemy": "medium", "count": [1, 1]}]},
 			{"id": "destroyer", "weight": 15, "units": [{"enemy": "destroyer", "count": [1, 1]}]},
 			{"id": "heavy", "weight": 10, "units": [{"enemy": "heavy", "count": [1, 1]}]},
 			{"id": "ambush", "weight": 25, "units": [{"enemy": "recon", "count": [1, 1]}, {"enemy": "tankette", "count": [0, 1]}]}

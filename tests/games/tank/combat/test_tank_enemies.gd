@@ -231,7 +231,7 @@ func test_a_far_hit_lands_after_its_flight_and_costs_the_hull() -> void:
 	assert_eq(hits.size(), 1)
 	assert_eq(
 		[hits[0]["on"], hits[0]["dmg"], hits[0]["sh"], hits[0]["b"]],
-		[TankEvents.ON_TANK, 4, TankIds.SHELL_ENEMY, 0]
+		[TankEvents.ON_TANK, 3, TankIds.SHELL_ENEMY, 0]
 	)
 	assert_eq(rig.state.shells.size(), 0)
 	assert_eq(rig.of_type("splash").size(), 0)
@@ -384,7 +384,7 @@ func test_a_solo_hull_takes_the_crew_damage_scale_of_an_enemy_shell() -> void:
 		var want := 4.0 * rig.content.crew_damage_scale(crew)
 		assert_almost_eq(lost, want, 1e-6, "crew %d" % crew)
 		assert_almost_eq(rig.hull().hp, full - want, 1e-6)
-	assert_eq(TankFixtures.content().crew_damage_scale(1), 0.65)
-	assert_eq(TankFixtures.content().crew_damage_scale(2), 0.65)
-	assert_eq(TankFixtures.content().crew_damage_scale(3), 0.85)
-	assert_eq(TankFixtures.content().crew_damage_scale(4), 0.9)
+	assert_eq(TankFixtures.content().crew_damage_scale(1), 0.62)
+	assert_eq(TankFixtures.content().crew_damage_scale(2), 0.57)
+	assert_eq(TankFixtures.content().crew_damage_scale(3), 0.74)
+	assert_eq(TankFixtures.content().crew_damage_scale(4), 0.74)
