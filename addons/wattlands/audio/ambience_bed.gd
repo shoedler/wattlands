@@ -14,7 +14,7 @@ var trim_db: float = 0.0  ## added to every layer and spot: the kit's crossfade 
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _spots: Array = []
 var _left: PackedFloat64Array = PackedFloat64Array()
-var _variant: PackedInt32Array = PackedInt32Array()
+var _variant: Dictionary = {}  ## a running count per sound: a sound split into several spots by `when` keeps its round
 var _spot_min_gap_s: float = 0.0
 var _since_detail: float = INF
 
@@ -25,11 +25,9 @@ func _init(p_spec: Dictionary, p_seed: int) -> void:
 	_spots = p_spec.get("spots", [])
 	_spot_min_gap_s = float(p_spec.get("spot_min_gap_s", 0.0))
 	_left.resize(_spots.size())
-	_variant.resize(_spots.size())
 	for i in _spots.size():
 		var spot: Dictionary = _spots[i]
 		_left[i] = _pick(spot.get("gap_s", 1.0))
-		_variant[i] = 0
 
 
 ## Spots due now: {"sound", "variant", "at_s", "db", "pitch"}. A spot whose `when` fails stays quiet this round.
@@ -49,7 +47,7 @@ func update(params: Dictionary, dt: float) -> Array[Dictionary]:
 		_left[i] = _pick(spot.get("gap_s", 1.0))
 		if not AudioCurve.passes(spot.get("when", {}), params):
 			continue
-		_expand(i, spot, params, out)
+		_expand(spot, params, out)
 		if detail:
 			_since_detail = -float(out[-1]["at_s"])
 	return out
@@ -63,7 +61,8 @@ func _is_detail(spot: Dictionary) -> bool:
 	return shortest >= _spot_min_gap_s
 
 
-func _expand(i: int, spot: Dictionary, params: Dictionary, out: Array[Dictionary]) -> void:
+func _expand(spot: Dictionary, params: Dictionary, out: Array[Dictionary]) -> void:
+	var sound := str(spot.get("sound", ""))
 	var burst: Variant = spot.get("burst", 1)
 	var n := int(burst) if burst is float or burst is int else _pick_int(burst)
 	var gap := float(spot.get("burst_gap_s", 0.0))
@@ -73,14 +72,14 @@ func _expand(i: int, spot: Dictionary, params: Dictionary, out: Array[Dictionary
 			break
 		var level := _pick(spot.get("db", 0.0)) + AudioCurve.sum_db(spot.get("db_by", []), params)
 		var entry := {
-			"sound": str(spot.get("sound", "")),
-			"variant": _variant[i],
+			"sound": sound,
+			"variant": int(_variant.get(sound, 0)),
 			"at_s": at_s,
 			"db": level + trim_db,
 			"pitch": _pick(spot.get("pitch", 1.0)),
 		}
 		out.append(entry)
-		_variant[i] += 1
+		_variant[sound] = int(_variant.get(sound, 0)) + 1
 
 
 ## A [lo, hi] range drawn from the bed's RNG, or a plain number.

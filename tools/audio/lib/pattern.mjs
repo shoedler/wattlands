@@ -211,7 +211,8 @@ export class AmbienceBed {
     this.loops = new LayeredLoop(spec.layers ?? []);
     this._next = xorshift32(seed);
     this._variantsOf = variantsOf;
-    this._spots = (spec.spots ?? []).map((s) => ({ s, wait: this._range(s.gap_s, 1), rr: 0 }));
+    this._spots = (spec.spots ?? []).map((s) => ({ s, wait: this._range(s.gap_s, 1) }));
+    this._rr = new Map();
     this._minGap = spec.spot_min_gap_s ?? 0;
     this._sinceDetail = Infinity;
   }
@@ -251,14 +252,15 @@ export class AmbienceBed {
       for (let i = 0; i < Math.max(burst, 1); i++) {
         const atS = i * (e.s.burst_gap_s ?? 0);
         if (atS > BURST_MAX_S) break;
+        const rr = this._rr.get(e.s.sound) ?? 0;
         out.push({
           sound: e.s.sound,
-          variant: e.rr % Math.max(1, this._variantsOf(e.s.sound)),
+          variant: rr % Math.max(1, this._variantsOf(e.s.sound)),
           at_s: atS,
           db: this._range(e.s.db) + curveSumDb(e.s.db_by, params),
           pitch: this._range(e.s.pitch, 1),
         });
-        e.rr += 1;
+        this._rr.set(e.s.sound, rr + 1);
       }
       if (detail) this._sinceDetail = -out[out.length - 1].at_s;
     }
