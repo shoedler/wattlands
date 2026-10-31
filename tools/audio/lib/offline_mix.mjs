@@ -30,6 +30,9 @@ export const SAFETY_DUCK = [
 export const PROMPT_UI_DUCK = { bus: 'UI', db: -10, attack_s: 0.02, release_s: 2 };
 export const PROMPT_UI_SPARED = new Set(['countdown', 'click']);
 export const STEM_BUSES = ['Machines', 'Ambience', 'Sfx', 'UI', 'Master'];
+// AudioBuses.PAN_STEP and PAN_MAX. A test pins the two together.
+export const PAN_STEP = 0.25;
+export const PAN_MAX = 0.75;
 
 /** A bank's audio: each file read from disk when present, else rendered in memory. Cached. */
 export class BankAudio {
@@ -155,9 +158,15 @@ export function simulate(bank, scenario) {
       const db = (h.db ?? 0) + trim + (h.db_var ? Number(vars[h.db_var] ?? 0) : 0);
       const rr = cueRr.get(h.sound) ?? 0;
       cueRr.set(h.sound, rr + 1);
-      const v = { sound: h.sound, variant: rr % Math.max(1, bank.variants(h.sound)), t: t + delay, db, pitch, bus: h.bus ?? 'Sfx', priority: h.priority ?? 6, lead, cue: c.cue };
+      const pan = h.pan_var ? Number(vars[h.pan_var] ?? 0) : 0;
+      const v = { sound: h.sound, variant: rr % Math.max(1, bank.variants(h.sound)), t: t + delay, db, pitch, bus: h.bus ?? 'Sfx', priority: h.priority ?? 6, lead, cue: c.cue, pan };
+      if (h.flight) {
+        const panTo = h.flight.pan_to_var ? Number(vars[h.flight.pan_to_var] ?? pan) : pan;
+        const dur = Math.max(0.05, h.flight.dur_var ? Number(vars[h.flight.dur_var] ?? h.flight.dur_s ?? 1) : (h.flight.dur_s ?? 1));
+        v.flight = { dur, panTo, gain: h.flight.gain ?? [[0, 0]], pitch: h.flight.pitch ?? null };
+      }
       voices.push(v);
-      events.push({ t: v.t, sound: v.sound, variant: v.variant, db, kind: 'cue', cue: c.cue, thinned: false });
+      events.push({ t: v.t, sound: v.sound, variant: v.variant, db, kind: 'cue', cue: c.cue, thinned: false, pan, flight: v.flight?.dur });
     }
     if (lead) for (const d of def.duck ?? []) ducks.push({ ...d, t });
   };
@@ -236,6 +245,7 @@ export function simulate(bank, scenario) {
 }
 
 function voiceLength(bank, shared, v) {
+  if (v.flight) return v.flight.dur;
   const f = (v.shared ? shared : bank).file(v.sound, v.variant);
   return (f.frames - f.preroll) / (f.rate * v.pitch);
 }
@@ -302,7 +312,44 @@ function cubic(x, i, u, loopFrames) {
   return b + 0.5 * u * (c - a + u * (2 * a - 5 * b + 4 * c - d + u * (3 * (b - c) + d - a)));
 }
 
+/** The left and right gains of a mono voice at `pan`, as AudioEffectPanner applies them on the nearest of AudioBuses' sends. */
+export function panGains(pan = 0, bus = 'Sfx') {
+  if (bus !== 'Sfx') return [1, 1];
+  const q = Math.round(Math.max(-PAN_MAX, Math.min(PAN_MAX, pan)) / PAN_STEP) * PAN_STEP;
+  return [1 - q, 1 + q];
+}
+
+/** A flight: its loop read at the pitch its curve asks for, its level and side moved once per frame like the kit does. */
+function mixFlight(file, v, stem, total) {
+  const f = v.flight;
+  const period = file.loopFrames > 0 ? file.loopFrames : file.frames;
+  const start = Math.round(v.t * MIX_RATE);
+  const end = Math.min(total, Math.round(v.end * MIX_RATE));
+  const frameLen = Math.round(FRAME_DT * MIX_RATE);
+  const l = file.data[0];
+  let pos = 0;
+  for (let n = Math.max(0, start); n < end; n += frameLen) {
+    const u = Math.min(1, (n - start) / MIX_RATE / f.dur);
+    const g = dbToGain(v.db + curveEval({ param: 'u', points: f.gain }, { u }));
+    const pitch = v.pitch * (f.pitch ? curveEval({ param: 'u', points: f.pitch }, { u }) : 1);
+    const [gl, gr] = panGains(v.pan + (f.panTo - v.pan) * u, v.bus);
+    const step = (file.rate * Math.max(0.05, Math.min(4, pitch))) / MIX_RATE;
+    for (let k = 0; k < frameLen && n + k < end; k++) {
+      const i = Math.floor(pos);
+      const a = cubic(l, i, pos - i, period) * g;
+      stem[0][n + k] += a * gl;
+      stem[1][n + k] += a * gr;
+      pos += step;
+      if (pos >= period) pos -= period;
+    }
+  }
+}
+
 function mixVoice(file, v, stem, total) {
+  if (v.flight) {
+    mixFlight(file, v, stem, total);
+    return;
+  }
   const gain = dbToGain(v.db);
   const step = (file.rate * v.pitch) / MIX_RATE;
   const start = Math.round(v.t * MIX_RATE);
@@ -310,6 +357,7 @@ function mixVoice(file, v, stem, total) {
   const fade = 44;
   const l = file.data[0];
   const r = file.ch > 1 ? file.data[1] : l;
+  const [gl, gr] = panGains(v.pan ?? 0, v.bus);
   for (let n = Math.max(0, start); n < end; n++) {
     const pos = file.preroll + (n - start) * step;
     const i = Math.floor(pos);
@@ -317,8 +365,8 @@ function mixVoice(file, v, stem, total) {
     const u = pos - i;
     const g = gain * Math.min(1, (end - n) / fade);
     const a = cubic(l, i, u, 0);
-    stem[0][n] += a * g;
-    stem[1][n] += (r === l ? a : cubic(r, i, u, 0)) * g;
+    stem[0][n] += a * g * gl;
+    stem[1][n] += (r === l ? a : cubic(r, i, u, 0)) * g * gr;
   }
 }
 
@@ -351,6 +399,14 @@ function mixTrack(file, track, stem, total) {
     pos += (file.rate * pitch) / MIX_RATE;
     if (pos >= period) pos -= period;
   }
+}
+
+/** One voice of a simulation alone, from its own start, as a mono track, for the rows that weigh it against the mix. */
+export function renderVoice(bank, v, shared = null) {
+  const n = Math.max(1, Math.ceil((v.end - v.t) * MIX_RATE));
+  const stem = newStem(n);
+  mixVoice((v.shared ? shared : bank).file(v.sound, v.variant), { ...v, t: 0, end: v.end - v.t }, stem, n);
+  return stem[0].map((a, i) => (a + stem[1][i]) / 2);
 }
 
 /** The envelope in dB of one duck trigger at time t. */

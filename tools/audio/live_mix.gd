@@ -3,10 +3,10 @@ extends SceneTree
 ## server, with no hand-fed cue. Not part of run_tests. The offline preview scores the bank; this hears the game.
 ##   tools/godot.sh --path . --timeout=600 --audio-driver Dummy -s tools/audio/live_mix.gd -- \
 ##       --game=siege --content=short --bots=3 --seed=1 --skip-s=60 --run-s=240 --out=build/audio_live/siege
-## --audio-driver Dummy keeps the speakers out of it: Godot still mixes in real time, and an AudioEffectCapture at the head
-## of each bus takes what reaches it. Master's capture is the whole mix with the ducks in, before the limiter; the
+## --audio-driver Dummy keeps the speakers out of it: Godot still mixes in real time, and an AudioEffectCapture at the
+## head of each bus takes what reaches it. Master's capture is the whole mix with the ducks in, before the limiter; the
 ## others sit before their bus volume, so they are the bus without its ducks. --skip-s runs that much sim in the first
-## frames, before anything is recorded. Writes <out>.json and <out>_<bus>.wav (mono 16-bit, the left channel of the bus):
+## frames, before anything is recorded. Writes <out>.json and <out>_<bus>.wav (stereo 16-bit):
 ##   cues: every game `cue` the view would hear, by kind; shots by shot kind, projectiles counted;
 ##   played: every start the kit recorded, by sound, with the level it asked for;
 ##   voices: per pool the most and the mean playing at once, frames at the cap; voiceless and thinned.
@@ -42,6 +42,7 @@ var _pool_full: Dictionary = {}
 var _voice_frames: int = 0
 var _skip_voiceless: int = 0
 var _skip_thinned: int = 0
+var _skip_flights: int = 0
 
 
 func _process(delta: float) -> bool:
@@ -69,6 +70,7 @@ func _process(delta: float) -> bool:
 			_kit.clear_played()
 			_skip_voiceless = _kit.voiceless
 			_skip_thinned = _kit.thinned
+			_skip_flights = _kit.flight_starts
 			_add_captures()
 		return false
 	_t += delta
@@ -160,9 +162,10 @@ func _drain_captures() -> void:
 		var frames := cap.get_buffer(n)
 		var out: PackedByteArray = _samples[bus]
 		var at := out.size()
-		out.resize(at + n * 2)
+		out.resize(at + n * 4)
 		for k in n:
-			out.encode_s16(at + k * 2, int(clampf(frames[k].x, -1.0, 1.0) * PEAK))
+			out.encode_s16(at + k * 4, int(clampf(frames[k].x, -1.0, 1.0) * PEAK))
+			out.encode_s16(at + k * 4 + 2, int(clampf(frames[k].y, -1.0, 1.0) * PEAK))
 		_samples[bus] = out
 
 
@@ -216,6 +219,7 @@ func _finish() -> void:
 		"played": _played,
 		"voices": voices,
 		"voiceless": _kit.voiceless - _skip_voiceless,
+		"flight_starts": _kit.flight_starts - _skip_flights,
 		"thinned": _kit.thinned - _skip_thinned,
 		"cue_log": _cue_log,
 		"played_log": _played_log,
@@ -245,10 +249,10 @@ func _write_wav(path: String, data: PackedByteArray, rate: int) -> void:
 	f.store_buffer("WAVEfmt ".to_ascii_buffer())
 	f.store_32(16)
 	f.store_16(1)
-	f.store_16(1)
-	f.store_32(rate)
-	f.store_32(rate * 2)
 	f.store_16(2)
+	f.store_32(rate)
+	f.store_32(rate * 4)
+	f.store_16(4)
 	f.store_16(16)
 	f.store_buffer("data".to_ascii_buffer())
 	f.store_32(data.size())

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { BankAudio, MIX_RATE, PROMPT_UI_DUCK, PROMPT_UI_SPARED, PROMPT_VOICE_DB, SAFETY_DUCK, limit, mixdown, simulate, toInt16 } from '../lib/offline_mix.mjs';
+import { BankAudio, MIX_RATE, PAN_MAX, PAN_STEP, PROMPT_UI_DUCK, PROMPT_UI_SPARED, PROMPT_VOICE_DB, SAFETY_DUCK, limit, mixdown, panGains, renderVoice, simulate, toInt16 } from '../lib/offline_mix.mjs';
 import { FIXTURE_BANK, REPO, bankOf, readJson } from './helpers.mjs';
 
 const TICK = { dur: 0.04, seed: 1, locked: true, norm: { peak: -6 }, layers: [{ src: 'noise', env: { a: 0.0003, d: 0.03 } }] };
@@ -311,4 +311,51 @@ test('unknown names are errors', () => {
   assert.throws(() => simulate(b, { segments: [{ rpm: 0, s: 1, params: {} }], machines: [], cues: [{ t: 0, cue: 'zz' }] }), /no cue/);
   assert.throws(() => simulate(b, { segments: [{ rpm: 0, s: 1, params: {} }], machines: [], loops: [{ id: 'zz', t0: 0, t1: 1 }] }), /no loops entry/);
   assert.throws(() => b.file('zz'), /no sound/);
+});
+
+test('the panned sends: the same step and reach as AudioBuses', () => {
+  const src = fs.readFileSync(path.join(REPO, 'addons', 'wattlands', 'audio', 'audio_buses.gd'), 'utf8');
+  assert.equal(Number(src.match(/PAN_STEP := ([\d.]+)/)[1]), PAN_STEP);
+  assert.equal(Number(src.match(/PAN_MAX := ([\d.]+)/)[1]), PAN_MAX);
+});
+
+test('panGains: AudioEffectPanner on a mono voice, to the nearest send, Sfx only', () => {
+  assert.deepEqual(panGains(0), [1, 1]);
+  assert.deepEqual(panGains(0.1), [1, 1]);
+  assert.deepEqual(panGains(-0.5), [1.5, 0.5]);
+  assert.deepEqual(panGains(5), [0.25, 1.75]);
+  assert.deepEqual(panGains(-0.5, 'Machines'), [1, 1]);
+});
+
+const FLIGHT_BANK = {
+  sounds: { air: { dur: 1, seed: 5, loop: true, compress: 'pcm', layers: [{ src: 'noise', color: 'white' }] } },
+  cues: {
+    fly: { hits: [{ sound: 'air', db: -6, pan_var: 'a', flight: { dur_var: 'f', pan_to_var: 'b', gain: [[0, 0], [1, 0]], pitch: [[0, 1], [1, 1]] } }] },
+    hit: { hits: [{ sound: 'tick', db: -6, pan_var: 'a' }] },
+  },
+};
+
+test('a flight runs for the time it is given, longer than its loop, and moves across the screen', () => {
+  const b = bank(FLIGHT_BANK);
+  const sim = simulate(b, { segments: [{ rpm: 0, s: 5, params: {} }], machines: [], cues: [{ t: 0.5, cue: 'fly', vars: { f: 3, a: -0.75, b: 0.75 } }] });
+  const v = sim.voices.find((x) => x.flight);
+  assert.ok(Math.abs(v.end - v.t - 3) < 1e-9);
+  const x = mixdown(b, sim).stems.Sfx;
+  const rms = (s, from, to) => {
+    let e = 0;
+    for (let i = Math.round(from * MIX_RATE); i < Math.round(to * MIX_RATE); i++) e += s[i] * s[i];
+    return Math.sqrt(e);
+  };
+  assert.ok(rms(x[0], 0.55, 0.9) > 2 * rms(x[1], 0.55, 0.9), 'on the left at the launch');
+  assert.ok(rms(x[1], 3.1, 3.45) > 2 * rms(x[0], 3.1, 3.45), 'on the right at the landing');
+  assert.ok(rms(x[0], 3.55, 4.5) === 0, 'nothing after it lands');
+  assert.equal(renderVoice(b, v).length, Math.ceil(3 * MIX_RATE));
+});
+
+test('a plain hit stays where it is panned', () => {
+  const b = bank(FLIGHT_BANK);
+  const sim = simulate(b, { segments: [{ rpm: 0, s: 1, params: {} }], machines: [], cues: [{ t: 0.1, cue: 'hit', vars: { a: 0.5 } }] });
+  const x = mixdown(b, sim).stems.Sfx;
+  const peak = (s) => s.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+  assert.ok(Math.abs(peak(x[1]) / peak(x[0]) - 3) < 0.01);
 });

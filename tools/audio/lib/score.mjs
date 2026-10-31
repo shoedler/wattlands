@@ -6,9 +6,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { allFiles, bankWavBytes, loadBank } from './bank.mjs';
-import { bandShareDb, fft, gainToDb, powerSpectrum } from './dsp.mjs';
+import { bandFilter, bandShareDb, fft, gainToDb, powerSpectrum } from './dsp.mjs';
 import { integratedLufs, loudnessRange, momentaryMaxLufs, momentaryTrack, truePeakDb } from './lufs.mjs';
-import { BankAudio, MIX_RATE, PROMPT_VOICE_DB, STROKE_HORIZON_S, mixdown, segmentsLength, simulate } from './offline_mix.mjs';
+import { BankAudio, MIX_RATE, PROMPT_VOICE_DB, STROKE_HORIZON_S, mixdown, renderVoice, segmentsLength, simulate } from './offline_mix.mjs';
 import { curvePasses } from './pattern.mjs';
 
 /** Repo WAV caps in MB (SPEC 3.4). */
@@ -394,6 +394,120 @@ function averageShape(bank, ids) {
   return thirdOctaveShape(sum, rate, size);
 }
 
+// --- Projectiles ---
+
+const P_FLIGHT_MARGIN_DB = 3;
+const P_IMPACT_MARGIN_DB = 3;
+const P_SURFACE_APART_DB = 3;
+const P_FLIGHT_BAND = [800, 6000];
+const P_IMPACT_BAND = [400, 6000];
+
+/** A voice's loudest `span` s in a band, against the (already band-limited) background in the same moment: dB over it. */
+function voiceOverBackground(bank, v, background, band, span) {
+  const x = bandFilter(renderVoice(bank, v), band[0], band[1], MIX_RATE);
+  const at = Math.max(0, Math.round(v.t * MIX_RATE));
+  const win = Math.min(Math.round(span * MIX_RATE), x.length);
+  let best = -Infinity;
+  let bestAt = 0;
+  for (let a = 0; a + win <= x.length; a += Math.max(1, Math.round(win / 2))) {
+    const level = rmsDb(x, a, a + win);
+    if (level > best) {
+      best = level;
+      bestAt = a;
+    }
+  }
+  return best - rmsDb(background, at + bestAt, Math.min(background.length, at + bestAt + win));
+}
+
+/**
+ * P1-P5, for a bank whose preview says preview.checks.projectiles: {shots: [cue...], surfaces: {name: [cue...]}}. An
+ * offline card passed a game nobody could hear arrows in, because nothing asked whether a shot had a sound that lasted
+ * its flight, or whether that sound stood out of the mix. These ask.
+ */
+function projectileRows(bank, p, sim, mix, rows) {
+  const spec = p.checks?.projectiles;
+  const targets = {
+    P1: 'flight sounds started per shot: 1 for every weapon',
+    P2: 'a flight sound lasts its flight',
+    P3: `a flight's loudest 250 ms is >= +${P_FLIGHT_MARGIN_DB} dB over the wheels and the bed, ${P_FLIGHT_BAND.join('-')} Hz`,
+    P4: `every surface is in the preview, its impact >= +${P_IMPACT_MARGIN_DB} dB over the wheels and the bed, ${P_IMPACT_BAND.join('-')} Hz`,
+    P5: `surfaces differ: spectra >= ${P_SURFACE_APART_DB} dB apart`,
+  };
+  if (!spec) {
+    for (const id of Object.keys(targets)) rows.push({ id, pass: true, value: 'n/a', target: 'preview.checks.projectiles not set' });
+    return;
+  }
+  const events = p.events ?? [];
+  const perShot = spec.shots.map((cue) => {
+    const shots = events.filter((e) => e.cue === cue).length;
+    const flights = sim.voices.filter((v) => v.cue === cue && v.flight).length;
+    return { cue, shots, flights, ratio: shots > 0 ? flights / shots : 0 };
+  });
+  rows.push({ id: 'P1', pass: perShot.every((s) => s.ratio === 1), value: perShot.map((s) => `${s.cue} ${s.flights}/${s.shots}`).join(', '), target: targets.P1 });
+  const flights = sim.voices.filter((v) => v.flight && spec.shots.includes(v.cue));
+  let shortest = flights.length > 0 ? Infinity : 0;
+  for (const v of flights) shortest = Math.min(shortest, (v.end - v.t) / v.flight.dur);
+  rows.push({ id: 'P2', pass: shortest >= 0.99, value: round(shortest), target: targets.P2 });
+
+  const n = mix.n;
+  const whole = new Float64Array(n);
+  for (const bus of ['Machines', 'Ambience']) {
+    const stem = mono(mix.stems[bus]);
+    for (let i = 0; i < n; i++) whole[i] += stem[i];
+  }
+  const flightBack = bandFilter(whole, P_FLIGHT_BAND[0], P_FLIGHT_BAND[1], MIX_RATE);
+  const impactBack = bandFilter(whole, P_IMPACT_BAND[0], P_IMPACT_BAND[1], MIX_RATE);
+  let quiet = Infinity;
+  let quietWhat = '';
+  for (const v of flights) {
+    const over = voiceOverBackground(bank, v, flightBack, P_FLIGHT_BAND, 0.25);
+    if (over < quiet) {
+      quiet = over;
+      quietWhat = `${v.sound} at ${round(v.t, 1)} s`;
+    }
+  }
+  rows.push({ id: 'P3', pass: quiet >= P_FLIGHT_MARGIN_DB, value: `+${round(quiet)} dB`, target: targets.P3, note: quietWhat });
+
+  const surfaces = Object.entries(spec.surfaces);
+  const missing = surfaces.filter(([, cues]) => !events.some((e) => cues.includes(e.cue))).map(([s]) => s);
+  let quietHit = Infinity;
+  let quietHitWhat = '';
+  for (const [surface, cues] of surfaces) {
+    for (const v of sim.voices.filter((x) => cues.includes(x.cue) && x.sound === bank.doc.cues[x.cue].hits[0].sound)) {
+      const over = voiceOverBackground(bank, v, impactBack, P_IMPACT_BAND, 0.05);
+      if (over < quietHit) {
+        quietHit = over;
+        quietHitWhat = `${surface}: ${v.sound} at ${round(v.t, 1)} s`;
+      }
+    }
+  }
+  rows.push({
+    id: 'P4',
+    pass: missing.length === 0 && quietHit >= P_IMPACT_MARGIN_DB,
+    value: missing.length > 0 ? `missing ${missing.join(', ')}` : `${surfaces.length} surfaces, worst +${round(quietHit)} dB`,
+    target: targets.P4,
+    note: quietHitWhat,
+  });
+  const shapes = surfaces.map(([surface, cues]) => {
+    const sounds = cues.map((c) => bank.doc.cues[c]?.hits?.[0]?.sound).filter(Boolean);
+    return { surface, shape: averageShape(bank, sounds) };
+  });
+  let closest = Infinity;
+  let closestWhat = '';
+  for (let i = 0; i < shapes.length; i++) {
+    for (let j = i + 1; j < shapes.length; j++) {
+      const a = shapes[i].shape;
+      const b = shapes[j].shape;
+      const d = Math.sqrt(a.reduce((acc, v, k) => acc + (v - b[k]) * (v - b[k]), 0) / a.length);
+      if (d < closest) {
+        closest = d;
+        closestWhat = `${shapes[i].surface} and ${shapes[j].surface}`;
+      }
+    }
+  }
+  rows.push({ id: 'P5', pass: closest >= P_SURFACE_APART_DB, value: round(closest), target: targets.P5, note: closestWhat });
+}
+
 // --- The card ---
 
 function fixedRows(doc, dir, rows, root) {
@@ -716,6 +830,8 @@ export function scoreBank(doc, dir, { shared, root = null, rpms = null, stems = 
   }
   const clipPct = (100 * clipped) / Math.max(1, sumN);
   rows.push({ id: 'A15', pass: clipPct <= 0.1, value: `${round(clipPct, 3)} %`, target: 'clipped before the limiter <= 0.1 %' });
+
+  projectileRows(bank, p, sim, mix, rows);
 
   rows.push({ id: 'D8', pass: true, value: 'external', target: 'event coverage: the game GUT test' });
   rows.push({ id: 'D10', pass: true, value: 'external', target: 'commit cost: a bench' });

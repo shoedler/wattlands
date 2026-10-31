@@ -319,6 +319,8 @@ static func _check_cue(
 			errors.append("%s.sound: no sound '%s'" % [at_path, id])
 		_check_bus(at_path + ".bus", hit.get("bus", AudioBuses.SFX), errors)
 		_check_numbers(at_path, hit, ["db", "pitch", "priority", "delay_s"], errors)
+		if hit.has("flight"):
+			_check_flight(at_path + ".flight", hit["flight"], all.get(id, {}), errors)
 	var ducks := _list_at(cue, "duck", path, errors)
 	for i in ducks.size():
 		var at_path := "%s.duck[%d]" % [path, i]
@@ -330,6 +332,19 @@ static func _check_cue(
 		if bus == AudioBuses.UI:
 			errors.append("%s.bus: UI is never ducked" % at_path)
 		_check_numbers(at_path, duck, ["db", "attack_s", "release_s"], errors)
+
+
+## A flight runs a looping sound for as long as its projectile flies, so the sound must be a loop.
+static func _check_flight(
+	path: String, flight: Variant, sound: Variant, errors: Array[String]
+) -> void:
+	if not _is_object(path, flight, errors):
+		return
+	if not (sound is Dictionary and bool((sound as Dictionary).get("loop", false))):
+		errors.append("%s: its sound must be a loop" % path)
+	for key: String in ["gain", "pitch"]:
+		if (flight as Dictionary).has(key) and not ((flight as Dictionary)[key] is Array):
+			errors.append("%s.%s: needs a list of [u, value] points" % [path, key])
 
 
 ## A known bus: the four of AudioBuses, or one that exists on the server (the jitter bench's temporary bus).
