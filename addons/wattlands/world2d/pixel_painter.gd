@@ -2,8 +2,7 @@ class_name PixelPainter
 extends RefCounted
 ## Procedural pixel-art images (static helpers): sprites from text rows, gears, discs,
 ## dithered gradients and tileable hill silhouettes. The world2d demo draws everything with
-## them; games use them for code-drawn parts and placeholder art (Tank's placeholder_art.gd
-## draws a missing sprite at its size from palette shapes). Deterministic: no global RNG.
+## them; games use them for code-drawn parts. Deterministic: no global RNG.
 ## Images are RGBA8 without mipmaps; wrap one with PixelPainter.texture(img).
 
 ## 4 x 4 ordered-dither (Bayer) thresholds, 0..15.
