@@ -44,8 +44,8 @@
 //                 (`ended_by`: duration, end_phase or max_s: an overrun is max_s on a WORK phase); v3: a seat
 //                 switch splits a segment into plan phases (the rest of it a lap-false phase), so a segment is
 //                 every phase with its meta `segment` (phaseSpansOf keeps them one by one).
-//   T1 (crews 1-4) every Advance 120-280 s, gun line 60-160 s, boss 120-330 s (ambush_15: 80-160, 60-120, 100-190),
-//                 no overrun, at most 1 tank loss, no breakdown (Normal has none; Easy, whose hull breaks down
+//   T1 (crews 1-4) every Advance 120-280 s, gun line 60-160 s (crew 2 on ashfall_road: 60-180 s, see
+//                 T1_CREW2_GUN_LINE_MAX_S), boss 120-330 s (ambush_15: 80-160, 60-120, 100-190), no overrun, at most 1 tank loss, no breakdown (Normal has none; Easy, whose hull breaks down
 //                 instead, at most 1), grade S/A/B. v4: a segment holding a tank_lost is not held to the range or
 //                 to "no overrun": it started over and max_s is what ends it.
 //   T2 (crews 2-4) the dynamo's applied ERG target (trace rows, % FTP) is above 80% for >= 30 s per
@@ -100,6 +100,13 @@ export const T1_RANGES = {
   ambush_15: { advance: [80, 160], gun_line: [60, 120], boss: [100, 190] },
 };
 export const T1_CREWS = [1, 2, 3, 4];
+/**
+ * Lead's ruling (docs/decisions/tank.md, "v4: T1 for crew 2"): on ashfall_road a crew of two may hold a gun line up to
+ * the brief's own 90% gun-line limit (docs/games/tank.md 4.6.1 checks), not the 160 s of every other crew. One rider
+ * shuttles between Gun and Loader while the other repairs, and its holds reach 175 s and 168 s on two seeds; tuning
+ * only moved the miss to another seed. Every other crew and every other T1 row stay as they are.
+ */
+export const T1_CREW2_GUN_LINE_MAX_S = 180;
 export const T1_MAX_LOSSES = 1;
 /** Hull at 0 on Easy is the old breakdown; the other levels lose the tank instead (TankDifficulty.tank_loss). */
 export const T1_MAX_BREAKDOWNS = { easy: 1, normal: 0, hard: 0 };
@@ -425,11 +432,12 @@ export function segmentAt(segs, t) {
 export function t1Problems(name, r) {
   const probs = [];
   const ranges = T1_RANGES[r.content_id] ?? T1_RANGES.ashfall_road;
+  const crew2Hold = ranges === T1_RANGES.ashfall_road && (r.slots ?? []).length === 2;
   const segs = segmentsOf(r);
   const hit = new Set(eventsOf(r, 'tank_lost').map((e) => segmentAt(segs, e._t)?.index));
   for (const s of segs) {
     if (hit.has(s.index)) continue;
-    const lim = ranges[s.seg];
+    const lim = crew2Hold && s.seg === 'gun_line' ? [ranges.gun_line[0], T1_CREW2_GUN_LINE_MAX_S] : ranges[s.seg];
     if (lim && (!(s.dur >= lim[0] - EPS) || !(s.dur <= lim[1] + EPS))) {
       probs.push(`${name}: ${s.seg} ${s.stage} lasted ${fmt(s.dur)} s (${lim[0]}-${lim[1]})`);
     }

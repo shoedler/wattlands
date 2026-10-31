@@ -296,6 +296,20 @@ test('T1 catches a slow Advance, a short gun line, a long boss, an overrun, brea
   assert.deepEqual(C.t1Problems('x', makeRun(3, { grade: 'B' })), []);
 });
 
+test('T1 lets crew 2 hold a gun line up to 180 s on ashfall_road, and nobody else', () => {
+  const hold = (crew, s, content) => C.t1Problems('x', makeRun(crew, { durations: { gun_line: s }, content }));
+  assert.deepEqual(hold(2, 175), [], 'crew 2 at 175');
+  assert.deepEqual(hold(2, 180), [], "crew 2 at the brief's own limit");
+  assert.match(ids(hold(2, 181)), /gun_line 1 lasted 181 s \(60-180\)/);
+  assert.match(ids(hold(3, 175)), /gun_line 1 lasted 175 s \(60-160\)/);
+  assert.match(ids(hold(1, 175)), /gun_line 1 lasted 175 s \(60-160\)/);
+  assert.match(ids(hold(4, 175)), /gun_line 1 lasted 175 s \(60-160\)/);
+  assert.match(ids(hold(2, 50)), /gun_line 1 lasted 50 s \(60-180\)/, 'the short end stays');
+  assert.match(ids(C.t1Problems('x', makeRun(2, { durations: { advance: 290 } }))), /advance 1 lasted 290 s \(120-280\)/);
+  assert.match(ids(C.t1Problems('x', makeRun(2, { durations: { boss: 340 } }))), /boss 4 lasted 340 s \(120-330\)/);
+  assert.match(ids(hold(2, 130, 'ambush_15')), /gun_line 1 lasted 130 s \(60-120\)/, 'ambush_15 stays');
+});
+
 test('T1 holds every crew, the solo rider (crew 1) included', () => {
   assert.deepEqual(C.T1_CREWS, [1, 2, 3, 4]);
   const set = { s1_c1_seed1: makeRun(1, { grade: 'C' }) };
