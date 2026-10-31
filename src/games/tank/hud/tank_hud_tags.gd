@@ -339,7 +339,7 @@ static func post_layout(
 	if left.position.x < near.position.x + 4.0 or not clear_of(left, body):
 		plate = right
 		if plate.end.x > near.end.x:
-			# Step back toward the tank; a narrow panel can still leave the plate over the seam.
+			# Step back toward the tank; a narrow panel may still not leave it room (clamped below).
 			var back := minf(x, maxf(near.end.x - size.x - 9.0, u.end.x + TAG_CLEAR + 5.0))
 			if clear_of(post_rect(back, gy), body):
 				x = back
@@ -351,6 +351,8 @@ static func post_layout(
 	lifted.position = lifted.position.round()
 	if clear_of(lifted, body):
 		plate = lifted
+	# Whatever else gives: every near plate stays in the near panel, none crosses the seam.
+	plate.position.x = clampf(plate.position.x, near.position.x + 4.0, near.end.x - 4.0 - size.x)
 	return {"x": x, "plate": plate, "pinned": pinned, "pole": threats.is_empty() or not pinned}
 
 

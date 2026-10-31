@@ -325,6 +325,18 @@ func test_leaves_are_hard_pixels_that_flutter_down_and_go() -> void:
 	assert_eq(fx.count(), 0)
 
 
+func test_a_wisp_fades_at_both_ends_and_rises_a_little() -> void:
+	assert_eq(TankFx.wisp_fade(0.0), 0.0, "no pop at its start")
+	assert_almost_eq(TankFx.wisp_fade(1.0), 0.0, 1e-6, "none at its end")
+	assert_eq(TankFx.wisp_fade(0.4), 1.0, "full between them")
+	var fx := TankFx.new()
+	fx.wisp(Vector2(100, 300), Vector2.ZERO, 0.85, 15.0, 0.5, Color.WHITE)
+	for _i in 50:
+		fx.step(1.0 / 60.0, 0.0)
+	var rise := 300.0 - (fx.wisps[0]["pos"] as Vector2).y
+	assert_between(rise, 1.0, 6.0, "a slight rise")
+
+
 func test_near_threats_carry_a_dark_line_and_the_far_ones_none() -> void:
 	var v := _view("near_ambush")
 	U.run(v, 2)

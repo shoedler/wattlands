@@ -233,7 +233,49 @@ func test_on_the_narrowest_canvas_the_post_stays_off_the_far_panel() -> void:
 		TankHudTags.clear_of(TankHudTags.post_rect(pl["x"], v.hud_ground_y()), body), "the post"
 	)
 	assert_true(TankHudTags.clear_of(pl["plate"], body), "the plate")
-	assert_lte((pl["plate"] as Rect2).end.x, seam.end.x, "at worst its plate overlaps the seam")
+	assert_lte((pl["plate"] as Rect2).end.x, seam.position.x, "its plate stops at the seam")
+
+
+## Every plate of the near panel stays inside it on the 852 x 480 canvas: the posts wherever the line is,
+## in both directions and every crew, the speed plate and a SURGE tag on a near threat.
+func test_on_the_narrowest_canvas_no_near_plate_crosses_the_seam() -> void:
+	var canvas := Vector2(852, 480)
+	for crew in [1, 2, 3, 4]:
+		var s := U.fixture("state", crew)
+		var g: TankGame = autofree(U.make_game(s))
+		var v := U.make_view(self, g, canvas)
+		var body: Array[Rect2] = v.hud_tank_rects()
+		var gy := v.hud_ground_y()
+		for mirrored in [false, true]:
+			var near: Rect2 = TankFarMap.panels(canvas, mirrored)["near"]
+			for title in ["HALT LINE", "TURN"]:
+				var size := TankHudTags.post_size(title, "400 m")
+				var x := -100.0
+				while x <= canvas.x + 100.0:
+					var pl := TankHudTags.post_layout(x, size, gy, near, body)
+					var at := "crew %d mirrored %s %s at %d" % [crew, mirrored, title, x]
+					assert_true(near.encloses(pl["plate"]), "post plate " + at)
+					assert_true(TankHudTags.clear_of(pl["plate"], body), "clear of the tank " + at)
+					x += 20.0
+			var rear := v.hud_tank_point("rear")
+			var sr := TankHudTags.speed_rect(rear, 60.0, mirrored, body, near)
+			assert_true(near.encloses(sr), "the speed plate")
+			var keep: Array[Rect2] = []
+			for anchor_x in [near.position.x, near.get_center().x, near.end.x]:
+				var wl := TankHudTags.warn_layout(
+					Vector2(anchor_x, gy - 20.0), Vector2(80.0, 16.0), near, keep, body
+				)
+				assert_true(near.encloses(wl["rect"]), "a SURGE tag at %d" % anchor_x)
+
+
+## A tank that takes the panel and both lifted spots leaves the post's plate nowhere clear of it: the
+## clamp keeps it off the seam all the same.
+func test_a_plate_with_no_clear_spot_still_stops_at_the_seam() -> void:
+	var near: Rect2 = TankFarMap.panels(Vector2(852, 480), false)["near"]
+	var tall: Array[Rect2] = [Rect2(0.0, 0.0, near.end.x - 40.0, 400.0)]
+	var size := TankHudTags.post_size("HALT LINE", "400 m")
+	var pl := TankHudTags.post_layout(near.end.x - 8.0, size, 400.0, near, tall)
+	assert_true(near.encloses(pl["plate"]), "inside the near panel: %s" % pl["plate"])
 
 
 func test_posts_and_the_speed_plate_step_off_the_tank_wherever_they_stand() -> void:

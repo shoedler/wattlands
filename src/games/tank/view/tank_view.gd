@@ -99,11 +99,11 @@ const LEAF := Color(0.3, 0.3, 0.14)
 const LEAF_SPEED := 70.0
 ## The leaves still fluttering down after the burst, the bush's colours, and how fast a bursting threat keeps
 ## throwing them (per second) while it comes out.
-const LEAF_DRIFT := 34
+const LEAF_DRIFT := 22
 const LEAF_DRIFT_S := 3.4
 const LEAF_LIT := Color(0.36, 0.43, 0.27)
 const LEAF_DARK := Color(0.2, 0.3, 0.2)
-const LEAF_RATE := 40.0
+const LEAF_RATE := 24.0
 ## A bush a threat burst from goes on shedding for this long (s).
 const LEAF_SHED_S := 1.9
 ## How far a threat may be from a bush and still be bursting out of it.

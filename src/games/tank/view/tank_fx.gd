@@ -12,13 +12,17 @@ const MAX_BOOMS := 24
 const MAX_SPARKS := 160
 const MAX_CASINGS := 48
 const MAX_TRACERS := 48
-const MAX_LEAVES := 64
+const MAX_LEAVES := 40
 const MAX_WISPS := 90
 ## A falling leaf: how fast it settles, how wide and how fast it sways.
 const LEAF_FALL := 11.0
 const LEAF_SWAY := 7.0
 const LEAF_SWAY_HZ := 1.3
 const GRAVITY := 160.0
+## A wisp of exhaust: the share of its life it fades in and out over, and how fast it lifts (px/s^2).
+const WISP_FADE_IN := 0.2
+const WISP_FADE_OUT := 0.5
+const WISP_RISE := 10.0
 
 var rng := RandomNumberGenerator.new()
 ## {pos, vel, age, life, r0, r1, a, c, carry}
@@ -36,7 +40,7 @@ var tracers: Array[Dictionary] = []
 ## {pos, vel, age, life, len, h, a, c}: a wisp of exhaust streaming off a running vehicle: a thin hard dash that
 ## stretches and thins; a run of them is a streak, where soft puffs would be a row of dots.
 var wisps: Array[Dictionary] = []
-## {pos, vel, age, life, c, phase}: a leaf thrown from a bush, fluttering down: a hard pixel or two, no soft blob.
+## {pos, vel, age, life, c, phase}: a leaf thrown from a bush, fluttering down: a small hard chip, no soft blob.
 var leaves: Array[Dictionary] = []
 ## A flash lighting the scene (0..1), where and in what colour.
 var wash: float = 0.0
@@ -273,12 +277,17 @@ func step(dt: float, scroll: float) -> void:
 	for w in wisps:
 		w["age"] = float(w["age"]) + dt
 		var v5: Vector2 = w["vel"]
-		v5 = v5 * (1.0 - 0.9 * dt) + Vector2(0, -3.0 * dt)
+		v5 = v5 * (1.0 - 0.9 * dt) + Vector2(0, -WISP_RISE * dt)
 		w["vel"] = v5
 		w["pos"] = (w["pos"] as Vector2) + v5 * dt - Vector2(scroll * 0.45, 0)
 		if float(w["age"]) < float(w["life"]):
 			keep5.append(w)
 	wisps = keep5
+
+
+## A wisp's share of its alpha at `k` of its life (0..1): 0 at both ends, so it never pops.
+static func wisp_fade(k: float) -> float:
+	return minf(k / WISP_FADE_IN, 1.0) * minf((1.0 - k) / WISP_FADE_OUT, 1.0)
 
 
 static func _aged(list: Array[Dictionary], dt: float) -> Array[Dictionary]:
@@ -301,7 +310,7 @@ func draw_smoke(ci: CanvasItem) -> void:
 	for w in wisps:
 		var kw := float(w["age"]) / float(w["life"])
 		var col: Color = w["c"]
-		col.a = float(w["a"]) * (1.0 - kw) * minf(float(w["age"]) * 12.0, 1.0)
+		col.a = float(w["a"]) * wisp_fade(kw)
 		var size := Vector2(roundf(lerpf(3.0, float(w["len"]), kw)), float(w["h"]))
 		ci.draw_rect(Rect2((w["pos"] as Vector2).floor(), size), col)
 
@@ -324,7 +333,7 @@ func draw_leaves(ci: CanvasItem) -> void:
 		var col: Color = l["c"]
 		col.a = clampf((float(l["life"]) - age) * 2.0, 0.0, 1.0)
 		var flat := fposmod(ph, TAU) < PI
-		ci.draw_rect(Rect2(p.floor(), Vector2(2, 1) if flat else Vector2(1, 1)), col)
+		ci.draw_rect(Rect2(p.floor(), Vector2(3, 2) if flat else Vector2(2, 2)), col)
 
 
 ## Flashes, explosions, sparks and tracers (the additive layer).
