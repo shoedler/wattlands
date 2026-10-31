@@ -69,15 +69,17 @@ function energy(id, lo, hi) {
   return 10 * Math.log10(total / bank.variants(id) + 1e-30);
 }
 
-test('fatigue: nothing locked above 2 kHz within 16 dB of the main stroke, at its loudest', () => {
+test('fatigue: nothing locked above 2 kHz within 16 dB of the main stroke, by energy, at any load', () => {
   const press = bikeEvent('pedal_press');
-  const hard = { power: 1.5, crowd: 1, speed: 15, coast: 1, rpm: 110 };
-  const levelOf = (e) => (e.db ?? 0) + (e.db_by ?? []).reduce((a, c) => a + curveEval(c, hard), 0);
-  const main = energy('pedal_press', 0, 1e6) + levelOf(press);
-  for (const machine of ['bike', 'breath', 'wheel']) {
-    for (const e of doc.machines[machine].events) {
-      const above = energy(e.sound, 2000, 1e6) + levelOf(e);
-      assert.ok(above <= main - 16, `${e.sound}: ${(above - main).toFixed(1)} dB`);
+  for (const power of [0.3, 0.65, 1.0, 1.3, 1.5]) {
+    const at = { power, crowd: 1, speed: 15, coast: 1, rpm: 110 };
+    const levelOf = (e) => (e.db ?? 0) + (e.db_by ?? []).reduce((a, c) => a + curveEval(c, at), 0);
+    const main = energy('pedal_press', 0, 1e6) + levelOf(press);
+    for (const machine of ['bike', 'breath', 'wheel']) {
+      for (const e of doc.machines[machine].events) {
+        const above = energy(e.sound, 2000, 1e6) + levelOf(e);
+        assert.ok(above <= main - 16, `${e.sound} at ${power}: ${(above - main).toFixed(1)} dB`);
+      }
     }
   }
 });
