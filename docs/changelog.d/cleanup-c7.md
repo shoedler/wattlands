@@ -1,0 +1,2 @@
+- Removed unreferenced functions and constants across the platform, Fishing, Siege, Diesel Domestiques and Workout, plus `SiegeDepthSprite`, Siege's old art proposal and orphaned files. Nothing a rider sees changes.
+- Siege's art tools now write PNGs through the repo's shared codec; the baked art is byte-identical.
