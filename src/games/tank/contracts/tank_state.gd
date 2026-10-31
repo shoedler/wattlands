@@ -187,7 +187,7 @@ func to_dict() -> Dictionary:
 	return d
 
 
-func load_dict(d: Dictionary) -> TankRecord:
+func load_dict(d: Dictionary) -> WlRecord:
 	super.load_dict(d)
 	seg.load_dict(d.get("seg", {}))
 	hull.load_dict(d.get("hull", {}))

@@ -36,7 +36,7 @@ static func normalize(raw: Variant) -> Dictionary:
 		via = SiegeIds.VIA_ACTION
 	if not SiegeIds.VIAS.has(via):
 		return {}
-	var auto := via == SiegeIds.VIA_AUTO or _truthy(d.get("auto", 0))
+	var auto := via == SiegeIds.VIA_AUTO or IntentRateLimiter.truthy(d.get("auto", 0))
 	if auto:
 		via = SiegeIds.VIA_AUTO
 	var out := {"k": k, "to": 0, "item": "", "station": 0, "pad": 0, "auto": auto, "via": via}
@@ -102,11 +102,3 @@ static func normalize_all(list: Array) -> Array[Dictionary]:
 
 static func _whole(v: Variant) -> bool:
 	return (v is int) or (v is float and is_finite(v) and float(v) == floorf(v))
-
-
-static func _truthy(v: Variant) -> bool:
-	if v is bool:
-		return v
-	if v is int or v is float:
-		return float(v) != 0.0
-	return false
