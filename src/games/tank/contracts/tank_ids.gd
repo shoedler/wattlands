@@ -173,9 +173,6 @@ const EM_RETIRE := 7
 ## v4: a near threat paused to fire (EM_MOVE is its dash, EM_LEAVE its flight).
 const EM_PAUSE := 8
 
-## Where an Advance encounter enters.
-const FROM_FRONT := "front"
-
 # --- Difficulty (v4, game.json option "difficulty"; TankDifficulty) ---------------------------------
 const DIFF_AUTO := "auto"
 const DIFF_EASY := "easy"
@@ -189,7 +186,6 @@ const OBST_WRECK := "wreck"
 ## The depot's aim drill targets (no HP effect on scoring).
 const OBST_DRILL_WRECK := "drill_wreck"
 const OBST_TANK_TRAPS := "tank_traps"
-const OBSTACLE_TYPES: Array[String] = [OBST_WIRE, OBST_WRECK, OBST_DRILL_WRECK, OBST_TANK_TRAPS]
 const OBSTACLE_CODES := {OBST_WIRE: 1, OBST_WRECK: 2, OBST_DRILL_WRECK: 3, OBST_TANK_TRAPS: 4}
 
 # --- Shells -----------------------------------------------------------------------------------------
@@ -236,8 +232,6 @@ const OUTCOME_COMPLETE := "complete"
 const OUTCOME_TIME_UP := "time_up"
 
 # --- Intents (brief 2.6; TankIntents) ---------------------------------------------------------------
-## Reserved (v3 retired the Bulwark's gearbox lever): "lever" is junk to TankIntents.normalize.
-const INTENT_LEVER := "lever"
 const INTENT_AIM := "aim"
 const INTENT_TARGET := "target"
 const INTENT_FIRE := "fire"
@@ -271,7 +265,6 @@ const SEAT_TO_PREV := "prev"
 const AIM_UP := 1
 const AIM_DOWN := -1
 const TARGET_NEXT := 1
-const TARGET_PREV := -1
 
 
 ## The tank a crew of `crew` rides: the landship for every crew size (v3).

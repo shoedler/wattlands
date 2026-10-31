@@ -60,21 +60,6 @@ static func lamp(ci: CanvasItem, p: Vector2, c: Color, k: float) -> void:
 	glow_at(ci, p, 2.0, Color(c.r * 0.5 + 0.5, c.g * 0.5 + 0.5, c.b * 0.5 + 0.5, k))
 
 
-## A vertical wash over `rect`, `c` at the top fading to a quarter at the bottom.
-static func fill_room(ci: CanvasItem, rect: Rect2, c: Color) -> void:
-	var top := Color(c.r, c.g, c.b, c.a)
-	var bot := Color(c.r, c.g, c.b, c.a * 0.25)
-	var pts := PackedVector2Array(
-		[
-			rect.position,
-			rect.position + Vector2(rect.size.x, 0),
-			rect.end,
-			rect.position + Vector2(0, rect.size.y)
-		]
-	)
-	ci.draw_polygon(pts, PackedColorArray([top, top, bot, bot]))
-
-
 ## An additive volumetric cone from `p` at angle `ang`, `blen` long, half-spread `half`: a soft core
 ## and a wide faint halo, fading along its length and toward its edges; `k` scales it.
 static func beam(
