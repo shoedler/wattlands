@@ -105,8 +105,37 @@ func test_code_keys_exist() -> void:
 		"WORKOUT_PREVIEW_COURSE",
 		"WORKOUT_PREVIEW_CLAMP",
 		"WORKOUT_PREVIEW_WARNING",
-		"WORKOUT_HUD_WATTS",
 		"WORKOUT_HUD_IN_BAND",
+		"WORKOUT_HUD_TARGET_ERG",
+		"WORKOUT_HUD_TARGET_RAMP",
+		"WORKOUT_HUD_TARGET_EASY",
+		"WORKOUT_HUD_HOLD_BAND",
+		"WORKOUT_HUD_SPRINT",
+		"WORKOUT_HUD_FREE_RIDE",
+		"WORKOUT_HUD_DO_SPIN",
+		"WORKOUT_HUD_DO_HOLD",
+		"WORKOUT_HUD_DO_EASY",
+		"WORKOUT_HUD_NEXT",
+		"WORKOUT_HUD_NEXT_COOLDOWN",
+		"WORKOUT_HUD_NEXT_END",
+		"WORKOUT_HUD_LEFT",
+		"WORKOUT_HUD_FTP",
+		"WORKOUT_HUD_W",
+		"WORKOUT_HUD_WKG",
+		"WORKOUT_HUD_RPM",
+		"WORKOUT_HUD_WPRIME",
+		"WORKOUT_HUD_LOW",
+		"WORKOUT_HUD_GEAR",
+		"WORKOUT_HUD_CARD",
+		"WORKOUT_HUD_NO_POWER",
+		WorkoutHudModel.FLAG_RESCUE,
+		WorkoutHudModel.FLAG_AFK,
+		WorkoutHudModel.FLAG_LINK,
+		"WORKOUT_HUD_BLOCK",
+		"WORKOUT_HUD_GROUP",
+		"WORKOUT_HUD_KMH",
+		"WORKOUT_HUD_KM",
+		"WORKOUT_HUD_PEAK",
 		"WORKOUT_BANNER_RAMP",
 		"WORKOUT_BANNER_ERG",
 		"WORKOUT_BANNER_SPRINT",
@@ -129,6 +158,8 @@ func test_code_keys_exist() -> void:
 	]
 	for k: String in WorkoutResults.BEST_STATS.values():
 		keys.append(k)
+	for e: Array in WorkoutHud.HELP:
+		keys.append(str(e[0]))
 	for g in WorkoutProgress.GRADES:
 		keys.append("WORKOUT_RESULT_" + g)
 	for u in WorkoutProgress.UNLOCKS:
