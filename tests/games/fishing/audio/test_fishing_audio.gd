@@ -190,14 +190,24 @@ func _foot_y(angle: float) -> int:
 	return y
 
 
+## The crank and leg's mean pixel row. At the top of the stroke the foot's row hides behind the hub's.
+func _leg_y(angle: float) -> float:
+	var total := 0
+	var n := 0
+	for p in FishingRig.drivetrain(angle):
+		if p.z == 1:
+			total += p.y
+			n += 1
+	return float(total) / float(n)
+
+
 func test_the_stroke_fractions_come_from_the_art() -> void:
 	var low := _foot_y(0.25 * TAU)
 	assert_gt(low, _foot_y(0.0), "at .25 the pedal is at the bottom of the stroke")
 	assert_gt(low, _foot_y(0.5 * TAU))
-	assert_gt(_foot_y(0.0), _foot_y(0.75 * TAU) - 1, "at .75 at the top")
-	var pedal_0 := sin(0.0)
-	var pedal_half := sin(0.5 * TAU)
-	assert_almost_eq(pedal_0, pedal_half, 1e-6, "0 and .5: level, a foot starts down")
+	assert_lt(_leg_y(0.75 * TAU), _leg_y(0.0), "at .75 at the top: the leg is drawn at its highest")
+	assert_lt(_leg_y(0.75 * TAU), _leg_y(0.5 * TAU))
+	assert_eq(_foot_y(0.0), _foot_y(0.5 * TAU), "0 and .5: level, a foot starts down")
 	var machine: Dictionary = _doc()["machines"]["drivetrain"]
 	var at := {}
 	for ev: Dictionary in machine["events"]:
@@ -417,6 +427,271 @@ func test_lifting_off_the_power_burbles_only_while_driving() -> void:
 	r.p_eff_w = 100.0
 	_run(c, {0: b}, st, 0.1)
 	assert_does_not_have(c.played, "exhaust_burble", "the clutch is in the winch")
+
+
+func test_a_stopped_crank_never_burbles_however_the_power_falls() -> void:
+	# A client's cadence is live while its load comes in the 10 Hz snapshot, so the power falls after
+	# the crank stops: the three shapes the review measured.
+	for shape: Array in [[0.0, 0.0], [2.0, 0.0], [3.0, 0.5]]:
+		var a := _audio()
+		var st := _state()
+		var r: FishingRiderState = st.riders[0]
+		var b := _boat(90.0)
+		b.prop_drive = 1.0
+		r.p_eff_w = 250.0
+		_run(a, {0: b}, st, 2.0)
+		a.kit.clear_played()
+		b.cadence = 0.0
+		var t := 0.0
+		while t < 5.0:
+			var u := clampf((t - float(shape[1])) / maxf(float(shape[0]), 0.001), 0.0, 1.0)
+			r.p_eff_w = 250.0 * (1.0 - u)
+			_run(a, {0: b}, st, DT)
+			t += DT
+		assert_does_not_have(a.played, "exhaust_burble", "falling over %s s" % shape[0])
+
+
+func test_a_lift_burbles_once_and_not_again_until_the_power_has_come_back() -> void:
+	var a := _audio()
+	var st := _state()
+	var r: FishingRiderState = st.riders[0]
+	var b := _boat(90.0)
+	b.prop_drive = 1.0
+	r.p_eff_w = 300.0
+	_run(a, {0: b}, st, 1.5)
+	for w in [220.0, 150.0, 80.0]:
+		r.p_eff_w = w
+		_run(a, {0: b}, st, 0.5)
+	assert_eq(_count(a, "exhaust_burble"), 1, "each further drop is the same lift")
+	r.p_eff_w = 200.0
+	_run(a, {0: b}, st, 2.0)
+	assert_eq(_count(a, "exhaust_burble"), 1, "power coming back is silent")
+	r.p_eff_w = 100.0
+	_run(a, {0: b}, st, 0.2)
+	assert_eq(_count(a, "exhaust_burble"), 2, "a new lift")
+
+
+# --- The clutch -------------------------------------------------------------------------------
+
+
+func test_the_clutch_lever_clunks_back_to_the_prop_on_your_boat_only() -> void:
+	var a := _audio()
+	var st := _state(2)
+	var me := _boat(90.0)
+	var other := _boat(90.0)
+	var boats := {0: me, 1: other}
+	_run(a, boats, st, 0.2)
+	assert_does_not_have(a.played, "reel_clunk", "no clunk for a boat that was never on the winch")
+	me.fishing_target = 1.0
+	other.fishing_target = 1.0
+	_run(a, boats, st, 0.5)
+	assert_does_not_have(a.played, "reel_clunk", "the flip up belongs to the cast's own cue")
+	other.fishing_target = 0.0
+	_run(a, boats, st, 0.5)
+	assert_does_not_have(a.played, "reel_clunk", "another boat's lever is too small to hear")
+	me.fishing_target = 0.0
+	_run(a, boats, st, 0.5)
+	assert_eq(_count(a, "reel_clunk"), 1, "landed, snap or thrown: the lever flips back")
+	var level := float(_doc()["cues"]["turn"]["hits"][0]["db"])
+	assert_almost_eq(_loudest(a, "reel_clunk"), level, 1.0, "at about the turn's level")
+
+
+# --- Other riders' cues -----------------------------------------------------------------------
+
+
+func test_a_far_riders_routine_cue_falls_away_and_the_news_does_not() -> void:
+	var a := _audio()
+	var st := _state(2)
+	var boats := {0: _boat(0.0), 1: _boat(0.0)}
+	var at_me := st.riders[0].x_m
+	var far := at_me + FishingAudio.EAR_ZERO_M
+	for routine: String in [
+		FishingCues.CUE_CAST,
+		FishingCues.CUE_TURN,
+		FishingCues.CUE_HOOKUP,
+		FishingCues.CUE_RUN,
+		FishingCues.CUE_THROWN,
+		FishingCues.CUE_JUMP,
+		FishingCues.CUE_SNAP,
+	]:
+		st.riders[1].x_m = at_me
+		_run(a, boats, st, DT)
+		var close := _cue_db(a, {"k": routine, "l": 1})
+		st.riders[1].x_m = far
+		_run(a, boats, st, DT)
+		var gone := _cue_db(a, {"k": routine, "l": 1})
+		assert_almost_eq(gone - close, FishingAudio.FAR_DB, 0.01, routine)
+	for news: String in [
+		FishingCues.CUE_BITE, FishingCues.CUE_DOUBLE_HOOKUP, FishingCues.CUE_LANDED
+	]:
+		st.riders[1].x_m = at_me
+		_run(a, boats, st, DT)
+		var close := _cue_db(a, {"k": news, "l": 1})
+		st.riders[1].x_m = far
+		_run(a, boats, st, DT)
+		assert_almost_eq(_cue_db(a, {"k": news, "l": 1}), close, 0.01, "%s reaches anywhere" % news)
+	var mine := _cue_db(a, {"k": FishingCues.CUE_TURN, "l": 0}, true)
+	assert_almost_eq(mine, float(_doc()["cues"]["turn"]["hits"][0]["db"]), 0.01, "yours is level")
+
+
+## The loudest thing cue `c` starts this frame.
+func _cue_db(a: FishingAudio, c: Dictionary, local: bool = false) -> float:
+	a.kit.clear_played()
+	a.cue(c, local)
+	var top := -INF
+	for db in a.kit.played_db:
+		top = maxf(top, db)
+	return top
+
+
+# --- Pause ------------------------------------------------------------------------------------
+
+
+func test_a_pause_stands_the_boat_and_the_bed_reads_no_speed() -> void:
+	var a := _audio(8)
+	var st := _state()
+	var r: FishingRiderState = st.riders[0]
+	r.v_mps = 14.0
+	r.p_eff_w = 250.0
+	var b := _boat(90.0)
+	b.prop_drive = 1.5
+	_run(a, {0: b}, st, 2.0)
+	var bus := get_tree().root.get_node("EventBus")
+	assert_true(bus.is_connected("paused_changed", a._on_paused_changed))
+	bus.emit_signal("paused_changed", true, "test")
+	_run(a, {0: b}, st, 0.2)
+	a.kit.clear_played()
+	var fired := a.kit.machine_voice("boat0").fired
+	r.p_eff_w = 0.0
+	r.heave_m -= 0.5
+	_run(a, {0: b}, st, 30.0)
+	assert_eq(a.kit.machine_voice("boat0").fired, fired, "not one stroke")
+	assert_true(a.kit.machine_loop("boat0").all_off(), "the machine's loops are closed")
+	assert_does_not_have(a.played, "exhaust_burble", "power falling under a pause is no lift")
+	assert_eq(a.played.count("hull_slap"), _resting_slaps(a), "only a resting hull's slaps")
+	assert_lte(a.played.count("hull_slap"), ceili(30.0 / 3.2) + 1, "at a resting hull's pace")
+	r.p_eff_w = 250.0
+	bus.emit_signal("paused_changed", false, "resume")
+	a.kit.clear_played()
+	var at := a.kit.machine_voice("boat0").fired
+	_run(a, {0: b}, st, 0.1)
+	assert_lte(a.kit.machine_voice("boat0").fired - at, 3, "no burst on resume")
+	assert_does_not_have(a.played, "exhaust_burble")
+	assert_eq(_slaps(a), 0, "the heave that moved under the pause is no fall")
+
+
+## A resting hull's spot: the slow band's level, less the kit's pause drop.
+func _resting_slaps(a: FishingAudio) -> int:
+	var lo := INF
+	var hi := -INF
+	for spot: Dictionary in _doc()["beds"]["open_sea"]["spots"]:
+		if spot["sound"] == "hull_slap" and spot["when"].has("max") and not spot["when"].has("min"):
+			lo = float(spot["db"][0]) + GameAudioKit.PAUSE_BED_DB - 0.01
+			hi = float(spot["db"][1]) + 0.01
+	var n := 0
+	for i in a.played.size():
+		if a.played[i] == "hull_slap" and a.kit.played_db[i] >= lo and a.kit.played_db[i] <= hi:
+			n += 1
+	return n
+
+
+# --- Eight boats ------------------------------------------------------------------------------
+
+
+## Eight boats around the local one: `reeling` of the others in a fight, the rest driving.
+func _fleet(reeling: int) -> Dictionary:
+	var st := _state(8)
+	var boats := {}
+	for i in 8:
+		var r: FishingRiderState = st.riders[i]
+		r.x_m = st.riders[0].x_m + float(i) * 10.0
+		r.p_eff_w = 220.0
+		r.v_mps = 12.0
+		var b := _boat(88.0 + 24.0 * float(i) / 7.0)
+		b.prop_drive = 1.5
+		boats[i] = b
+	for i in range(1, 1 + reeling):
+		_fishing(boats[i], 0.7, 3.0)
+		st.riders[i].action = FishingConst.A_FIGHT
+	return {"st": st, "boats": boats}
+
+
+func test_eight_boats_keep_the_lead_exact_and_the_rest_inside_their_caps() -> void:
+	for reeling in [0, 3, 7]:
+		var a := _audio(8)
+		var f := _fleet(reeling)
+		var boats: Dictionary = f["boats"]
+		var seconds := 15.0
+		var top := 0
+		for i in roundi(seconds / DT):
+			for slot: int in boats:
+				(boats[slot] as FishingBoatView).advance(DT)
+			a.update(DT, boats, f["st"], 0)
+			top = maxi(top, a.kit.loops_in_use())
+		assert_lte(top, int(_doc()["mix"]["max_loop_players"]), "the pool, %d reeling" % reeling)
+		var lead := a.kit.machine_voice("boat0")
+		var to := lead.planned_to()
+		var feet := floori(to) + floori(to + 0.5)
+		var crack := floori(to + 0.96) + floori(to + 0.46)
+		var valve := floori(to + 0.75) + floori(to + 0.25)
+		var gear_and_knock := feet
+		# The putt, its crack, the valves, the gear tick and the knock: a stroke lost would show.
+		assert_eq(lead.fired, feet + crack + valve + gear_and_knock, "%d reeling" % reeling)
+		assert_eq(lead.dropped, 0, "the lead is never thinned")
+		var planned := 0
+		for i in range(1, 8):
+			planned += a.kit.machine_voice("boat%d" % i).fired
+		var cap := 1.0 / float(_doc()["mix"]["other_min_gap_s"])
+		assert_gt(a.kit.thinned, 0, "others are thinned, %d reeling" % reeling)
+		assert_lte(float(planned - a.kit.thinned), cap * seconds + 1.0, "they stay under the cap")
+		var theirs := a.kit.machine_loop("boat1")
+		assert_eq(theirs.on[_layer_of(theirs, "line_tension")], 0, "their line sings to them")
+		assert_eq(theirs.on[_layer_of(theirs, "drive_whine")], 0, "their whine is theirs")
+
+
+func test_eight_boats_with_players_stay_inside_every_pool() -> void:
+	var a := FishingAudio.new()
+	a.rng_seed = 8
+	a.kit.force_audio = true
+	add_child_autofree(a)
+	var f := _fleet(3)
+	var boats: Dictionary = f["boats"]
+	var names := [
+		FishingCues.CUE_BITE,
+		FishingCues.CUE_HOOKUP,
+		FishingCues.CUE_RUN,
+		FishingCues.CUE_JUMP,
+		FishingCues.CUE_LANDED,
+		FishingCues.CUE_SNAP,
+		FishingCues.CUE_CAST,
+		FishingCues.CUE_THROWN,
+	]
+	var next := 0.0
+	var t := 0.0
+	var k := 0
+	while t < 12.0:
+		if t >= next:
+			a.cue({"k": names[k % names.size()], "l": 1 + k % 7}, false)
+			k += 1
+			next += 0.9
+		for slot: int in boats:
+			(boats[slot] as FishingBoatView).advance(DT)
+		a.update(DT, boats, f["st"], 0)
+		t += DT
+	var doc := _doc()
+	assert_lte(_players(a, "Machines"), int(doc["mix"]["machine_voices"]))
+	assert_lte(_players(a, "Sfx"), int(doc["mix"]["sfx_voices"]))
+	assert_gt(_players(a, "Sfx"), 0, "the cues found voices")
+	assert_lte(a.kit.loops_in_use(), int(doc["mix"]["max_loop_players"]))
+	assert_eq(a.kit.machine_voice("boat0").dropped, 0, "the lead is whole under the crowd")
+
+
+func _players(a: FishingAudio, prefix: String) -> int:
+	var n := 0
+	for c in a.kit.get_children():
+		if str(c.name).begins_with(prefix):
+			n += 1
+	return n
 
 
 # --- In the view ------------------------------------------------------------------------------

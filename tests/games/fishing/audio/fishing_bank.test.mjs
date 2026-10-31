@@ -8,12 +8,22 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { loadBank, renderFile, soundFiles } from '../../../../tools/audio/lib/bank.mjs';
 import { bandShareDb } from '../../../../tools/audio/lib/dsp.mjs';
+import { integratedLufs, momentaryMaxLufs } from '../../../../tools/audio/lib/lufs.mjs';
+import * as offlineMix from '../../../../tools/audio/lib/offline_mix.mjs';
+import { previewScenario } from '../../../../tools/audio/lib/score.mjs';
 import { decodeWav, deinterleave } from '../../../../tools/audio/lib/wav.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 const BANK = path.join(REPO, 'assets', 'fishing', 'audio', 'audio.json');
 const doc = loadBank(BANK);
 const machine = doc.machines.drivetrain;
+const { BankAudio, MIX_RATE, mixdown, simulate } = offlineMix;
+const bank = new BankAudio(doc, path.dirname(BANK));
+const SHARED = path.join(REPO, 'assets', '_shared', 'audio');
+const shared = new BankAudio(loadBank(path.join(SHARED, 'audio.json')), SHARED);
+// D5's row is +6 LU. WlSfx's duck on main (-6, -6, -4) cannot reach it at this game's loud moments, so each floor below pins
+// what that duck gives and rises by itself to +6 when the deeper duck lands: offline_mix then exports SAFETY_DUCK (see the ADR).
+const floorLu = (today) => (offlineMix.SAFETY_DUCK ? 6 : today);
 
 const VARIANTS = { gear_tick: 3, outboard_chug: 3, reel_ratchet: 3, line_creak: 4, hull_slap: 5, gull: 4 };
 const LIST = [
@@ -118,8 +128,8 @@ test('the bed has its gulls near the dock, a far one at sea, and a hull slap per
   const buoy = spots.find((s) => s.sound === 'buoy_bell');
   assert.deepEqual(buoy.gap_s, [40, 90]);
   assert.equal(spots.find((s) => s.sound === 'rigging_tick').when.param, 'near_dock');
-  // Loop lengths co-prime in tenths of a second: the bed takes minutes to repeat.
-  const layers = doc.beds.open_sea.layers.map((l) => Math.round(doc.sounds[l.sound].dur * 10));
+  // Loop lengths co-prime in tenths of a second: the bed takes minutes to repeat. The second wash is the same file at another pitch.
+  const layers = [...new Set(doc.beds.open_sea.layers.map((l) => l.sound))].map((id) => Math.round(doc.sounds[id].dur * 10));
   const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b));
   for (let i = 0; i < layers.length; i++) for (let j = i + 1; j < layers.length; j++) assert.ok(gcd(layers[i], layers[j]) <= 10, `${layers}`);
 });
@@ -139,6 +149,88 @@ test('the fanfare and the bells sit on C major pentatonic', () => {
   const onScale = (hz) => [0.25, 0.5, 1, 2, 4].some((o) => NOTES.some((n) => Math.abs(hz * o - n) < 0.5));
   for (const id of ['fanfare_1', 'fanfare_2', 'fanfare_3', 'fanfare_4', 'bite_bell', 'bell_double']) {
     for (const l of doc.sounds[id].layers) assert.ok(onScale(l.f), `${id}: ${l.f} Hz`);
+  }
+});
+
+test('routine cues carry the distance of the boat they come from; a catch and the bells do not', () => {
+  for (const id of ['cast', 'hookup', 'thrown', 'run', 'jump', 'jump_1', 'jump_3', 'snap', 'turn']) {
+    for (const h of doc.cues[id].hits) assert.equal(h.db_var, 'far_db', `${id}: ${h.sound}`);
+  }
+  for (const id of ['bite', 'double_hookup', 'landed', 'landed_trophy', 'time_up', 'trip_over', 'clutch']) {
+    for (const h of doc.cues[id].hits) assert.equal(h.db_var, undefined, `${id}: ${h.sound}`);
+  }
+});
+
+test('nothing in the machine repeats on a short cycle: the putt, the body and the winch', () => {
+  assert.equal(eventOf('outboard_chug').pitch_table.length, 7, 'a 21 revolution cycle against the 3 takes');
+  for (const [id, cycles] of [['outboard_body', [87, 130]], ['winch_gear', [187]]]) {
+    const hz = doc.sounds[id].layers.filter((l) => typeof l.f === 'number').map((l) => l.f);
+    assert.equal(hz.length, cycles.length, id);
+    hz.forEach((f, i) => assert.ok(Math.abs(f * doc.sounds[id].dur - cycles[i]) < 1e-3, `${id}: ${f} Hz stays whole cycles`));
+  }
+  const pitches = doc.sounds.line_creak.per_variant.map((v) => v.pitch);
+  assert.ok(Math.log2(Math.max(...pitches) / Math.min(...pitches)) * 12 < 2.5, 'the creak is no 4-note riff');
+});
+
+test('with nothing on the line the sea leads over the crank', () => {
+  const seg = { rpm: 70, s: 40, params: { near: 1, fishing: 1, tension: 0.15, speed: 0.6, near_dock: 0, prop: 0, load: 0.5 } };
+  const sim = simulate(bank, { segments: [seg], machines: [{ id: 'lead', machine: 'drivetrain', lead: true }], bed: 'open_sea', bed_params: {}, seed: 8 });
+  const m = mixdown(bank, sim, { tail: 0 });
+  assert.ok(integratedLufs(m.stems.Machines, MIX_RATE) <= integratedLufs(m.stems.Ambience, MIX_RATE), 'machines at or under the bed');
+});
+
+/** D5's own metric: `warning` over everything else, ducks counted, in a 600 ms window from each time. */
+function promptMargins(scenario, ts) {
+  const sim = simulate(bank, { ...scenario, prompts: ts.map((t) => ({ t, name: 'warning' })), shared });
+  const pm = mixdown(bank, sim, { shared });
+  return ts.map((t) => {
+    const from = Math.round(t * MIX_RATE);
+    const to = Math.round((t + 0.6) * MIX_RATE);
+    const others = [new Float64Array(to - from), new Float64Array(to - from)];
+    for (const bus of ['Machines', 'Ambience', 'Sfx', 'UI']) {
+      for (let c = 0; c < 2; c++) {
+        const src = pm.stems[bus][c];
+        for (let i = from; i < to; i++) others[c][i - from] += src[i];
+      }
+    }
+    const master = [pm.stems.Master[0].subarray(from, to), pm.stems.Master[1].subarray(from, to)];
+    return momentaryMaxLufs(master, MIX_RATE) - momentaryMaxLufs(others, MIX_RATE);
+  });
+}
+
+const LEAD = { id: 'lead', machine: 'drivetrain', lead: true };
+const DRIVE = { near: 1, prop: 1.5, load: 1, fishing: 0, tension: 0, reel: 0 };
+const bots = (params) => Array.from({ length: 7 }, (_, i) => ({ id: `b${i}`, machine: 'drivetrain', lead: false, rpm_scale: 0.88 + (0.24 * i) / 6, params }));
+
+test('a safety prompt clears steady riding, alone and among seven boats', () => {
+  const ts = [2, 6, 10, 14, 18, 22];
+  for (const [rpm, load, speed] of [[60, 0.45, 3.2], [90, 1, 12], [110, 1.15, 15], [110, 1.4, 16], [140, 1.4, 16]]) {
+    const seg = { rpm, s: 24, params: { ...DRIVE, load, speed, near_dock: 0 } };
+    for (const [who, machines, today] of [['alone', [LEAD], 4.7], ['with 7', [LEAD, ...bots(DRIVE)], 3.7]]) {
+      const worst = Math.min(...promptMargins({ segments: [seg], machines, bed: 'open_sea', bed_params: {}, seed: 8 }, ts));
+      assert.ok(worst >= floorLu(today), `${rpm} rpm, load ${load}, ${who}: ${worst.toFixed(2)} LU`);
+    }
+  }
+});
+
+test('a safety prompt clears every cue, on it and around it', () => {
+  const names = Object.keys(doc.cues);
+  const cues = names.map((cue, i) => ({ t: 3 + i * 5, cue, vars: {} }));
+  const seg = { rpm: 70, s: 3 + names.length * 5, params: { near: 1, fishing: 1, tension: 0.15, speed: 0.6, near_dock: 0, prop: 0, load: 0.5 } };
+  const scenario = { segments: [seg], machines: [LEAD], bed: 'open_sea', bed_params: {}, cues, seed: 8 };
+  for (const off of [-0.4, -0.2, 0, 0.16, 0.32, 0.48]) {
+    promptMargins(scenario, names.map((_, i) => 3 + i * 5 + off)).forEach((d, i) => {
+      assert.ok(d >= floorLu(1.2), `${names[i]}, prompt at ${off} s: ${d.toFixed(2)} LU`);
+    });
+  }
+});
+
+test('a safety prompt clears the preview at its worst moments, not only at the midpoint', () => {
+  const scenario = previewScenario(doc);
+  for (const off of [0, 1.5, 3]) {
+    const ts = [];
+    for (let t = 1 + off; t < 107; t += 4) ts.push(t);
+    promptMargins(scenario, ts).forEach((d, i) => assert.ok(d >= floorLu(1.6), `at ${ts[i]} s: ${d.toFixed(2)} LU`));
   }
 });
 

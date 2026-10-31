@@ -85,6 +85,7 @@ All sound is rendered by `tools/audio` from `assets/fishing/audio/audio.json` (`
 | `reel` | line coming in, smoothed, 0 unless fishing and not on a run | the ratchet |
 | `tension` | the rod's shown tension | the line's creak, song and pitch, the rod's groan, the winch |
 | `near` | distance to your boat, 1 within 150 m, out of earshot from 700 m | another boat's level |
-| `near_dock`, `speed` | your boat (bed params) | gulls, rigging and the harbour; wind and hull slaps |
+| `near_dock`, `speed` | your boat (bed params); speed reads 0 under a pause | gulls, rigging and the harbour; wind and hull slaps |
+| `far_db` | a cue's rider, 0 down to -26 dB with distance | another rider's routine cues; a catch and the bells carry no such var |
 
 Listen: `node tools/audio/preview.mjs --game=fishing` writes `build/audio_preview/fishing.mp3` (out of the harbour, flat out, cast, bite, the fight, the catch) with a solo per rpm. `node tools/audio/scorecard.mjs --game=fishing` holds the mix to its numbers; `tests/games/fishing/audio/` holds the sync, the cue map and the sound list.

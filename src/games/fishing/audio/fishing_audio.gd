@@ -26,6 +26,9 @@ const REEL_TAU_S := 0.15
 const SLAP_RATE_MPS := 0.05
 const HEAVE_TAU_S := 0.25
 const SLAP_MIN_MPS := 1.5
+## What the bank's routine cues lose (dB) from another boat at the edge of earshot: the fall of its
+## machine (`near` in the bank). The news of a catch and the bells carry no `db_var`, so stay level.
+const FAR_DB := -26.0
 ## The clutch: the prop is off once the clutch is halfway to the winch.
 const CLUTCH_K := 2.0
 const LOAD_MAX := 1.5
@@ -44,6 +47,12 @@ var _heave_was: float = 0.0
 var _heave_rate: float = 0.0
 var _slap_armed: bool = true
 var _lift: LiftOffDetector = LiftOffDetector.new()
+var _lift_armed: bool = true
+var _lift_low: float = 0.0
+var _clutch_in: bool = false
+var _paused: bool = false
+var _state: FishingState = null
+var _local_slot: int = -1
 
 
 func _init() -> void:
@@ -54,12 +63,17 @@ func _init() -> void:
 func _ready() -> void:
 	kit.setup(BANK_PATH, rng_seed)
 	kit.set_bed("open_sea")
+	var bus := get_tree().root.get_node_or_null("EventBus")
+	if bus != null:
+		bus.connect("paused_changed", _on_paused_changed)
 
 
 ## The sounds of one cue; `local` is true for the local rider. A cue with no rider (l < 0, the
-## horns) is everyone's.
+## horns) is everyone's. Another rider's routine cue falls away with distance as its boat does.
 func cue(c: Dictionary, local: bool) -> void:
-	kit.cue(cue_name(c), {}, local or int(c.get("l", -1)) < 0)
+	var slot := int(c.get("l", -1))
+	var vars := {"far_db": 0.0 if local else _far_db(slot)}
+	kit.cue(cue_name(c), vars, local or slot < 0)
 
 
 ## The bank's cue for FishingCues cue `c`: one splash per leap the fish makes, more for a trophy.
@@ -75,6 +89,8 @@ static func cue_name(c: Dictionary) -> String:
 ## One frame: every boat in earshot (`boats`: slot -> FishingBoatView, placed and advanced this
 ## frame), the loops of the local rider, the bed, then the kit's commit.
 func update(dt: float, boats: Dictionary, state: FishingState, local_slot: int) -> void:
+	_state = state
+	_local_slot = local_slot
 	var me := state.rider(local_slot)
 	for r in state.riders:
 		var b: FishingBoatView = boats.get(r.slot)
@@ -94,7 +110,9 @@ func update(dt: float, boats: Dictionary, state: FishingState, local_slot: int) 
 	var speed := absf(me.v_mps) if me != null else 0.0
 	if me != null and boats.has(local_slot):
 		_local_loops(me, boats[local_slot], speed, dt)
-	kit.bed_params({"near_dock": near_dock(me.x_m) if me != null else 0.0, "speed": speed})
+		_clutch(boats[local_slot])
+	var hull_speed := 0.0 if _paused else speed
+	kit.bed_params({"near_dock": near_dock(me.x_m) if me != null else 0.0, "speed": hull_speed})
 	kit.commit(dt)
 
 
@@ -113,6 +131,19 @@ static func ear_of(x_m: float, me: FishingRiderState) -> float:
 ## The rider's fish is running: the drag screams and the ratchet is silent.
 static func is_running(r: FishingRiderState) -> bool:
 	return r.action == FishingConst.A_FIGHT and r.fish.run_active
+
+
+func _far_db(slot: int) -> float:
+	if _state == null or _state.rider(slot) == null:
+		return 0.0
+	return FAR_DB * (1.0 - ear_of(_state.rider(slot).x_m, _state.rider(_local_slot)))
+
+
+## Paused, the boat stands: the bed reads no speed, and nothing the frozen hull does is a new edge.
+func _on_paused_changed(paused: bool, _reason: String) -> void:
+	_paused = paused
+	_heave_seen = false
+	_lift = LiftOffDetector.new()
 
 
 func _params(r: FishingRiderState, b: FishingBoatView, near: float, dt: float) -> Dictionary:
@@ -140,11 +171,33 @@ func _local_loops(me: FishingRiderState, b: FishingBoatView, speed: float, dt: f
 		kit.set_loop("drag_scream", {"tension": b.tension})
 	if me.plane > 0.0:
 		kit.set_loop("plane_wash", {"plane": me.plane, "speed": speed})
-	if dt <= 0.0:
+	if dt <= 0.0 or _paused:
 		return
 	_hull_slap(me, speed, dt)
-	if _lift.update(_load_of(me), dt) >= 1.0 and b.fishing < 0.5:
-		kit.cue("lift_off")
+	_lift_off(_load_of(me), b, dt)
+
+
+## One burble per lift, only with the crank turning and the clutch on the prop. Power can fall after
+## the crank has stopped (on a client it comes in the 10 Hz snapshot, cadence is live): that is no
+## lift-off. Any further drop waits until the load has risen by a drop's worth again.
+func _lift_off(load_now: float, b: FishingBoatView, dt: float) -> void:
+	if _lift.update(load_now, dt) >= 1.0:
+		if _lift_armed and b.cadence > CrankClock.STOP_RPM and b.fishing < 0.5:
+			kit.cue("lift_off")
+		_lift_armed = false
+		_lift_low = load_now
+	_lift_low = minf(_lift_low, load_now)
+	if load_now >= _lift_low + LiftOffDetector.DROP:
+		_lift_armed = true
+
+
+## The lever flips back to the prop after a landing, a snap or a thrown hook. The cast's clunk is
+## the same lever going the other way.
+func _clutch(b: FishingBoatView) -> void:
+	var fishing := b.fishing_target >= 0.5
+	if _clutch_in and not fishing:
+		kit.cue("clutch")
+	_clutch_in = fishing
 
 
 ## The hull falling back onto the water: an edge on the heave's smoothed fall, the same on a host
