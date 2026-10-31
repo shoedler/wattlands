@@ -85,6 +85,24 @@ describe('refusals before Godot starts', () => {
   }
 });
 
+describe('plan capture', () => {
+  test('WATTLANDS_SIM_PLAN records the arguments and starts no Godot', { skip: !BASH && 'no bash' }, async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'wattlands-run-game-sim-plan-'));
+    temps.push(cwd);
+    const plan = path.join(cwd, 'plan.txt').replaceAll('\\', '/');
+    // GODOT points nowhere: a Godot start could only fail.
+    const env = minimalEnv({ WATTLANDS_SIM_PLAN: plan, GODOT: path.join(cwd, 'no-godot') });
+    const one = ['--game=tank', '--rider=erg+cadence_drop:rpm=0,at_s=900 x', '--options={"a":"b c"}', '--report=build/a.json'];
+    const two = ['--game=tank', '--report=build/b.json'];
+    assert.equal((await runSim('bash', one, { env, cwd })).code, 0);
+    const r = await runSim('bash', two, { env, cwd });
+    assert.equal(r.code, 0, r.stderr);
+    assert.equal(r.stdout, '', 'nothing ran');
+    const lines = fs.readFileSync(plan, 'utf8').split('\n').filter(Boolean).map((l) => l.split('\x1f').slice(0, -1));
+    assert.deepEqual(lines, [one, two]);
+  });
+});
+
 describe('through Godot', () => {
   for (const sh of shells) {
     const skip = (!GODOT && 'no Godot binary (tools/godot_bin.local or GODOT)') || (!sh.ok && `no ${sh.name}`);
