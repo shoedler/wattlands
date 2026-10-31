@@ -458,7 +458,14 @@ func advance(delta: float) -> void:
 	for n: Node2D in [_far_sprite, seam, pip]:
 		n.queue_redraw()
 	if audio != null:
-		audio.update(state, delta, game.ctx.local_peer if game.ctx != null else 0, feed)
+		audio.update(
+			state,
+			delta,
+			game.ctx.local_peer if game.ctx != null else 0,
+			audio_feed(state),
+			travel / (TankConst.PX_PER_M * S),
+			not far.rects.is_empty() or far.boss_box.has_area()
+		)
 
 
 func _layout() -> void:

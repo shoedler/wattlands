@@ -219,7 +219,7 @@ Each item is something a MockTrainer run cannot show. Do them after the rest and
 | 89 | A real rider stopping on the Gun for 15 s at 60% FTP or more, then restarting | Rescue, AFK at 10 s, back: the gun is not left frozen | |
 | 90 | 60 fps at 1080p on integrated graphics: a 60 s boss fight with far and near enemies at the caps, vsync on | Mean and 1%-low frame times against 16.7 ms. Note the GPU, driver and resolution, and whether the miniature pass turned itself off | |
 | 91 | Frame pacing on a real display with nothing else running | Do isolated long frames appear? Log their spacing | |
-| 92 | Audio | A person has to listen: your own station loudest, nothing shrill, nothing clips at a normal volume. Note anything that grates over 30 minutes | |
+| 92 | Audio | Section 16, the Listen step: your own station loudest, nothing shrill, nothing clips at a normal volume. Note anything that grates over 30 minutes | |
 | 93 | Boiler feel at the default 50% setting: 4.0% peak, then 0 at a stow | The steps are perceptible; "building at 90% FTP or more" is holdable | |
 | 94 | The Gun at 98 to 100% FTP for several minutes in a long boss on Hard | Do riders finish it? How rescue or the stagger behaves at the end. Note heart-rate or RPE drift | |
 | 95 | The Gun's phase-boundary drop from about 95% to 55% ERG, then the climb | The decrease is immediate and clean; the climb smooth | |
@@ -228,3 +228,25 @@ Each item is something a MockTrainer run cannot show. Do them after the rest and
 | 98 | A tank loss on a real ride | Does the loss feel fair, with the effort unchanged? Is KEEP RIDING clear? Is the stage's restart motivating or deflating? | |
 
 Log: date, trainer firmware, FTP, verified or not, your settings, crew size, the content, the difficulty, and each step's result with the running log of a full ride attached. Anything that spikes, jolts, exceeds a stated bound or feels wrong is a failed safety check: stop, note the segment and time, and report it.
+
+## 16. Listen
+
+Nobody has heard this audio: every number behind it was measured offline. A machine can check timing and levels, not whether a diesel reads as a diesel or whether an hour of it tires you. Listen with the sound on, over the fan and the trainer, and write down what you hear.
+
+| # | Step | Expected | Result |
+| --- | --- | --- | --- |
+| 99 | Before riding, play `build/audio_preview/tank.mp3` (`node tools/audio/preview.mjs --game=tank`) | A diesel with valves, a turbo whistle and crackle, not a monotone rumble; the night forest behind it; the gun, a far boom some time after it, an incoming whistle | |
+| 100 | Drive for 10 minutes at 60, then 90, then 110 rpm, with the fan on | The firing stays with the machine on screen at every cadence and stops when you stop; it follows your feet in rate, not in phase (FTMS reports cadence about once a second and no crank angle). No two-second bar you can sing along to. The turbo climbs when you push and is not shrill | |
+| 101 | Lift off hard from over band | One blow-off, then the exhaust crackles and fades | |
+| 102 | Ten minutes on each of Gun, Loader, Lights, Secondaries and Repairs | Each machine is about as loud as the diesel was, and brighter the harder you push; none reaches the point of grating. Its stroke matches the drawn one: the jars' dump, the chuff, the ladder's zap, the bolts, the hammer's strike | |
+| 103 | Stop pedalling on any seat with others riding | Your machine stops dead, and the others' machines do **not** get louder | |
+| 104 | Fire and watch a far hit | The flash first, the boom later (0.6 to 3.5 s by range; twice real sound speed on purpose). Say whether the delay feels right or detached | |
+| 105 | A far kill | The wreck goes up with its own boom, not before it | |
+| 106 | An incoming shell, then Surge | The shot is a low thump after its range. The shell in the air is faint and comes close only in its last second, ending at the impact; say whether it reads as far until then, and whether its end still cuts through the machines. The Surge prompt, not this, is the time to start a sprint | |
+| 107 | A near threat | Before you look: a burst from the bushes, a small high engine over your machine that revs as it dashes and idles down to fire, a sharp small gun whose rounds ring on the plate; no whistle. It fades over about 3 s as it flees, and stops dead if you kill it. Say whether a recon and a tankette sound different, and whether they get tiring in a long fight | |
+| 108 | The track at speed | Links and a squeak that follow the tread on screen and stop with the hull. On a client, say whether they lurch when the network does (they follow the drawn tread, ADR 2026-10-31) | |
+| 109 | The depot, a fight, the cool-down | Wind, crickets and now and then a frog, an owl or a branch; a far battle on the road, gone once an enemy stands in the far panel. Crickets stay crickets for 30 minutes, not a pattern | |
+| 110 | Lose the tank on Hard, then the restart. Also a segment and a boss banner: a horn and a groan of iron, never the safety warning | A heavy hit, the klaxon, everything else ducked, the chain of the tow and the tread's links as it runs backwards, the engine catching at the restart | |
+| 111 | Pause and resume, with the crank still turning | Machines close, the night drops, a pending boom waits; nothing bursts on resume | |
+| 112 | A crew of 4 with bots at 90 rpm, as the driver | Your diesel in front; the others a texture behind it, no machine-gun | |
+| 113 | Half an hour on your speakers or headphones | Note what tires you, and set the levels in Settings > Audio (Machines holds the seats and track, Ambience the night, Effects the guns and hits) | |

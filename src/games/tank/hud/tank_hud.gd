@@ -116,6 +116,7 @@ static func spec(game: TankGame) -> HudSpec:
 	_add(hs, TankHudTags.new(), game, "tags")
 	hs.toasts_at(LAYOUT["roam_toasts" if roam else "toasts"])
 	hs.banners_at(LAYOUT["banners"])
+	hs.banner_sound = ""
 	hs.shows_power = true
 	hs.help = help(roam)
 	var pal := PALETTE.duplicate()
