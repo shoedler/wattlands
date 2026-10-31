@@ -1,29 +1,24 @@
 class_name TankWorldDraw
 extends RefCounted
 ## The world on the road (docs/games/tank.md v3 "World", 3.5), drawn by TankView's World layer in
-## stage px (the planes and the road band are TankForest's): the little bases, the tank's contact
-## shadow under its track run, the halt line (concrete teeth, a post with a hooded amber lamp),
-## obstacles (wire, hulks, tank traps), wrecks aging on sim time from a burning hulk into a debris
-## heap, the enemies in their depth lanes (a dark rim, dimmer further back, a warm pulse while they
-## telegraph), each on the relief (rotated as a whole to the fit of the ground under it). Far enemies
-## and the Behemoth stand in the far panel (TankFarPanel). Free roam: the turning places at the
-## road's ends; the turn's dust cloud. No people.
+## stage px (the planes and the road band are TankForest's): free roam's little bases, the tank's contact
+## shadow under its track run, the halt line (concrete teeth, a post with a hooded amber lamp), the
+## roadside bushes, obstacles (wire, hulks, tank traps), wrecks aging on sim time from a burning hulk
+## into a debris heap, the near threats in their two lanes, on the relief (TankEnemyDraw fits them).
+## Far enemies, the Behemoth and a stage's little base stand in the far panel (TankFarPanel). Free roam:
+## the turning places at the road's ends; the turn's dust cloud. No people.
 
-const LANE_DIM: Array[float] = [1.0, 0.74, 0.56, 0.44]
-## How much night haze each depth lane carries (a cool teal laid over the sprite).
-const LANE_FOG: Array[float] = [0.0, 0.2, 0.36, 0.5]
-const HAZE := Color(0.05, 0.085, 0.09)
-## Enemies behind the tank (pursuers) are drawn darker and hazed at least this much.
-const PURSUER_DIM := 0.7
-const PURSUER_FOG := 0.45
-## The banks the back lanes stand on.
-const BANK := Color(0.14, 0.125, 0.1)
-const BANK_HI := Color(0.25, 0.22, 0.17)
+const LANE_DIM: Array[float] = [1.0, 0.76]
+## How much night haze each lane carries.
+const LANE_FOG: Array[float] = [0.0, 0.16]
+## Roadside bushes (SPEC_TANK 4.7): one every 90-160 rules px of road, on the verge (stage y above the road).
+const BUSH_PITCH := 125.0
+const BUSH_JITTER := 35.0
+const BUSH_VERGE := 12.0
 ## A wreck's hulk sits this far into its lane's ground; the fire through its hatch.
 const WRECK_SINK := 2.0
 const FIRE := Color(1.0, 0.55, 0.18)
 const FIRE_HI := Color(1.0, 0.85, 0.45)
-const RIM := Color(0.02, 0.025, 0.03, 0.9)
 const CONCRETE := Color(0.2, 0.195, 0.18)
 const CONCRETE_DK := Color(0.1, 0.1, 0.095)
 const CONCRETE_HI := Color(0.3, 0.28, 0.25)
@@ -37,6 +32,10 @@ const WIRE := Color(0.42, 0.42, 0.4)
 const TURN_BARRIER_M := 15.0
 const TURN_LOOP_M := 70.0
 const GRAVEL := Color(0.2, 0.18, 0.15)
+## Where a hurt near threat's bar sits: this share of its height over its foot, on its hull's flank under the deck.
+const BAR_ON_HULL := 0.58
+## How high the dark under a near threat's hull reaches.
+const BELLY_H := 11.0
 const GRAVEL_DK := Color(0.12, 0.11, 0.09)
 
 
@@ -46,18 +45,24 @@ static func draw_world(ci: CanvasItem, v: TankView, state: TankState) -> void:
 	_tank_contact(ci, v)
 	if state.roam.active and state.roam_map != null:
 		_turning_places(ci, v, state)
+	_bushes(ci, v)
 	_halt_line(ci, v, state)
 	for ob in state.obstacles:
 		_obstacle(ci, v, ob)
-	# Back lanes first, each lane's wrecks before its live enemies (a nearer bank hides the foot of
-	# whatever stands behind it).
-	for want in [3, 2, 1, 0]:
+	# The back lane first. The live near threats are drawn on the tank's layer (draw_near_threats).
+	for want in [1, 0]:
 		for w in v.wrecks:
 			if clampi(int(w.get("lane", 0)), 0, TankView.LANES - 1) == want:
 				_wreck(ci, v, w)
+
+
+## The live near threats, the back lane first, over the world's lights (the tank's layer, before the tank): the road's
+## warm pools lie under their wheels, never over their plates.
+static func draw_near_threats(ci: CanvasItem, v: TankView, state: TankState) -> void:
+	for want in [1, 0]:
 		for e in state.enemies:
 			if v.lanes.has(e.id) and int(v.lanes[e.id]) == want:
-				_enemy(ci, v, e, want)
+				_enemy(ci, v, e)
 
 
 ## The tank's contact with the road: a dark shadow along the track run under the road wheels'
@@ -82,95 +87,72 @@ static func _tank_contact(ci: CanvasItem, v: TankView) -> void:
 			)
 
 
+# --- Bushes --------------------------------------------------------------------------------
+
+
+## Bush `n`'s world x (rules px): every BUSH_PITCH along the road, moved by its hash, so the gaps stay
+## within 90-160.
+static func bush_x(n: int) -> float:
+	return BUSH_PITCH * float(n) + (TankDraw.hash01(float(n) * 0.77) - 0.5) * BUSH_JITTER
+
+
+## The bushes on the near panel this frame: [{x (stage), n}], from behind the tank's rear to past the seam.
+static func bushes_at(v: TankView) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var end := TankFarMap.near_end_x(v.canvas.x) + 60.0
+	var n := floori((v.cam_x - BUSH_PITCH) / BUSH_PITCH)
+	var x := v.sx(bush_x(n))
+	while x < end:
+		out.append({"x": x, "n": n})
+		n += 1
+		x = v.sx(bush_x(n))
+	return out
+
+
+## The roadside bushes (the kit's sprites; none until its art), on the verge behind the road, picked and
+## flipped by hash. The near threats burst out past them.
+static func _bushes(ci: CanvasItem, v: TankView) -> void:
+	var tex := v.enemy_kit.bushes()
+	var rects := v.enemy_kit.bush_rects()
+	if tex == null or rects.is_empty():
+		return
+	for b in bushes_at(v):
+		var n := int(b["n"])
+		var h := TankDraw.hash01(float(n) * 1.91 + 3.0)
+		var src := rects[mini(int(h * float(rects.size())), rects.size() - 1)]
+		var x := roundf(float(b["x"]))
+		var foot := roundf(v.ground_y(x)) - BUSH_VERGE
+		var at := Vector2(x - roundf(src.size.x * 0.5), foot - src.size.y)
+		var dst := Rect2(at, src.size)
+		if posmod(n, 2) == 1:
+			dst = Rect2(at, Vector2(-src.size.x, src.size.y))
+		ci.draw_texture_rect_region(tex, dst, src)
+
+
 # --- Enemies, wrecks ------------------------------------------------------------------------
 
 
-static func _enemy(ci: CanvasItem, v: TankView, e: TankEnemyState, lane: int) -> void:
+## A near threat: TankEnemyDraw at its foot in its pose, a shadow under it, a small framed bar on its deck once it is
+## hurt.
+static func _enemy(ci: CanvasItem, v: TankView, e: TankEnemyState) -> void:
 	var r: Rect2 = v.enemy_rects[e.id]
-	var row: Dictionary = v.kit.enemies[v.enemy_kind(e)]
-	lane_ground(ci, v, r, lane)
-	var flash := 0.0
-	if e.telegraph_s > 0.0:
-		flash = 0.25 + 0.25 * sin(v.time * 30.0)
-	var flip := e.side < 0
-	var tex: Texture2D = row["tex"]
-	var sil: Texture2D = row.get("sil", tex)
-	# The whole sprite turned to the relief about its foot's middle (nearest).
-	var foot := Vector2(r.get_center().x, r.end.y)
-	ci.draw_set_transform(foot, float(v.enemy_rots.get(e.id, 0.0)), Vector2.ONE)
-	var lr := Rect2(r.position - foot, r.size)
-	for off: Vector2 in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1)]:
-		sprite(ci, sil, Rect2(lr.position + off, lr.size), flip, RIM)
-	var dim := lane_dim(lane)
-	var fog := lane_fog(lane)
-	if e.side < 0:
-		dim *= PURSUER_DIM
-		fog = maxf(fog, PURSUER_FOG)
-	sprite(ci, tex, lr, flip, Color(dim + flash, dim + flash * 0.6, dim, 1.0))
-	if fog > 0.0:
-		sprite(ci, sil, lr, flip, Color(HAZE.r, HAZE.g, HAZE.b, fog))
-	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
-	if e.hp_max > 0.0 and e.hp < e.hp_max:
-		var bw := roundf(r.size.x * 0.4)
-		var bp := Vector2(roundf(r.position.x + r.size.x * 0.3), r.position.y - 5.0)
-		ci.draw_rect(Rect2(bp, Vector2(bw, 2)), Color(0, 0, 0, 0.5))
-		var fill := roundf(bw * clampf(e.hp / e.hp_max, 0.0, 1.0))
-		ci.draw_rect(Rect2(bp, Vector2(fill, 2)), Color(0.78, 0.3, 0.2, 0.75))
+	var foot: Vector2 = v.enemy_feet[e.id]
+	contact_shadow(ci, Vector2(r.position.x + 3.0, foot.y), r.size.x - 6.0)
+	# the dark under a hull that rides high on its tyres: the road's warm pool never shows through as a pale plate
+	var under := Rect2(r.position.x + 6.0, foot.y - BELLY_H, r.size.x - 12.0, BELLY_H)
+	ci.draw_rect(under, Color(0.015, 0.015, 0.012, 0.82))
+	TankEnemyDraw.draw(ci, v.enemy_kit, v.enemy_kind(e), foot, v.near_pose(e))
+	var deck := roundf(foot.y - float(v.enemy_kit.kind(v.enemy_kind(e))["size"].y) * BAR_ON_HULL)
+	TankEnemyDraw.hp_bar(ci, r, deck, e.hp, e.hp_max)
 
 
-## How bright a depth lane's sprites are (1 the front lane, darker further back).
+## How bright a lane's sprites are (1 the front lane, darker further back).
 static func lane_dim(lane: int) -> float:
 	return LANE_DIM[clampi(lane, 0, LANE_DIM.size() - 1)]
 
 
 static func lane_fog(lane: int) -> float:
 	return LANE_FOG[clampi(lane, 0, LANE_FOG.size() - 1)]
-
-
-## The ground under a sprite `r` (stage px) in depth lane `lane`: in the front lane a contact
-## shadow on the road; further back a low earthen bank rising softly off the road to the lane's
-## ground line (gravel-coloured, darker and hazier with depth, a faintly lit crest, a few stones),
-## and the shadow on its crest.
-static func lane_ground(ci: CanvasItem, _v: TankView, r: Rect2, lane: int) -> void:
-	var foot := r.end.y
-	if lane > 0:
-		var g := roundf(_v_ground(_v, r.get_center().x)) + 3.0
-		var rise := g - foot
-		var x0 := r.position.x - 4.0
-		var x1 := r.end.x + 4.0
-		var slope := rise * 3.5 + 10.0
-		var fog := lane_fog(lane)
-		var dim := 0.55 + 0.45 * lane_dim(lane)
-		var earth := Color(BANK.r * dim, BANK.g * dim, BANK.b * dim).lerp(HAZE, fog)
-		var crest := Color(BANK_HI.r * dim, BANK_HI.g * dim, BANK_HI.b * dim).lerp(HAZE, fog)
-		var top := PackedVector2Array()
-		var x := x0 - slope
-		while x <= x1 + slope + 0.01:
-			var u := 1.0
-			if x < x0:
-				u = smoothstep(x0 - slope, x0, x)
-			elif x > x1:
-				u = 1.0 - smoothstep(x1, x1 + slope, x)
-			var wob := (TankDraw.hash01(roundf(x) * 0.31 + r.position.x) - 0.5) * 1.2 * u
-			top.append(Vector2(x, roundf(g - rise * u + wob)))
-			x += 3.0
-		var poly := top.duplicate()
-		poly.append(Vector2(x1 + slope, g))
-		poly.append(Vector2(x0 - slope, g))
-		ci.draw_polygon(poly, PackedColorArray([earth]))
-		ci.draw_polyline(top, crest, 1.0)
-		var n := int((x1 - x0 + slope * 2.0) / 9.0)
-		for i in n:
-			var h := TankDraw.hash01(float(i) * 3.1 + r.position.x * 0.07)
-			var sx := roundf(x0 - slope + float(i) * 9.0 + h * 6.0)
-			var sy := roundf(lerpf(foot + 2.0, g - 1.0, h))
-			ci.draw_rect(Rect2(Vector2(sx, sy), Vector2(2, 1)), crest.darkened(0.25))
-			ci.draw_rect(Rect2(Vector2(sx, sy + 1.0), Vector2(2, 1)), earth.darkened(0.35))
-	contact_shadow(ci, Vector2(r.position.x + 3.0, foot), r.size.x - 6.0)
-
-
-static func _v_ground(v: TankView, x: float) -> float:
-	return v.ground_y(x) if v != null and v.ground != null else TankView.GROUND
 
 
 ## A soft dark shadow `w` px long starting at `p` (its left end on the ground line).
@@ -186,17 +168,8 @@ static func contact_shadow(ci: CanvasItem, p: Vector2, w: float) -> void:
 		ci.draw_rect(Rect2(Vector2(p.x + w - inset, y), Vector2(3, 1)), half)
 
 
-## `tex` stretched over `r`, mirrored when `flip` (a negative width mirrors the texture in place: the
-## rect keeps its left edge).
-static func sprite(ci: CanvasItem, tex: Texture2D, r: Rect2, flip: bool, mod: Color) -> void:
-	if flip:
-		ci.draw_texture_rect(tex, Rect2(r.position, Vector2(-r.size.x, r.size.y)), false, mod)
-	else:
-		ci.draw_texture_rect(tex, r, false, mod)
-
-
-## The wreck's footprint (stage px): the hulk's sprite rect in its lane (scaled, a little sunk into
-## the lane's ground), and the heap's.
+## The wreck's footprint (stage px): the hulk's sprite rect in its lane (a little sunk into the
+## lane's ground), and the heap's.
 static func wreck_rect(v: TankView, w: Dictionary) -> Rect2:
 	var r := v.lane_rect(str(w["kind"]), v.sx(float(w["x"])), int(w.get("lane", 0)))
 	return Rect2(r.position + Vector2(0, WRECK_SINK), r.size)
@@ -212,37 +185,21 @@ static func heap_rect(v: TankView, w: Dictionary) -> Rect2:
 static func wreck_hatch(v: TankView, w: Dictionary) -> Vector2:
 	var r := wreck_rect(v, w)
 	var sink := roundf(v.wreck_collapse(w) * r.size.y * 0.7)
-	var u := 0.62 if int(w.get("side", 1)) >= 0 else 0.38
 	return Vector2(
-		roundf(r.position.x + r.size.x * u), r.position.y + sink + roundf(r.size.y * 0.3)
+		roundf(r.position.x + r.size.x * 0.62), r.position.y + sink + roundf(r.size.y * 0.3)
 	)
 
 
-## A wreck (brief 3.5): a burnt-out hulk, opaque and charred (the paint burnt brown-black, torn
-## plates with lit edges), fire flickering through its open hatch, sinking into a debris heap as it
-## collapses; its lane's ground under it. The beams light it (TankLightDraw).
+## A wreck (brief 3.5): the kit's charred hulk, fire flickering through its open hatch, sinking into a
+## debris heap as it collapses, a shadow under it. The beams light it (TankLightDraw).
 static func _wreck(ci: CanvasItem, v: TankView, w: Dictionary) -> void:
 	var r := wreck_rect(v, w)
 	if r.position.x > v.canvas.x + 10.0 or r.end.x < -10.0:
 		return
-	var lane := int(w.get("lane", 0))
-	lane_ground(ci, v, Rect2(r.position - Vector2(0, WRECK_SINK), r.size), lane)
+	contact_shadow(ci, Vector2(r.position.x + 3.0, r.end.y - WRECK_SINK), r.size.x - 6.0)
 	var collapse := v.wreck_collapse(w)
-	var row: Dictionary = v.kit.enemies[str(w["kind"])]
 	if collapse < 1.0:
-		var tex: Texture2D = row["tex"]
-		var sil: Texture2D = row.get("sil", tex)
-		var sink := roundf(collapse * r.size.y * 0.7)
-		var dst := Rect2(r.position + Vector2(0, sink), Vector2(r.size.x, r.size.y - sink))
-		var src_sz: Vector2 = row["size"]
-		var src := Rect2(Vector2.ZERO, Vector2(src_sz.x, src_sz.y * (1.0 - sink / r.size.y)))
-		var plates := dst
-		if int(w.get("side", 1)) < 0:
-			dst = Rect2(dst.position, Vector2(-dst.size.x, dst.size.y))
-		var dim := lane_dim(lane)
-		ci.draw_texture_rect_region(tex, dst, src, Color(0.5 * dim, 0.4 * dim, 0.33 * dim))
-		ci.draw_texture_rect_region(sil, dst, src, Color(0.05, 0.035, 0.03, 0.55))
-		_torn_plates(ci, plates, float(w["x"]), dim)
+		_hulk(ci, v, w, r, collapse)
 		var fire := v.wreck_fire(w)
 		if fire > 0.0:
 			var hp := wreck_hatch(v, w)
@@ -280,19 +237,24 @@ static func _wreck(ci: CanvasItem, v: TankView, w: Dictionary) -> void:
 	)
 
 
-## Torn, burnt plates on a hulk: dark gashes with bent edges catching the light (by hash, so a
-## wreck always tears the same way).
-static func _torn_plates(ci: CanvasItem, r: Rect2, seed_v: float, dim: float) -> void:
-	var lip := Color(0.4, 0.3, 0.22).darkened(1.0 - dim)
-	for i in 5:
-		var h := TankDraw.hash01(seed_v * 0.013 + float(i) * 5.7)
-		var h2 := TankDraw.hash01(seed_v * 0.029 + float(i) * 2.3)
-		var p := (r.position + r.size * Vector2(0.15 + 0.7 * h, 0.2 + 0.5 * h2)).round()
-		var gash := roundf(3.0 + 6.0 * h2)
-		ci.draw_rect(Rect2(p, Vector2(gash, 2)), Color(0.03, 0.025, 0.02))
-		ci.draw_rect(Rect2(p + Vector2(0, -1), Vector2(gash - 1.0, 1)), lip)
-		if h > 0.5:
-			ci.draw_rect(Rect2(p + Vector2(gash, -2), Vector2(1, 2)), lip.darkened(0.1))
+## The hulk, its bottom sunk away as it collapses; the kit's stub box until its art, gone half way down.
+static func _hulk(ci: CanvasItem, v: TankView, w: Dictionary, r: Rect2, collapse: float) -> void:
+	var kind := str(w["kind"])
+	var row := v.enemy_kit.kind(kind)
+	var tex := v.enemy_kit.texture()
+	var dim := lane_dim(int(w.get("lane", 0)))
+	var tone := Color(dim, dim, dim)
+	if tex != null and row.has("wreck"):
+		var src: Rect2 = row["wreck"]
+		var sink := roundf(collapse * r.size.y * 0.7)
+		var keep := 1.0 - sink / r.size.y
+		var dst := Rect2(r.position + Vector2(0, sink), Vector2(r.size.x, r.size.y - sink))
+		ci.draw_texture_rect_region(
+			tex, dst, Rect2(src.position, src.size * Vector2(1, keep)), tone
+		)
+	elif collapse < 0.5:
+		var foot := Vector2(r.get_center().x, r.end.y)
+		TankEnemyDraw.draw(ci, v.enemy_kit, kind, foot, {"wrecked": true, "dim": 1.0 - dim})
 
 
 # --- The halt line, obstacles, the depot -------------------------------------------------------------------
@@ -403,15 +365,11 @@ static func _obstacle(ci: CanvasItem, v: TankView, ob: TankObstacleState) -> voi
 				)
 		_:
 			# A burnt-out hulk across the road (a wreck, the drill's targets).
-			var tex: Texture2D = v.kit.enemies["medium"]["tex"]
-			var sz: Vector2 = v.kit.enemies["medium"]["size"]
-			var hs := sz * 0.8
-			var r := Rect2(
-				Vector2(roundf((x0 + x1) * 0.5 - hs.x * 0.5), roundf(TankView.ROAD_ENEMY_Y - hs.y)),
-				hs
-			)
-			ci.draw_texture_rect(
-				tex, Rect2(r.position, Vector2(-r.size.x, r.size.y)), false, Color(0.22, 0.2, 0.18)
+			var foot := Vector2(roundf((x0 + x1) * 0.5), TankView.ROAD_ENEMY_Y)
+			var sz: Vector2 = v.enemy_kit.kind(TankIds.ENEMY_MEDIUM)["size"]
+			contact_shadow(ci, foot - Vector2(sz.x * 0.5 - 3.0, 0.0), sz.x - 6.0)
+			TankEnemyDraw.draw(
+				ci, v.enemy_kit, TankIds.ENEMY_MEDIUM, foot, {"wrecked": true, "dim": 0.25}
 			)
 
 

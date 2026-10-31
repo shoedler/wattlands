@@ -5,7 +5,7 @@ extends RefCounted
 ##    and uses from_event());
 ##  - otherwise edges in the state the view reads (diff()), so a host, a client and SOLO show the
 ##    same effects whatever the module raises.
-## A cue is {"k": CUE_*, "l": slot, ...}: jump {leaps}, landed {grade}.
+## A cue is {"k": CUE_*, "l": slot, ...}: jump {leaps}, landed {grade}, hookup {replacement}.
 
 const CUE_CAST := "cast"
 const CUE_BITE := "bite"
@@ -14,6 +14,7 @@ const CUE_RUN := "run"
 const CUE_JUMP := "jump"
 const CUE_SNAP := "snap"
 const CUE_THROWN := "thrown"
+const CUE_LANDING := "landing"
 const CUE_LANDED := "landed"
 const CUE_DOUBLE_HOOKUP := "double_hookup"
 const CUE_TURN := "turn"
@@ -23,6 +24,7 @@ const CUE_TRIP_OVER := "trip_over"
 var _seen: bool = false
 var _action: PackedInt32Array = PackedInt32Array()
 var _landed: PackedInt32Array = PackedInt32Array()
+var _replacement: PackedByteArray = PackedByteArray()
 var _heading: PackedInt32Array = PackedInt32Array()
 var _run: PackedByteArray = PackedByteArray()
 var _trip_over: bool = false
@@ -41,6 +43,10 @@ static func from_event(raw: Dictionary) -> Array[Dictionary]:
 			k = CUE_BITE
 		FishingEvents.HOOKUP:
 			k = CUE_HOOKUP
+		FishingEvents.REPLACEMENT:
+			return [{"k": CUE_HOOKUP, "l": l, "replacement": true}]
+		FishingEvents.LANDING:
+			k = CUE_LANDING
 		FishingEvents.RUN:
 			k = CUE_RUN
 		FishingEvents.JUMP:
@@ -64,6 +70,22 @@ static func from_event(raw: Dictionary) -> Array[Dictionary]:
 	return [{"k": k, "l": l}]
 
 
+## One frame's cues, a call said once: a Landing that finds its fish off the line hooks the replacement
+## in the same step, and the sprint's call speaks for both.
+static func merged(cues: Array[Dictionary]) -> Array[Dictionary]:
+	var landing: Array[int] = []
+	for c in cues:
+		if c.get("k") == CUE_LANDING:
+			landing.append(int(c.get("l", -1)))
+	if landing.is_empty():
+		return cues
+	var out: Array[Dictionary] = []
+	for c in cues:
+		if not (c.get("replacement", false) and landing.has(int(c.get("l", -1)))):
+			out.append(c)
+	return out
+
+
 ## The cues the state shows since the last call (none on the first call, which only learns).
 func diff(state: FishingState) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
@@ -81,6 +103,10 @@ func diff(state: FishingState) -> Array[Dictionary]:
 				out.append({"k": CUE_CAST, "l": i})
 			elif r.action == FishingConst.A_FIGHT and was != FishingConst.A_LAND:
 				out.append({"k": CUE_HOOKUP, "l": i})
+			elif r.action == FishingConst.A_LAND and r.fish.sp >= 0:
+				out.append({"k": CUE_LANDING, "l": i})
+		if r.fish.replacement and _replacement[i] == 0 and r.action == FishingConst.A_FIGHT:
+			out.append({"k": CUE_HOOKUP, "l": i, "replacement": true})
 		if r.fish.run_active and _run[i] == 0 and r.action == FishingConst.A_FIGHT:
 			out.append({"k": CUE_RUN, "l": i})
 		if r.fish_landed > _landed[i]:
@@ -103,6 +129,7 @@ func _learn(state: FishingState) -> void:
 	var n := state.riders.size()
 	_action.resize(n)
 	_landed.resize(n)
+	_replacement.resize(n)
 	_heading.resize(n)
 	_run.resize(n)
 	for r in state.riders:
@@ -110,6 +137,7 @@ func _learn(state: FishingState) -> void:
 			continue
 		_action[r.slot] = r.action
 		_landed[r.slot] = r.fish_landed
+		_replacement[r.slot] = 1 if r.fish.replacement else 0
 		_heading[r.slot] = r.heading
 		_run[r.slot] = 1 if r.fish.run_active else 0
 	_time_up = state.time_up

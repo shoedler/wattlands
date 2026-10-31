@@ -356,6 +356,6 @@ func test_an_advance_encounter_spawns_when_the_tank_has_driven_that_far() -> voi
 	assert_eq(rig.state.enemies.size(), 0)
 	rig.run_until(func() -> bool: return rig.hull().distance_m >= 150.0, 60.0)
 	rig.run(0.2)
-	assert_eq(rig.state.enemies.size(), 1, "a light tank at 150 m")
-	assert_eq(rig.state.enemies[0].code, TankIds.enemy_code(TankIds.ENEMY_LIGHT))
+	assert_eq(rig.state.enemies.size(), 1, "a medium tank at 150 m")
+	assert_eq(rig.state.enemies[0].code, TankIds.enemy_code(TankIds.ENEMY_MEDIUM))
 	assert_eq(rig.state.seg.next_encounter, 1)

@@ -313,39 +313,6 @@ func test_history_keeps_the_values_the_view_draws() -> void:
 	assert_eq(float(v["pitch"]), 4.0)
 
 
-func test_audio_hums_with_cadence_screams_on_a_run_and_plays_the_fanfare() -> void:
-	var a := FishingAudio.new()
-	add_child_autofree(a)
-	var r := FishingRiderState.new()
-	r.cadence_ema = 90.0
-	a.update(0.05, r, 0.0)
-	assert_true(a.hum_on)
-	assert_almost_eq(a.hum_pitch, 1.0, 0.01)
-	r.action = FishingConst.A_FIGHT
-	r.fish.run_active = true
-	a.update(0.05, r, 0.0)
-	assert_true(a.drag_on)
-	r.cadence_ema = 0.0
-	a.update(0.05, r, 0.0)
-	assert_false(a.hum_on)
-	a.cue({"k": FishingCues.CUE_LANDED, "l": 0}, true)
-	for i in 10:
-		a.update(0.05, r, 0.0)
-	assert_has(a.played, "fishing_note_3")
-
-
-func test_audio_clicks_while_the_winch_brings_line_in() -> void:
-	var a := FishingAudio.new()
-	add_child_autofree(a)
-	var r := FishingRiderState.new()
-	r.x_m = 5000.0
-	for i in 20:
-		a.update(0.05, r, 3.0)
-	assert_has(a.played, "fishing_click")
-	assert_does_not_have(a.played, "fishing_gull", "no gulls out at sea")
-	assert_eq(FishingAudio.sound_names().size(), FishingAudio.SOUNDS.size() + 3)
-
-
 func test_no_narrow_slot_sinks_between_higher_floor_pieces() -> void:
 	var s := FishingScenery.new()
 	var map: Variant = JSON.parse_string(

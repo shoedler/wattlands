@@ -33,14 +33,14 @@ func paint() -> void:
 	var low := frac < LOW
 	var broken := bool(m["breakdown"])
 	var label := tx("TANK_HUD_BREAKDOWN") if broken else tx("TANK_HUD_HULL").to_upper()
-	D.tall(self, 6, 5, label, D.OVER if broken else D.DIM)
+	var lw := D.tall(self, 6, 5, label, D.OVER if broken else D.DIM)
 	var nw := D.big(self, 6, 16, str(ceili(hp)), D.OVER if low else D.NUM)
 	var mw := D.tall(self, 6 + nw + 2, 31, "/%d" % roundi(float(m["max"])), D.DIM)
 	var bar_w := nw + 2 + mw
 	D.bar(self, Rect2(6, 42, bar_w, 2), frac, D.OVER if low else D.BRASS)
 	if not show_kills:
 		return
-	var dx := roundf(bar_w + 14)
+	var dx := roundf(maxf(bar_w, lw) + 14)
 	D.rect(self, Rect2(dx - 6, 6, 1, h - 12), D.FRAME_IN)
 	D.tall(self, dx, 5, tx("TANK_HUD_KILLS"), D.DIM)
 	D.big(self, dx, 16, str(int(m["kills"])), D.AMBER)

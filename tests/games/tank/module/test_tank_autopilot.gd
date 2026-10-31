@@ -91,6 +91,7 @@ func test_enemies_in_range_counts_far_kinds_and_the_behemoth_never_a_near_threat
 	assert_eq(TankAutopilot.enemies_in_range(s), 0, "a dead enemy is no target")
 	var b := TankFixtures.boss(2)
 	b.enemies.clear()
+	b.boss.range_m = 1100.0
 	assert_eq(TankAutopilot.enemies_in_range(b), 1, "the Behemoth stands")
 
 
@@ -295,5 +296,61 @@ func test_a_crew_may_move_inside_the_opening_while_a_near_threat_is_alive() -> v
 	rc.hp = 0.0
 	assert_false(TankAutopilot._crew_may_move(s, false), "and only while it lives")
 	rc.hp = 10.0
+	s.seg.seg = TankIds.SEG_CHECKPOINT
+	assert_false(TankAutopilot._crew_may_move(s, false), "never in a checkpoint")
+
+
+## A rider who left Drive in the hold is not stuck off it: an Advance with nobody on Drive opens the crew's
+## moves at once, or the tank stands until min_s and the Advance overruns.
+## Free roam is one segment until time up: a rider a near threat pulled off the Loader comes back.
+func test_free_roam_never_holds_a_crew_on_the_seat_a_near_threat_pulled_it_to() -> void:
+	var s := _quiet(3)
+	s.seg.seg = TankIds.SEG_ROAM
+	s.seg.elapsed_s = 400.0
+	s.seg.min_s = 1500.0
+	s.seg.open_ended = false
+	assert_true(TankAutopilot._crew_may_move(s, false), "no near threat, inside the roam's min_s")
+	s.seg.seg = TankIds.SEG_GUN_LINE
+	assert_false(TankAutopilot._crew_may_move(s, false), "a hold's opening still holds the crew")
+
+
+## A hold's clock has no time for shells nobody needs: the solo Loader stops at what clears the field.
+func test_the_solo_loader_stops_at_the_shells_that_clear_the_field() -> void:
+	var s := _quiet(1)
+	var dmg := s.content.num("tanks", "damage.heavy", 35.0)
+	var e := _far(s)
+	e.hp = dmg * 2.0
+	assert_eq(TankAutopilot._hits_to_clear(s), 2)
+	e.hp = dmg * 0.5
+	assert_eq(TankAutopilot._hits_to_clear(s), 1)
+	s.enemies.clear()
+	assert_eq(TankAutopilot._hits_to_clear(s), 1, "at least one")
+	s.boss.phase = TankIds.BOSS_PHASE_1
+	assert_eq(TankAutopilot._hits_to_clear(s), TankConst.RACK_MAX, "the Behemoth wants a full rack")
+
+
+## The Behemoth is dead: only the cool-down comes, so nobody takes a seat its trainer could never reach.
+func test_no_seat_move_once_the_last_fight_is_won() -> void:
+	var s := _quiet(3)
+	s.seg.seg = TankIds.SEG_BOSS
+	s.seg.phase_index = s.content.segments().size() - 1
+	s.seg.segment_index = s.content.segments().size() - 1
+	s.seg.objective_done = true
+	s.seg.open_ended = true
+	s.seg.elapsed_s = 200.0
+	s.tick = 0
+	s.t = 1000.0
+	assert_eq(TankAutopilot.next_fight_segment(s), TankIds.SEG_NONE)
+	for r in s.riders:
+		assert_eq(TankAutopilot.seat_intent(s, r), {})
+
+
+func test_an_advance_with_nobody_on_drive_opens_the_crews_moves() -> void:
+	var s := TankFixturesV4.make("advance_far", 3)
+	s.seg.elapsed_s = 1.0
+	s.seg.objective_done = false
+	assert_false(TankAutopilot._crew_may_move(s, false), "Drive manned: the opening stay holds")
+	s.station(TankIds.ENGINE_DIESEL).slot = -1
+	assert_true(TankAutopilot._crew_may_move(s, false), "nobody on Drive")
 	s.seg.seg = TankIds.SEG_CHECKPOINT
 	assert_false(TankAutopilot._crew_may_move(s, false), "never in a checkpoint")

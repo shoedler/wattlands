@@ -76,6 +76,55 @@ test('D5 needs the _shared bank, and fails a mix that buries the prompts', () =>
   assert.equal(row(card(doc), 'D5').pass, false);
 });
 
+test('D5 hears the loudest moment, not only the midpoint', () => {
+  const doc = structuredClone(fixture);
+  const moving = doc.preview.segments.filter((s) => s.rpm > 0).reduce((a, s) => a + s.s, 0);
+  const calm = row(card(doc), 'D5');
+  doc.cues = { ...doc.cues, late_blast: { hits: [{ sound: 'body', db: 12, bus: 'Sfx', priority: 6 }] } };
+  doc.preview.events = [...(doc.preview.events ?? []), { t: moving - 0.5, cue: 'late_blast', vars: {} }];
+  const loud = row(card(doc), 'D5');
+  assert.ok(calm.pass, `${calm.value}`);
+  assert.equal(loud.pass, false, `${loud.value} ${loud.note}`);
+  assert.ok(loud.value < calm.value - 3, `${loud.value} against ${calm.value}`);
+  const t = Number(loud.note.match(/at ([\d.]+) s/)[1]);
+  assert.ok(Math.abs(t - (moving - 0.5)) < 1, `the worst of it, ${loud.note}, is on the blast at ${moving - 0.5}`);
+});
+
+test('D4 reads a stop anywhere in the cycle: a ring that few stops would meet still fails, and names the stroke', () => {
+  const doc = structuredClone(fixture);
+  // Once in 8 revolutions, with a ring long enough to reach past the 400 ms.
+  doc.sounds.late_ring = { dur: 0.7, seed: 9, locked: true, layers: [{ src: 'sine', f: 900, gain: 0.8, env: { a: 0.001, h: 0.45, d: 0.2, curve: 'lin' } }] };
+  doc.machines.slow = { bus: 'Machines', events: [{ at: [0.13], sound: 'late_ring', db: -6, lead_only: true }] };
+  doc.preview.others = [...(doc.preview.others ?? []), { machine: 'slow', lead: true, rpm_scale: 1 / 8 }];
+  const swept = row(card(doc), 'D4');
+  assert.equal(swept.pass, false, `${swept.value} ${swept.note}`);
+  assert.match(swept.note, /late_ring/);
+  doc.sounds.late_ring.dur = 0.3;
+  doc.sounds.late_ring.layers[0].env = { a: 0.001, d: 0.28, curve: 'lin' };
+  assert.equal(row(card(doc), 'D4').pass, true, 'and a stroke that rings out in time passes');
+});
+
+test('D5 hears what HudLayer plays over the moment: preview.hud, and prompts just ahead of it', () => {
+  const doc = structuredClone(fixture);
+  const quiet = row(card(doc), 'D5');
+  doc.preview.hud = [{ t: 10, sound: 'phase' }, { t: 10, sound: 'toast' }, { t: 10, sound: 'lap' }, { t: 10, sound: 'results' }, { t: 10, sound: 'ui_confirm' }];
+  const r = row(card(doc), 'D5');
+  assert.ok(r.value < quiet.value, `${r.value} against ${quiet.value}`);
+  assert.match(r.note, /at (9\.6|9\.8|10) s/);
+});
+
+test("D6 has the game in it: the lead's own machines, its loops, its cues and the coast", () => {
+  const doc = structuredClone(fixture);
+  const bare = row(card(doc), 'D6').value;
+  doc.loops = { ...(doc.loops ?? {}), a: { bus: 'Sfx', layers: [{ sound: doc.machines.engine.loops[0].sound, db: -30 }] } };
+  doc.preview.loops = [...(doc.preview.loops ?? []), { id: 'a', t0: 0, t1: 1, params: {} }];
+  const more = row(card(doc), 'D6').value;
+  assert.equal(Number(more.split('/')[2]), Number(bare.split('/')[2]) + 1, `${bare} then ${more}: held for the whole scene`);
+  doc.machines.tap = { bus: 'Sfx', events: [{ at: [0, 0.5], sound: doc.machines.engine.events[0].sound, db: -20, lead_only: true }] };
+  doc.preview.others = [...(doc.preview.others ?? []), { machine: 'tap', lead: true }];
+  assert.ok(Number(row(card(doc), 'D6').value.split('/')[1]) > Number(more.split('/')[1]), 'the Sfx pool counts it');
+});
+
 test('D4: a machine layer with no min_rpm still stops dead, as the kit stops it', () => {
   const doc = structuredClone(fixture);
   for (const l of doc.machines.engine.loops) delete l.min_rpm;

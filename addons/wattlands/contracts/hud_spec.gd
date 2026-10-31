@@ -61,6 +61,10 @@ var banner_area: Variant = TOP
 ## and the trainer notice (4.4, another app may hold control) always show: false hides only
 ## the warm-up and pause banners.
 var show_safety_banners: bool = true
+## What a game's own banner (ctx.hud.banner) plays. "warning" by default; "" for a game whose banners
+## are routine and already have sounds of their own, so a safety prompt keeps its meaning. The safety
+## banners and trainer notices ignore it: they always warn.
+var banner_sound: String = "warning"
 ## Optional colors for the kit's neutral chrome so the widgets match a game's art (default {}
 ## = the kit look). Keys (Color values, any may be left out): panel, panel_border, text,
 ## text_dim, bar_bg, bar_fg, accent, banner_bg, banner_text. Safety and warning colors (rescue,

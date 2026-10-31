@@ -168,8 +168,9 @@ static func request(
 
 ## True when the trainer of rider `peer` (its last input, TankAux.seat_input) would follow a move to
 ## `engine` at once (TankSeatPlan.follow: a split now, or no change needed). Without that input (a
-## test's bare state) it is true.
-static func follows_now(state: TankState, peer: int, engine: String) -> bool:
+## test's bare state) it is true. `no_hold` (a bot): TankSeatPlan.follow's, and a switch left for the
+## segment's end does not count as following.
+static func follows_now(state: TankState, peer: int, engine: String, no_hold: bool = false) -> bool:
 	var aux := TankAux.of(state)
 	var ri: TankRiderInput = aux.seat_input.get(peer)
 	if ri == null or ri.plan == null:
@@ -180,9 +181,13 @@ static func follows_now(state: TankState, peer: int, engine: String) -> bool:
 		engine,
 		float(aux.last_switch_s.get(peer, -INF)),
 		state.t,
-		state.seg.objective_done and state.seg.open_ended
+		state.seg.objective_done and state.seg.open_ended,
+		true,
+		no_hold
 	)
 	var action := int(f["action"])
+	if no_hold and float(f["wait_s"]) != 0.0:
+		return false
 	return action == TankSeatPlan.FOLLOW_SPLIT or action == TankSeatPlan.FOLLOW_NONE
 
 

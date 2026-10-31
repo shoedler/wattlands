@@ -12,7 +12,7 @@ const LAYOUT := [
 		Rect2(0, 0, 622, 540),
 		Rect2(622, 0, 8, 540),
 		Rect2(630, 0, 330, 540),
-		Rect2(636, 150, 318, 60)
+		Rect2(630, 150, 176, 52)
 	],
 	[
 		Vector2(852, 480),
@@ -20,7 +20,7 @@ const LAYOUT := [
 		Rect2(0, 0, 558, 480),
 		Rect2(558, 0, 8, 480),
 		Rect2(566, 0, 286, 480),
-		Rect2(572, 150, 274, 60)
+		Rect2(566, 150, 176, 52)
 	],
 	[
 		Vector2(1280, 680),
@@ -28,7 +28,7 @@ const LAYOUT := [
 		Rect2(0, 0, 852, 680),
 		Rect2(852, 0, 8, 680),
 		Rect2(860, 0, 420, 680),
-		Rect2(866, 150, 408, 60)
+		Rect2(860, 150, 176, 52)
 	],
 	[
 		Vector2(960, 540),
@@ -36,7 +36,7 @@ const LAYOUT := [
 		Rect2(338, 0, 622, 540),
 		Rect2(330, 0, 8, 540),
 		Rect2(0, 0, 330, 540),
-		Rect2(6, 150, 318, 60)
+		Rect2(154, 150, 176, 52)
 	],
 ]
 const SIZES: Array[Vector2] = [Vector2(960, 540), Vector2(852, 480), Vector2(1280, 680)]
@@ -135,18 +135,26 @@ func test_far_enemies_stand_in_the_far_panel_and_near_ones_on_the_stage() -> voi
 	assert_eq(far_n, 8)
 
 
-func test_a_far_sprite_stands_where_range_and_lane_say_at_scale_one() -> void:
+func test_a_far_sprite_stands_where_range_says_at_scale_one() -> void:
 	var v := _view("far_duel")
 	var fw := float(v.far.far_w)
+	var rows: Array = []
+	for e0 in v.game.state.enemies:
+		var half: float = v.far.kit.kind(TankIds.enemy_of(e0.code))["size"].x * 0.5
+		rows.append({"id": e0.id, "range_m": e0.range_m, "lane": e0.lane, "half_w": half})
+	var placed := TankFarMap.place(rows, fw)
 	for e in v.game.state.enemies:
 		var r: Rect2 = v.far.rects[e.id]
 		var size: Vector2 = v.far.kit.kind(TankIds.enemy_of(e.code))["size"]
 		assert_eq(r.size, size, "no perspective scale")
 		var foot: Vector2 = v.far.feet[e.id]
-		assert_eq(foot.y, TankFarMap.foot_y(e.range_m, e.lane))
+		assert_eq(foot, placed[e.id], "where the map places the field")
 		var x := TankFarMap.range_x(e.range_m, fw)
-		assert_eq(foot.x, TankFarPanel.foot_x(e.range_m, size.x * 0.5, fw))
 		assert_almost_eq(foot.x, x, size.x, "%d near its range's x" % e.id)
+		for o in v.game.state.enemies:
+			if o.range_m > e.range_m:
+				var other: Vector2 = v.far.feet[o.id]
+				assert_lt(other.y, foot.y, "%d, farther than %d, stands higher" % [o.id, e.id])
 	var nearer: Rect2 = v.far.rects[22]
 	var further: Rect2 = v.far.rects[23]
 	assert_lt(nearer.get_center().x, further.get_center().x, "further is further from the seam")
@@ -253,7 +261,8 @@ func test_the_behemoth_stands_in_the_far_panel() -> void:
 		if panel.size.x >= box.size.x:
 			assert_true(panel.encloses(box), "%s: whole" % size)
 		else:
-			assert_almost_eq(box.get_center().x, panel.get_center().x, 1.0, "%s: centred" % size)
+			var bow := box.position.x - panel.position.x
+			assert_almost_eq(bow, TankFarPanel.BOSS_EDGE, 1.0, "%s: bow and gun whole" % size)
 		var mz := v.hud_boss_muzzle()
 		assert_true(box.grow(1.0).has_point(mz), "%s: the main gun on the sprite" % size)
 		for part in 4:
@@ -448,7 +457,12 @@ func test_the_pip_maps_range_and_height_as_the_spec_says() -> void:
 	assert_eq(TankPip.to_px(2600.0, 0.0, size, false), Vector2(308, 51))
 	assert_eq(TankPip.to_px(2600.0, 0.0, size, true), Vector2(10, 51), "mirrored")
 	assert_eq(TankPip.to_px(0.0, 0.0, size, true), Vector2(308, 51))
-	assert_eq(TankPip.to_px(1200.0, 174.0, size, false).y, 16.0, "174 m is 35 px up")
+	assert_eq(
+		TankPip.to_px(1200.0, 174.0, size, false).y, 20.0, "174 m is 31 px up: the top of its box"
+	)
+	assert_lte(
+		TankPip.to_px(1200.0, 42.0, size, false).y, 36.0, "a 1220 m arc's 42 m uses 15 px, not 8"
+	)
 
 
 func test_the_pip_shows_each_far_shell_on_its_arc() -> void:
@@ -485,6 +499,82 @@ func test_the_pip_skips_near_shells_and_mirrors_going_west() -> void:
 	assert_gt(arc[0].x, arc[arc.size() - 1].x, "ours flies right to left on a mirrored plate")
 
 
+func test_the_pip_is_a_little_screen_inside_the_far_panel() -> void:
+	for row: Array in LAYOUT:
+		var p := TankFarMap.panels(row[0], row[1])
+		var pip: Rect2 = p["pip"]
+		assert_lte(pip.size.x, 180.0, "%s: small" % row[0])
+		assert_true((p["far"] as Rect2).encloses(pip), "%s: inside the far panel" % row[0])
+
+
+func test_a_tracer_trails_along_its_arc_behind_its_head() -> void:
+	var s := TankFixturesV4.make("far_duel")
+	s.shells.clear()
+	s.shells.append(_flying(true, 1300.0, 1.0))
+	var v := U.view_of(self, s, Wl.SOLO, 1, Vector2(960, 540))
+	var d := v.pip.dots(s)[0]
+	var trail: PackedVector2Array = d["trail"]
+	assert_gt(trail.size(), 3, "a trail")
+	var p: Vector2 = d["p"]
+	assert_lt(trail[trail.size() - 1].x, p.x, "ours: the trail runs back toward the hull")
+	assert_gte(p.x, trail[0].x, "the head leads")
+
+
+func test_the_pip_says_how_long_a_shell_has_left() -> void:
+	assert_eq(TankPip.flight_label(2.44), "2.4 S")
+	assert_eq(TankPip.flight_label(-0.1), "0.0 S")
+	var s := TankFixturesV4.make("far_duel")
+	s.shells.clear()
+	s.shells.append(_flying(true, 1300.0, 1.5))
+	var v := U.view_of(self, s, Wl.SOLO, 1, Vector2(960, 540))
+	assert_almost_eq(float(v.pip.dots(s)[0]["left"]), 1.5, 0.001)
+
+
+func test_the_gun_arc_shows_while_nothing_flies() -> void:
+	var v := _view("far_duel")
+	var arc := v.pip.aim_arc(1640.0)
+	assert_gt(arc.size(), 5, "an arc to the target")
+	var top := INF
+	for q in arc:
+		top = minf(top, q.y)
+	assert_lt(top, arc[0].y - 3.0, "it rises")
+	assert_almost_eq(
+		arc[0].x, TankPip.to_px(0.0, 0.0, v.pip.rect.size, false).x, 1.0, "from the hull"
+	)
+	assert_eq(v.pip.aim_arc(0.0).size(), 0, "no target, no arc")
+	assert_eq(v.pip.aim_arc(99999.0).size(), 0, "out of the gun's reach")
+
+
+func test_a_landing_shell_leaves_a_puff_that_fades() -> void:
+	var s := TankFixturesV4.make("far_duel")
+	s.shells.clear()
+	var shell := _flying(true, 1300.0, 0.2)
+	s.shells.append(shell)
+	var v := U.view_of(self, s, Wl.SOLO, 1, Vector2(960, 540))
+	v.pip.puffs.clear()
+	v.pip.frame(s, 0.05)
+	assert_eq(v.pip.puffs.size(), 0, "still flying")
+	var land := TankShellPath.landing_m(shell.x, shell.vx, shell.left_s)
+	s.shells.clear()
+	v.pip.frame(s, 0.05)
+	assert_eq(v.pip.puffs.size(), 1, "gone near its end: it landed")
+	assert_almost_eq(float(v.pip.puffs[0]["r"]), land, 0.01, "where it was going to land")
+	assert_true(bool(v.pip.puffs[0]["friendly"]))
+	v.pip.frame(s, TankPip.PUFF_S)
+	assert_eq(v.pip.puffs.size(), 0, "faded")
+
+
+func test_a_cleared_field_leaves_no_puff() -> void:
+	var s := TankFixturesV4.make("far_duel")
+	s.shells.clear()
+	s.shells.append(_flying(false, 1300.0, 2.0))
+	var v := U.view_of(self, s, Wl.SOLO, 1, Vector2(960, 540))
+	v.pip.frame(s, 0.05)
+	s.shells.clear()
+	v.pip.frame(s, 0.05)
+	assert_eq(v.pip.puffs.size(), 0, "mid flight: a tow or a new stage took it, nothing landed")
+
+
 func test_the_target_range_labels_the_pip_and_the_seam() -> void:
 	assert_eq(TankPip.range_label(1640.4), "1640 M")
 	assert_eq(TankPip.range_label(0.0), "--")
@@ -494,6 +584,30 @@ func test_the_target_range_labels_the_pip_and_the_seam() -> void:
 	assert_eq(v.target_range_m(v.game.state), 0.0, "no target")
 	v.game.state.hull.target_id = 9999
 	assert_eq(v.target_range_m(v.game.state), 0.0, "a barricade")
+
+
+# --- The back ------------------------------------------------------------------------------------------
+
+
+func test_the_far_panel_has_a_treeline_in_three_walls() -> void:
+	var kit := TankEnemyKit.shared()
+	assert_not_null(kit.far_forest(), "the baked treeline")
+	assert_eq(kit.far_forest_rects().size(), TankFarPanel.FOREST_FOOT.size(), "one foot per wall")
+	var last := -INF
+	for foot: float in TankFarPanel.FOREST_FOOT:
+		assert_gt(foot, last, "the nearer wall stands lower")
+		last = foot
+	assert_lte(
+		last, TankFarPanel.GROUND_TOP + 14.0, "the ground's soft top covers the last wall's foot"
+	)
+
+
+func test_a_base_stands_behind_the_enemies_and_its_lamps_too() -> void:
+	var v := _view("far_duel")
+	var world := v.far.layer("World").get_index()
+	assert_lt(v.far.layer("Base").get_index(), world, "the base under the enemies")
+	assert_lt(v.far.layer("BaseLight").get_index(), world, "its lamps never shine through a hull")
+	assert_gt(v.far.layer("BaseLight").get_index(), v.far.layer("Base").get_index())
 
 
 # --- The seam -----------------------------------------------------------------------------------------
@@ -544,7 +658,6 @@ func test_every_fixture_draws_the_split_screen_at_every_canvas() -> void:
 			assert_eq(v.far.size.y, int(size.y), "%s at %s" % [n, size])
 			v.queue_free()
 	await wait_physics_frames(2)
-	assert_true(true, "no error drawing them")
 
 
 func test_the_split_screen_never_writes_the_state() -> void:

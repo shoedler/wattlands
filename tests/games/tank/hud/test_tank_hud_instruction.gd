@@ -137,14 +137,14 @@ func test_the_telegraph_list_has_every_shooter_with_its_full_length() -> void:
 	var t := TankHudModel.telegraphs(s)
 	assert_eq(t.size(), 1)
 	assert_eq(int(t[0]["id"]), 13)
-	assert_eq(float(t[0]["total"]), 7.0, "the destroyer's 7 s glint (v3)")
+	assert_eq(float(t[0]["total"]), 5.0, "the destroyer's 5 s glint (v4, enemies.json)")
 	s.enemy(13).mode = TankIds.EM_DEAD
 	assert_eq(TankHudModel.telegraphs(s).size(), 0)
 	var b := TankHudModel.telegraphs(X.state(3, "boss"))
 	assert_true(bool(b[-1]["boss"]))
-	assert_eq(float(b[-1]["total"]), 8.0)
+	assert_eq(float(b[-1]["total"]), 6.0, "the Behemoth's main gun (v4)")
 	var g := TankHudModel.telegraphs(X.state(3, "gun_line"))
-	assert_eq(float(g[0]["total"]), 6.0, "the heavy's 6 s glow (v3)")
+	assert_eq(float(g[0]["total"]), 5.0, "the heavy's 5 s glow (v4)")
 
 
 func test_the_power_ratio_is_watts_over_the_riders_target_in_one_helper() -> void:

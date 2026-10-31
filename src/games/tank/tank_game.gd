@@ -37,6 +37,9 @@ signal snapshot_applied(tick: int)
 ## Session ids kept in the progress file (a restarted client sees the same results twice).
 const PROGRESS_SESSIONS_KEPT := 32
 
+## The kill counts on the results, in the order TANK_TEAM_KILLS and TANK_TEAM_ROAM_KILLS name them.
+const TEAM_KILL_CODES: Array[int] = [1, 2, 3, 5, TankIds.BOSS_CODE, 7, 8]
+
 var content: TankContent = null
 var state: TankState = null
 ## peer -> EffortPlan built here (host / SOLO).
@@ -427,8 +430,8 @@ func _difficulty_label() -> String:
 
 
 ## The crew's values in the results screen's order: the mission, (v4) the difficulty and tanks lost,
-## hull HP at the end of each segment, breakdowns, overruns, kills by code (light, medium, destroyer,
-## reserved, heavy, Behemoth, recon, tankette), evades (successful/tried) and bow-gun hits.
+## hull HP at the end of each segment, breakdowns, overruns, kills by kind (TEAM_KILL_CODES), evades
+## (successful/tried) and bow-gun hits.
 func _team_stats() -> Dictionary:
 	var sc := state.score
 	var outcome_key: String
@@ -445,7 +448,7 @@ func _team_stats() -> Dictionary:
 	for v in sc.hp_by_segment:
 		hp.append(str(v))
 	var kills: PackedStringArray = []
-	for code in range(1, sc.kills.size()):
+	for code: int in TEAM_KILL_CODES:
 		kills.append(str(sc.kills[code]))
 	return {
 		"TANK_TEAM_OUTCOME": ctx.strings.t(outcome_key),
@@ -514,11 +517,11 @@ func _kill_total() -> int:
 
 ## The crew's free-roam values in the results screen's order: the outcome, (v4) the difficulty and tanks
 ## lost, points, points per WORK minute, kills by code without the Behemoth's (light, medium, destroyer,
-## reserved, heavy, recon, tankette), distance, evades, breakdowns, patrols.
+## heavy, recon, tankette), distance, evades, breakdowns, patrols.
 func _roam_team_stats(per_min: float) -> Dictionary:
 	var sc := state.score
 	var kills: PackedStringArray = []
-	for code in range(1, sc.kills.size()):
+	for code: int in TEAM_KILL_CODES:
 		if code != TankIds.BOSS_CODE:
 			kills.append(str(sc.kills[code]))
 	var timed_out := state.outcome == TankIds.OUTCOME_TIME_UP

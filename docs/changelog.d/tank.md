@@ -1,5 +1,16 @@
 # Changelog: tank
 
+### Changed (Diesel Domestiques) v0.4.0
+
+- The enemy is far away now. The screen splits: our tank, the near road and the bushes on one side, a long-lens view of the enemy at 800-2400 m on the other, with the range on a riveted seam between them. Shells really fly, 1.4 to 4 s, and lead and elevation matter. A small shell screen shows the arc with our shells and theirs in flight, and an incoming shell is the cue to sprint.
+- New enemies, drawn to the tank's standard by a new generator with no generated images: real track runs and road wheels on suspension, turrets that traverse, guns that recoil, rivets, weathering and moonlight, a cold grey-green faction with cyan vision slits, burning wrecks, and a Behemoth with bogies you can break. Nothing comes from behind any more, and the dug-in guns are gone: gun lines are now holding actions, enemies on the move at long range.
+- Recon cars and tankettes burst from the roadside bushes, drive away with their turrets firing back, and flee if you leave them. Only the Secondaries hit them. One that gets away costs nothing.
+- Difficulty: Easy, Normal or Hard, set by the host. It changes enemy HP, damage, accuracy, counts, telegraph length and the repair rate, and never an effort number or your plan. On Normal and Hard a hull at 0 is TANK LOST: the crew is towed back and the stage restarts while the ride goes on. An S needs a ride with no losses. On Easy you break down instead and cannot lose. A rider in rescue, AFK or dropped keeps the hull at 1 HP on every level.
+- Ambush: a new 15-minute session with the full warm-up, about 7 minutes of hard fights and the cool-down. It defaults to Hard and starts short of plates: expect to lose the tank once or twice and still get a good workout. In simulation the Autopilot alone never beat the Behemoth on Hard.
+- A sixth seat, Repairs, on the upper deck: a crank-driven rivet hammer and a patch press in their own copper light, ERG 55-70 %, which rebuild the hull while you stay in band. The HUD has a sixth card.
+- Bots fill the empty seats and adapt to the humans: they load when the rack runs low, repair when the hull is low, take the Lights for a gunner and cover a rider who stopped. A human's move always wins, and a bot never changes a human's effort.
+- Free roam follows the same rules: patrols far off, ambushes from the bushes, holding forces at the strongpoints, and a turn clears the field. The help overlay covers the new screen.
+
 ### Changed (Diesel Domestiques) v0.3.1
 
 - No seat lock. Move to any empty seat at any time with the arrow keys and OK, on every seat; the move lands at once and your power works the new seat right away. On the Gun, target cycling moved to swap (R / LB); up/down still nudge the elevation.

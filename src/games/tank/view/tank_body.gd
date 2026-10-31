@@ -8,9 +8,8 @@ extends SubViewport
 ##          its links moving with `travel`), the idler, the road wheels (each at its own suspension
 ##          centre `wheels`), the return rollers
 ##   Shade  the skirt's deep shadow over the running gear (multiplied)
-##   Front  the base art with the live rooms (TankInterior's texture), the turret block mirrored
-##          about its pivot by `turret_sx` (a traverse), the searchlights' lit lenses while they
-##          burn, the sprocket, the main gun at `elev_deg` with its recoil, the bow guns tilted to
+##   Front  the base art with the live rooms (TankInterior's texture), the searchlights' lit lenses
+##          while they burn, the sprocket, the main gun at `elev_deg` with its recoil, the bow guns tilted to
 ##          `bow_elev_deg` with their kick
 ##   Dim    the rooms' backup lighting (multiplied): every room and window dimmed toward
 ##          BACKUP_DIM by `backup` (0 the warm lamps .. 1 the Lights seat unpowered); the machines
@@ -35,8 +34,6 @@ var wheels: Array[Vector2] = []
 var travel: float = 0.0
 var elev_deg: float = 0.0
 var recoil: float = 0.0
-## The turret's horizontal scale about its pivot: 1 forward .. -1 facing the rear.
-var turret_sx: float = 1.0
 var bow_elev_deg: float = 2.0
 var bow_kick: Array[float] = [0.0, 0.0]
 var search_lit: bool = false
@@ -93,18 +90,12 @@ func refresh() -> void:
 	_dim.queue_redraw()
 
 
-## The turret's transform (sprite px): mirrored and squeezed about its pivot.
-func turret_xf() -> Transform2D:
-	var px := rig.turret_pivot_x
-	return Transform2D(Vector2(turret_sx, 0), Vector2(0, 1), Vector2(px * (1.0 - turret_sx), 0))
-
-
 ## The main gun's transform (sprite px): the bore along +x from the trunnion at the elevation,
-## pulled back by the recoil, on the turret.
+## pulled back by the recoil.
 func barrel_xf() -> Transform2D:
 	var ang := -deg_to_rad(elev_deg)
 	var d := Vector2(cos(ang), sin(ang))
-	return turret_xf() * Transform2D(ang, rig.trunnion - d * recoil)
+	return Transform2D(ang, rig.trunnion - d * recoil)
 
 
 ## Bow gun `k`'s transform (sprite px): along its tilt from its pivot, kicked back.
@@ -348,11 +339,9 @@ func _draw_front() -> void:
 		ci.draw_texture_rect_region(tex, r, r)
 	if rear_lit and rig.lit_rear_tex != null:
 		ci.draw_texture(rig.lit_rear_tex, rig.lit_rear_at)
-	ci.draw_set_transform_matrix(turret_xf())
 	ci.draw_texture_rect_region(tex, tr, tr)
 	if search_lit and rig.lit_tex != null:
 		ci.draw_texture(rig.lit_tex, rig.lit_at)
-	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
 	var sp: Dictionary = rig.gear["sprocket"]
 	_sheet(ci, "sprocket", TankRig.vec(sp["c"]), travel / float(sp["r"]))
 	if rig.barrel_tex != null:
@@ -380,10 +369,6 @@ func _draw_dim() -> void:
 	if backup <= 0.0:
 		return
 	var c := backup_tint(backup)
-	var tr := rig.turret_rect
 	var rects: Array = rig.rooms.values() + rig.windows.values()
 	for r: Rect2 in rects:
-		if tr.encloses(r):
-			_dim.draw_set_transform_matrix(turret_xf())
 		_dim.draw_rect(r, c)
-		_dim.draw_set_transform_matrix(Transform2D.IDENTITY)

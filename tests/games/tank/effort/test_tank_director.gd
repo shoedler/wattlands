@@ -582,6 +582,22 @@ func test_haptic_spacing_of_15_s() -> void:
 
 ## Never in WARMUP kinds, the first 300 s, the cool-down, to an ERG rider, an opted-out rider or
 ## one on reserve.
+## A haptic landing as max_s ends the phase would still pull in the next one, the cool-down at worst.
+func test_no_haptic_can_outlast_a_phase_max_s_is_ending() -> void:
+	var ri := TankRiderInput.new()
+	var ph := PlanPhase.new()
+	ph.max_s = 100.0
+	ri.phase_elapsed_s = 90.0
+	assert_false(TankDirector.haptic_outlasts_phase(ri, ph, 2.0), "ten seconds left")
+	ri.phase_elapsed_s = 97.5
+	assert_true(TankDirector.haptic_outlasts_phase(ri, ph, 2.0), "2.5 s left: too close")
+	ph.max_s = 0.0
+	assert_false(
+		TankDirector.haptic_outlasts_phase(ri, ph, 2.0), "no max_s: nothing forces its end"
+	)
+	assert_false(TankDirector.haptic_outlasts_phase(ri, null, 2.0))
+
+
 func test_haptic_gates() -> void:
 	var events := _ev([_hit(20.0), TankEvents.evade(5, 3, true, 0)])
 	var h := _h()

@@ -85,7 +85,7 @@
 	},
 	"dynamo": {
 		"bank_max": 100,
-		"j_per_unit": 150,
+		"j_per_unit": 180,
 		"stabilizer_per_s": 2.25,
 		"per_degree": 0.5,
 		"per_traverse": 15,
@@ -109,7 +109,7 @@
 		"light_latch_pct": 40
 	},
 	"gun": {
-		"load_elev_deg": 0,
+		"load_elev_deg": 8,
 		"elev_min_deg": -12,
 		"elev_max_deg": 30,
 		"shell_speed_px_s": 360,
@@ -117,7 +117,7 @@
 		"aim_tol_deg": 0.5,
 		"manual_pause_s": 5,
 		"nudge_deg": 1,
-		"far": {"v0_mps": 560, "g_mps2": 70, "max_range_m": 2500, "nudge_deg": 0.25, "aim_tol_deg": 0.1, "dispersion_deg": [0.2, 0.6], "splash_m": 60}
+		"far": {"v0_mps": 560, "g_mps2": 70, "max_range_m": 2500, "nudge_deg": 0.25, "aim_tol_deg": 0.1, "dispersion_deg": [0.2, 0.35], "splash_m": 60}
 	},
 	"damage": {
 		"light": 14,
@@ -141,7 +141,7 @@
 		"_doc": "v3: the Lights seat (arc generator). While its rider is in band the searchlights are lit: the main gun reaches its full range with its normal dispersion. Empty or not lit, far targets only up to dark_range_m, with its dispersion x dark_dispersion_mult (dark_range_px is v3's, until the Autopilot moves).",
 		"dark_range_px": 260,
 		"dark_range_m": 2300,
-		"dark_dispersion_mult": 2
+		"dark_dispersion_mult": 1.5
 	},
 	"repair": {
 		"_doc": "v4: the Repairs seat rebuilds hp_per_kj hull HP per kJ of P_eff in band (x difficulty.repair), one patch per patch_hp.",

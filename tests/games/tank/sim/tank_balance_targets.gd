@@ -4,7 +4,16 @@ extends RefCounted
 ## check: the gates are tests/games/tank/sim/check_sims.mjs over the full simulation matrix).
 ## Returns [{id, ok, text}], one entry per target; a target no run applies to reads "skipped".
 ## T1-T5 are Normal's targets (a result without a difficulty counts as Normal); d1() holds the
-## difficulty table of SPEC_TANK 9.3 and adds a table of rows.
+## difficulty table and adds a table of rows.
+##
+## The difficulty targets the content is tuned to (compliant autopilot crews, seeds 1-3 for the
+## tuning, seeds 4-6 as the check against overfit; no effort number, plan or governor input differs):
+##   Easy    never loses: every run a victory, no loss, grade A or S.
+##   Normal  usually wins: most seeds a victory, at most 1 loss, grade B or better.
+##   Hard    expect to fail: 1-2 losses on most seeds, none above 4, grade C or better, never S with a
+##           loss. ambush_15 defaults to it: 15 minutes, one or two failures, a whole workout.
+##   Compliance 0.85: no loss on Easy, more losses than the compliant rider on Normal and Hard.
+##   Only 1.0 and 0.85 are judged: these riders never rescue, so 0.7 reads harsher than the real matrix.
 
 
 static func evaluate(results: Array) -> Array[Dictionary]:
@@ -34,15 +43,15 @@ static func _compliant(r: Dictionary) -> bool:
 	return float(r["compliance"]) > 0.999 and str(r["content"]) == "ashfall_road" and _normal(r)
 
 
-## T1: compliant crews: every Advance 150-240 s, gun line 80-160 s, boss 180-330 s, no overrun,
-## at most 1 breakdown, grade B or better.
+## T1: compliant crews: every Advance 120-280 s, gun line 60-160 s, boss 120-330 s (check_sims.mjs
+## T1_RANGES of ashfall_road), no overrun, at most 1 breakdown, grade B or better.
 static func t1(results: Array) -> Dictionary:
 	var problems: Array[String] = []
 	var runs := 0
 	var ranges := {
-		TankIds.SEG_ADVANCE: [150.0, 240.0],
-		TankIds.SEG_GUN_LINE: [80.0, 160.0],
-		TankIds.SEG_BOSS: [180.0, 330.0],
+		TankIds.SEG_ADVANCE: [120.0, 280.0],
+		TankIds.SEG_GUN_LINE: [60.0, 160.0],
+		TankIds.SEG_BOSS: [120.0, 330.0],
 	}
 	for r: Dictionary in results:
 		if not _compliant(r):

@@ -1381,14 +1381,14 @@ export function checkS10(reports) {
     notes.push(`${n} ${overs.length} client Overpressure shells`);
   }
 
-  // Slot 1 stops pedaling in the stage 1 gun line (the dynamo, ERG 60% or more): rescue, then AFK and a station on reserve, then back.
+  // Slot 1 stops pedaling on the Gun in stage 1's Advance (the dynamo, ERG 60% or more; v4's near threats can pull it off the Gun by plan phase 2): rescue, then AFK and a station on reserve, then back.
   const stop = reports.s10_c3_dynamo_stop;
   if (stop) {
     const n = 's10_c3_dynamo_stop';
     hygiene(n, stop);
     const peer = '2';
     const rows = traceOf(stop, peer);
-    const span = phaseSpansOf(stop, peer).find((x) => x.index === 2);
+    const span = phaseSpansOf(stop, peer).find((x) => x.index === 1);
     const zero = rows.find((row) => num(row.game_t) >= num(span?.start, 0) - EPS && num(row.power_w) <= 0 && num(row.cadence_rpm) <= 0);
     const afk = rows.filter((row) => row.afk === true);
     if (!zero) probs.push(`${n}: peer ${peer} never stopped pedaling in the gun line`);

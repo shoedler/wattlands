@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# tools/gate: the merge gates in concurrent lanes, the bulletproofing check and the worktree chores.
+# tools/gate.ps1 is the PowerShell twin; both call tools/lib/gate.mjs (tools/gate --help lists commands).
+#
+#   tools/gate check|fast|strict|matrix|stamp-ok|floor|fmt|wt-add|wt-gc|pin-safety [options]
+#
+# Same verdict code as tools/run_tests, which stays the literal serial gate.
+set -u
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export WATTLANDS_NO_HW_CONTROL=1
+export WATTLANDS_NO_NETWORK_INTEGRATIONS=1
+command -v node >/dev/null 2>&1 || {
+  printf 'gate: node not found on PATH (Node 22.12+ is required)\n' >&2
+  exit 127
+}
+bash_bin="${BASH:-bash}"
+if command -v cygpath >/dev/null 2>&1; then
+  bash_bin="$(cygpath -m "$bash_bin")"
+fi
+export WATTLANDS_BASH="$bash_bin"
+exec node "$here/lib/gate.mjs" --shell=bash "$@" </dev/null

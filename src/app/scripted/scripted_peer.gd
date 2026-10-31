@@ -383,7 +383,8 @@ func _on_game_message(from: int, data: Dictionary) -> void:
 			if phase == "lobby":
 				launch(Wl.CLIENT, {"session_start": data.duplicate(true)})
 		"plan", "phase", "snapshot":
-			if phase == "lobby":
+			# A broadcast can beat the lobby to a restarted client; the host's catch-up follows it.
+			if phase == "lobby" and str(services.net.lobby.get("game_id", "")) != "":
 				launch(
 					Wl.CLIENT,
 					{"rejoin": true, "replay": [{"from": from, "data": data.duplicate(true)}]}

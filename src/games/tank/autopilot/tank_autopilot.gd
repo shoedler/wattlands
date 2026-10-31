@@ -106,12 +106,8 @@ static func is_gunner(engine: String) -> bool:
 
 
 ## The live enemies the main gun could lay on: far kinds within its range, the Behemoth while a part
-## of it stands. Near threats are the Secondaries' (the main gun does not lay on them). An enemy in
-## the old frame (range 0; gone with the old rules at T) counts while on screen.
+## of it stands. Near threats are the Secondaries' (the main gun does not lay on them).
 static func enemies_in_range(state: TankState) -> int:
-	var cam := state.camera_x()
-	var lo := cam + EDGE_MARGIN_PX
-	var hi := cam + float(TankConst.SCREEN_W) - EDGE_MARGIN_PX
 	var max_range := 2500.0
 	if state.content != null:
 		max_range = state.content.num("tanks", "gun.far.max_range_m", max_range)
@@ -119,21 +115,17 @@ static func enemies_in_range(state: TankState) -> int:
 	for e in state.enemies:
 		if e.mode == TankIds.EM_DEAD or e.hp <= 0.0 or e.is_near():
 			continue
-		if e.range_m > 0.0:
-			n += 1 if e.range_m <= max_range else 0
-		elif e.x_px + maxf(float(e.w), 1.0) >= lo and e.x_px <= hi and e.side > 0:
+		if e.range_m > 0.0 and e.range_m <= max_range:
 			n += 1
 	var b := state.boss
 	var stands := b.phase == TankIds.BOSS_PHASE_1 or b.phase == TankIds.BOSS_PHASE_2
-	if stands and (b.range_m > 0.0 or b.x_px < hi):
+	if stands and b.range_m > 0.0:
 		n += 1
 	return n
 
 
 static func _obstacle_shot(state: TankState) -> Array:
 	var hull := state.hull
-	if hull.facing != TankIds.FACE_RIGHT or hull.traverse_s > 0.0:
-		return []
 	if enemies_in_range(state) > 0:
 		return []
 	var ob := _blocking_obstacle(state)
@@ -213,6 +205,8 @@ static func seat_intent(state: TankState, rider: TankRiderState) -> Dictionary:
 		return {}
 	if at_end:
 		seg = next_fight_segment(state)
+		if seg == TankIds.SEG_NONE:
+			return {}  # the last fight is won: nothing but the cool-down comes, and it has no seats
 		sit = expected(state, seg)
 	var want := (
 		seat_wanted_solo(state, rider, sit, seg)
@@ -224,13 +218,30 @@ static func seat_intent(state: TankState, rider: TankRiderState) -> Dictionary:
 	var st := state.station(want)
 	if st == null or not st.is_empty():
 		return {}
-	if not at_end and not TankSeats.follows_now(state, rider.peer, want):
+	if (
+		not at_end
+		and not TankSeats.follows_now(state, rider.peer, want)
+		and not _solo_shells_to_fire(state, want, sit)
+	):
 		return {}
 	if not at_end and _switches_in_warmup(state, ri, want):
 		return {}
 	var out := TankIntents.seat(want, TankIds.VIA_AUTO)
 	out["auto"] = 1
 	return out
+
+
+## True for a solo rider with rounds, a target and the Gun free in a holding action: past a hold's
+## nominal end its trainer would only follow at the segment's end, but the seat lands at once and the
+## clock is the fight's, so it fires instead of sitting on a full rack until max_s.
+static func _solo_shells_to_fire(state: TankState, want: String, sit: Dictionary) -> bool:
+	return (
+		state.riders.size() == 1
+		and state.seg.seg == TankIds.SEG_GUN_LINE
+		and want == TankIds.ENGINE_DYNAMO
+		and int(sit["shells"]) > 0
+		and bool(sit["gun"])
+	)
 
 
 ## True when moving to `engine` would switch the rider's trainer ERG <-> SIM inside a warm-up
@@ -248,15 +259,37 @@ static func _switches_in_warmup(state: TankState, ri: TankRiderInput, engine: St
 ## not before the segment's own min_s (`at_end`: planning the next segment once the objective is
 ## done). v4: open while a near threat is alive: it lives 8-20 s, and stage 1's recon comes at about
 ## 40 s, so otherwise no Autopilot crew could ever man the Secondaries (the 1 s ask, the stay and the
-## follows_now gate still hold).
+## follows_now gate still hold). Also open while an Advance has nobody on Drive: a rider who left it in
+## the hold would otherwise keep the tank standing until min_s. Free roam is one long segment with no
+## opening to hold: a rider a near threat pulled off the Loader would otherwise stay away until time up.
 static func _crew_may_move(state: TankState, at_end: bool) -> bool:
 	if state.seg.seg == TankIds.SEG_CHECKPOINT:
 		return false
-	if near_threat_alive(state):
+	if near_threat_alive(state) or state.seg.seg == TankIds.SEG_ROAM:
+		return true
+	if state.seg.seg == TankIds.SEG_ADVANCE and not state.seg.objective_done:
+		var drive := state.station(TankIds.ENGINE_DIESEL)
+		if drive != null and drive.is_empty():
+			return true
+	if _gun_dry(state):
 		return true
 	if state.seg.elapsed_s < TankConst.AUTO_STAY_S - 1e-6:
 		return false
 	return at_end or (state.seg.open_ended and state.seg.elapsed_s >= state.seg.min_s - 1e-6)
+
+
+## True in a fight whose Gun has nothing to fire with nobody on the Loader: a small crew that arrives
+## with an empty rack would otherwise sit out the opening with an idle gun.
+static func _gun_dry(state: TankState) -> bool:
+	if state.seg.seg != TankIds.SEG_GUN_LINE and state.seg.seg != TankIds.SEG_BOSS:
+		return false
+	var loader := state.station(TankIds.ENGINE_STEAM)
+	return (
+		loader != null
+		and loader.is_empty()
+		and loader.rack <= 0
+		and state.hull.loaded == TankIds.SHELL_NONE
+	)
 
 
 ## v4: true while a recon car or a tankette is alive.
@@ -303,7 +336,8 @@ static func seat_wanted_solo(
 		return TankIds.ENGINE_FEED
 	match rider.engine:
 		TankIds.ENGINE_STEAM:
-			return TankIds.ENGINE_STEAM if rack < TankConst.RACK_MAX else TankIds.ENGINE_DYNAMO
+			var enough := rack >= TankConst.RACK_MAX or rack >= _hits_to_clear(state)
+			return TankIds.ENGINE_DYNAMO if enough else TankIds.ENGINE_STEAM
 		TankIds.ENGINE_DYNAMO:
 			return TankIds.ENGINE_DYNAMO if shells > 0 else TankIds.ENGINE_STEAM
 	# From Drive (or the Secondaries): a rack with SOLO_GUN_FIRST shells or more goes to the Gun at
@@ -311,6 +345,20 @@ static func seat_wanted_solo(
 	if shells >= SOLO_GUN_FIRST or rack >= TankConst.RACK_MAX:
 		return TankIds.ENGINE_DYNAMO
 	return TankIds.ENGINE_STEAM
+
+
+## The heavy shells that would kill every far enemy standing, at least 1: the solo Loader stops
+## filling the rack once it holds them (a hold's clock has no time for a third shell nobody needs).
+## RACK_MAX when the Behemoth stands: that fight wants a full rack.
+static func _hits_to_clear(state: TankState) -> int:
+	if state.boss.phase != TankIds.BOSS_NONE and state.boss.phase != TankIds.BOSS_DEAD:
+		return TankConst.RACK_MAX
+	var dmg := maxf(state.content.num("tanks", "damage.heavy", 35.0), 1.0)
+	var hits := 0
+	for e in state.enemies:
+		if not e.is_near() and e.mode != TankIds.EM_DEAD and e.hp > 0.0:
+			hits += ceili(e.hp / dmg)
+	return maxi(hits, 1)
 
 
 ## True when rider `rider` sat somewhere other than Drive in the current Advance: it sits there now,
@@ -440,7 +488,6 @@ static func repair_need(state: TankState) -> float:
 ## "far": a far enemy beyond the headlight's range (arc.dark_range_m), "gun": the auto-aim can lay on
 ## a target now (TankAim.pick), "rack": shells in the rack, "shells": the rack plus a chambered round,
 ## "far_target": a far enemy or Behemoth part stands, "near_threat": a recon car or tankette is alive}.
-## An enemy in the old frame (range 0; gone with the old rules at T) reads as it always did.
 static func situation(state: TankState) -> Dictionary:
 	var aux := TankAux.of(state)
 	var cam := state.camera_x()
@@ -449,7 +496,6 @@ static func situation(state: TankState) -> Dictionary:
 	var hi := c.num("tanks", "bow.max_px", 220.0) if c != null else 220.0
 	var reach := c.num("tanks", "arc.dark_range_px", 260.0) if c != null else 260.0
 	var dark_m := c.num("tanks", "arc.dark_range_m", 2300.0) if c != null else 2300.0
-	var light_code := TankIds.enemy_code(TankIds.ENEMY_LIGHT)
 	var targets := false
 	var near := false
 	var only_light := true
@@ -479,16 +525,12 @@ static func situation(state: TankState) -> Dictionary:
 			continue
 		if not TankShells.collidable(t) or not TankTargets.engageable(t, cam):
 			continue
-		var enemy := t.kind == TankTarget.KIND_ENEMY
 		if t.kind == TankTarget.KIND_OBSTACLE and not TankDrive.blocks(t.obstacle):
-			continue
-		if enemy and t.enemy.side < 0 and t.enemy.code == light_code:
 			continue
 		targets = true
 		near = near or TankAim.in_reach(state, t)
 		var d := TankBow.distance(state, t)
-		var ahead := not enemy or t.enemy.side > 0
-		var in_bow := ahead and d >= lo - 1e-6 and d <= hi + 1e-6
+		var in_bow := d >= lo - 1e-6 and d <= hi + 1e-6
 		bow = bow or in_bow
 		if in_bow and not light_target(state, t):
 			only_light = false

@@ -36,11 +36,12 @@
 			"length_m": 1100,
 			"terrain": [[0, 0], [130, 1.5], [250, 3], [380, 1], [510, -2], [630, 0], [760, 2.5], [890, 1], [1020, -1], [1100, 0]],
 			"encounters": [
-				{"at_m": 130, "enemy": "light", "count": 1},
+				{"at_m": 130, "enemy": "medium", "count": 1},
 				{"at_m": 250, "enemy": "recon", "count": 1, "min_crew": 2},
-				{"at_m": 360, "enemy": "medium", "count": 1},
+				{"at_m": 360, "enemy": "light", "count": 1},
 				{"at_m": 600, "enemy": "destroyer", "count": 1},
 				{"at_m": 700, "enemy": "tankette", "count": 1, "min_crew": 2},
+				{"at_m": 720, "enemy": "destroyer", "count": 1, "min_crew": 4},
 				{"at_m": 830, "enemy": "light", "count": 1}
 			],
 			"obstacles": [
@@ -61,11 +62,13 @@
 			"backdrop": "base",
 			"enemies": [
 				{"enemy": "medium", "count": 2, "hold_m": [1200, 1500]},
-				{"enemy": "light", "count": 2, "hold_m": [900, 1050], "min_crew": 2}
+				{"enemy": "medium", "count": 1, "hold_m": [1350], "min_crew": 2},
+				{"enemy": "light", "count": 1, "hold_m": [900], "min_crew": 2},
+				{"enemy": "light", "count": 1, "hold_m": [1050], "min_crew": 3}
 			],
 			"near": [
-				{"at_s": 15, "enemy": "tankette", "count": 1, "min_crew": 2},
-				{"at_s": 40, "enemy": "recon", "count": 1, "min_crew": 2}
+				{"at_s": 15, "enemy": "tankette", "count": 1, "min_crew": 3},
+				{"at_s": 40, "enemy": "recon", "count": 1, "min_crew": 3}
 			],
 			"props": [
 				{"type": "tank_traps", "at_px": 40}
@@ -99,10 +102,11 @@
 				{"at_m": 109, "enemy": "medium", "count": 1},
 				{"at_m": 349, "enemy": "recon", "count": 1, "min_crew": 2},
 				{"at_m": 589, "enemy": "destroyer", "count": 1},
+				{"at_m": 700, "enemy": "destroyer", "count": 1, "min_crew": 4},
 				{"at_m": 800, "enemy": "light", "count": 1}
 			],
 			"obstacles": [
-				{"at_m": 971, "type": "wreck", "min_crew": 2}
+				{"at_m": 971, "type": "wreck", "min_crew": 3}
 			]
 		},
 		{
@@ -119,11 +123,13 @@
 			"backdrop": "base",
 			"enemies": [
 				{"enemy": "heavy", "count": 1, "hold_m": [1500]},
-				{"enemy": "medium", "count": 2, "hold_m": [1150, 1450], "min_crew": 2}
+				{"enemy": "medium", "count": 2, "hold_m": [1150, 1450], "min_crew": 2},
+				{"enemy": "medium", "count": 1, "hold_m": [1300], "min_crew": 3},
+				{"enemy": "medium", "count": 1, "hold_m": [1550], "min_crew": 3}
 			],
 			"near": [
-				{"at_s": 20, "enemy": "recon", "count": 1, "min_crew": 2},
-				{"at_s": 55, "enemy": "tankette", "count": 1, "min_crew": 2}
+				{"at_s": 20, "enemy": "recon", "count": 1, "min_crew": 3},
+				{"at_s": 55, "enemy": "tankette", "count": 1, "min_crew": 3}
 			],
 			"props": [
 				{"type": "tank_traps", "at_px": 40}
@@ -158,6 +164,7 @@
 				{"at_m": 266, "enemy": "tankette", "count": 1, "min_crew": 2},
 				{"at_m": 475, "enemy": "light", "count": 1},
 				{"at_m": 608, "enemy": "destroyer", "count": 1},
+				{"at_m": 690, "enemy": "destroyer", "count": 1, "min_crew": 4},
 				{"at_m": 760, "enemy": "recon", "count": 1, "min_crew": 2}
 			],
 			"obstacles": []
@@ -176,12 +183,13 @@
 			"backdrop": "forest_birches",
 			"enemies": [
 				{"enemy": "heavy", "count": 1, "hold_m": [1600]},
+				{"enemy": "light", "count": 1, "hold_m": [1000], "min_crew": 2},
 				{"enemy": "destroyer", "count": 1, "hold_m": [1900], "min_crew": 2},
-				{"enemy": "medium", "count": 1, "hold_m": [1200], "min_crew": 2}
+				{"enemy": "medium", "count": 1, "hold_m": [1400], "min_crew": 3}
 			],
 			"near": [
-				{"at_s": 25, "enemy": "recon", "count": 1, "min_crew": 2},
-				{"at_s": 60, "enemy": "recon", "count": 1, "min_crew": 2}
+				{"at_s": 25, "enemy": "recon", "count": 1, "min_crew": 3},
+				{"at_s": 60, "enemy": "recon", "count": 1, "min_crew": 3}
 			],
 			"props": [
 				{"type": "tank_traps", "at_px": 40}
@@ -211,9 +219,9 @@
 			"end_hold_s": 7.5,
 			"boss": {"start_left_px": 500},
 			"near": [
-				{"at_s": 30, "enemy": "tankette", "count": 1, "min_crew": 2},
-				{"at_s": 90, "enemy": "recon", "count": 1, "min_crew": 2},
-				{"at_s": 150, "enemy": "tankette", "count": 1, "min_crew": 2}
+				{"at_s": 30, "enemy": "tankette", "count": 1, "min_crew": 3},
+				{"at_s": 90, "enemy": "recon", "count": 1, "min_crew": 3},
+				{"at_s": 150, "enemy": "tankette", "count": 1, "min_crew": 3}
 			]
 		}
 	],

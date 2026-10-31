@@ -1,2 +1,0 @@
-- Audio kit for games (`GameAudioKit`, `CrankClock`, `CadenceVoice`, `LayeredLoop`, `AmbienceBed`, `AudioBank`): machine strokes 1:1 with the on-screen crank at 30-140 rpm, stopping dead at 0 rpm.
-- Settings > Audio has a level each for Machines, Ambience, Effects and Menus. Safety prompts play on Master, so none of them can hide one.

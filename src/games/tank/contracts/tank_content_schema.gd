@@ -25,7 +25,8 @@ extends RefCounted
 ##                  crew_count_scale (v3: enemy counts by crew size, one
 ##                  factor in (0, 1] per crew size 1..TankIds.MAX_CREW) (ENEMIES_SPEC); difficulty
 ##                  (v4: easy, normal, hard, DIFFICULTY_MULTS and tank_loss, nothing else)
-##   missions/<id>.json  {id, label, difficulty_default?, score_stages?, segments: [{id, type, stage,
+##   missions/<id>.json  {id, label, difficulty_default?, score_stages?, hull_hp?, checkpoint_hp?,
+##                  segments: [{id, type, stage,
 ##                  kind, duration_s, min_s?, max_s?, label, name, backdrop (TankIds.BACKDROPS),
 ##                  terrain?, length_m?, encounters?, near? [{at_s, enemy, count?, min_crew?}],
 ##                  obstacles?, enemies? [{.., hold_m?: [metres]}], props?, drills?, boss?}], cooldown}
@@ -721,6 +722,9 @@ static func validate_mission(d: Variant, mission_id: String = "") -> Array[Strin
 		errors.append("%s difficulty_default: one of %s" % [at, ", ".join(TankIds.DIFFICULTIES)])
 	if d.has("score_stages") and not (_num(d["score_stages"]) and float(d["score_stages"]) > 0.0):
 		errors.append("%s score_stages: expected > 0" % at)
+	for key: String in ["hull_hp", "checkpoint_hp"]:
+		if d.has(key) and not (_num(d[key]) and float(d[key]) > 0.0):
+			errors.append("%s %s: expected > 0" % [at, key])
 	var segs: Variant = d.get("segments")
 	if not (segs is Array) or (segs as Array).is_empty():
 		errors.append("%s segments: expected a non-empty array" % at)

@@ -4,7 +4,7 @@
 	"weights": {"band": 0.3, "accuracy": 0.2, "objectives": 0.3, "survival": 0.2},
 	"objectives": {"stages": 3, "stage_frac": 0.6, "boss_frac": 0.4},
 	"survival_per_breakdown": 0.25,
-	"survival_per_loss": 0.35,
+	"survival_per_loss": 0.25,
 	"loss_grade_cap": "A",
 	"grades": {"S": 900, "A": 800, "B": 650, "C": 500},
 	"xp": {"kj_per_xp": 10, "grade_bonus": {"S": 60, "A": 40, "B": 25, "C": 10, "D": 0}}

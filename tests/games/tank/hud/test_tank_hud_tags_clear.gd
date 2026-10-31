@@ -315,6 +315,106 @@ func test_the_shells_tag_mirrors_with_the_panels() -> void:
 	assert_lte(r.end.x, seam_x - TankHudTags.SEAM_PLATE_W * 0.5, "left of the plate")
 
 
+func test_one_instruction_and_a_tick_on_every_shooter() -> void:
+	var s := TankFixturesV4.make("far_duel", 3)
+	s.enemy(22).telegraph_s = 1.0
+	s.enemy(22).mode = TankIds.EM_TELEGRAPH
+	var tags := _tags(autofree(X.game(s)))
+	tags.refresh()
+	var warn: Array = tags.m["layout"]["warn"]
+	assert_eq(warn.size(), 2, "both shooters marked")
+	for wl: Dictionary in warn:
+		assert_false(bool(wl["plate"]), "a shell flies: its plate is the one instruction")
+		assert_eq((wl["rect"] as Rect2).size, TankHudTags.TICK_SIZE)
+	s.shells.clear()
+	tags.refresh()
+	warn = tags.m["layout"]["warn"]
+	assert_eq((tags.m["layout"]["shell"] as Rect2).size, Vector2.ZERO)
+	assert_eq(warn.size(), 2)
+	assert_true(bool(warn[0]["plate"]), "no shell: the plate on who fires soonest")
+	assert_eq((warn[0]["w"] as Dictionary)["left"], 1.0)
+	assert_false(bool(warn[1]["plate"]), "only one")
+
+
+func test_the_instruction_leaves_air_beside_the_seam_plate() -> void:
+	var panels := TankFarMap.panels(Vector2(960, 540), false)
+	var r := TankHudTags.shell_rect(panels["seam"], panels["far"], Vector2(100, 26))
+	var seam_x := (panels["seam"] as Rect2).get_center().x
+	assert_gte(r.position.x, seam_x + TankHudTags.SEAM_PLATE_W * 0.5 + 6.0, "never butting on it")
+
+
+func test_the_behemoths_tag_never_lies_on_its_gun() -> void:
+	for cv: Vector2 in CANVASES:
+		var s := TankFixturesV4.make("boss_far", 3)
+		var g: TankGame = autofree(X.game(s))
+		var v := U.make_view(self, g, cv)
+		v.advance(1.0 / 60.0)
+		var panels := TankFarMap.panels(cv, false)
+		var far: Rect2 = panels["far"]
+		var mz := v.hud_boss_muzzle()
+		assert_true(far.has_point(mz), "%s: the gun's end shows in the panel" % cv)
+		var box := v.hud_boss_rect()
+		assert_gte(box.position.x, far.position.x, "%s: the bow too" % cv)
+		var keep: Array[Rect2] = [(panels["pip"] as Rect2).grow(2)]
+		var room := TankHudTags._off_seam_plate(far, panels["seam"])
+		var size := Vector2(100, TankHudTags.WARN_H)
+		var body: Array[Rect2] = []
+		var wl := TankHudTags.warn_layout(mz, size, far, keep, body, box.position.y, room)
+		var tr: Rect2 = wl["rect"]
+		assert_lte(tr.end.y, mz.y - 4.0, "%s: the tag stands over the gun" % cv)
+		var last: Vector2i = wl["pointer"][-1]
+		assert_almost_eq(Vector2(last).distance_to(mz), 3.0, 2.5, "%s: its leader ends there" % cv)
+		var seam_x := (panels["seam"] as Rect2).get_center().x
+		assert_gte(tr.position.x, seam_x + TankHudTags.SEAM_PLATE_W * 0.5, "%s: off the plate" % cv)
+
+
+func test_the_halt_post_leaves_a_near_threat_alone() -> void:
+	for cv: Vector2 in CANVASES:
+		var s := TankFixturesV4.make("near_ambush", 3)
+		var g: TankGame = autofree(X.game(s))
+		var v := U.make_view(self, g, cv)
+		v.advance(1.0 / 60.0)
+		var near: Rect2 = TankFarMap.panels(cv, false)["near"]
+		var threats: Array[Rect2] = []
+		for e in s.enemies:
+			threats.append(v.hud_enemy_rect(e.id))
+		var body: Array[Rect2] = v.hud_tank_rects()
+		var gy := v.hud_ground_y()
+		var size := TankHudTags.post_size("HALT LINE", "789 m")
+		var pl := TankHudTags.post_layout(5000.0, size, gy, near, body, threats)
+		var plate: Rect2 = pl["plate"]
+		assert_true(TankHudTags.clear_of(plate, body), "%s: clear of the tank" % cv)
+		assert_true(near.encloses(plate), "%s: in the near panel" % cv)
+		for r: Rect2 in threats:
+			assert_false(plate.intersects(r), "%s: the plate off the threat" % cv)
+		assert_lte(plate.end.y, gy - 80.0, "%s: over the beam" % cv)
+		assert_true(bool(pl["pinned"]), "%s: the line is beyond the panel" % cv)
+		assert_false(bool(pl["pole"]), "%s: a pinned line stands no post in the lane" % cv)
+		var on_road := TankHudTags.post_layout(near.end.x - 50.0, size, gy, near, body, threats)
+		assert_true(bool(on_road["pole"]), "%s: a line on the road keeps its post" % cv)
+
+
+func test_the_tags_know_the_near_threats() -> void:
+	var s := TankFixturesV4.make("near_ambush", 3)
+	var tags := _tags(autofree(X.game(s)))
+	tags.refresh()
+	assert_eq((tags.m["threats"] as Array).size(), 2, "both near threats")
+	assert_false(bool(tags.m["layout"]["posts"][0]["pole"]), "the lane stays theirs")
+	for e in s.enemies:
+		e.mode = TankIds.EM_DEAD
+	tags.refresh()
+	assert_eq((tags.m["threats"] as Array).size(), 0)
+	assert_true(bool(tags.m["layout"]["posts"][0]["pole"]), "the post again")
+
+
+func test_without_a_near_threat_the_post_stands_as_ever() -> void:
+	var s := TankFixturesV4.make("advance_far", 3)
+	var tags := _tags(autofree(X.game(s)))
+	tags.refresh()
+	var pl: Dictionary = tags.m["layout"]["posts"][0]
+	assert_true(bool(pl["pole"]))
+
+
 func test_no_shell_tag_without_an_evadable_incoming_shell() -> void:
 	var s := TankFixturesV4.make("advance_far", 3)
 	var g: TankGame = autofree(X.game(s))

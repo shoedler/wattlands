@@ -9,7 +9,8 @@ extends RefCounted
 ## (TankSeats.request lands the bot on next_seat first). A bot never causes an effort change for a
 ## human: it acts on its own seat, on `cover` (a swap with a human on reserve, whose plan the director
 ## leaves alone) and on eviction. Its own trainer follows through the same TankSeatPlan.follow as any
-## rider's, so BRIEF 4.5 holds for it. Nothing here reads the difficulty.
+## rider's, so BRIEF 4.5 holds for it, and it never holds a segment's end for the humans (`no_hold`: a
+## switch that could waits for the segment's end). Nothing here reads the difficulty.
 ##
 ## A row's score holds while no human sits on that seat (empty or bot-held): the bot already loading
 ## must not leave the Loader for the next row, because the score that brought it there is still true.
@@ -82,7 +83,7 @@ static func intent(state: TankState, rider: TankRiderState) -> Dictionary:
 	var want := seat_wanted(state, rider)
 	if want == "" or want == rider.engine or not TankSeats.is_free(state, want):
 		return {}
-	if not _plans_ahead(state) and not TankSeats.follows_now(state, rider.peer, want):
+	if not _plans_ahead(state) and not TankSeats.follows_now(state, rider.peer, want, true):
 		return {}
 	var ri: TankRiderInput = TankAux.of(state).seat_input.get(rider.peer)
 	if TankAutopilot._switches_in_warmup(state, ri, want):

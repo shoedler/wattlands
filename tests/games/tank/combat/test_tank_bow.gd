@@ -205,7 +205,7 @@ func test_nothing_fires_in_a_breakdown_a_rescue_or_on_reserve() -> void:
 
 ## Dark (the Lights seat empty or out of band) the main gun's dispersion doubles; lit it is the
 ## bank's own.
-func test_dark_searchlights_double_the_main_guns_dispersion() -> void:
+func test_dark_searchlights_widen_the_main_guns_dispersion() -> void:
 	var rig := _rig(4, false)
 	rig.run(0.1)
 	var arc := rig.arc()
@@ -226,7 +226,9 @@ func test_dark_searchlights_double_the_main_guns_dispersion() -> void:
 	var lit_spread: float = spread.call(true)
 	var dark_spread: float = spread.call(false)
 	assert_almost_eq(lit_spread, 0.5, 0.05, "the full bank's 0.5 degrees")
-	assert_almost_eq(dark_spread, 1.0, 0.1, "doubled")
+	var mult := rig.content.num("tanks", "arc.dark_dispersion_mult")
+	assert_gt(mult, 1.0, "dark is worse than lit")
+	assert_almost_eq(dark_spread, 0.5 * mult, 0.1, "times arc.dark_dispersion_mult")
 	rig.cadence[rig.peer_of(TankIds.ENGINE_ARC)] = 40.0
 	rig.run(0.1)
 	assert_false(arc.lit, "under band: dark")

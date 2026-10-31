@@ -83,23 +83,26 @@ func test_the_drill_never_loses_or_breaks_down() -> void:
 
 func test_the_damage_counts_after_the_difficulty_and_the_hit_event_before_it() -> void:
 	for row: Array in [
-		[TankIds.DIFF_EASY, 0.55], [TankIds.DIFF_NORMAL, 1.0], [TankIds.DIFF_HARD, 1.6]
+		[TankIds.DIFF_EASY, 0.55], [TankIds.DIFF_NORMAL, 1.0], [TankIds.DIFF_HARD, 1.5]
 	]:
-		var rig := _rig(str(row[0]))
+		var rig := _rig(str(row[0]), ADVANCE, 4)
 		rig.state.hull.hp = 100.0
 		var events: Array[Dictionary] = []
 		var lost := TankHullRules.hit(rig.state, 10.0, TankIds.SHELL_ENEMY, 0.0, events)
-		assert_almost_eq(lost, 10.0 * float(row[1]), 1e-6, str(row[0]))
-		assert_almost_eq(rig.state.hull.hp, 100.0 - 10.0 * float(row[1]), 1e-6, str(row[0]))
-		assert_eq(events[0]["dmg"], 10, "%s: the haptics read the same numbers" % row[0])
+		var crew_hit := 10.0 * rig.content.crew_damage_scale(4)
+		assert_almost_eq(lost, crew_hit * float(row[1]), 1e-6, str(row[0]))
+		assert_almost_eq(rig.state.hull.hp, 100.0 - crew_hit * float(row[1]), 1e-6, str(row[0]))
+		assert_eq(
+			events[0]["dmg"], roundi(crew_hit), "%s: the haptics read the same numbers" % row[0]
+		)
 
 
 func test_the_berm_absorbs_before_the_difficulty() -> void:
-	var rig := _rig(TankIds.DIFF_HARD)
+	var rig := _rig(TankIds.DIFF_HARD, ADVANCE, 4)
 	rig.state.hull.hp = 100.0
 	rig.state.hull.berm_hp = 4.0
 	var lost := TankHullRules.hit(rig.state, 10.0, TankIds.SHELL_ENEMY, 0.0, [])
-	assert_almost_eq(lost, 6.0 * 1.6, 1e-6)
+	assert_almost_eq(lost, (10.0 * rig.content.crew_damage_scale(4) - 4.0) * 1.5, 1e-6)
 	assert_eq(rig.state.hull.berm_hp, 0.0)
 
 
@@ -511,16 +514,16 @@ func test_each_loss_costs_survival_and_caps_the_grade_at_a() -> void:
 	assert_eq(clean["survival"], 1.0)
 	s.score.losses = 1
 	var one := TankScore.summary(s)
-	assert_almost_eq(float(one["survival"]), 0.65, 1e-6)
-	assert_almost_eq(float(one["score"]), float(clean["score"]) - 1000.0 * 0.2 * 0.35, 1e-3)
+	assert_almost_eq(float(one["survival"]), 0.75, 1e-6)
+	assert_almost_eq(float(one["score"]), float(clean["score"]) - 1000.0 * 0.2 * 0.25, 1e-3)
 	assert_eq(one["grade"], "A", "920 points, but a loss caps it")
 	s.score.losses = 2
-	assert_almost_eq(float(TankScore.summary(s)["survival"]), 0.3, 1e-6)
+	assert_almost_eq(float(TankScore.summary(s)["survival"]), 0.5, 1e-6)
 	s.score.losses = 4
 	assert_eq(TankScore.summary(s)["survival"], 0.0, "floored at 0")
 	s.score.breakdowns = 1
 	s.score.losses = 1
-	assert_almost_eq(float(TankScore.summary(s)["survival"]), 0.4, 1e-6, "both count")
+	assert_almost_eq(float(TankScore.summary(s)["survival"]), 0.5, 1e-6, "both count")
 
 
 func test_the_cap_never_lifts_a_lower_grade() -> void:
@@ -550,3 +553,21 @@ func test_the_brass_unlock_needs_no_loss_too() -> void:
 	assert_has(TankScore.unlocks(s, "S", true), "brass_machinery")
 	s.score.losses = 1
 	assert_does_not_have(TankScore.unlocks(s, "S", true), "brass_machinery")
+
+
+## An ambush catches the tank short of plates: ambush_15's own hull and checkpoint numbers.
+func test_a_mission_can_set_its_own_hull_and_checkpoint_plates() -> void:
+	var rig := TankRulesRig.new(3, "ambush_15", 7)
+	var mission := rig.content.mission()
+	assert_eq(rig.state.hull.hp_max, float(mission["hull_hp"]))
+	assert_lt(rig.state.hull.hp_max, rig.content.num("tanks", "hull.hp", 0.0))
+	var before := rig.state.hull.hp_max
+	for i in rig.content.segments().size():
+		if str(rig.content.segment(i).get("type", "")) == TankIds.SEG_CHECKPOINT:
+			rig.enter(i, 0.0)
+			break
+	assert_eq(rig.state.hull.hp_max, before + float(mission["checkpoint_hp"]))
+	assert_eq(
+		TankRulesRig.new(3, "ashfall_road", 7).state.hull.hp_max,
+		rig.content.num("tanks", "hull.hp", 0.0)
+	)

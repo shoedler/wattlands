@@ -45,7 +45,10 @@ const DIRECTIVE_CALLS: Array[String] = [
 	"request", "course_grade", "cadence_band", "end_phase", "replan", "split"
 ]
 ## v4: what no effort code may name (SPEC_TANK 3.5, lead's ruling 2).
-const DIFFICULTY := "TankDifficulty|DIFF_(AUTO|EASY|NORMAL|HARD)|\\.difficulty\\b"
+const DIFFICULTY := (
+	"TankDifficulty|DIFF_(AUTO|EASY|NORMAL|HARD)|\\.difficulty\\b"
+	+ "|[\"']difficulty\\b|\\boptions\\s*(\\[|\\.\\s*get\\s*\\()"
+)
 ## The folders whose choices become plans, directives or seat moves. effort/ holds TankSeatPlan too.
 const NO_DIFFICULTY_DIRS: Array[String] = ["effort", "autopilot"]
 const CLOCKS := (
@@ -373,6 +376,9 @@ func test_the_difficulty_scan_catches_every_form() -> void:
 		"if s == TankIds.DIFF_AUTO:",
 		"if s == TankIds.DIFF_EASY:",
 		"if s == TankIds.DIFF_NORMAL:",
+		'var o: String = ctx.options["difficulty"]',
+		'var o: String = ctx.options.get("mode", "")',
+		'var row: Variant = content.value("enemies", "difficulty.hard", {})',
 	]
 	for line: String in bad:
 		assert_ne(hit(line, DIFFICULTY), "", line)

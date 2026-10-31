@@ -53,6 +53,8 @@ const ARC_STEP := 2.0
 const ARC_PUSH_MAX := 60.0
 ## The Behemoth's row in TankEnemyKit.
 const BOSS_KIND := "behemoth"
+## With no view: the Behemoth's muzzle, px in from its bow and a share of its height down.
+const BOSS_MUZZLE := Vector2(4, 0.2)
 
 var state: TankState = null
 ## The view when it has the API (else null: the fallback).
@@ -175,6 +177,25 @@ func boss_rect() -> Rect2:
 	if view != null:
 		return view.call("hud_boss_rect")
 	return Rect2(world_x(state.boss.x_px), ground_y() - 150.0, 260.0, 150.0)
+
+
+## Where a far enemy's gun ends as drawn (canvas art px), Vector2.ZERO without a view that places it.
+func enemy_muzzle(e: TankEnemyState) -> Vector2:
+	if view == null or not view.has_method("hud_enemy_muzzle"):
+		return Vector2.ZERO
+	var at: Vector2 = view.call("hud_enemy_muzzle", e.id)
+	return at if panels()["far"].has_point(at) else Vector2.ZERO
+
+
+## Where the Behemoth's main gun ends: as drawn, else on its rect's bow at the gun's height.
+func boss_muzzle() -> Vector2:
+	if view != null and view.has_method("hud_boss_muzzle"):
+		var at: Vector2 = view.call("hud_boss_muzzle")
+		if at != Vector2.ZERO and panels()["far"].has_point(at):
+			return at
+	var r := boss_rect()
+	var x := r.end.x - BOSS_MUZZLE.x if mirrored() else r.position.x + BOSS_MUZZLE.x
+	return Vector2(x, r.position.y + r.size.y * BOSS_MUZZLE.y)
 
 
 ## The barrel as drawn: {pivot, length (pivot to the muzzle at full length), left}. v4: the gun only

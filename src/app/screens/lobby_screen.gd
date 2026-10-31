@@ -1094,6 +1094,8 @@ static func refusal_text(reason: String) -> String:
 
 ## Client: the host started (session_start), or a rejoin brought the running session's plan,
 ## phase or snapshot: open the session screen with the message so the client GameHost gets it.
+## A broadcast can reach a restarted client before the host has sent it the lobby: that message
+## waits, since the session cannot be built yet and the host follows the lobby with its own catch-up.
 func _on_game_message(from: int, data: Dictionary) -> void:
 	if role != Wl.CLIENT or launched:
 		return
@@ -1101,7 +1103,11 @@ func _on_game_message(from: int, data: Dictionary) -> void:
 	if type == "session_start":
 		launched = true
 		goto("session", {"role": Wl.CLIENT, "session_start": data.duplicate(true)})
-	elif type in ["plan", "phase", "snapshot"] and page == PAGE_LOBBY:
+	elif (
+		type in ["plan", "phase", "snapshot"]
+		and page == PAGE_LOBBY
+		and str(lobby().get("game_id", "")) != ""
+	):
 		launched = true
 		goto(
 			"session",

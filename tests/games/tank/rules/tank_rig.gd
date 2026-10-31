@@ -78,6 +78,9 @@ func _init(
 	var rng := RandomNumberGenerator.new()
 	rng.seed = rng_seed
 	state = TankRules.new_state(content, slots, p_mission, rng)
+	# The gun rests at its loading elevation, so a test's bank numbers hold only what the test does.
+	state.hull.elev_deg = content.num("tanks", "gun.load_elev_deg", 0.0)
+	state.hull.elev_target_deg = state.hull.elev_deg
 
 
 func segs() -> Array:

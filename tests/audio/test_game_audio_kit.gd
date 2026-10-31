@@ -364,6 +364,23 @@ func test_pause_drops_the_bed_and_holds_delayed_cues() -> void:
 	assert_eq(_count(kit, "boom"), 1, "and it plays")
 
 
+## A routine stop-and-go: the bed's timers run on under the pause, so its bursts play out there, 9 dB down. Saved up,
+## they would all start in the first second of the resume, on a silent road.
+func test_a_long_pause_saves_up_no_bed_spots_for_the_resume() -> void:
+	var kit := _kit()
+	kit.set_bed("night")
+	kit.bed_params({})
+	kit._on_paused_changed(true, "test")
+	for i in 120 * 60:
+		kit.commit(DT)
+	assert_gt(_count(kit, "cricket"), 40, "the bed's details go on under the pause")
+	var before := _count(kit, "cricket")
+	kit._on_paused_changed(false, "test")
+	for i in 60:
+		kit.commit(DT)
+	assert_lte(_count(kit, "cricket") - before, 9, "one second of the bed's own rate, no more")
+
+
 func test_the_event_bus_pauses_it() -> void:
 	var kit := _kit()
 	var bus := get_tree().root.get_node("EventBus")

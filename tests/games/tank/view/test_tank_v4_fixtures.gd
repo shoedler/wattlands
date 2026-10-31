@@ -11,11 +11,13 @@ class Sketch:
 	extends Node2D
 	var kit := TankEnemyKit.shared()
 	var calls: Array = []
+	var drawn := 0
 
 	func _draw() -> void:
 		for c: Array in calls:
 			TankEnemyDraw.draw(self, kit, str(c[0]), c[1], c[2])
 			TankEnemyDraw.draw_light(self, kit, str(c[0]), c[1], c[2])
+			drawn += 1
 
 
 func test_the_fixture_list_matches_the_script() -> void:
@@ -160,7 +162,6 @@ func test_every_fixture_runs_through_the_view_at_both_canvases() -> void:
 			assert_true(v.frames > 0, "%s at %s" % [n, size])
 			v.queue_free()
 	await wait_physics_frames(2)
-	assert_true(true, "no error drawing them")
 
 
 func test_every_fixture_builds_the_hud() -> void:
@@ -194,27 +195,46 @@ func test_the_enemy_kit_has_every_kind_at_its_size() -> void:
 	for k: String in sizes:
 		assert_eq(kit.kind(k)["size"], sizes[k], k)
 	assert_eq(kit.kind("nothing")["size"], sizes["medium"], "size is always there")
-	assert_null(kit.texture(), "no atlas in the stub")
-	assert_eq(TankEnemyKit.check({"kinds": {}}).size(), 9, "7 kinds, bushes, far_ground")
+	assert_not_null(kit.texture(), "the baked atlas")
+	assert_eq(
+		TankEnemyKit.check({"kinds": {}}).size(), 10, "7 kinds, bushes, far_ground, far_forest"
+	)
 	assert_eq(TankEnemyKit.check({}), ["no kinds"] as Array[String])
 
 
-## SPEC_TANK 4.3 and 4.7: A bakes these while V draws them, so V's branch must load nothing and guard on null.
-func test_the_enemy_kit_stubs_bushes_and_far_ground() -> void:
+## SPEC_TANK 4.3 and 4.7: A's bake holds the bushes and the far ground the view draws.
+func test_the_enemy_kit_has_bushes_and_far_ground() -> void:
 	var kit := TankEnemyKit.shared()
-	assert_null(kit.bushes(), "no bush sheet in the stub")
-	assert_eq(kit.bush_rects().size(), 0, "no bush frames in the stub")
-	assert_null(kit.far_ground(), "no far ground in the stub")
+	assert_not_null(kit.bushes(), "the bush sheet")
+	assert_gt(kit.bush_rects().size(), 0, "bush frames")
+	assert_not_null(kit.far_ground(), "the far ground")
 	var kinds := {}
 	for k: String in TankEnemyKit.SIZES:
 		kinds[k] = {"size": [1, 1]}
 	var problems := TankEnemyKit.check({"kinds": kinds})
-	assert_eq(problems, ["no bushes", "no far_ground"] as Array[String])
+	assert_eq(problems, ["no bushes", "no far_ground", "no far_forest"] as Array[String])
+	var forest := {"rects": [[0, 0, 8, 8]]}
 	assert_eq(
-		TankEnemyKit.check({"kinds": kinds, "bushes": {"rects": []}, "far_ground": "g.png"}).size(),
+		(
+			TankEnemyKit
+			. check(
+				{
+					"kinds": kinds,
+					"bushes": {"rects": []},
+					"far_ground": "g.png",
+					"far_forest": forest
+				}
+			)
+			. size()
+		),
 		1
 	)
-	var whole := {"kinds": kinds, "bushes": {"rects": [[0, 0, 8, 8]]}, "far_ground": "g.png"}
+	var whole := {
+		"kinds": kinds,
+		"bushes": {"rects": [[0, 0, 8, 8]]},
+		"far_ground": "g.png",
+		"far_forest": forest,
+	}
 	assert_eq(TankEnemyKit.check(whole).size(), 0, "a whole manifest")
 
 
@@ -238,7 +258,7 @@ func test_the_enemy_draw_stub_draws_and_aims() -> void:
 	]
 	sk.queue_redraw()
 	await wait_physics_frames(2)
-	assert_true(true, "drew without error")
+	assert_eq(sk.drawn, sk.calls.size(), "every pose drew")
 
 
 func test_the_repairs_room_paints_the_rider_in_the_second_floor_room() -> void:

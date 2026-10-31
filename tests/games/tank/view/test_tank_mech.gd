@@ -141,6 +141,49 @@ func test_the_action_is_in_the_cards_middle() -> void:
 	assert_gt(float(mid) / float(_diff(a, b)), 0.6, "most of what moves is in the middle 60 px")
 
 
+## The hammer is the hero: the head is the card's lit mass and the cam stays small beside it (the critic's
+## "boulder" was a cam of 13 px radius).
+func test_the_hammer_is_the_cards_hero_and_the_cam_stays_small() -> void:
+	assert_lte(TankMech.R_CAM_R + TankMech.R_LIFT, 9.0, "a small drawn cam on its shaft")
+	assert_gte(TankMech.R_HEAD_LIFT, 12.0, "a stroke you can see at 72 x 41")
+	var top := _paint("repair", 3.85, 1.0)
+	var low := _paint("repair", 3.3, 1.0)
+	var head := Rect2i(
+		int(TankMech.R_HEAD_X) - 8, roundi(TankMech.R_REST_Y - TankMech.R_HEAD_LIFT), 17, 8
+	)
+	var cam := Rect2i(int(TankMech.R_CAM.x) - 6, int(TankMech.R_CAM.y) - 6, 12, 12)
+	assert_gt(_mean_v(top, head), _mean_v(top, cam) + 0.1, "the head outshines the cam")
+	assert_ne(_mean_v(top, head), _mean_v(low, head), "and it moves")
+
+
+func _mean_v(img: Image, r: Rect2i) -> float:
+	var total := 0.0
+	for y in range(r.position.y, r.end.y):
+		for x in range(r.position.x, r.end.x):
+			total += img.get_pixel(x, y).v
+	return total / float(r.size.x * r.size.y)
+
+
+## The card's colour: its own, a pinker copper, not hotter than its neighbours.
+func test_the_repair_card_is_a_pinker_copper_than_drive() -> void:
+	var rep := _mean_colour(_paint("repair", 3.5, 1.0))
+	var die := _mean_colour(_paint("diesel", 3.5, 1.0))
+	assert_lt(rep.h, die.h, "hue %.3f is pinker than Drive's %.3f" % [rep.h, die.h])
+	assert_lte(rep.s, 0.62, "sat %.2f: copper, not orange" % rep.s)
+
+
+func _mean_colour(img: Image) -> Color:
+	var c := Color(0, 0, 0)
+	for y in img.get_height():
+		for x in img.get_width():
+			var q := img.get_pixel(x, y)
+			c.r += q.r
+			c.g += q.g
+			c.b += q.b
+	var n := float(img.get_width() * img.get_height())
+	return Color(c.r / n, c.g / n, c.b / n)
+
+
 # --- The Repairs room (TankInterior.repair_bay) ---------------------------------------------------------------
 
 
@@ -168,6 +211,135 @@ func test_the_room_shows_the_rider_the_press_and_the_plates() -> void:
 		"plates stack by patches"
 	)
 	assert_eq(_diff(_room(5.6, 1, true, 0.3, 1), _room(5.6, 1, true, 0.3, 6)), 0, "patches mod 5")
+
+
+## The room's edge is not a TV screen: its border rows keep the hull's art round it; the middle is the room's.
+func test_the_room_dissolves_into_the_hull_at_its_edge() -> void:
+	var rig := TankRig.shared()
+	if rig.base_img == null:
+		pass_test("no base picture headless")
+		return
+	var room := _room(5.6, 1, true)
+	var r := Rect2i(rig.rooms["turret_drive"])
+	var edge := 0.0
+	var inner := 0.0
+	for x in r.size.x:
+		edge += _px_diff(
+			room.get_pixel(x, 0), rig.base_img.get_pixel(r.position.x + x, r.position.y)
+		)
+		inner += _px_diff(
+			room.get_pixel(x, 6), rig.base_img.get_pixel(r.position.x + x, r.position.y + 6)
+		)
+	assert_lt(edge, inner, "the top row stays nearer the base than a row inside")
+
+
+static func _px_diff(a: Color, b: Color) -> float:
+	return absf(a.r - b.r) + absf(a.g - b.g) + absf(a.b - b.b)
+
+
+## The machine takes the lamp: no neutral grey line of a diagram on it.
+func test_the_rooms_machine_takes_the_lamp() -> void:
+	for ramp: Array[Color] in [TankInterior.RP_IRON, TankInterior.RP_HEAD]:
+		for c in ramp:
+			assert_gt(c.r, c.b, "%s leans to the lamp" % c.to_html(false))
+
+
+## Form by the lamp's falloff, as the rooms round it: no black outline on the machine.
+func test_the_room_has_no_black_outline() -> void:
+	var room := _room(5.6, 1, true)
+	var out := 0
+	for y in room.get_height():
+		for x in room.get_width():
+			out += int(room.get_pixel(x, y).is_equal_approx(TankInterior.OUT))
+	var share := float(out) / float(room.get_width() * room.get_height())
+	assert_lt(share, 0.01, "outline colour on %.1f %% of the room" % (share * 100.0))
+
+
+## The flywheel is open: round its web the spokes and the wall alternate, and a spoke moves with the crank.
+func test_the_flywheel_has_open_spokes() -> void:
+	var r := Rect2i(TankRig.shared().rooms["turret_drive"])
+	var c := Vector2(0.0, float(r.size.y - 2)) + TankInterior.RP_FLYWHEEL
+	var room := _room(5.6, 1, true)
+	var cols: Array[Color] = []
+	for k in 48:
+		var q := c + Vector2.from_angle(TAU * k / 48.0) * (TankInterior.RP_FLY_R - 3.0)
+		cols.append(room.get_pixelv(Vector2i(q)))
+	var iron := 0
+	for col in cols:
+		for ramp: Color in TankInterior.RP_IRON:
+			if col.is_equal_approx(ramp):
+				iron += 1
+				break
+	assert_between(iron, 4, 34, "%d of 48 samples on a spoke: neither a disc nor nothing" % iron)
+
+
+## The chain reads against the wall, and the helve has a lit top over a dark underside.
+func test_the_chain_and_the_helve_stand_off_the_wall() -> void:
+	var wall := TankInterior.REPAIR_WALL
+	assert_gt(TankInterior.RP_CHAIN[0].get_luminance(), wall.get_luminance())
+	assert_gt(TankInterior.RP_CHAIN[1].get_luminance(), wall.get_luminance() * 2.0)
+	assert_gt(
+		TankInterior.RP_HAFT[3].get_luminance(), TankInterior.RP_HAFT[0].get_luminance() * 3.0
+	)
+
+
+static func _luma(c: Color) -> float:
+	return (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) * 255.0
+
+
+## The room is a dark room with a lamp pool, as its neighbours on the deck (median L 27-38, p95 3.4-4.2 times that):
+## no bright flat panel, its corners near their median.
+func test_the_room_is_a_lamp_pool_not_a_panel() -> void:
+	var room := _room(5.6, 1, true)
+	var ls: Array[float] = []
+	for y in room.get_height():
+		for x in room.get_width():
+			ls.append(_luma(room.get_pixel(x, y)))
+	ls.sort()
+	var med: float = ls[ls.size() / 2]
+	var p95: float = ls[ls.size() * 95 / 100]
+	assert_lte(med, 44.0, "median L")
+	assert_gte(p95 / med, 3.2, "the pool stands out of the wall")
+	var w := room.get_width()
+	var corner := 0.0
+	for q: Vector2i in [Vector2i(3, 4), Vector2i(w - 4, 4), Vector2i(w - 4, 20)]:
+		for y2 in 3:
+			for x2 in 3:
+				corner += _luma(room.get_pixel(q.x + x2 - 1, q.y + y2 - 1))
+	corner /= 27.0
+	assert_lte(corner, 40.0, "the corners fall to the neighbours' median")
+
+
+## No pale frame: no full-width pipe or post stands lit round the room. No column and no row of the wall holds a long
+## straight run of bright iron.
+func test_no_pale_frame_round_the_machine() -> void:
+	var room := _room(5.6, 1, true)
+	var w := room.get_width()
+	var h := room.get_height()
+	for y in 4:
+		var bright := 0
+		for x in w:
+			bright += int(_luma(room.get_pixel(x, y)) > 70.0)
+		assert_lt(bright, w / 3, "row %d of the ceiling: %d px bright" % [y, bright])
+	for x2 in range(w - 10, w):
+		var run := 0
+		var best := 0
+		for y2 in h:
+			run = run + 1 if _luma(room.get_pixel(x2, y2)) > 60.0 else 0
+			best = maxi(best, run)
+		assert_lt(best, 10, "column %d: a straight lit run of %d" % [x2, best])
+
+
+## What stands under the lamp is not the loudest shape after the hammer: no flat saturated square over the head.
+func test_nothing_flat_and_loud_under_the_lamp() -> void:
+	var it := TankInterior.new(TankRig.shared())
+	var wall := it._repair_wall(Rect2i(TankRig.shared().rooms["turret_drive"]), true)
+	var loud := 0
+	for y in range(3, 14):
+		for x in range(28, 52):
+			var c := wall.get_pixel(x, y)
+			loud += int(c.s > 0.45 and _luma(c) > 110.0)
+	assert_lte(loud, 3, "%d px of loud colour on the wall under the lamp" % loud)
 
 
 func test_the_room_key_repaints_on_press_and_patches() -> void:

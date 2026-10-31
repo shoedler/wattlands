@@ -137,8 +137,9 @@ func _all_whole_numbers(node: Variant) -> bool:
 			if not _all_whole_numbers(x):
 				return false
 	elif node is Dictionary:
+		var floats: Array = TankEvents.FLOAT_FIELDS.get(str(node.get("type", "")), [])
 		for k: Variant in node:
-			if str(k) != "type" and not _all_whole_numbers(node[k]):
+			if str(k) != "type" and not floats.has(str(k)) and not _all_whole_numbers(node[k]):
 				return false
 	elif node is float:
 		return is_equal_approx(float(node), roundf(float(node)))

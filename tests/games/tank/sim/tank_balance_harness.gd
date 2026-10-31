@@ -445,7 +445,7 @@ static func line(r: Dictionary) -> String:
 			)
 		)
 	return (
-		"crew %d seed %d %s c%.2f %s: losses %d breakdowns %d near %d/%d hp %s grade %s %s times %s"
+		"crew %d seed %d %s c%.2f %s: losses %d breakdowns %d near %d/%d hp %s %d grade %s %s times %s"
 		% [
 			r["crew"],
 			r["seed"],
@@ -457,6 +457,7 @@ static func line(r: Dictionary) -> String:
 			r["near_killed"],
 			r["near_escaped"],
 			",".join(hps),
+			r["score"],
 			r["grade"],
 			r["outcome"],
 			",".join(times),
