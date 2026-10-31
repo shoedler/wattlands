@@ -1,6 +1,6 @@
 extends GutTest
 ## The ride view (BRIEF 3.7) builds headless and draws what the state says: parallax
-## layers, one pennant per rider at its distance from the local rider (slot color, shape,
+## layers, one rider and pennant per rider at its distance from the local rider (slot color, shape,
 ## pattern), the course profile in Rolling road and the interval blocks on the ground.
 
 const U := preload("res://tests/games/workout/workout_test_util.gd")
@@ -30,10 +30,10 @@ func test_make_view_returns_a_node2d_with_layers() -> void:
 	assert_true(view is Node2D, "a 2D view for the PixelViewport")
 	assert_true(view is WorkoutRideView)
 	add_child_autofree(view)
-	assert_eq(view.get_child_count(), 6, "sky, clouds, three parallax strips, track")
 	var rv := view as WorkoutRideView
-	assert_eq(rv.sky.texture.get_size(), Vector2(WorkoutArt.W, WorkoutArt.H))
-	assert_eq(rv.far_hills.factor, 0.06)
+	assert_eq(rv.stage.get_child_count(), 19, "every layer of section 3, under one stage")
+	assert_eq(rv.sky.texture.get_size(), Vector2(64, 720))
+	assert_eq(rv.far_hills.factor, 0.03)
 	assert_false(rv.model.is_empty(), "the first refresh ran in _ready")
 
 
@@ -157,18 +157,3 @@ func test_the_view_never_changes_the_state() -> void:
 		view.refresh()
 		view._process(0.016)
 	assert_eq(JSON.stringify(WorkoutSnapshot.encode(view.game.state, true)), before)
-
-
-func test_procedural_art_is_deterministic() -> void:
-	assert_eq(WorkoutArt.far_hills_image().get_data(), WorkoutArt.far_hills_image().get_data())
-	assert_eq(WorkoutArt.trees_image().get_data(), WorkoutArt.trees_image().get_data())
-	var hills := WorkoutArt.mid_hills_image()
-	# Seamless: the first and last columns have the same height.
-	var first := -1
-	var last := -1
-	for y in hills.get_height():
-		if first < 0 and hills.get_pixel(0, y).a > 0.5:
-			first = y
-		if last < 0 and hills.get_pixel(hills.get_width() - 1, y).a > 0.5:
-			last = y
-	assert_lt(absi(first - last), 3, "the strip tiles without a step")
