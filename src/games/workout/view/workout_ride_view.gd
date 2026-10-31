@@ -37,12 +37,6 @@ const FREE_STRIP_PCT := 55.0
 ## Off-screen riders sit this far inside the left and right edges (a rider sprite is 88 wide).
 const EDGE_MARGIN_LEFT := 44.0
 const EDGE_MARGIN_RIGHT := 44.0
-## Client display, other riders: a SnapRenderClock. Its constants under the names this view's tests
-## read.
-const INTERP_DELAY_S := SnapRenderClock.CLIENT_DELAY_S
-const CLOCK_RESYNC_S := SnapRenderClock.RESYNC_S
-const INTERP_DELAY_MAX_S := SnapRenderClock.MAX_DELAY_S
-const CLOCK_CATCHUP_TAU_S := SnapRenderClock.CATCHUP_TAU_S
 ## Client display, local rider: drawn from its own prediction (moved by its predicted speed
 ## each frame) and blended toward the client state's value (the host's latest plus the
 ## prediction since) with this time constant. It never moves backwards; it jumps to the state

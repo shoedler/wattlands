@@ -46,7 +46,7 @@ func test_other_riders_are_drawn_between_two_snapshots() -> void:
 	_game.apply_snapshot(_snap(20, 100.0, 100.5, 120.0))
 	_game.apply_snapshot(_snap(22, 101.0, 100.5, 122.0))
 	_view.advance(FRAME)
-	assert_almost_eq(_view.interp_delay(), V.INTERP_DELAY_S, 1e-9, "10 Hz: 0.1 s")
+	assert_almost_eq(_view.interp_delay(), SnapRenderClock.CLIENT_DELAY_S, 1e-9, "10 Hz: 0.1 s")
 	assert_almost_eq(_view.render_t, 1.0, 1e-9, "the first frame starts 0.1 s behind the newest")
 	assert_almost_eq(_view.shown_distance(1), 100.0, 1e-9, "the older snapshot at its own time")
 	_view.advance(0.05)
@@ -78,22 +78,22 @@ func test_render_time_catches_up_softly_and_resyncs_after_a_gap() -> void:
 	_view.advance(FRAME)
 	assert_almost_eq(_view.render_t, 0.9, 1e-9)
 	# Three snapshots arrive in one burst: render_t (0.9) is 0.15 s behind its new goal
-	# (1.15 - 0.1) and closes the gap with CLOCK_CATCHUP_TAU_S, not at once.
+	# (1.15 - 0.1) and closes the gap with SnapRenderClock.CATCHUP_TAU_S, not at once.
 	for tick in [21, 22, 23]:
 		_game.apply_snapshot(_snap(tick, 100.0 + float(tick - 20), 100.0, 100.0))
 	var before := 0.9 + FRAME
-	var goal := 1.15 - V.INTERP_DELAY_S
-	var expected := before + (goal - before) * (1.0 - exp(-FRAME / V.CLOCK_CATCHUP_TAU_S))
+	var goal := 1.15 - SnapRenderClock.CLIENT_DELAY_S
+	var expected := before + (goal - before) * (1.0 - exp(-FRAME / SnapRenderClock.CATCHUP_TAU_S))
 	_view.advance(FRAME)
 	assert_almost_eq(_view.render_t, expected, 1e-9, "a soft catch-up")
 	for i in 60:
 		_view.advance(FRAME)
 	assert_almost_eq(_view.render_t, 1.15, 1e-9, "caught up, and held at the newest snapshot")
-	# A rejoin brings a snapshot 10 s later: past CLOCK_RESYNC_S render_t jumps, and past
+	# A rejoin brings a snapshot 10 s later: past SnapRenderClock.RESYNC_S render_t jumps, and past
 	# MAX_GAP_S the history starts over, so nothing is drawn between 1.15 s and 11.15 s.
 	_game.apply_snapshot(_snap(223, 300.0, 300.0, 300.0))
 	_view.advance(FRAME)
-	assert_almost_eq(_view.render_t, 223.0 * Wl.SIM_DT - V.INTERP_DELAY_S, 1e-9)
+	assert_almost_eq(_view.render_t, 223.0 * Wl.SIM_DT - SnapRenderClock.CLIENT_DELAY_S, 1e-9)
 	assert_eq(_game.history.entries.size(), 1)
 	assert_almost_eq(_view.shown_distance(1), 300.0, 1e-9, "the only entry")
 
@@ -105,7 +105,9 @@ func test_snapshots_a_second_apart_interpolate_without_a_hold() -> void:
 	# At host time t rider 1 and the local rider are at 100 + 6 t, the bot at 120 + 5 t.
 	_game.apply_snapshot(_snap(20, 106.0, 106.0, 125.0))
 	_view.advance(FRAME)
-	assert_almost_eq(_view.interp_delay(), V.INTERP_DELAY_S, 1e-9, "one snapshot: no spacing yet")
+	assert_almost_eq(
+		_view.interp_delay(), SnapRenderClock.CLIENT_DELAY_S, 1e-9, "one snapshot: no spacing yet"
+	)
 	assert_almost_eq(_view.render_t, 0.9, 1e-9)
 	for i in 59:
 		_view.advance(FRAME)
@@ -146,15 +148,17 @@ func test_snapshots_a_second_apart_interpolate_without_a_hold() -> void:
 	assert_almost_eq(_view.shown_distance(-1), 160.0, 1e-9, "120 + 5 x 8 s")
 
 
-## The delay is the history's mean spacing, never under INTERP_DELAY_S (a burst) and never over
-## INTERP_DELAY_MAX_S; a render_t ahead of its goal runs on and never goes back.
+## The delay is the history's mean spacing, never under SnapRenderClock.CLIENT_DELAY_S (a burst) and never over
+## SnapRenderClock.MAX_DELAY_S; a render_t ahead of its goal runs on and never goes back.
 func test_the_delay_follows_the_snapshot_spacing_within_bounds() -> void:
-	assert_almost_eq(V.INTERP_DELAY_MAX_S, 1.4, 1e-12, "CLOCK_RESYNC_S - 0.1")
-	assert_almost_eq(_view.interp_delay(), V.INTERP_DELAY_S, 1e-12, "no snapshot yet")
+	assert_almost_eq(SnapRenderClock.MAX_DELAY_S, 1.4, 1e-12, "SnapRenderClock.RESYNC_S - 0.1")
+	assert_almost_eq(_view.interp_delay(), SnapRenderClock.CLIENT_DELAY_S, 1e-12, "no snapshot yet")
 	for tick in [20, 21, 22]:
 		_game.apply_snapshot(_snap(tick, 100.0, 100.0, 100.0))
 	assert_almost_eq(_game.history.mean_spacing(), 0.05, 1e-9, "a burst 0.05 s apart")
-	assert_almost_eq(_view.interp_delay(), V.INTERP_DELAY_S, 1e-9, "never under 0.1 s")
+	assert_almost_eq(
+		_view.interp_delay(), SnapRenderClock.CLIENT_DELAY_S, 1e-9, "never under 0.1 s"
+	)
 	_game.apply_snapshot(_snap(42, 100.0, 100.0, 100.0))
 	assert_almost_eq(_view.interp_delay(), 1.1 / 3.0, 1e-9, "the mean of 0.05, 0.05 and 1.0 s")
 	# 2.9 s later the history starts over; three snapshots 1.45 s apart.
@@ -162,7 +166,7 @@ func test_the_delay_follows_the_snapshot_spacing_within_bounds() -> void:
 		_game.apply_snapshot(_snap(tick, 100.0, 100.0, 100.0))
 	assert_eq(_game.history.entries.size(), 3)
 	assert_almost_eq(_game.history.mean_spacing(), 1.45, 1e-9)
-	assert_almost_eq(_view.interp_delay(), 1.4, 1e-9, "never over INTERP_DELAY_MAX_S")
+	assert_almost_eq(_view.interp_delay(), 1.4, 1e-9, "never over SnapRenderClock.MAX_DELAY_S")
 	_view.advance(FRAME)
 	assert_almost_eq(_view.render_t, 7.9 - 1.4, 1e-9)
 	for i in 120:
