@@ -8,7 +8,7 @@ Written by `node src/games/siege/art/bake.mjs` from the same scene as the approv
 
 | File | What it is |
 | --- | --- |
-| `world.png` | The static world at 960 x 540 art pixels: everything that never moves or takes a rider's hue, with sun shadows, AO, outlines, glow and the grade. No tilt-shift, vignette or haze (the view's screen shader adds those). |
+| `world.png` | The static world at 1920 x 1084 art pixels, the 960 x 540 design frame at (480, 272) in it and more terrain round that for a flex canvas: everything that never moves or takes a rider's hue, with sun shadows, AO, outlines, glow and the grade. No tilt-shift, vignette or haze (the view's screen shader adds those). |
 | `world_depth.png` | Per pixel of `world.png`: depth x + y + z in 16 bits (R high byte, G low byte) as `(depth - offset) * scale`, 0 for the sky; B is the sun (255 lit, 0 in shadow). |
 | `atlas_<n>.png` | The dynamic parts' frames (wheels, routes, shafts, stations, gate, tar, pads, enemies, effects, projectile pixels). Rider-hue pixels are a magenta key ramp the view recolours to the slot's ramp or the part's idle material; a dark halo pixel is black at `halo_alpha`. |
 | `atlas_<n>_depth.png` | Each frame pixel's depth relative to the frame's anchor, 16 bits in R and G (`rel * scale + zero`), same layout as its atlas. |
