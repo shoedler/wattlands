@@ -56,8 +56,11 @@ export function previewBank(bankPath, { root, rpms = null, mp3 = true }) {
   const bank = new BankAudio(doc, path.dirname(bankPath));
   const game = doc.game;
   const written = [];
-  const sim = simulate(bank, previewScenario(doc, { rpms }));
-  const mix = mixdown(bank, sim);
+  // The UI the game plays over this moment (preview.hud) needs the _shared bank.
+  const sharedPath = path.join(root, 'assets', '_shared', 'audio', 'audio.json');
+  const shared = fs.existsSync(sharedPath) ? new BankAudio(loadBank(sharedPath), path.dirname(sharedPath)) : null;
+  const sim = simulate(bank, { ...previewScenario(doc, { rpms }), shared });
+  const mix = mixdown(bank, sim, { shared });
   const mixFile = path.join(outDir, `${game}.wav`);
   writeWav(mixFile, mix.master);
   written.push(mixFile);

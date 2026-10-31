@@ -12,6 +12,8 @@ import { decodeWav, deinterleave } from './wav.mjs';
 
 export const MIX_RATE = 44100;
 export const FRAME_DT = 1 / 60;
+// The kit's horizon at this frame rate (game_audio_kit.gd): a stroke can be planned this far ahead of its frame.
+export const STROKE_HORIZON_S = Math.min(0.05, Math.max(0.012, 1.5 * FRAME_DT));
 // The kit's limiter ceiling is -1 dB. On sample peaks this one stays 0.25 dB under that, which keeps the true peak of a 9 kHz band-limited mix at or under -1 dBTP.
 const LIMITER_CEILING = dbToGain(-1.25);
 const LIMITER_LOOKAHEAD = 66;
@@ -24,6 +26,9 @@ export const SAFETY_DUCK = [
   { bus: 'Ambience', db: -14, attack_s: 0.02, release_s: 2 },
   { bus: 'Sfx', db: -20, attack_s: 0.02, release_s: 2 },
 ];
+// WlSfx's trim of the UI voices under a safety prompt (sfx.gd). A test pins the two together.
+export const PROMPT_UI_DUCK = { bus: 'UI', db: -10, attack_s: 0.02, release_s: 2 };
+export const PROMPT_UI_SPARED = new Set(['countdown', 'click']);
 export const STEM_BUSES = ['Machines', 'Ambience', 'Sfx', 'UI', 'Master'];
 
 /** A bank's audio: each file read from disk when present, else rendered in memory. Cached. */
@@ -77,7 +82,9 @@ export function segmentsLength(segments) {
  * Run a scenario through the kit's logic: no audio yet. A scenario:
  * {segments, machines: [{id, machine, lead, rpm_scale, rpm_by, params, strokes, loops}], bed,
  *  bed_params, cues: [{t, cue, vars, lead}], loops: [{id, t0, t1, params, lead}], prompts: [{t, name}],
- *  seed, duration}
+ *  hud: [{t, sound}], shared, seed, duration}
+ * A loops id keeps one track across its entries, as a game's set_loop does: only its params change.
+ * hud: the _shared sounds HudLayer plays on UI at that moment; they need scenario.shared, and without it stay out.
  * Returns {voices, tracks, ducks, thinned, voicePeak, loopPeak, events, duration}.
  */
 export function simulate(bank, scenario) {
@@ -119,16 +126,23 @@ export function simulate(bank, scenario) {
   const bedSpec = scenario.bed ? doc.beds?.[scenario.bed] : null;
   const bed = bedSpec ? new AmbienceBed(bedSpec, scenario.seed ?? 1, variantsOf) : null;
   const bedTracks = bedSpec ? (bedSpec.layers ?? []).map((l) => addTrack(l.sound, 'Ambience', true, `bed:${l.sound}`)) : [];
-  const namedLoops = (scenario.loops ?? []).map((nl) => {
+  const namedById = new Map();
+  for (const nl of scenario.loops ?? []) {
     const def = doc.loops?.[nl.id];
     if (!def) throw new Error(`no loops entry "${nl.id}"`);
-    const layers = def.layers ?? [];
-    return { nl, loops: new LayeredLoop(layers), tracks: layers.map((l) => addTrack(l.sound, def.bus ?? 'Sfx', nl.lead !== false, `loop:${nl.id}:${l.sound}`)) };
-  });
+    const lead = nl.lead !== false;
+    const key = `${nl.id}:${lead}`;
+    if (!namedById.has(key)) {
+      const layers = def.layers ?? [];
+      namedById.set(key, { lead, entries: [], loops: new LayeredLoop(layers), tracks: layers.map((l) => addTrack(l.sound, def.bus ?? 'Sfx', lead, `loop:${nl.id}:${l.sound}`)) });
+    }
+    namedById.get(key).entries.push(nl);
+  }
+  const namedLoops = [...namedById.values()];
   const cueQueue = [...(scenario.cues ?? [])].sort((a, b) => a.t - b.t);
   const promptQueue = [...(scenario.prompts ?? [])].sort((a, b) => a.t - b.t);
+  const hudQueue = scenario.shared ? [...(scenario.hud ?? [])].sort((a, b) => a.t - b.t) : [];
   const cueRr = new Map();
-  const horizon = Math.min(0.05, Math.max(0.012, 1.5 * FRAME_DT));
   const playCue = (c, t) => {
     const def = doc.cues?.[c.cue];
     if (!def) throw new Error(`no cue "${c.cue}"`);
@@ -156,7 +170,7 @@ export function simulate(bank, scenario) {
       const rpm = rig.m.rpm_by ? curveEval(rig.m.rpm_by, params) : seg.rpm * (rig.m.rpm_scale ?? 1);
       params.rpm = rpm;
       rig.clock.advance(rpm, FRAME_DT);
-      for (const ev of rig.voice.plan(rig.clock.revs, rpm, horizon, params, rig.m.lead)) planned.push({ ev, rig, at: t + ev.at_s });
+      for (const ev of rig.voice.plan(rig.clock.revs, rpm, STROKE_HORIZON_S, params, rig.m.lead)) planned.push({ ev, rig, at: t + ev.at_s });
       const trim = rig.m.lead ? 0 : otherDb + spectatorDb;
       if (rpm <= STOP_RPM) rig.loops.close(FRAME_DT);
       else rig.loops.update(params, trim, rig.m.lead, FRAME_DT);
@@ -186,10 +200,16 @@ export function simulate(bank, scenario) {
       const p = promptQueue.shift();
       voices.push({ shared: true, sound: p.name, variant: 0, t, db: PROMPT_VOICE_DB, pitch: 1, bus: 'Master', priority: 10, lead: true });
       for (const d of SAFETY_DUCK) ducks.push({ ...d, t });
+      ducks.push({ ...PROMPT_UI_DUCK, t });
+    }
+    while (hudQueue.length > 0 && hudQueue[0].t <= t) {
+      const h = hudQueue.shift();
+      voices.push({ shared: true, sound: h.sound, variant: 0, t, db: PROMPT_VOICE_DB, pitch: 1, bus: 'UI', priority: 6, lead: true });
+      events.push({ t, sound: h.sound, variant: 0, db: PROMPT_VOICE_DB, kind: 'hud', thinned: false });
     }
     for (const nl of namedLoops) {
-      const lead = nl.nl.lead !== false;
-      if (t >= nl.nl.t0 && t < nl.nl.t1) nl.loops.update({ ...nl.nl.params }, lead ? 0 : (mix.other_db ?? -10), lead, FRAME_DT);
+      const now = nl.entries.find((e) => t >= e.t0 && t < e.t1);
+      if (now) nl.loops.update({ ...now.params }, nl.lead ? 0 : (mix.other_db ?? -10), nl.lead, FRAME_DT);
       else nl.loops.close(FRAME_DT);
       for (let i = 0; i < nl.loops.count; i++) {
         nl.tracks[i].pitch[f + 1] = nl.loops.pitch[i];
@@ -392,16 +412,20 @@ export function limit(stem, ceiling = LIMITER_CEILING) {
 export function mixdown(bank, sim, { shared = null, tail = 0.5 } = {}) {
   const n = Math.ceil((sim.duration + tail) * MIX_RATE);
   const stems = Object.fromEntries(STEM_BUSES.map((b) => [b, newStem(n)]));
-  for (const v of sim.voices) {
-    if (v.t >= sim.duration + tail) continue;
+  const addVoice = (v) => {
+    if (v.t >= sim.duration + tail) return;
     const file = (v.shared ? shared : bank).file(v.sound, v.variant);
     mixVoice(file, v, stems[v.bus] ?? stems.Sfx, n);
-  }
+  };
+  // A prompt's trim of the UI is per voice in the game: the voices it spares join the stem after the duck.
+  const spared = (v) => v.bus === 'UI' && PROMPT_UI_SPARED.has(v.sound);
+  for (const v of sim.voices) if (!spared(v)) addVoice(v);
   for (const t of sim.tracks) mixTrack(bank.file(t.sound, 0), t, stems[t.bus] ?? stems.Sfx, n);
   for (const bus of STEM_BUSES) {
     const ds = sim.ducks.filter((d) => d.bus === bus);
     applyDucks(stems[bus], ds);
   }
+  for (const v of sim.voices) if (spared(v)) addVoice(v);
   const sum = newStem(n);
   for (const bus of STEM_BUSES) {
     for (let i = 0; i < n; i++) {
