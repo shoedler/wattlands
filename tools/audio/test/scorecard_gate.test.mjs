@@ -8,7 +8,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { findBanks, loadBank } from '../lib/bank.mjs';
 import { BankAudio } from '../lib/offline_mix.mjs';
-import { detectOnsets, scoreBank, scoreBankFile } from '../lib/score.mjs';
+import { detectOnsets, runtimePitches, scoreBank, scoreBankFile } from '../lib/score.mjs';
 import { AUDIO_DIR, FIXTURE_BANK, REPO, SHARED_BANK, readJson, tempDir } from './helpers.mjs';
 
 const CLI = path.join(AUDIO_DIR, 'scorecard.mjs');
@@ -32,7 +32,7 @@ test('the fixture passes every row, and every row is there', () => {
   assert.equal(c.pass, true);
   const ids = c.rows.map((r) => r.id);
   for (let i = 1; i <= 10; i++) assert.ok(ids.includes(`D${i}`), `D${i}`);
-  for (let i = 1; i <= 16; i++) assert.ok(ids.includes(`A${i}`), `A${i}`);
+  for (let i = 1; i <= 17; i++) assert.ok(ids.includes(`A${i}`), `A${i}`);
 });
 
 test('every bank on disk with a preview block passes', () => {
@@ -258,7 +258,7 @@ test('the CLI writes the card and its exit code is the verdict', (t) => {
 
 test('P1-P5 are n/a for a bank with no projectiles, and count flights when it has them', () => {
   const plain = card(structuredClone(fixture));
-  for (const id of ['P1', 'P2', 'P3', 'P4', 'P5']) assert.equal(row(plain, id).value, 'n/a', id);
+  for (const id of ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7']) assert.equal(row(plain, id).value, 'n/a', id);
   const doc = structuredClone(fixture);
   doc.sounds.air = { dur: 1, rate: 22050, ch: 1, seed: 9, loop: true, compress: 'pcm', layers: [{ src: 'noise', color: 'white', gain: 1, fx: [{ bp: { f: 2500, q: 0.7 } }] }] };
   const flying = { sound: 'air', db: 3, flight: { dur_var: 'f' } };
@@ -279,4 +279,50 @@ test('P1-P5 are n/a for a bank with no projectiles, and count flights when it ha
   assert.ok(row(c2, 'P3').pass, 'a loud flight over the fixture stands out');
   doc.cues.flies.hits[0].db = -40;
   assert.equal(row(card(doc), 'P3').pass, false, 'and a buried one does not');
+});
+
+test('A17 reads a file at the pitch it plays: reported for every bank, held where the bank asks', () => {
+  const doc = structuredClone(fixture);
+  doc.sounds.hisser = { dur: 0.5, rate: 22050, ch: 1, seed: 7, layers: [{ src: 'noise', color: 'white', gain: 1 }] };
+  doc.cues.hisser = { hits: [{ sound: 'hisser', db: -30, pitch: 1.5 }] };
+  doc.preview.events = [...doc.preview.events, { t: 3, cue: 'hisser' }];
+  assert.ok(row(card(doc), 'A17').value > -32, 'white noise up to 9 kHz reaches 13.5 kHz');
+  assert.equal(row(card(doc), 'A17').pass, true, 'only reported');
+  doc.preview.checks = { ...doc.preview.checks, a17: true };
+  assert.equal(row(card(doc), 'A17').pass, false, 'held');
+  assert.equal(row(card(doc), 'A9').pass, true, 'A9 reads the file as it is');
+});
+
+test('runtimePitches: every place a bank plays a sound', () => {
+  const pitches = runtimePitches({
+    machines: { m: { events: [{ sound: 'a', pitch_table: [0, 0.1] }], loops: [{ sound: 'b', pitch_by: [{ param: 'rpm', points: [[0, 1], [10, 1.8]] }] }] } },
+    beds: { x: { spots: [{ sound: 'c', pitch: [0.9, 1.3] }] } },
+    cues: { y: { hits: [{ sound: 'd', pitch: 1.2, pitch_var: 'p', flight: { pitch: [[0, 1.1], [1, 0.8]] } }] } },
+    preview: { events: [{ cue: 'y', vars: { p: 1.05 } }] },
+  });
+  assert.ok(Math.abs(pitches.get('a') - 1.1) < 1e-9);
+  assert.equal(pitches.get('b'), 1.8);
+  assert.equal(pitches.get('c'), 1.3);
+  assert.ok(Math.abs(pitches.get('d') - 1.2 * 1.1 * 1.05) < 1e-9);
+});
+
+test('P4 hears the flights too: an impact under a loud Sfx bus does not pass', () => {
+  const doc = structuredClone(fixture);
+  doc.sounds.air = { dur: 1, rate: 22050, ch: 1, seed: 9, loop: true, compress: 'pcm', layers: [{ src: 'noise', color: 'white', gain: 1, fx: [{ bp: { f: 2000, q: 0.7 } }] }] };
+  doc.sounds.tap = { dur: 0.1, rate: 22050, ch: 1, seed: 11, layers: [{ src: 'noise', color: 'white', env: { a: 0.001, d: 0.09 }, gain: 1, fx: [{ bp: { f: 2000, q: 0.7 } }] }] };
+  doc.cues.flies = { hits: [{ sound: 'air', db: 6, flight: { dur_var: 'f' } }] };
+  doc.cues.tap = { hits: [{ sound: 'tap', db: -24 }] };
+  doc.preview.events = [...doc.preview.events, { t: 3, cue: 'flies', vars: { f: 2 } }, { t: 4, cue: 'tap' }];
+  doc.preview.checks = { ...doc.preview.checks, projectiles: { shots: ['flies'], surfaces: { dirt: ['tap'] } } };
+  assert.equal(row(card(doc), 'P4').pass, false);
+  doc.preview.checks.projectiles.surfaces.dirt.push('never_played');
+  assert.match(String(row(card(doc), 'P4').value), /missing never_played/);
+});
+
+test('P6 holds the 2-8 kHz of the master where a bank asks', () => {
+  const doc = structuredClone(fixture);
+  doc.preview.checks = { ...doc.preview.checks, projectiles: { shots: [], surfaces: {} }, ear_band: { limit: -60 } };
+  assert.equal(row(card(doc), 'P6').pass, false);
+  doc.preview.checks.ear_band.limit = 0;
+  assert.equal(row(card(doc), 'P6').pass, true);
 });

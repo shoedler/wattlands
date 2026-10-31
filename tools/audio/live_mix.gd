@@ -23,6 +23,7 @@ var _game: Node = null
 var _out: String = ""
 var _run_s: float = 240.0
 var _skip_s: float = 0.0
+var _station: int = -1
 var _accum: float = 0.0
 var _t: float = 0.0
 var _frames: int = 0
@@ -57,11 +58,11 @@ func _process(delta: float) -> bool:
 	_frames += 1
 	if _frames == 1 and _skip_s > 0.0:
 		for _i in roundi(_skip_s / SIM_DT):
-			_runner.step()
+			_step()
 	_accum += delta
 	while _accum >= SIM_DT:
 		_accum -= SIM_DT
-		_runner.step()
+		_step()
 	if _kit == null:
 		_kit = _find_kit(root)
 	if not _recording:
@@ -74,18 +75,31 @@ func _process(delta: float) -> bool:
 			_add_captures()
 		return false
 	_t += delta
-	_drain_captures()
+	# The log first: what started this frame starts after what is already captured.
 	_drain_played()
+	_drain_captures()
 	_count_voices()
 	if _t >= _run_s or _runner.host.is_finished():
 		_finish()
 	return false
 
 
+## --station keeps the local rider's wheel on one station (Siege only, the recording's own business): a game's level
+## depends on whose shots are the rider's.
+func _step() -> void:
+	if _station >= 0 and _game != null and _game.get("state") != null:
+		var me: Variant = _game.state.rider(_runner.host.ctx.local_peer)
+		if me != null:
+			me.target = _station
+			me.route_fallback = false
+	_runner.step()
+
+
 func _begin() -> void:
 	_out = CmdLine.get_str("out", "build/audio_live/session")
 	_run_s = CmdLine.get_float("run-s", 240.0)
 	_skip_s = CmdLine.get_float("skip-s", 0.0)
+	_station = CmdLine.get_int("station", -1)
 	var args := PackedStringArray(
 		[
 			"--game=" + CmdLine.get_str("game", "siege"),
@@ -122,7 +136,7 @@ func _on_cue(kind: String, data: Dictionary) -> void:
 	if not _recording:
 		return
 	_cues[kind] = int(_cues.get(kind, 0)) + 1
-	_cue_log.append([snappedf(_t, 0.001), kind, int(data.get("kind", -1)), int(data.get("n", 0))])
+	_cue_log.append([_captured_s(), kind, int(data.get("kind", -1)), int(data.get("n", 0))])
 	if kind == "shot":
 		var key := str(int(data.get("kind", -1)))
 		var s: Dictionary = _shots.get(key, {"events": 0, "projectiles": 0})
@@ -175,8 +189,15 @@ func _drain_played() -> void:
 		var e: Dictionary = _played.get(id, {"n": 0, "db": _kit.played_db[i]})
 		e["n"] = int(e["n"]) + 1
 		_played[id] = e
-		_played_log.append([snappedf(_t, 0.001), id, snappedf(_kit.played_db[i], 0.1)])
+		_played_log.append([_captured_s(), id, snappedf(_kit.played_db[i], 0.1)])
 	_kit.clear_played()
+
+
+## Where the recording has got to. The log uses this and not the frame clock: a capture starts a mix step or two after
+## its frame, and a log 50 ms off puts every onset in the wrong frame of a level plot.
+func _captured_s() -> float:
+	var bytes: PackedByteArray = _samples.get("Master", PackedByteArray())
+	return snappedf(float(bytes.size()) / 4.0 / AudioServer.get_mix_rate(), 0.001)
 
 
 func _count_voices() -> void:
