@@ -35,6 +35,7 @@ func test_session_flags() -> void:
 	assert_eq(o["error"], "")
 	assert_eq(o["app_role"], "host")
 	assert_eq(o["app_overlay"], "panic")
+	assert_eq(_parse(["--app-screen=session", "--app-overlay=discard"])["error"], "")
 	assert_eq(o["at"], [20.0, 100.0])
 	assert_eq(o["content"], "e2e")
 	assert_true(

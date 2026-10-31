@@ -175,6 +175,8 @@ var _pause_reason: String = ""
 ## HOST: every human rider was ride-paused at the last check (_update_shared_pause).
 var _all_paused: bool = false
 var _progress_done: Dictionary = {}
+## discard_own_ride(): this machine's rider keeps nothing from this session.
+var _own_ride_discarded: bool = false
 var _fit_paths: Dictionary = {}
 var _view_root: Node = null
 var _pixel_viewport: PixelViewport = null
@@ -477,6 +479,36 @@ func end_session(reason: String) -> void:
 
 
 # --- additive public API -----------------------------------------------------------------
+
+
+## This machine's rider keeps nothing from this session, whatever end follows: the recorder goes
+## (it holds the ride in memory and writes only when saved, so no file exists yet, and a rider
+## without one saves nothing on any later path, an app quit included), and _apply_results neither
+## applies nor saves progress nor announces the results here. The session and the trainer are not
+## touched: the caller ends the session as usual, and the host still computes and sends the other
+## riders' results. False once the session has ended or has results (the ride may be saved).
+func discard_own_ride() -> bool:
+	if state == "ended" or results != null:
+		push_warning("GameHost: the session is over; its ride can't be discarded")
+		return false
+	_own_ride_discarded = true
+	var rider: LocalRider = _local_riders.get(_local_peer)
+	if rider != null:
+		rider.recorder = null
+	return true
+
+
+## A client whose host left: apply the results still waiting in the inbox, if any (a leave right
+## after the results can arrive in the same poll, and the inbox only drains in step()).
+func apply_pending_results() -> void:
+	if role != Wl.CLIENT or results != null:
+		return
+	for i in _inbox.size():
+		var data: Dictionary = (_inbox[i] as Array)[1]
+		if str(data.get("type", "")) == "results":
+			_inbox.remove_at(i)
+			_on_results(data)
+			return
 
 
 ## Queue an input action for the next step (on-screen buttons and tests; the InputRouter's
@@ -1265,7 +1297,7 @@ func complete_rows(r: GameResults) -> void:
 
 
 func _apply_results(r: GameResults) -> void:
-	if _progress_done.has(r.session_id):
+	if _own_ride_discarded or _progress_done.has(r.session_id):
 		return
 	_progress_done[r.session_id] = true
 	var u: Variant = []

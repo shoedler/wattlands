@@ -1,6 +1,6 @@
 class_name TankHud
 extends RefCounted
-## hud_spec() for Diesel Domestiques (brief 3.6; GAME_SDK 10): the game's own HUD, the way Turbo
+## hud_spec() for Torque Company (brief 3.6; GAME_SDK 10): the game's own HUD, the way Turbo
 ## Reel does it. No kit widgets: only Tank Controls (TankHudCtl) at Rect2i placements in art px of
 ## the 960 x 540 base, which the HUD anchors on the flexible canvas (pixel_flex, min 852 x 480:
 ## rects in the left / top half stay, rects in the right / bottom half follow that edge, rects

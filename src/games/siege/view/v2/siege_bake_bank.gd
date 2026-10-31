@@ -12,6 +12,8 @@ extends RefCounted
 
 const DIR := "res://assets/siege/bake/"
 const SHADER_PATH := "res://src/games/siege/view/v2/siege_depth_sprite.gdshader"
+## The design frame in art pixels (game.json pixel_base). Frames, anchors and to_art() all measure
+## from its top-left; the world image reaches beyond it (world_size, world_origin).
 const ART_SIZE := Vector2i(960, 540)
 ## Rows of the ramp table: the four slots' powered ramps, then the idle materials.
 const SLOT_ROWS := 4
@@ -26,6 +28,12 @@ var bake_version: int = 0
 var world_texture: Texture2D = null
 var world_depth_texture: Texture2D = null
 var world_depth_image: Image = null
+## The world image's size, and where the design frame's top-left lies in it: the bake's extra
+## terrain round the frame, for a flex canvas (bake.mjs WORLD_MARGIN).
+var world_size: Vector2i = ART_SIZE
+var world_origin: Vector2i = Vector2i.ZERO
+## Where the design frame's top-left lies on the canvas (SiegeViewMath.view_offset).
+var view_offset: Vector2i = Vector2i.ZERO
 var atlases: Array[Texture2D] = []
 var depth_atlases: Array[Texture2D] = []
 var ramp_texture: ImageTexture = null
@@ -89,6 +97,10 @@ func _load(dir: String) -> void:
 	key_count = int(key.get("count", key_count))
 	halo_alpha = float(manifest.get("halo_alpha", halo_alpha))
 	var world: Dictionary = manifest.get("world", {})
+	var ws: Array = world.get("size", [ART_SIZE.x, ART_SIZE.y])
+	var wo: Array = world.get("origin", [0, 0])
+	world_size = Vector2i(int(ws[0]), int(ws[1]))
+	world_origin = Vector2i(int(wo[0]), int(wo[1]))
 	world_texture = _tex(dir.path_join(str(world.get("color", "world.png"))))
 	var depth_path := dir.path_join(str(world.get("depth", "world_depth.png")))
 	world_depth_texture = _tex(depth_path)
@@ -237,8 +249,17 @@ func material(i: int) -> ShaderMaterial:
 		m.set_shader_parameter("sprite_scale", sprite_scale)
 		m.set_shader_parameter("key_g0", float(key_g0))
 		m.set_shader_parameter("key_step", float(key_step))
+		m.set_shader_parameter("art_size", Vector2(world_size))
+		m.set_shader_parameter("art_origin", Vector2(view_offset - world_origin))
 		_materials.append(m)
 	return _materials[i] if i >= 0 and i < _materials.size() else null
+
+
+## Puts the design frame's top-left at `offset` on the canvas: the depth test follows.
+func set_view_offset(offset: Vector2i) -> void:
+	view_offset = offset
+	for m in _materials:
+		m.set_shader_parameter("art_origin", Vector2(view_offset - world_origin))
 
 
 # --- Art space and encodings ---------------------------------------------------------------------
@@ -290,28 +311,18 @@ func pack_modulate(anchor_depth: float, row: int, shade: float, alpha: float) ->
 
 ## The baked world's depth at an art pixel (-1e9 for the sky or off the picture).
 func world_depth_at(px: Vector2i) -> float:
-	if (
-		world_depth_image == null
-		or px.x < 0
-		or px.y < 0
-		or px.x >= ART_SIZE.x
-		or px.y >= ART_SIZE.y
-	):
+	var q := px + world_origin
+	if world_depth_image == null or not Rect2i(Vector2i.ZERO, world_size).has_point(q):
 		return -1.0e9
-	return decode_world_depth(rg16(world_depth_image.get_pixelv(px)))
+	return decode_world_depth(rg16(world_depth_image.get_pixelv(q)))
 
 
 ## 1 where the world surface at an art pixel is in the sun, 0 in shadow.
 func sun_at(px: Vector2i) -> float:
-	if (
-		world_depth_image == null
-		or px.x < 0
-		or px.y < 0
-		or px.x >= ART_SIZE.x
-		or px.y >= ART_SIZE.y
-	):
+	var q := px + world_origin
+	if world_depth_image == null or not Rect2i(Vector2i.ZERO, world_size).has_point(q):
 		return 1.0
-	return 1.0 if world_depth_image.get_pixelv(px).b8 > 127 else 0.0
+	return 1.0 if world_depth_image.get_pixelv(q).b8 > 127 else 0.0
 
 
 ## The key index of a colour, or -1 when it is not a key colour.

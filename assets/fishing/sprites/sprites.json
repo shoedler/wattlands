@@ -297,17 +297,6 @@
 				3
 			]
 		},
-		"picker_card": {
-			"anchor": [
-				0,
-				0
-			],
-			"frames": 1,
-			"size": [
-				160,
-				90
-			]
-		},
 		"scenery_pier": {
 			"anchor": [
 				0,

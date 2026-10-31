@@ -15,6 +15,20 @@ const WALKER_HYST_W := 20.0
 const STRIDE_M := 1.4
 ## A rescued rider's walkers stumble once every this many seconds (brief 2.4: rescue is a stagger).
 const STUMBLE_S := 0.9
+## The part of the design frame every flex canvas shows whole (game.json pixel_flex.min is its size):
+## the road's west bend and its lowest loop, the fort, the wheels, the aqueduct and the hamlet.
+const MUST_SHOW := Rect2i(29, 36, 852, 480)
+
+
+## Where the design frame's top-left lies on an art canvas of `art`: centred (as the HUD's rects
+## across the middle are), then moved no further than keeps MUST_SHOW on the canvas.
+static func view_offset(art: Vector2i) -> Vector2i:
+	var base := SiegeBakeBank.ART_SIZE
+	var out := PixelViewport.anchor_rect(Rect2i(Vector2i.ZERO, base), base, art).position
+	for axis in 2:
+		var hi := art[axis] - MUST_SHOW.end[axis]
+		out[axis] = maxi(mini(out[axis], hi), -MUST_SHOW.position[axis])
+	return out
 
 
 static func rim_speed(p_eff_w: float) -> float:

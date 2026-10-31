@@ -1,0 +1,1 @@
+- Game picker: Castellum Rotae now has a picture instead of a title card: its fortress with the coloured treadwheels. Torque Company's card is brighter and closer, so the lit rooms and tracks read at night. Turbo Reel's shows a boat, the line and a giant grouper in the current art.

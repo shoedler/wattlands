@@ -32,7 +32,7 @@
 	"e2e_content": "e2e_2min",
 	"zero_input_content": "roam_30",
 	"first_run_priority": 10,
-	"picker_image": "res://assets/fishing/sprites/picker_card.png",
+	"picker_image": "res://assets/fishing/cards/picker_card.png",
 	"player_options": [
 		{
 			"id": "reel_pct",

@@ -5,7 +5,7 @@ extends SceneTree
 ##   tools/screenshot --scene=res://addons/wattlands/world2d/demo.tscn [--frames=<n>]
 ##   tools/screenshot --app-screen=title|picker|lobby [--app-game=<id>] [--frames=<n>]
 ##   tools/screenshot --app-screen=session [--app-role=client|host|solo] [--app-game=<id>]
-##                    [--content=<id>] [--at=<s>[,<s>...]] [--app-overlay=menu|panic|none]
+##                    [--content=<id>] [--at=<s>[,<s>...]] [--app-overlay=menu|panic|discard|none]
 ##   tools/screenshot --app-screen=results [--app-riders=<1..8>] [--frames=<n>]
 ##
 ## (tools/screenshot runs tools/godot.sh --path . --resolution 1920x1080 -s tools/qa/screenshot_main.gd
@@ -231,6 +231,8 @@ func _run_session(out_dir: String, main: Node, app: WlApp) -> void:
 			screen.panic()
 		else:
 			screen.open_menu()
+			if overlay == "discard":
+				screen.open_discard_confirm()
 		for i in 3:
 			await process_frame
 		print(run.describe(screen))

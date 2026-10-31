@@ -2,7 +2,7 @@
 
 Co-op tower defense for 1-4 riders at a Roman wheel fort (brief: `docs/games/siege.md`). Each rider turns one great treadwheel. A junction couples the wheel to one of five stations: the gold mine, the tree ballista, the great onager, the arrow organ or the tar works. Attackers march down one long road to the only gate. Waves are ERG intervals, breaks are recovery and shopping, and Overdrive is a 30 s SIM sprint block. Bots fill empty wheels, and every phase, the shop and the results work with zero input.
 
-Presentation `2d`: a fixed isometric pixel-art view at 960 x 540 art pixels (x2 at 1080p, 3.5 px per metre), drawn by Siege's own CPU rasterizer and baked to PNGs. Version 0.3.1 (v2 with its own Roman HUD). v0.1.0 had a 3D fort, three roads, eight pads, a generator and denarii; v2 replaces all of that. Decisions: `docs/decisions/siege.md`. Real-trainer checklist: `HARDWARE_TEST.md`.
+Presentation `2d`: a fixed isometric pixel-art view designed at 960 x 540 art pixels (x2 at 1080p, 3.5 px per metre) whose canvas flexes with the window (`pixel_flex`, see "The flex canvas"), drawn by Siege's own CPU rasterizer and baked to PNGs. Version 0.3.1 (v2 with its own Roman HUD). v0.1.0 had a 3D fort, three roads, eight pads, a generator and denarii; v2 replaces all of that. Decisions: `docs/decisions/siege.md`. Real-trainer checklist: `HARDWARE_TEST.md`.
 
 ## How to play
 
@@ -172,7 +172,7 @@ All in `docs/decisions/siege.md`:
 
 | Path | What |
 | --- | --- |
-| `game.json` | The manifest (brief 2.2): five contents, the `wave_offset` and `tilt_shift` player options, `first_run_priority` -1, `pixel_base` 960 x 540 |
+| `game.json` | The manifest (brief 2.2): five contents, the `wave_offset` and `tilt_shift` player options, `first_run_priority` -1, `pixel_base` 960 x 540, `pixel_flex` min 852 x 480 |
 | `siege_game.gd` | `SiegeGame` (GameModule): intents, the host loop, the Overdrive directive round trip, events, cues and toasts, results, `apply_progress` |
 | `contracts/` | `STATE_V2.md` (what the view and HUD read), `SiegeIds`, `SiegePath` (the map), `SiegeContent` (loads and validates the JSON), the state records (`SiegeState`, `SiegeRiderState`, `SiegeStationState`, `SiegePadState`, `SiegeEnemyState`, `SiegeTarState`, `SiegeProjectile`, `SiegeSpawn`, `SiegeWaveState`), the rules input (`SiegeInputs`, `SiegeRiderInput`, `SiegePhaseInfo`), `SiegeIntents`, `SiegeIntentLimiter`, `SiegeEvents`, `SiegeSnapshotSchema` |
 | `rules/` | `SiegeRules.step` (the phase clock, the tick order, B), `SiegePlanBuilder`, `SiegeRouting`, `SiegeEconomy`, `SiegeShop`, `SiegeOverdrive`, `SiegeScore`, `SiegeTune` |
@@ -246,9 +246,28 @@ node src/games/siege/art/export_map.mjs
 - `node src/games/siege/art/export_map.mjs --check` exits 1 when the committed map differs from the generator's output ("rotae.json is stale"). The rules read only the map, so the picture and the rules can't drift apart.
 - Both checks run in the Node tests (`tests/games/siege/view2/bake_check.test.mjs`, `tests/games/siege/map_check.test.mjs`).
 
+## The flex canvas
+
+There are no black bars: the canvas follows the window at a whole scale (`pixel_flex` min 852 x 480).
+
+| Window | Scale | Canvas | Design frame's offset |
+| --- | --- | --- | --- |
+| 1280 x 720 | 1 | 1280 x 720 | 160, 90 |
+| 1920 x 1080 | 2 | 960 x 540 | 0, 0 |
+| 2560 x 1440 | 3 | 853 x 480 | -29, -36 |
+| 3440 x 1440 | 3 | 1146 x 480 | 93, -36 |
+| 3840 x 1080 | 2 | 1920 x 540 | 480, 0 |
+| 3840 x 2160 | 4 | 960 x 540 | 0, 0 |
+
+- **World-to-screen math stays.** `to_art()`, the map, every frame and the HUD's tags still measure from the design frame's top-left. `SiegeViewMath.view_offset` puts that corner on the canvas: centred, as the HUD's rects across the middle are, and moved no further than keeps `MUST_SHOW` on the canvas. `MUST_SHOW` (29, 36, 852 x 480) is the road's west bend and lowest loop, the fort, the wheels and the hamlet, and its size is the `pixel_flex` min.
+- **The bake.** `world.png` and `world_depth.png` are 1920 x 1084: the design frame byte for byte (the test pins its hash), at `world.origin` (480, 272), and more terrain all round from the same rasterizer. The road's tail west of the camp is art only (`world.mjs` `ROAD_TAIL`): the rules' road still starts at the camp. The atlases bake against the frame alone and don't change. Attackers fade in over the road's first 6 m, on screen on a wide canvas.
+- **What it covers.** Any canvas up to 1920 x 1084: every usual window up to 7680 x 4320. A window with a low or tall shape stays at scale 1 and can pass that (3440 x 900 is a 3440 x 900 canvas). Past the bake each edge continues with that edge's margin mirrored back and forth (`SiegeV2WorldLayer.tiles`): you can see the mirror, but there is no black and no second fort.
+- **The screen pass.** `SiegeV2TiltShift.set_canvas` covers the canvas. A short canvas keeps the design frame's focus band in focus; a tall one keeps the base's blurred rows at its edges, so there are never more blurred rows than at the base.
+- **The HUD.** The HudLayer anchors the rects. They fit at 852 x 480 with no overlap: the column ends on the base's middle row so it stays at the top right, the cockpit starts left of the middle so it stays centred, and the banners fit between the session plate and the column. `SiegeHudWorld` adds `shift()` to the anchored rect to reach the view's offset, for its tags, its banner and the help's points on the world.
+
 ## View architecture
 
-`SiegeView` is a Node2D in the platform's `PixelViewport` at 960 x 540. It only reads `SiegeState` (`contracts/STATE_V2.md`) and the module's `cue` signal. Its children, in draw order:
+`SiegeView` is a Node2D in the platform's `PixelViewport`; its origin is the design frame's top-left (see "The flex canvas"). It only reads `SiegeState` (`contracts/STATE_V2.md`) and the module's `cue` signal. Its children, in draw order:
 1. **Baked world** (`SiegeV2WorldLayer`): `world.png` as one sprite at art pixel 0, 0.
 2. **Depth-tested sprites**: `SiegeV2Machines` (wheels, walkers, the junction's 20 route overlays and station shafts, stations at their yaw and animation phase, the tar works, the gate's damage stage, curtain and coat, pads), `SiegeV2Crowd` (up to 150 enemies, a docked tower, boarders, the march home) and `SiegeV2Shots` (projectiles and impacts). Each is a `SiegeDepthBatch`: one RenderingServer canvas item per atlas with that atlas's material, sorted far to near. The ADR measured a whole fort, 150 enemies and 100+ projectiles at 7 draw calls.
 3. **Tilt-shift** (`SiegeV2TiltShift`): a screen shader with the fort in the sharp band (rows 95-500), plus haze and a vignette. The local rider's `tilt_shift` option off keeps the picture sharp and keeps the haze and vignette.

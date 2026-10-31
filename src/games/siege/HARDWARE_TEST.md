@@ -195,6 +195,8 @@ The HUD is Siege's own (`docs/games/siege.md` 3). Run `short` with the real trai
 | 78 | Check W/kg with the opt-in off, then on (Settings) | Off: none anywhere. On: the W/kg under the %FTP | |
 | 79 | The last 30 s of a break before a wave | The clock turns gold, LOAD UP IN 0:30, SPIN UP counts down; the NEXT line's watts match what the trainer then applies | |
 | 80 | Ride a whole `short` on an integrated-graphics PC at 1080p with four riders | 60 fps with the HUD up, also with the shop open. Log any dropped frames | |
+| 81 | Maximise the window on every monitor you have, then drag it to other sizes during a wave | No black at any size; the fort, the wheels and the road stay on screen; no plate overlaps another; tags sit over their engines, the F1 arrows on what they name | |
+| 82 | Repeat step 80's fps check at a 1280 x 720 window and, if you have one, on an ultrawide | 60 fps at the largest canvas you can reach. Log the window and any dropped frames | |
 
 ## Log template
 

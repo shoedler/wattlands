@@ -56,6 +56,11 @@ func leave() -> void:
 	role = ""
 
 
+func leave_when_flushed() -> void:
+	record("leave_when_flushed")
+	role = ""
+
+
 func set_local_player_info(p_info: Dictionary) -> void:
 	info = p_info.duplicate(true)
 	record("set_local_player_info", [info])

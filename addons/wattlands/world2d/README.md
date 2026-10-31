@@ -1,10 +1,10 @@
 # world2d: the 2D pixel-art kit
 
-Helpers for 2D games (BRIEF 3.9, 3.10). Every 2D game runs in a `PixelViewport`, and Workout scrolls its world on `ParallaxStrip`s. The shipped games draw most of their own art (Diesel Domestiques and Castellum Rotae bake theirs, Turbo Reel draws from grids), so the parts and shaders below are there for a new game to start from: no shipped game uses `SpinningPart`, `SlidingPart`, `ScrollingChain`, `PaletteSwap`, `SpriteWobble` or `DitherDissolve` today. Every class is documented in its script; this page is the overview. Run `addons/wattlands/world2d/demo.tscn` to see all of them at once.
+Helpers for 2D games (BRIEF 3.9, 3.10). Every 2D game runs in a `PixelViewport`, and Workout scrolls its world on `ParallaxStrip`s. The shipped games draw most of their own art (Torque Company and Castellum Rotae bake theirs, Turbo Reel draws from grids), so the parts and shaders below are there for a new game to start from: no shipped game uses `SpinningPart`, `SlidingPart`, `ScrollingChain`, `PaletteSwap`, `SpriteWobble` or `DitherDissolve` today. Every class is documented in its script; this page is the overview. Run `addons/wattlands/world2d/demo.tscn` to see all of them at once.
 
 ## PixelViewport
 
-The GameHost puts a 2D game's `make_view()` Node2D into a `PixelViewport` at the game's `pixel_base` (640 x 360 for Turbo Reel and the template, 960 x 540 for Diesel Domestiques, Castellum Rotae and Workout) with `set_game_view(view)`.
+The GameHost puts a 2D game's `make_view()` Node2D into a `PixelViewport` at the game's `pixel_base` (640 x 360 for Turbo Reel and the template, 960 x 540 for Torque Company, Castellum Rotae and Workout) with `set_game_view(view)`.
 
 - The view renders into a SubViewport of exactly `pixel_base`, with nearest filtering, no texture repeat and 2D pixel snapping. Everything inside is drawn at art resolution, so rotated parts keep the chunky look.
 - The frame is scaled by a whole number of device pixels (`integer_scale()`: 2 in a 1280 x 720 window, 3 at 1920 x 1080, 4 at 2560 x 1440) and centred. The rest of the control is `bar_color` (black).

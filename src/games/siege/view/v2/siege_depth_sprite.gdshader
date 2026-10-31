@@ -3,7 +3,7 @@ shader_type canvas_item;
 // bake atlases has a depth twin (depth_atlas, same layout): the pixel's depth relative to the
 // frame's anchor. The drawer passes the anchor's depth in the modulate colour (R, G: 16 bits in
 // the world encoding), with the ramp row and the sun shade in B (row * 16 + shade 0..15) and the
-// opacity in A. A pixel whose depth (anchor + frame) is behind the baked world's depth at its art
+// opacity in A. A pixel whose depth (anchor + frame) is behind the baked world's depth at its
 // pixel is discarded, so sprites vanish behind walls. Key-ramp pixels (magenta, R = B = 255,
 // G = key_g0 + key_step * index) take entry `index` of ramp row `row`: a slot's hue or an idle
 // material. Compatibility renderer: plain textures and texelFetch only.
@@ -11,7 +11,7 @@ shader_type canvas_item;
 uniform sampler2D depth_atlas : filter_nearest, repeat_disable;
 uniform sampler2D world_depth : filter_nearest, repeat_disable;
 uniform sampler2D ramps : filter_nearest, repeat_disable;
-// The canvas position of art pixel (0, 0) (the view's origin).
+// The canvas position of the world image's top-left pixel, and that image's size (SiegeBakeBank).
 uniform vec2 art_origin = vec2(0.0);
 uniform vec2 art_size = vec2(960.0, 540.0);
 uniform bool depth_test = true;

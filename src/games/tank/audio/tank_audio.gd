@@ -1,6 +1,6 @@
 class_name TankAudio
 extends Node
-## Diesel Domestiques' sound on the platform's audio kit: the view's crank revolutions drive the machines' strokes, the
+## Torque Company's sound on the platform's audio kit: the view's crank revolutions drive the machines' strokes, the
 ## game's events pick cues, and the numbers live in assets/tank/audio/audio.json. It maps state to parameters and events
 ## to cue names, and nothing else: the bank says what plays, this says when.
 ##
@@ -182,7 +182,7 @@ static func crackle_level(lift: float, power: float) -> float:
 	return maxf(lift, SPIT_LEVEL * smoothstep(SPIT_POWER.x, SPIT_POWER.y, power))
 
 
-## How far the arc climbs its ladder (TankMech's `reach`): what its zap's level follows.
+## How far the arc climbs its ladder (TankMech's `reach`): what its relay's level and its spark follow.
 static func ladder_reach(power: float) -> float:
 	return 0.25 + 0.75 * smoothstep(0.3, 0.9, power)
 

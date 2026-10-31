@@ -584,3 +584,9 @@ Short ADRs for the tank game: date, decision, alternatives, reason. Game session
 - Decision: a bot never holds a segment's end, in depth. `TankSeatPlan.follow`'s `no_hold` keeps a bot's split from outlasting the segment's min_s, `TankSegments.riders_may_end` now skips bots as well, and the director asks a bot still inside its own min_s only once that has passed, so the platform refuses nothing. A human's own seat move may still hold the end: that effort is the human's choice.
 - Decision: `follow()` keeps the rest's offset at `offset + elapsed` inside the first 300 s instead of checking with `elapsed + SIM_DT`, as the review proposed. The router validates at `tracker.elapsed_s`, so a rest shorter by the tick would pass a check at `elapsed + SIM_DT` and still be refused there. The rest reaches 300 s in the router's model and 300 s plus a tick in real time; a test runs it through the real `DirectiveRouter` and `PhaseTracker`.
 - Decision: `TankEnemyState.side` stays, always +1, because the snapshot's `E_SIDE` column carries it. Nothing else reads it (static test).
+
+## 2026-10-31: The game is called Torque Company
+
+- Decision: the display name changes from Diesel Domestiques to Torque Company, the owner's pick. The id `tank`, the `Tank` class prefix and the paths stay.
+- Alternatives: rename the id and classes too, which breaks saved progress and rewrites hundreds of files with no gain for a rider.
+- Reason: the owner wanted no "domestique" in the name. Earlier changelog entries, ADRs and the never-edit briefs keep the old name as history.

@@ -1,7 +1,7 @@
 extends GutTest
 ## SpeedModel (BRIEF 3.11) beyond W0's tests: the integrator against the bisection oracle
 ## across powers, grades, winds, masses, CdA and mass offsets; the game-feel parameters (a
-## game's own CdA, mass offset and visual multiplier, Diesel Domestiques's CdA 0.5 m^2 at m + 8 kg);
+## game's own CdA, mass offset and visual multiplier, Torque Company's CdA 0.5 m^2 at m + 8 kg);
 ## a hand-computed first step; and effort scaling (BRIEF 3.3) feeding P_eff.
 
 const DT := 0.05
@@ -108,7 +108,7 @@ func test_first_steps_by_hand() -> void:
 
 
 func test_own_cda_for_game_feel() -> void:
-	# Diesel Domestiques: CdA 0.5 m^2, m = mass + 8 kg (the default offset).
+	# Torque Company: CdA 0.5 m^2, m = mass + 8 kg (the default offset).
 	var tank := SpeedModel.create(75.0, 0.5)
 	assert_eq(tank.cda, 0.5)
 	assert_eq(tank.mass_kg(), 83.0)

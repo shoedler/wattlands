@@ -1,6 +1,6 @@
 class_name TankHudModel
 extends RefCounted
-## What Diesel Domestiques' own HUD shows, as plain data computed from TankGame.state (pure and
+## What Torque Company's own HUD shows, as plain data computed from TankGame.state (pure and
 ## static, so tests read it without drawing; brief 2.3, 2.4, 3.6): the local rider's band and their
 ## one instruction line (v3 per seat: HOLD / SURGE / BUILD / OVER / SPIN / RESERVE), the seat panel's
 ## cards in seat order, the rack, the feed's rate and the Repairs card's numbers,

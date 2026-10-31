@@ -70,6 +70,8 @@ export class Scene {
     this.gateStage = opts.gate ?? 0;
     this.coat = opts.coat ?? 1;
     this.padWeapons = opts.padWeapons ?? [null, 110, null, 160];
+    // How far off the raster terrain is still built (px); steep rock needs more at the top edge.
+    this.terrainPad = opts.terrainPad ?? 40;
     let s = 7;
     this.rand = () => {
       s = (s * 1103515245 + 12345) & 0x7fffffff;
@@ -136,7 +138,8 @@ export class Scene {
   // --- ground -----------------------------------------------------------------------------
 
   terrain() {
-    const step = 2, x0 = -124, x1 = 230, y0 = -150, y1 = 196;
+    // Reaches the whole bake (bake.mjs WORLD_MARGIN); what lies off the raster is culled below.
+    const step = 2, x0 = -276, x1 = 366, y0 = -288, y1 = 358;
     const nx = Math.floor((x1 - x0) / step) + 1;
     const ny = Math.floor((y1 - y0) / step) + 1;
     const hs = new Float32Array(nx * ny);
@@ -146,7 +149,8 @@ export class Scene {
         const x = x0 + i * step, y = y0 + j * step;
         const h00 = hs[j * nx + i], h10 = hs[j * nx + i + 1], h01 = hs[(j + 1) * nx + i], h11 = hs[(j + 1) * nx + i + 1];
         const sp = this.r.project(v3(x + 1, y + 1, h00));
-        if (sp.x < -40 || sp.x > this.r.w + 40 || sp.y > this.r.h + 40 || sp.y < -40) continue;
+        const pad = this.terrainPad;
+        if (sp.x < -pad || sp.x > this.r.w + pad || sp.y > this.r.h + pad || sp.y < -pad) continue;
         if (y === 4 && x >= 0 && x < 84) {
           this.groundTri(v3(x, y, 0), v3(x + step, y, 0), v3(x + step, y + step, 0), M.PAVE);
           this.groundTri(v3(x, y, 0), v3(x + step, y + step, 0), v3(x, y + step, 0), M.PAVE);
@@ -999,6 +1003,83 @@ export class Scene {
       c.z = W.height(c.x, c.y);
       r.box(c, add(c, v3(1.6, 2.6, 1)), M.WOOD, 82);
       r.cyl(add(c, v3(-0.1, 0.6, 0.4)), add(c, v3(1.7, 0.6, 0.4)), 0.45, M.WOOD_DARK, 82, 6);
+    }
+  }
+
+  // What only a flex canvas sees, around the design frame (bake.mjs WORLD_MARGIN): the attackers'
+  // camp along the road's tail, boulders, ruins, a hamlet and an oasis in the same materials as the
+  // frame's. Nothing here reaches into the frame, which stays exactly as approved.
+  marginProps() {
+    const r = this.r;
+    const clear = (x, y, pad = 34) => W.offFrame(x, y, pad) && W.roadAt(x, y) <= 0.05;
+    // tents and stacks on both sides of the road's tail, thinning out to the west
+    const tail = W.ROAD_TAIL;
+    for (let k = 0; k < 64; k++) {
+      const t = (k + 0.5) / 64;
+      const c = tail[Math.floor(t * t * (tail.length - 1))];
+      const side = k % 2 ? 1 : -1;
+      const off = this.range(7, 30);
+      const x = c.x + side * off * 0.7 + this.range(-3, 3), y = c.y + side * off * 0.7 + this.range(-3, 3);
+      if (!clear(x, y)) continue;
+      const z = W.height(x, y);
+      if (k % 7 === 3) {
+        const q = v3(x, y, z);
+        r.box(q, add(q, v3(1.6, 2.6, 1)), M.WOOD, 82);
+        r.cyl(add(q, v3(-0.1, 0.6, 0.4)), add(q, v3(1.7, 0.6, 0.4)), 0.45, M.WOOD_DARK, 82, 6);
+        continue;
+      }
+      const big = W.hash2(k, 31) > 0.5;
+      const hx = big ? 2.2 : 1.6, hy = big ? 1.6 : 1.2;
+      r.gable({ x: x - hx, y: y - hy }, { x: x + hx, y: y + hy }, z, big ? 2.2 : 1.7, true, M.TENT, M.TENT, 81);
+    }
+    // boulder fields, by screen position so they sit evenly around the frame
+    const fields = [[-160, 210, 16], [-330, 150, 20], [-240, 420, 18], [-420, 330, 14], [-300, 640, 18], [-90, 720, 12], [140, 660, 16], [420, 770, 12], [760, 640, 18], [1120, 610, 22], [1300, 720, 14], [1180, 420, 16], [1380, 470, 18], [-120, -110, 18], [-360, -180, 14], [120, -200, 16]];
+    for (const [sx, sy, n] of fields) {
+      const g = W.fromScreen(sx, sy);
+      for (let k = 0; k < n; k++) {
+        const x = g.x + this.range(-16, 16), y = g.y + this.range(-16, 16);
+        if (clear(x, y)) this.rock({ x, y }, this.range(0.5, 2.2));
+      }
+    }
+    // the wadi's boulders run on with it
+    for (let k = 0; k < 18; k++) {
+      const t = k / 18, side = k % 2 ? 1 : -1;
+      const x = 175 + t * 87 + side * (5 + t * 3), y = 150 + t * 140 - side * (5 + t * 3);
+      if (clear(x, y)) this.rock({ x, y }, this.range(0.6, 1.6));
+    }
+    // a broken colonnade and two more obelisks
+    for (const [sx, sy] of [[1120, 560], [-250, 560]]) {
+      const g = W.fromScreen(sx, sy);
+      for (let k = 0; k < 6; k++) {
+        const x = g.x + k * 2.2, y = g.y;
+        if (clear(x, y, 20)) r.cylZ(v3(x, y, W.height(x, y)), 0.4, [3.2, 1.2, 2.6, 3.4, 0.9, 2][k], M.TEMPLE, 84, 8);
+      }
+    }
+    for (const [sx, sy, h] of [[-120, 330, 8], [1260, 590, 9], [640, 690, 7]]) {
+      const g = W.fromScreen(sx, sy);
+      if (!clear(g.x, g.y, 40)) continue;
+      const z = W.height(g.x, g.y);
+      r.box(v3(g.x - 0.9, g.y - 0.9, z), v3(g.x + 0.9, g.y + 0.9, z + 0.8), M.WALL, 82, M.WALLTOP);
+      r.box(v3(g.x - 0.5, g.y - 0.5, z + 0.8), v3(g.x + 0.5, g.y + 0.5, z + h), M.PLASTER, 82);
+      r.pyramid({ x: g.x - 0.5, y: g.y - 0.5 }, { x: g.x + 0.5, y: g.y + 0.5 }, z + h, 0.8, M.ORE, 82);
+    }
+    // a second hamlet out east, and the oasis pools (Life.marginPalms stands palms round them)
+    const hamlet = W.fromScreen(1240, 660);
+    [[0, 0, 4, 5], [6.5, -1.5, 5, 4], [14, 3, 4, 4.5], [-1, 9, 5, 4], [10, 9.5, 4, 5], [5, 17, 4.5, 4]].forEach(([dx, dy, w, d], k) => {
+      const x = hamlet.x + dx, y = hamlet.y + dy;
+      if (!clear(x, y)) return;
+      const z = W.height(x, y);
+      const hgt = 2.5 + W.hash2(k, 19) * 1.5;
+      const mat = k % 3 === 0 ? M.PLASTER : M.MUDBRICK;
+      r.box(v3(x, y, z - 0.3), v3(x + w, y + d, z + hgt), mat, 87);
+      r.box(v3(x, y + d - 0.25, z + hgt), v3(x + w, y + d, z + hgt + 0.4), mat, 87);
+      r.box(v3(x + w - 0.25, y, z + hgt), v3(x + w, y + d, z + hgt + 0.4), mat, 87);
+      r.quad(v3(x + w + 0.02, y + d * 0.5 + 0.4, z + 1.7), v3(x + w + 0.02, y + d * 0.5 - 0.4, z + 1.7), v3(x + w + 0.02, y + d * 0.5 - 0.4, z), v3(x + w + 0.02, y + d * 0.5 + 0.4, z), M.STONE_DARK, 87, v3(1, 0, 0));
+    });
+    for (const [sx, sy] of W.MARGIN_POOLS) {
+      const g = W.fromScreen(sx, sy);
+      const oz = W.height(g.x, g.y);
+      r.cylZ(v3(g.x, g.y, oz - 0.6), 3.4, 0.7, M.MINE_DIRT, 81, 14, M.WATER);
     }
   }
 

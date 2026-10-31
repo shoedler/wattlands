@@ -10,8 +10,8 @@ You judge pixels, not reports. A builder's description of a frame is no evidence
 
 - `src/games/<id>/README.md` and `assets/<id>/README.md` if present: how the art is made and how to render it.
 - `docs/ART_PIPELINE.md` if the game uses `assets/<id>/art.json`.
-- The frames the caller names. Without any, render them: `tools/screenshot --game=<id> --at=<s>[,<s>...]` (PNGs in `build/screenshots/<id>/`), or `bash tests/games/tank/view/render_v4.sh` for Diesel Domestiques (`build/tank/v4_frames/`).
-- The hero asset, which sets the bar: the one the caller names, else the most finished thing the game draws (Diesel Domestiques: the player's tank, `assets/tank/v3/tank_base.png` and `tank_lit.png`). Say which you used. Read it beside the frames.
+- The frames the caller names. Without any, render them: `tools/screenshot --game=<id> --at=<s>[,<s>...]` (PNGs in `build/screenshots/<id>/`), or `bash tests/games/tank/view/render_v4.sh` for Torque Company (`build/tank/v4_frames/`).
+- The hero asset, which sets the bar: the one the caller names, else the most finished thing the game draws (Torque Company: the player's tank, `assets/tank/v3/tank_base.png` and `tank_lit.png`). Say which you used. Read it beside the frames.
 
 ## Judge, in this order
 

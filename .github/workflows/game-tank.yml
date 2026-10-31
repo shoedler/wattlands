@@ -1,4 +1,4 @@
-# Diesel Domestiques (docs/games/tank.md): the game's own GUT tests (strict gate: unit, static, view
+# Torque Company (docs/games/tank.md): the game's own GUT tests (strict gate: unit, static, view
 # and HUD built headless from fixtures, rules-level balance harness, S2 pause timing, S8 stress,
 # rules-step perf), its Node tests (the sim checker and the module's e2e report checker) and the
 # script check; a second job runs a short subset of

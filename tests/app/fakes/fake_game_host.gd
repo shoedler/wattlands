@@ -13,6 +13,7 @@ var ended_reasons: Array[String] = []
 var finished_flag: bool = false
 var results_out: GameResults = null
 var fits: Dictionary = {}
+var discards: int = 0
 
 
 func setup(config: Dictionary) -> String:
@@ -57,6 +58,11 @@ func final_results() -> GameResults:
 
 func fit_paths() -> Dictionary:
 	return fits
+
+
+func discard_own_ride() -> bool:
+	discards += 1
+	return true
 
 
 func end_session(reason: String) -> void:

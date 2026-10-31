@@ -264,16 +264,6 @@
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"background": "opaque",
-			"id": "picker_card",
-			"prompt": "the game's picker card",
-			"size": [
-				160,
-				90
-			]
-		},
-		{
-			"_source": "hand-authored grid, FishingArtGrids",
-			"background": "opaque",
 			"id": "card_roam",
 			"prompt": "Free Roam card",
 			"size": [
