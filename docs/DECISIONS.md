@@ -148,6 +148,21 @@ Merged from the fragments in `docs/decisions/` (the fragments stay as the per-mo
 - Alternatives: cache `build/green_count.txt` in CI (a cache miss silently brings back "> 0"); `--min-count=2720` in lead.yml (CI then differs from the local command); detach every child (Ctrl-C would no longer reach it).
 - Reason: CI should apply the gates exactly as `tools/run_tests` does locally, and fail loudly rather than hang or quietly loosen.
 
+#### 2026-10-31: the v1 run's rulings
+
+- Decision: the Godot lock's cap rises to 16 for the run, by the cap file, and returns to its default before the final literal `tools/run_tests` (BRIEF 2's 4 is a resource limit, not BRIEF 4.6 or 7). Checkpoints run `tools/gate strict` plus the matrices; the final release and CI run the literal suite.
+- Decision: rules-step budget tests keep 1000 us locally and allow 2500 us when `CI` is set: GitHub's runners measured 1229-1828 us on unchanged code, so main was red for a machine's speed. The floor and every other test are unchanged.
+- Decision: siege 0.3.0's edit of `docs/games/siege.md` stays: reverting it would leave the brief contradicting a shipped HUD. The `never_edit` rule applies from `tools/gate check` on.
+- Decision: workflows go from 20 to 7 in the cleanup, with `lead.yml` running everything.
+- Alternatives: cap 4 (about 8 h longer); no CI allowance (CI stays red and hides real failures).
+- Reason: the owner asked for quick, concurrent, bulletproof work; none of this touches BRIEF 4.6 or a BRIEF 7 assertion.
+
+#### 2026-10-31: Tank matrix rows re-pinned
+
+Decision: `tools/lib/gate_manifest.json` requires Tank's S14-S18 and 85 matrix runs, and the lead re-pinned `safety_pins.json`.
+Alternatives: leave the old 37 runs required, which would let the difficulty rows go missing unnoticed.
+Reason: a stricter gate; no threshold moved. The re-pin also took Tank v4's additive changes to `check_sims.mjs` (the Ambush laps, the Repairs engine code, the new rows).
+
 ### tooling
 
 Short ADRs for `tools/godot.sh`, `tools/godot.ps1`, `tools/lib/godot_lock.mjs`, `tools/lib/wrapper_common.ps1`, `tools/env.sh`, `tools/env.ps1`, `tools/run_tests`, `tools/run_tests.ps1`, `tools/lib/run_tests.mjs`, `tools/lib/gut_gate.mjs`, `tools/check_scripts.gd` and `tools/tests/` (BRIEF 1, 2, 7).
@@ -1596,3 +1611,476 @@ FIT timestamps (`start_time`, `*_ts`) are raw FIT seconds there; `start_s` is re
 - Decision: `--app-screen=results [--app-riders=<1..8>]` opens the app's real results screen through `App.goto("results", ...)` with a Workout-like GameResults from `tools/qa/screenshot_results.gd` (`QaScreenshotResults.params`): ten intervals, best 1/5/20 min, four-digit sprint peaks, 16-character names, two unlocks, a real-length FIT path, and the host-left notice from two riders on, so the shot is the tallest page a rider can get. It prints the page height, the fit level and the lowest line, and saves `app_results_<n>p.png`.
 - Alternatives: run a whole session to its results (about 30 minutes of sim time per shot).
 - Reason: the results page must fit 1080p for 1 to 8 riders; a windowed screenshot shows what the headless layout test measures.
+
+## The v1 run (from 31 Oct 2026)
+
+Merged from the platform fragments in `docs/decisions/`. The games' decisions of this run stay in their fragments: `fishing.md`, `siege.md`, `tank.md` and `workout.md`, and `audio-fishing.md`, `audio-siege.md`, `audio-tank.md` and `audio-workout.md`.
+
+### gate
+
+- **2026-10-31: A cap file, not only an env var.** `machineCap(dir)` returns `WATTLANDS_GODOT_LOCK_CAP` if set (with its existing error on a bad value), else the positive integer in `<lock dir>/cap`, else the computed default (4 or 2). `node tools/lib/godot_lock.mjs set-cap <n>` writes the file atomically, and `set-cap 0` deletes it. A bad file is ignored with one stderr note per content, so a typo can't stop the machine. *Alternative:* set the env var in every shell. *Reason:* every waiter computes its own cap, and under strict FIFO one shell at cap 4 stalls everyone queued behind it until held drops to 3. A file is one value for the whole machine, whichever checkout a shell runs from, and waiters re-read it every poll. The default with no file is unchanged. Every checkout needs this code before the cap goes above 4, so it lands on main first.
+- **2026-10-31: `machineCap` reads the cap of the dir `acquire` was given,** not always the machine's. A temp lock dir (tests, a gate's node lane) never picks up the machine's file. The one existing test that read the real lock dir now uses a fresh one; what it asserts is unchanged.
+- **2026-10-31: `WATTLANDS_USERDATA_DIR` replaces `<checkout>/.userdata` for non-export runs,** in both wrappers. Empty counts as unset, and a relative value resolves against the caller's directory, since Godot changes directory to `--path` and would otherwise see a different folder. Export runs still keep the real user dir, because they need the installed templates. *Alternative:* one checkout per concurrent run. *Reason:* Godot's default file log (`user://logs/godot.log`) and `user://` writes collide between concurrent runs in one checkout, which gate shards are.
+- **2026-10-31: A display sub-lock of 4 for screenshots,** in `<lock dir>/display`, taken in `tools/qa/screenshot.mjs` before the Godot slot, with its own fixed cap that no env var or cap file moves. Dry runs, skips and refusals take none. It waits 1800 s by default, or `--lock-timeout` if given (so a caller who set a short wait gets it here too), then exits 75 with the same message as the Godot lock. *Alternative:* let windows fill the Godot cap. *Reason:* at cap 16 that could mean 16 windows on one GPU and desktop. Isolation between windows is already sound, so this guards resources, not correctness. Slot holders never wait for the display lock, so the two can't deadlock. No Godot process starts in its tests: `main()` takes a `run` stand-in.
+- **2026-10-31: `tools/gate` next to `tools/run_tests`, not instead of it.** Lanes run each step's existing verdict code (`run_tests.mjs --only=<step>`, `evaluateGut`) concurrently. `tools/run_tests` keeps its behaviour with no flag, and CI and the Final checkpoint still run it literally. *Alternative:* parallelism inside `run_tests`. *Reason:* the literal serial gate stays the fallback for everything, and a gate bug can't change what `tools/run_tests` says.
+- **2026-10-31: A lane passes only on positive evidence.** `laneVerdict` needs exit 0, the pass line in the last summary, and a PASS row for each selected step (import may WARN). A SKIP row fails, and so do "gdtoolkit unavailable, skipped" and both workflow-check skip strings. That is stricter than `run_tests`, where those skips pass. *Reason:* a stray nested env or a missing tool must not read as green.
+- **2026-10-31: `fast` runs all of GUT in 8 shards and skips only sim and e2e of untouched games.** A shard runs under `evaluateGut` with `narrow: true`, then `aggregateGut` requires every file in some JUnit, none in two, and the sum at or above max(local, tracked floor). A group never splits, so the writers of one `res://build/<dir>` stay in one process. `strict` keeps one GUT process, because only it catches cross-file state leaks. *Alternative:* touched games plus a smoke set. *Reason:* all of GUT costs about 2.5 min in shards, so skipping saves little and loses coverage.
+- **2026-10-31: `check` with no `--ws` on `main` or `queue*` drops rule 2 (`lead_only`), and `never_edit` stays.** This extends SPEC_GATES 6.1, through a new manifest key `lead_branches`. *Alternative:* add `--ws` to every queue command. *Reason:* `strict` checks `<last floor commit>..HEAD` on the queue, a range holding the lead's own `project.godot`, `CHANGELOG.md` and floor commits, so rule 2 would always fail there. Everything on those branches was landed by the lead. `fast` and `strict` also take `--ws`, `--allow` and `--allow-pin`, passed to their check and written to the stamp, because a `fast` in the queue for a branch that needs an exception must be able to say so.
+- **2026-10-31: `tools/lib/safety_pins.json` is denied to the `gate` workstream,** although its `also` covers `tools/lib/**`. *Reason:* otherwise a `tooling/*` branch could weaken a pinned file and re-pin it in the same diff, and "only the lead re-pins" would hold only by habit. A lead branch can still commit it. This is stricter than SPEC_GATES 6.1.
+- **2026-10-31: Pins are checked against HEAD and, for uncommitted pinned paths, against the work tree.** The pin lists live in the manifest (`safety_pin_globs`, `append_only_pins`), because `pin-safety` has to know them before any `safety_pins.json` exists. This branch ships no pins: `tools/run_game_sim` is pinned and G1 edits it, so `pin-safety` runs after landing (SPEC_GATES 8.5). `pin-safety` refuses a dirty tree, so it can't bless uncommitted work. A new file under a pinned glob isn't a mismatch: adding a governor test strengthens BRIEF 4.6.
+- **2026-10-31: A merge revert skips the area rule too, not only the total rule.** SPEC_GATES 6.4 words the exception for the total only, but a revert also shrinks an area with no `Test-Removal:` trailer, and section 3 requires that revert to land. The tracked floor still applies.
+- **2026-10-31: The CR rule reads the git diff only, not untracked files.** `.gitattributes` has `* text=auto eol=lf`, so `git add` normalises an untracked file, and flagging its working copy would be a false red after gdformat on Windows. The other added-text rules do read untracked files.
+- **2026-10-31: The lock and art rules also cover extension-less scripts directly under `tools/`** (`tools/run_game_sim`, `tools/gate`), which are bash. SPEC_GATES 6.5 lists only extensions, which would let a flag into exactly those scripts. Stricter, never looser.
+- **2026-10-31: `aggregateGut` also fails on a file in two JUnits,** since a file run twice would pad the total toward the floor. SPEC_GATES 2.4 doesn't ask for this.
+- **2026-10-31: `matrix` imports first, and a `--scenarios` run stamps `partial`.** *Reason:* with `stamp-ok` skipping `fast`, a fresh queue merge could reach the matrix without an import. A subset of scenarios must not pass `stamp-ok --matrix` as the whole matrix. `matrix` also removes `<ID>_SIMS_OUT` from the script's env, since it deleted that directory's default.
+- **2026-10-31: `wt-gc` keeps a worktree at the exact base tip, and any with a live gate,** although SPEC_GATES 4 says merged and clean goes. *Reason:* a builder who has just started from main is both of those with no commits yet, and would lose its worktree at a checkpoint. Landed branches arrive by `--no-ff`, so their tips are never the base tip.
+- **2026-10-31: Audio's manifest paths also hold `docs/{decisions,changelog.d}/{tank,workout}.md`.** SPEC_GATES 6.1 has only the `audio*` fragments, but EXECUTION_DAG section 1 says `audio/tank` and `audio/workout` append to those files after the game lands, and rule 3 would fail them. Siege and Fishing stay out, because audio writes only their credits.
+- **2026-10-31: `gate_weights.json` comes from a monolith run on this tree** (4834 tests, 979 s of JUnit time, 122 s per shard at 8 shards), not from `wt/siege-hud/build/junit.xml` as SPEC_GATES 2.4 says, because that worktree no longer exists. `tools/gate floor` refreshes it at each checkpoint.
+- **2026-10-31: An append-only pin is a position rule, not a subsequence test.** The pinned lines stay in order with nothing between them. Added lines go after the last pinned line of the body, before its final `return`, and can't leave the function or empty what it collected (`return`, `throw`, `process.exit`, `.length =`, `.splice`, `.pop`, `.shift`), except in a branch guarded by a string the pinned lines never name. Two exceptions serve SPEC_TANK's recipe: comments and a one-line `probs.push(...)` go anywhere, since neither changes control flow; and the manifest's `append_only_anchors` accept only such a guarded branch right above three named lines (`directiveProblems`, `appliedProblems`, `classify`), which is what Repairs needs. *Alternative:* the critic's plain "only before the final return". *Reason:* that would have refused the Tank builder's own `if (kind === 'repair')` lines and S5's added push, none of which can switch a rule off. Checked against the live `wt/tank-sims` working copy: it passes. SPEC_GATES 6.3's subsequence wording let a first-line `return` through.
+- **2026-10-31: Pins follow what a checker rests on.** `pin-safety` pins the named functions, every top-level function and arrow const they reach, and the thresholds they read. It does not follow through a table, or `CHECKS` would pull in every check of the file. `CHECKS`, `SCENARIOS` and `NODE_SUITES` are tables: entries stay unchanged and new ones are welcome, a repeated key fails (a later key replaces a pinned one), and so does a line that changes the table at run time. `result` and `pick` may move to `tools/lib/sim_report.mjs` as SPEC_CLEANUP's C8 plans: the pin follows the import. *Reason:* with `checkS4` pinned but `humanPeers`, `TOTAL_GRADE_MAX_PCT` or `CHECKS` free, one small edit outside the pinned text switches off every BRIEF 4.6 sim assertion. *Known limit:* this reads JavaScript by lines; it stops an agent in a hurry, not a determined author.
+- **2026-10-31: Two partial file pins.** `run_tests.mjs` is hashed without its `NODE_SUITES` statement, so A-BASE can add `tools/audio` (E12). `settings.gd` has line pins on its grade and difficulty ranges and the inverted-range rule instead of a file hash, so audio's `kit` can add its bus defaults. *Alternative:* take `settings.gd` out of audio's paths. *Reason:* SPEC_AUDIO needs that file, and only those lines are BRIEF 4.6.
+- **2026-10-31: A pins file must match the manifest at the commit it names.** `check` recomputes every pin at `pinned_at` and compares, so `{"files":{}}`, a dropped glob or a rewritten hash fails, on `main` and `queue` too and whatever `--allow` says. A pins file that history once held and HEAD lacks fails. *Reason:* rule 2 was the only guard, and it does not run on lead branches. This branch still ships no pins, because `tools/run_game_sim` and the gate's own files are pinned and "only the lead pins". Before the first `pin-safety`, `check` says "not pinned yet" as a note, since failing would redden every branch and the acceptance run. `floor` refuses without pins, so the window can't pass a checkpoint. A new file under a pinned glob isn't a mismatch: adding a governor test strengthens BRIEF 4.6. It stays unpinned until the next `pin-safety`. This supersedes the earlier ADR's "no pins at HEAD is a note" for a file that has existed.
+- **2026-10-31: A matrix passes on the checker's own rows.** The check phase needs at least one PASS row, no FAIL, in a full matrix no SKIP, and the manifest's `matrix_required_rows` (the rows holding BRIEF 4.6 rules) PASS. Every `<ID>_*` variable is removed from the script's and the pool's env. `tools/run_game_sim` refuses a `WATTLANDS_SIM_PLAN` with no file (exit 2), and the gate creates the file and removes it after each phase, so a value left in a shell can't turn a real run into exit 0 with no report. *Reason:* `TANK_SKIP_CHECK=1` in a shell gave a green `check_sims` row, and a scenario with all its reports missing reads as SKIP. *Evidence:* Siege's 37 reports in `wt/siege-perf` give 9 PASS and 0 SKIP. Tank's and Fishing's full matrices were read, not run.
+- **2026-10-31: A `fast` that narrowed anything is partial.** `--lanes`, a `--base` that is not main's commit, a `--ws` other than the branch's own, any `--allow` or `--allow-pin`, and a `--games` that leaves out a game the branch touches. A wider `--games` narrows nothing. The stamp lists the reasons, and `stamp-ok` also refuses a dirty project, a stamp with a missing field, no GUT total, or a matrix with no evidence. `changedSince` uses `--no-renames`, so moving a platform file into a game selects the platform.
+- **2026-10-31: `fast` with no `--lanes` always runs `aggregateGut`,** so no GUT process is a red row, never a pass by absence. `listGutFiles` throws on a read error other than a missing `tests/`.
+- **2026-10-31: Strict's check starts before the last floor commit, and the floor answers to the highest value in HEAD's history.** *Alternative:* the previous value only. *Reason:* starting at the floor commit itself made base and head equal, so a commit lowering the floor and deleting tests compared clean; and 100 -> 50 -> 60 passes a previous-value test. The one past fall (86e9560, 4592 -> 4283) sits below today's 4834, so this reads green on the real history. A lead who must lower the floor changes this rule on purpose.
+- **2026-10-31: The quiet rerun is for budget tests only.** It runs only when every reason is a plain test failure and every failed testcase measures wall time (`Time.get_ticks_usec` in its body or in a function of its file it calls). A SCRIPT ERROR, a crash or a non-budget failure keeps its first verdict. `stamp-ok` shows a rerun and accepts it, with the test names. *Alternative:* move budget tests to their own files. *Reason:* those files belong to Tank and Siege, and reading the failed case gives the same guarantee today without touching them. Moving them later stays a request.
+- **2026-10-31: Test counts follow what GUT collects.** Only `tests/**/test_*.gd` counts, so a rename out of the pattern reads as lost tests, and a helper file can't pad the count. `strict` compares its JUnit suites with `listGutFiles` in a `gut:files` row.
+- **2026-10-31: `evaluateGut` reads JUnit's failure count.** Exit 0 with `failures="3"` is red. This is stricter than BRIEF 7's list, not looser, and a healthy run never differs: GUT exits non-zero on a failure. It lands now because `gut_gate.mjs` gets pinned next. It also changes `tools/run_tests`' verdict in that one case, so it is the one exception to "only additive flags".
+- **2026-10-31: More pins than the critic listed:** the gate's own `gate.mjs`, `gate_core.mjs` and manifest, and all of `addons/wattlands/trainer/**` rather than a list. *Reason:* a pinned rule is only as strong as the code reading it, and the rest of the trainer stack is what cleanup's `deny` already keeps out. After `pin-safety`, a gate fix needs the lead's re-pin.
+- **2026-10-31: No GUT config reaches a gate.** `stepGut`, the scaffold step and `gutLane` pass `-gconfig=`, and `check` fails on any `.gutconfig.json`, tracked, untracked or ignored, whatever `--allow` says. *Reason:* GUT loads `res://.gutconfig.json` by default, and one with `failure_error_types` or `unit_test_name` turned failing tests green in `strict`, `fast` and `tools/run_tests` alike. *Evidence, real GUT in a scratch project:* with `{"unit_test_name":"test_passes"}` it ran 1 of 2 tests and exited 0; with `-gconfig=` it ran 2 and exited 1. `-gconfig=` is the one change to the literal `tools/run_tests` here, and it changes no verdict on a tree with no such file.
+- **2026-10-31: A file's JUnit count may not fall below its source count,** in `aggregateGut` and in strict's `gut:files` row. *Reason:* GUT collects inner classes only with the `Test` prefix, so moving a failing test into `class Helper` kept the file in the JUnit with one test less, and only the floor's slack was left. *Evidence:* the last real JUnit on this tree (358 suites) has no file below its source, and none above. `Test*` inner-class suites count for their file. Nothing narrows on purpose in a gate, so there is no exception.
+- **2026-10-31: Pins reach the helpers, enforcers and pass-rule tools, whole-file only where nobody else writes.** Whole: `tests/scenarios/lib/{scenario_lib,scenario_test}.gd`, `tests/core/helpers/{core_test_util,fakes}.gd`, `tests/trainer/{unlocked_ftms_client,fake_kickr_transport}.gd`, `tests/sdk/helpers/session_kit.gd`, `tests/app/app_test_base.gd`, `core/{app_state,ftp_test}.gd`, `ui/input_router.gd`, `sdk/{sdk_conformance,report_collector}.gd`, `tools/e2e/run.mjs`, `tools/e2e/lib/game.mjs`, `tools/fit_check/check.mjs`. Line pins: the clamps in `settings.gd` (`kit`'s file, audio's paths), the panic dispatch in `game_host.gd` (2500 lines), `skip_warmup` in `session_launcher.gd` (audio's `src/app`) and `game_sim_runner.gd`. *Alternative:* whole-file for all, as the critic's list could read. *Reason:* a whole pin on a file a builder is writing reddens that builder. *Evidence:* no writer of the whole-pinned files in EXECUTION_DAG section 1 or any spec, and no live worktree on 2026-10-31 had changed any of them. Cleanup's planned helper moves (`result`, `pick`) already go through `append_only_moves`. If a batch does move a whole-pinned helper, `check` says "is gone" and the lead re-pins.
+- **2026-10-31: The manifest states each game's whole matrix: every checker row and a minimum of runs.** `matrix_required_rows` now lists every row (Tank S1-S7, S9-S13, FIT; Siege S1-S7, S9, S10; Fishing ALL, R1-R6, W1-W3, D, FIT), `matrix_min_runs` holds today's plans (37, 37, 15, deduplicated by report). A plan below the minimum fails the `plan` row, a game the manifest names with no `run_sims.sh` fails (exit 1, no stamp), a `--scenarios` subset answers to neither and stays partial, and `stamp-ok` compares both again. Each script also has line pins on its seeds default, its checker call, its `set -euo pipefail` and, for Siege, its `exit "$status"`. This supersedes the earlier ADR's safety-rows-only list. *Reason:* a hard-coded `--only=S4,S5` or `seeds="1"` in a game's own script read as a full matrix, with `partial` false. *Evidence:* the real plans give 37, 37, 15, and `wt/tank-sims`' live `run_sims.sh` keeps every pinned line. Both are floors, so Tank v4's S14-S18 and about 100 runs pass; **the lead raises Tank's rows and minimum when T-FINAL lands** (the manifest is lead-only).
+- **2026-10-31: Floor and pin history read `git log --full-history`.** `highestFloor`, the pins-deleted rule and `strictBase`. *Reason:* plain `git log -- <file>` simplifies away the side of a merge that holds the evidence: after `git merge -s ours main`, a floor raise on main and a pins file main added both disappeared, and all pin rules went quiet. The highest floor in the real history stays 4834.
+- **2026-10-31: The merge-revert exemption needs a real merge.** The commit's message must say `This reverts commit <sha>`, the sha must be a merge in HEAD's history, and its diff, compared as plain added and removed lines per file, must be the reverse of that merge's diff to its first parent, so a revert after later commits moved other lines still counts. The subject alone proved nothing: a branch with one commit titled `Revert "Merge nothing"` deleted a test file with no trailer. A revert that needed conflict resolution no longer matches and takes `Test-Removal:` instead.
+- **2026-10-31: The quiet rerun allows exit code 1 only.** GUT exits 1 on failed tests; any other code is a crash or a kill, which a rerun must not wash out.
+- **2026-10-31: The test-total rule covers Node suites.** `check` counts `test(` and `it(` in the files `node --test` runs (`NODE_SUITES`, `tests/games/<id>`) at the merge base and at HEAD. The total may fall only in a merge revert or with `Test-Removal: node <reason>`. A suite that held tests and holds none needs `Test-Removal: <suite> <reason>`, since `run_tests` reads it as SKIP. Other shrinking suites are notes, because tests move between them. `test.skip(` does not count, so skipping reads as a fall. *Alternative:* no trailer, as for GUT's total. *Reason:* Node tests have no floor to answer to, and a cleanup deleting a dead tool and its tests is legitimate, so the trailer puts the reason in front of the lead instead of stopping the batch.
+- **2026-10-31: Known limits of the gate.** The threat model is a hurried agent reaching for green, not a determined author, so these stay open, each found by the critic and not fixed:
+  - Append-only pins read JavaScript by lines. A comment-wrapped statement on one line (`/* x */ return ...; /* y */`), a computed or spread entry in `CHECKS` (`['S4']: fake`, `...{S4: fake}`), a top-level `checkS4 = fake`, `Array.prototype.push = ...`, `Object.defineProperty(CHECKS, ...)` and a side effect in a plain push's guard (`r.target_pct++`) all pass `checkPins`.
+  - Line pins are a subsequence: a guard added above a pinned line, or a pinned line left in dead code, passes.
+  - `lead_branches`' `^queue` also matches `queue-of-mine`: such a branch skips rule 2, and its stamp is not partial.
+  - `isBudgetTest` tags the whole test, so a logic assert failing in a test that also measures time (`test_crowd_draws_150_enemies_in_one_batch`) gets the quiet rerun.
+  - A stamp does not record which gate code wrote it. `--project=<dir>` runs this checkout's `run_tests.mjs` against another tree, so a stale or edited gate can stamp a tree that `stamp-ok` accepts, and `stamp-ok` does not check `mode`.
+  - A matrix's floors count runs and rows, not arguments: a script keeping its run count with changed compliance, crews or padded report names still passes.
+  - Node counts read source: a test made in a loop counts once, `{ skip: true }` is not seen, and `tools/run_tests` itself still reads an empty suite as SKIP.
+  - The source count reads `func test_` by line, so one inside a multi-line string would be a false red. None exist today.
+  - All pin rules are inactive until the lead runs `tools/gate pin-safety`; `floor` refuses until then.
+
+### audio-dsp
+
+Short ADRs for the audio pipeline (`tools/audio`, `assets/_shared/audio`). "SPEC" is the run's SPEC_AUDIO.
+
+#### 2026-10-31 A loop file carries a guard frame; `edit/loop_end` stays -1
+
+- Decision: a loop of N frames is written as N + 1, the last a copy of frame 0, with `edit/loop_end=-1`.
+- Alternatives: N frames with -1, as the SPEC's skeleton implied (measured on 4.7.2: Godot stores `frames - 1`, a period one frame short that drops the last frame); N frames with `loop_end=N` (Godot keeps it, but its resampler then reads one frame past the loop end into the zero padding, a small tick each wrap).
+- Reason: the period is exactly N and the read past the end lands on frame 0, in PCM and in QOA. `test_audio_assets.gd` holds it through the real importer. Manifest entries carry both `frames` and `loop_frames`.
+
+#### 2026-10-31 A loop's seam goes at the quietest step of its cycle
+
+- Decision: after the crossfade the file is rotated to start where the sample step is smallest.
+- Alternatives: leave the seam where the crossfade ends. On noise that pair is 2 sigma past the median step about one time in 25, per channel, and A11 can't be waived, so a few games' beds would fail by chance.
+- Reason: a seam no louder than any other pair of samples. A cyclic signal loses nothing by rotating.
+
+#### 2026-10-31 The crossfade adapts to the head and tail's correlation
+
+- Decision: fade gains `u / sqrt(u² + v² + 2ruv)`, with r measured over the crossfade. No per-sound setting.
+- Alternatives: equal power (measured: +2.5 dB across the seam of a tone in phase); linear (a dip on noise); a recipe flag that each builder has to get right.
+- Reason: constant power for any r, with nothing to choose.
+
+#### 2026-10-31 `warning` and `rescue` play at -16 LUFS momentary, past the UI row's -17
+
+- Decision: as played, both prompts read -16. `HudLayer._play`, the only path they have to `WlSfx`, plays at -4 dB and `hud_layer.gd` is frozen, so the files carry it: file peaks -8 and -10.6 dBFS, file momentary -12. `simulate()` plays a prompt at -4 dB too (`PROMPT_VOICE_DB`, pinned to `hud_layer.gd` by a test), D5 reads that, and A2 holds the prompts as played to -23..-15 and every other UI sound's file to -23..-17.
+- Alternatives: -17 and under, the SPEC's row. Measured as played on the fixture, -16 reads D5 +7.83 LU over a -19.31 LUFS mix, +6.53 over -18.13 and +6.03 over -17.67, so -17 would read about +5.5 at the SPEC's own -18 target. Raising the prompts further to cover A1's whole window (-16 LUFS needs about -14 as played) was also rejected: a louder alarm for a mix no bank should aim at.
+- Reason: D5 is the safety row and cannot be waived; BRIEF 4.6 outranks a loudness target. A sound here is over the row only by 1 dB, and only for the two prompts. The cost: D5 caps a game's mix at about -17.6 LUFS, inside A1's window, and the scorecard says so to the builder.
+
+#### 2026-10-31 Ticks under 100 ms and the metronome are outside the UI loudness row
+
+- Decision: `ui_move` (50 ms, about -27 momentary) and `click` (12 ms) are not metered. `coin`, `hit`, `boom` and `whoosh` play on Sfx (SPEC 1.4), so the UI row does not apply to them either.
+- Alternatives: raise `ui_move` by 4 dB so a 400 ms meter reads -23.
+- Reason: a 400 ms block reads a 50 ms tick as silence plus the tick. SPEC 4.5 asks for a soft tick, and raising it makes it louder than a confirm to the ear. `shared.test.mjs` names the excluded sounds, so a new one must be placed.
+
+#### 2026-10-31 The preview's limiter runs 0.25 dB under the kit's ceiling
+
+- Decision: `offline_mix` limits sample peaks to -1.25 dB. The kit's `AudioEffectHardLimiter` stays at -1 dB (SPEC 1.4).
+- Alternatives: -1 dB, which read -0.85 dBTP on the fixture, a failure of the unwaivable A1 from intersample peaks alone.
+- Reason: A1's -1 dBTP is a true-peak target and the limiter is a sample-peak one. Godot's true peak behind its own limiter is not measured here.
+
+#### 2026-10-31 A3 is measured with a longer window and a floor
+
+- Decision: spectral flux with a 2048 window, hop 512, from the second revolution on, as stdev over mean plus 2 % of the frame magnitude.
+- Alternatives: stdev over mean on a 512 window, which passed a steady 55 Hz saw: the window was shorter than its period, and the loops' opening dominated the stdev.
+- Reason: A3 exists to catch a monotone rumble. A drone now reads about 0.2 and fails; the fixture's engine reads 1.3.
+
+#### 2026-10-31 Additions to the schema, all of them read only by the generator or the preview
+
+- Decision: `per_variant`, `pitch`, `width`, `xfade_s`, layer `dur`, `glide_s`, swept filter `f`; `preview.others[].lead` and `.rpm_by` (a Tank track, driven by speed), `preview.loops`, `preview.seed`, `preview.checks`, `preview.waive`. `audio_manifest.json` is keyed by file stem and adds `sound`, `variant`, `loop_frames`, `preroll`, `bytes`, `loop`, `locked`, `compress`.
+- Alternatives: requests to the lead from each game builder later. The SPEC's list has no way to give variants different pans, which it asks for (gulls left and right), nor to run a machine on hull speed in the preview.
+- Reason: game builders do not edit `tools/audio/lib/`. `AudioBank` ignores keys it does not read.
+
+#### 2026-10-31 A third import proof fixture
+
+- Decision: `import_proof_locked` joins the SPEC's two, plus the bank and its manifest under the same prefix.
+- Alternatives: read the pre-roll guarantee off `edit/trim=false` alone.
+- Reason: SPEC's point is that a locked file's pre-roll survives import, so the test reads the 80 ms of silence out of the imported data.
+
+### audio-kit
+
+#### 2026-10-31: CrankClock lives in addons/wattlands/audio/, verbatim from the run's errata
+
+- **Decision:** `CrankClock` is `addons/wattlands/audio/crank_clock.gd`. No `drive`, `fraction` or `MAX_DT_S`.
+- **Alternatives:** `addons/wattlands/sim/` from a separate contract commit, which was dropped.
+- **Reason:** one class, one place. A second `class_name CrankClock` fails parse.
+
+#### 2026-10-31: a bank never plays on Master, and no duck touches Master or UI
+
+- **Decision:** `AudioBank.validate` rejects a bank's bus or duck on Master and a duck on UI; `AudioBuses.duck` refuses both with a warning. A game that registers its own `warning` or `rescue` in `WlSfx` still plays on Master.
+- **Alternatives:** trusting the bank's author, as the schema's plain "unknown bus" rule would.
+- **Reason:** BRIEF 4.6: no sub-slider or duck can hide a safety prompt. The rule is enforced where the data enters.
+
+#### 2026-10-31: validate accepts a bus that exists on the server
+
+- **Decision:** a bank's bus is known if it is one of `AudioBuses.ALL` or exists on `AudioServer`.
+- **Alternatives:** the bench puts a capture effect on the real Machines bus.
+- **Reason:** the jitter bench machine sits on its own temporary, muted bus, so the bench never sounds on the rider's speakers and never touches a real bus.
+
+#### 2026-10-31: `variant` from CadenceVoice and AmbienceBed is a running count
+
+- **Decision:** the pure classes count firings per sound; `AudioBank.stream` wraps the count by the sound's `variants`.
+- **Alternatives:** handing the variant counts to the pure classes, whose `_init` signature is fixed by the spec.
+- **Reason:** the pure classes stay free of the bank, and round-robin needs no RNG.
+
+#### 2026-10-31: additions to the kit's spec, all additive
+
+- `CadenceVoice`: `gated` (S2 counts fired + dropped + gated) and `planned_to()`.
+- `LayeredLoop`: `close(dt)`, `layer(i)`, `all_off()`. A machine's loops close at `rpm <= STOP_RPM` whatever its layers say (S4), also without `min_rpm`.
+- `AmbienceBed.trim_db`: the kit's crossfade (old bed down at 40 dB/s, new one up from -30 dB) and pause drop.
+- `GameAudioKit`: `preroll_on` (the bench's baseline), `voiceless`, test accessors. A stroke that may not steal anything is dropped and counted.
+- `AudioBank`: `duplicate_keys(text)` reads the raw JSON, because `JSON.parse` keeps only the last of a repeated key. A locked sound must be PCM (its seek must be exact).
+- A cue's `duck` runs only for `lead` true: someone else's shot does not duck my machine.
+
+#### 2026-10-31: the jitter bench misses with Godot's delta smoothing, and passes without it
+
+Superseded: `docs/decisions/audio-sync.md` replaces the call below to report the miss and keep the strokes on `revs`.
+
+Measured on WASAPI, 48 kHz, 59.94 Hz display, with other Godot runs on the machine; residual p99 / stddev in ms, limits 12 / 4, thresholds unchanged. All slopes hold (at most 0.056 %, limit 0.1 %), all onsets found, no stroke late or dropped.
+
+| rpm | engine delta, smoothing on (the exit code) | real clock | engine delta, smoothing off | no pre-roll seek |
+|---|---|---|---|---|
+| 60 | 9.05 / 3.83 | 5.85 / 3.15 | 5.69 / 2.99 | 17.15 / 6.93 |
+| 90 | 12.11 / 5.30 | 5.61 / 3.08 | 5.15 / 3.05 | 19.78 / 7.89 |
+| 110 | 14.18 / 6.88 | 5.70 / 3.40 | 5.52 / 3.16 | 18.48 / 7.86 |
+| 140 | 12.07 / 5.34 | 5.73 / 3.08 | 6.06 / 3.20 | 19.61 / 7.77 |
+
+- **Cause:** at 59.94 Hz Godot's delta smoothing hands out 16.667 ms and carries the rest, then pays it back as a whole vsync. `revs` integrates that delta, so it has a sawtooth of up to one vsync against real time, and a run looks good or bad according to where the jumps fall in it (a 60 rpm run measured 6.27 / 3.18 once and 18.75 / 6.71 once). What remains without it, stddev about 3.1, is a uniform spread over one 512-frame mix step (10.67 ms, stddev 3.08): the spec's own bound.
+- **Decision:** the kit keeps the spec's strategy, horizon and formula. The miss is reported with these numbers; the thresholds stay. S1 and S3 hold against `revs`: the stroke and the picture share the sawtooth.
+- **Alternatives:** `application/run/delta_smoothing=false` in `project.godot` passes every rpm, but it is the lead's file and changes every game's frame delta, so it is the lead's call. Feeding the bench only the real clock would have passed and hidden what a game actually does, so the "engine" run decides the exit code and the "real" run is a diagnosis.
+
+#### 2026-10-31: contract critic's fixes
+
+- **A safety prompt is never stolen.** `WlSfx`'s round-robin skips a player on Master (only `warning` and `rescue` play there). If all eight hold a prompt, a new prompt gets a player past the cap and an effect gets none: a prompt always sounds, and the pool grows only in that case. Alternatives: a reserved player (one prompt only, and it would shrink the pool for everyone).
+- **A pause closes `loops` entries** even while the adapter still calls `set_loop`. Spec 2.5 lists only machine loops, but views keep running under a pause, so its literal text would leave a drag scream at full level. Alternative: gating in each adapter, which would need `_paused` public or its own bus connection.
+- **A cue duck without times takes spec 5's 10 ms and 350 ms** (`DUCK_ATTACK_S`, `DUCK_RELEASE_S`), the preview's defaults. Alternative: both validators requiring the keys, which touches the dsp's file for no gain.
+- **`gap_s` stays fixed and `when` stays one param; no `gap_by`.** `hull_slap`'s gap by speed is one spot per speed band, each with its own `gap_s` and a `when` on speed; `reel_ratchet` and `freewheel_tick` take one composite param from the adapter. Alternatives: an optional `gap_by` or a list of gates, which adds schema and a second implementation in `tools/audio/lib/pattern.mjs` that the preview must match, for sounds that bands already express. The test is `test_bed_gap_by_speed_is_one_spot_per_band`; the words are in `docs/GAME_SDK.md` section 18, since `docs/AUDIO_PIPELINE.md` is the dsp builder's.
+- **`AudioBank.validate` checks shapes before it uses them:** blocks, lists, curves, `when`, and the numbers and flags the kit reads with a cast. A wrong shape is an error naming its key path, not a run-time type error. The loop budget runs only on a doc with no errors, since it reads the same blocks.
+
+### audio-sync
+
+#### 2026-10-31: strokes run on real time through one offset per kit, not one follower per machine
+
+Supersedes the kit's earlier call to report the miss and keep `revs` as is (`audio-kit.md`, the jitter bench).
+
+- **Decision:** `FrameClockLock`, one per `GameAudioKit`, keeps how far the frame clock has come from real time, less a 20 s mean of it: `lead_s`. A machine's strokes are planned at `revs - rpm / 60 * lead_s`. `commit(dt)` reads the real clock, unless silent, where real time is the delta and the lead is 0. Past 40 ms the lock follows the frames at once. While the crank stands, a machine keeps the offset it stopped with, so no stroke is skipped or gained at a stop.
+- **Cause, as measured:** on the 59.94 Hz display Godot's smoothing hands out 16.667 ms against 16.683 ms real, so the frame clock falls 1 ms/s behind and pays 16 ms back in about 100 ms, every 16.4 s. The picture keeps this. The strokes read it whole, which is the bench's miss.
+- **Alternatives:** a smoothed clock per machine, integrating rpm over real time and phase-locking slowly to the view's revs (what the task suggested). The sawtooth's period forces that lock to about 20 s, and it would then lag any machine whose `rpm` and `revs` disagree by a little: 1 % at 90 rpm settles at 0.3 revolutions behind, and a stop, a jump and a resume would each need a rule of their own. Here the sawtooth is measured where it starts, the frame clock, so there is nothing per machine to integrate, drift or snap: a jump in `revs` passes straight through and the distance from the view is bounded by construction. `application/run/delta_smoothing=false`: changes every game's picture, and it is the lead's file. It stays the reference below.
+- **What it asks of a game:** `commit(dt)` takes the delta its cranks integrate. All four do (Tank's host adds its render clock's catch-up, which is nothing in steady state). A view fed from anything else would get a sawtooth of at most a vsync added to its strokes, no more.
+- **Also gone, by reasoning, not measured (the bench's view does no work):** the time a view spends between its frame's start and `commit`, which moved the strokes the same way. The lock reads the clock at `commit`, where the strokes' delay is counted from.
+
+Measured on WASAPI, 48 kHz, 59.94 Hz, with other builders on the machine; residual p99 / stddev in ms, limits 12 / 4, thresholds unchanged. Slopes hold in every run (at most 0.097 % before, 0.036 % after, limit 0.1 %), all onsets heard, no stroke late or dropped.
+
+| rpm | engine, before | engine, after | real, before | real, after | no seek, before | no seek, after | engine, smoothing off |
+|---|---|---|---|---|---|---|---|
+| 60 | 14.44 / 5.22 | 5.82 / 3.12 | 5.76 / 3.19 | 5.78 / 3.11 | 9.75 / 4.33 | 18.24 / 6.95 | 6.03 / 3.19 |
+| 90 | 10.60 / 4.90 | 11.29 / 3.57 | 5.54 / 3.04 | 5.70 / 3.21 | 18.92 / 7.77 | 14.60 / 6.62 | 5.83 / 3.38 |
+| 110 | 11.57 / 5.64 | 6.06 / 3.15 | 5.75 / 3.15 | 5.92 / 3.22 | 16.84 / 6.87 | 14.26 / 6.52 | 6.65 / 3.28 |
+| 140 | 12.51 / 4.78 | 6.30 / 3.13 | 5.72 / 3.14 | 6.08 / 3.22 | 21.38 / 7.91 | 16.14 / 6.59 | 5.42 / 3.26 |
+
+The new sprint run, 70 to 130 rpm in 2 s: 144 strokes fired, 144 heard; 6.34 / 3.10 once settled. A commit of 8 machines: 0.111 ms mean, was 0.124 (D10: 0.5). The picture's crank was at most 13.1 ms from the strokes' clock in any engine run. The 90 rpm 11.29 after is two strokes of 112, most likely the machine's load (stddev 3.57). What remains everywhere else is what the seek cannot take out: one 512-frame mix step, stddev 3.08.
+
+#### 2026-10-31: the bench's exit code also holds a sprint and D10
+
+- **Decision:** a "sprint" run decides the exit code with the "engine" runs, every stroke fired must be heard, and so does a commit of 8 machines over 0.5 ms.
+- **Alternatives:** leaving both as numbers to read. Nobody reads a passing bench's numbers, and both are stated requirements.
+- **Reason:** this only adds to what the bench holds; no limit moved. The bench now takes about 340 s, inside its 420 s timeout.
+
+### cleanup-c0
+
+#### 2026-10-31: TankKit goes with nothing to replace it
+
+- **Decision:** delete `TankKit`, `assets/tank/v2/kit.json` and `test_tank_kit.gd`. `tests/games/tank/test_tank_cards.gd` holds four tests in their place and reads its paths from `game.json`. The manifest's `crew` assert in `test_tank_v3_tank.gd` now asserts the manifest is gone.
+- **Alternatives:** keep a thin manifest for the cards; do it in the batch that moves the cards.
+- **Reason:** nothing at run time read it after v4: `game.json` names the cards. Done first, because moving the cards would break `TankKit.check`.
+
+#### 2026-10-31: behaviour_hash compares every field, deterministic_hash included
+
+- **Decision:** the baseline holds `deterministic_hash`, and a compare fails on it like any other field. Two runs of the same commit in two worktrees wrote byte-identical files, so no path reaches the report and the field needs no exception.
+- **Alternatives:** skip `deterministic_hash` and rely on the snapshot, event and directive hashes, which the spec allows only if the two runs disagree.
+- **Reason:** it is the wider check: it also covers results and traces.
+
+#### 2026-10-31: behaviour_hash subsets merge into --out, and --names runs one scenario
+
+- **Decision:** `--games` and `--names` (added) run a subset, merge its rows into an existing `--out` and compare only the rows they ran. A failed run writes no row and exits 1. The first differing entries are read from the reports beside the `--compare` file.
+- **Alternatives:** overwrite `--out` on every call; store whole reports in the baseline file.
+- **Reason:** agents' shell calls stop at 10 minutes, so a run must be splittable (all ten take about 4 minutes on a quiet machine). The baseline file stays small and the reports stay in `build/`.
+
+#### 2026-10-31: verify_move fails a dropped allowed name, and keeps a column-zero comment in its body
+
+- **Decision:** an `--allow` name may differ but must still exist. A column-zero comment run followed by an indented line stays in the body it interrupts; other comment lines attach to the declaration directly below or count as loose.
+- **Alternatives:** let `--allow` skip the block entirely; end a body at any column-zero line.
+- **Reason:** allowing a change must not hide a deletion, and a body cut short would move part of a function unchecked.
+
+#### 2026-10-31: the generator walk also counts what a reached module's top-level code names
+
+- **Decision:** `toolsrc_reach.mjs` adds `assets/tank/v4/tools_src/*.gd` as entry points, as the spec asks, and also walks the constants and inner classes of each reached module, with strings and comments stripped.
+- **Alternatives:** walk column-zero functions only, as the original did.
+- **Reason:** a generator's inner class or constant can name a function too, and the walk decides deletions that no gate checks, so an error must fall on the side of keeping a function.
+
+### cleanup-c1
+
+#### 2026-10-31: a stricter walk decides what the tank generator keeps, and the bakes prove it
+
+- **Decision:** delete the generator code a walk with strings and comments stripped cannot reach from `bake.gd`, `r6_base.gd`, `env/` and `assets/tank/v4/tools_src/`. That goes beyond SPEC_CLEANUP 2.2's table: `tank.gd` and `mach.gd` go whole, `tank_r5.gd` and `tank_r6.gd` fold into `tank_gen.gd` with `layout`, `build`, `roof` and `puff` only, and `gear.gd` and `px.gd` lose more than `tools/qa/scan/toolsrc_reach.mjs` lists. That scan counts a name inside a string or a comment as a call (`"loader"`, `Tank6.blast()`), so it reports what stays as all live and can't see the rest.
+- **Alternatives:** delete only what `toolsrc_reach.mjs` calls dead, which keeps about 1200 lines nothing runs.
+- **Reason:** the proof doesn't depend on the walk. `bake.sh` and `enemy_bake.sh` rewrite `assets/tank/v3` and `assets/tank/v4` byte for byte after each cut, the same as on the untouched tree, and a missing function is a parse error on a preloaded script. No dynamic call names a deleted function: the only `.call("...")` uses were lambdas in the deleted `interior` functions.
+
+#### 2026-10-31: r6_hitbox.json is checked-in data
+
+- **Decision:** `assets/tank/v3/r6_hitbox.json` has no writer after `mock_r6.gd`. `bake.gd`'s header says so. `test_tank_v3_contracts.gd` still ties it to `tanks.json`.
+- **Alternatives:** keep `job_hitbox` and the whole dead chain it needs.
+- **Reason:** the plan leaves the tank's body as it is, so nothing regenerates the hitbox.
+
+#### 2026-10-31: the cards and the type leave v2, and v2 goes
+
+- **Decision:** the cards move to `assets/tank/cards/`, the type to `assets/tank/hud/`, `cards.gd` and `cards.sh` to `assets/tank/v3/tools_src/`. The rest of `assets/tank/v2/`, `source/reference.webp` included, is deleted. `card_ambush` moves too, which the spec's list missed. The moved `cards.sh` was run once and works; its renders were thrown away, so the cards stay byte-identical.
+- **Alternatives:** keep `reference.webp` because `docs/games/tank.md` names it as THE reference.
+- **Reason:** `tank_4rider.png` is the live input and the briefs are history; the image stays in git at every earlier commit. `docs/games/tank.md` is never edited, so its paths now describe the past.
+
+#### 2026-10-31: rigs.json keeps only what the rules read
+
+- **Decision:** drop `tanks` and `machinery` (855 of 943 lines), `RIG_FALLBACK`, `rig_of`, `has_rig` and `secondary_muzzles`. Also drop `boss_secondary_muzzle`, its frozen key and `boss.secondary_muzzle`: the spec expected a reader, and v4 left none. The Behemoth's bow secondary now comes from `assets/tank/v4/enemies.json`. `enemies.enemy_dugin` and its two frozen keys stay, because `test_tank_contracts.gd` still reads the hit box. `screen`, `enemies` and `boss` stay.
+- **Alternatives:** keep the frozen `boss.secondary_muzzle` for a future reader.
+- **Reason:** behaviour hash tank matches the baseline on all four scenarios.
+
+### cleanup-c2
+
+#### 2026-10-31: tank_mech.gd becomes a star of one kit and six machines
+
+- **Decision:** `TankMechKit` holds the sizes, ratios, palette, room and `Cv`. `TankMechDiesel`, `Dynamo`, `Steam`, `Arc`, `Feed` and `Repair` extend it and hold one machine each. `TankMech` extends it too and keeps `paint`, `paint_ex`, `_rate_of` and the caches. Only `paint_ex` changed: its arms name their class. `verify_move` proves the rest byte-identical, and `mech_hash` matches on all 288 images.
+- **Alternatives:** a chain like `tank_view.gd`'s; keeping the file whole.
+- **Reason:** the machines depend on the kit and almost never on each other, so one machine can be read and changed alone. A chain would claim a dynamo is a diesel.
+
+#### 2026-10-31: TankMech forwards the repair hammer
+
+- **Decision:** `TankMech` keeps `R_CAM`, `R_CAM_R`, `R_HEAD_X`, `R_REST_Y`, `R_HEAD_LIFT`, `R_LIFT`, `R_SPARK`, `hammer_lift` and `since_strike` as forwarders to `TankMechRepair`. SPEC_CLEANUP 3.1 did not list them, because the repair machine's outside readers (`TankInterior`, `test_tank_mech.gd`, `test_tank_audio_bank.gd`) arrived after the spec's scan.
+- **Alternatives:** move them to `TankMechKit`, which tears the repair machine's constants in two; `TankMech extends TankMechRepair`, which says the painter is a repair machine; changing the callers, which the spec rules out.
+- **Reason:** the repair machine stays in one file and no caller changes.
+
+#### 2026-10-31: test_tank_audio_bank's art pins follow the formulas to their machine's file
+
+- **Decision:** the five tests that read `tank_mech.gd` as text and check each art formula's line now read `tank_mech_<machine>.gd`. They ask for the same ten lines, each in its own machine's file, so the pin is stricter and no fraction or threshold moved. The test sits outside this batch's paths; the senior review ruled the fix belongs on `cleanup/c2`, because the split's tip must stand alone.
+- **Alternatives:** quote the lines in a comment in `tank_mech.gd`, which keeps the test green and pins nothing; leave the moving bodies in `tank_mech.gd`, which needs a chain and parts each machine from its own drawing.
+- **Reason:** the formulas did not change, only their file, and the test's own header says it speaks up when a formula moves.
+
+#### 2026-10-31: What the senior review left open
+
+- **Decision:** left as they are, for their owners: `src/games/tank/README.md`'s line on the audio test still says `tank_mech.gd` (C9's file); the comment above the diesel's picture in `tests/audio/test_cadence_sync_matrix.gd` still says `tank_mech.gd` (the lead's, comment only); `verify_move` prints no extra block whose name is also an old name (the lead's tool), so this batch compared top-level names across its files by hand: the only names declared twice are the nine forwarders above. `_belt` and `_loop` stay in the kit although only Dynamo reads them, because 3.1 moves the room section whole.
+- **Alternatives:** edit those files here, which breaks the ownership rule for a comment.
+- **Reason:** none changes behaviour or a pin, and each has an owner who is due to touch the file.
+
+### cleanup-c3
+
+#### 2026-10-31: tank_view.gd is a chain of six classes
+
+- **Decision:** `TankViewBase`, `TankViewMotion`, `TankViewSeats`, `TankViewWorld` and `TankViewHud` sit under `TankView`, each calling only down. Bodies moved byte-for-byte, proved by `tools/qa/verify_move.mjs` with no allow list. `far_panel_x` moved from Frame to Base, because the HUD's geometry reads it and it reads only `panels`.
+- **Alternatives:** a star like `TankMech`'s; a virtual stub to keep `far_panel_x` in `TankView`.
+- **Reason:** the sections share one set of vars and call down, so a star would pass the view everywhere. GDScript has no partial classes, and inheritance lets every `TankView.X` outside the file keep working. A stub would add a call the parser can no longer check.
+
+#### 2026-10-31: the near threats' lanes stay in the view
+
+- **Decision:** keep `LANES`, `LANE_FOOT`, `lane_foot` and `lane_rect`. `lane_scale` is already gone.
+- **Alternatives:** delete them, as SPEC_CLEANUP 2.1 asks if nothing but their own tests read them.
+- **Reason:** v4 uses them: `near_ground`, `_track_enemies` and `TankWorldDraw` read them at run time.
+
+#### 2026-10-31: seat phases use one CrankClock per seat
+
+- **Decision:** `_seats` advances a `CrankClock` per seat, made on first use, and writes `phases[seat] = clock.revs`. `phases`, `machine_phase` and `audio_feed` stay.
+- **Alternatives:** read the clocks directly and drop `phases`.
+- **Reason:** no reader changes and no number moves. The rpm there is 0 or above `STOP_RPM`, which `CrankClock` ignores the same way, and the dt is `render_dt` (clamped to 0 or more) or `dt`, so its early return changes nothing. The sum is the same float expression. SPEC_CLEANUP's `MAX_DT_S` difference is void under E1: the class has no clamp.
+
+### cleanup-c4
+
+#### 2026-10-31: every game's snapshot history and render clock are one platform pair
+
+- **Decision:** `SnapHistory` and `SnapRenderClock` in `addons/wattlands/sdk/`. `TankSnapHistory`, `SiegeSnapHistory`, `FishingSnapHistory` and `WorkoutSnapHistory` extend the history. `TankRenderClock` extends the clock; Siege, Fishing and Workout hold one, and their `render_t` is a property on it. Siege sets `never_back`; the others don't, because their clock already stopped only at the newest entry.
+- **Alternatives:** leave four copies; give the history its own clock so every game has the same shape.
+- **Reason:** the copies held the same constants and bodies. A new game now gets interpolation by naming its row. Keeping the clock separate keeps Tank's and Fishing's readers as they were.
+
+#### 2026-10-31: SAME_T_S replaces is_equal_approx in the histories
+
+- **Decision:** two times within 1e-6 s are the same time, in all four histories. This is the one intended change in the batch, and it reaches views only.
+- **Alternatives:** keep `is_equal_approx` and the old `t < newest` in Workout, Siege and Fishing, to change nothing at all.
+- **Reason:** its tolerance is 1e-5 x t, wider than a 0.05 s tick from about 5000 s on, so a new tick would replace the newest entry instead of adding one. No session reaches that today (3600 s plus overtime). `test_ticks_late_in_a_long_session_still_append` holds it. A time up to 1e-6 s before the newest now replaces it instead of starting over; ticks are 0.05 s apart, so no real push lands there.
+
+#### 2026-10-31: Siege keeps only DELAY_MIN_S, and Fishing keeps no clock constants
+
+- **Decision:** `SiegeSnapHistory` drops `DELAY_MAX_S`, `RESYNC_S` and `CATCHUP_TAU_S`, against the spec's "keep". `FishingView` drops `INTERP_DELAY_S`, `INTERP_DELAY_MAX_S`, `CLOCK_RESYNC_S`, `CLOCK_CATCHUP_TAU_S` and `interp_delay()`. Workout keeps its four as aliases of the clock's, and `interp_delay()` as a delegate.
+- **Alternatives:** keep them all as aliases.
+- **Reason:** Workout's stay because `test_workout_client_view.gd` reads them and tests don't change. Nothing reads the Siege or Fishing ones (word grep over `src`, `tests`, `tools` and docs), so an alias would be new dead code in a batch that removes it.
+
+#### 2026-10-31: TankSnapHistory loses boss_x_at and its row field
+
+- **Decision:** delete `boss_x_at` and the `"boss"` field it read. The C0 scan found them; the spec doesn't list them.
+- **Alternatives:** leave them for a later pass.
+- **Reason:** no reader in `src`, `tests` or `tools`. The view draws the Behemoth from `boss_range_at` since v4.
+
+### cleanup-c5
+
+#### 2026-10-31: WlRecord and IntentRateLimiter replace the games' copies
+
+- **Decision:** `WlRecord` (`addons/wattlands/sdk/wl_record.gd`) takes the bodies of `TankRecord`, `SiegeRecord` and `FishingRecord`, which stay as empty subclasses so no state type or caller changes. `IntentRateLimiter` (`addons/wattlands/sdk/intent_rate_limiter.gd`) takes `allow` and `_truthy` from Tank and Siege, which keep `filter` and `MAX_PER_S`. `load_dict` now returns `WlRecord`, so `TankState.load_dict` changes its annotation.
+- **Alternatives:** delete the three game base classes and have 28 state types extend `WlRecord` directly; leave the copies.
+- **Reason:** the three record bodies differed only in Siege's Vector3 arm and in Tank's `_load_array`. `WlRecord` has both: Siege's superset for the types, Tank's helper for the array loop, whose behaviour is the same as the inline form. Keeping the game names keeps the doc comments and `for r: TankRecord in records`-style typing as they are. No Tank or Fishing record declares a Vector3 (re-grepped on v4), so what they save is unchanged, and `behaviour_hash` matches the baseline on all ten scenarios.
+
+#### 2026-10-31: Fishing keeps its own rate limit
+
+- **Decision:** `FishingGame._admit` is not moved to `IntentRateLimiter`.
+- **Alternatives:** have it call `allow`.
+- **Reason:** it counts in a tumbling one-second window per slot, not a sliding one, and it applies the summary intent in the same loop, so a swap would change which intents a burst keeps, and with them the rules' input. It is a candidate only if Fishing's behaviour is allowed to change, for example in a Fishing version bump.
+
+### cleanup-c6
+
+#### 2026-10-31: the art-pixel HUD base and its draw helpers move to the platform
+
+- **Decision:** add `HudArtControl`, `HudArtDraw`, `PixelFont` and `PixelPainter.line_pixels`. `TankHudCtl`, `SiegeHudCtl`, `WorkoutHudCtl` and `FishingHudControl` extend the base; the four games' `font()`, `pixels` and Tank's and Workout's `frame` delegate. Siege keeps its `_process` and `_draw` (a refresh every `REFRESH_S`, and an empty model as the guard). Fishing keeps its `place_at` (sets `design_h`, renames nothing) and its `frame`, which overdraws its corners, so a merge would change pixels at alpha. Every `bar` stays.
+- **Alternatives:** leave a declared copy per game; a shared `bar`, which no two games draw alike.
+- **Reason:** four copies of one Control and three of one font loop. A fifth game now inherits them.
+
+#### 2026-10-31: HudArtDraw.frame draws through frame_rects, pixels stays a plain loop
+
+- **Decision:** add the pure `frame_rects(r, m)`, which `frame` iterates, so a test can read the geometry, including that no corner is drawn twice. `pixels` has no such helper; its test only proves it runs inside a real `_draw` with the argument order right, and the screenshot pass covers what it draws.
+- **Alternatives:** a pure `pixel_rects` under `pixels` too; no geometry test at all.
+- **Reason:** headless rendering has no pixels to read back and `draw_rect` cannot be intercepted. `frame` is cheap enough to allocate four rects, while `pixels` runs for every icon on every frame and a rect array for each is cost with no user.
+
+#### 2026-10-31: two sub-visible differences this batch accepts
+
+- **Decision:** `TankHudSeats` uses `CrankClock`, so a card's crank stands still at or below `CrankClock.STOP_RPM` (1 rpm), where it used to creep at under 1/60 of a turn a second while the cadence decayed to zero. `FishingHudModel.clock` uses `HudWidget.clock_text`, whose `ceili(seconds - 1e-6)` shows a remaining time less than 1 microsecond above a whole second as that second, one tick earlier at most, where it used to round it up.
+- **Alternatives:** keep both integrators and clocks as they were.
+- **Reason:** both are the spec's ruling (SPEC_CLEANUP 1.3, 5.6), and both match what the view's crank and every platform clock already do. Rules, snapshots and FIT do not read either: the behaviour hash of all ten scenarios matches the C0 baseline. `TankHudDraw.clock` (no hours) and `WorkoutHudDraw.clock` stay.
+
+#### 2026-10-31: dead helpers, with what the spec's list got wrong
+
+- **Decision:** delete `TankHudDraw.tall_shadow` and `big_r`, `FishingRig.SPRAY_AT`, and also `WorkoutHudDraw.tall_c` and `text_c`, which the per-class grep found with no caller. Keep `TankHudDraw.text_c`: the spec lists it as dead, but `TankSeam` (Tank v4) calls it.
+- **Alternatives:** delete only what the list names.
+- **Reason:** a word scan cannot separate `D.text_c` of one game from another, so each name was grepped per class.
+
+### cleanup-c7
+
+#### 2026-10-31: Siege's PROPOSAL.md goes, though the Siege brief still cites it
+
+- **Decision:** delete `src/games/siege/art/PROPOSAL.md` and its clause in `src/games/siege/README.md`. `docs/games/siege.md:3` still names the file, and that path is never edited, so the citation dangles. Git holds the file: `git show c885d4ed~1:src/games/siege/art/PROPOSAL.md`.
+- **Alternatives:** keep the file so the citation resolves.
+- **Reason:** it says of itself "mockup stage, not approved" and that once approved it becomes sections of the brief, which has happened. A stale proposal next to the art tools misleads more than one historical citation does.
+
+#### 2026-10-31: three names outside the spec's list, two deleted and one kept
+
+- **Decision:** delete `TankIds.FROM_FRONT` (the content schema now rejects any encounter `from`) and `TankAutopilot.EDGE_MARGIN_PX`, each with its comment. Keep `TankIds.RETIRED_ENEMY_CODES`, which no code reads, and keep `TankIds.BOSS_ID`, which v4's far panel now uses.
+- **Alternatives:** leave all three, as the spec's list predates them.
+- **Reason:** the first two describe nothing that exists any more. `RETIRED_ENEMY_CODES` records that wire code 4 is never reused, the same job as the schema constants the spec leaves as wire documentation.
+
+#### 2026-10-31: Siege's writePng keeps deflate level 9
+
+- **Decision:** `src/games/siege/art/png.mjs` calls `encodePng` from `tools/art/lib/png.mjs` with `{ level: 9 }`, as Workout's wrapper does, and keeps `toRgba8`.
+- **Alternatives:** take the codec's default level 6.
+- **Reason:** another level can change the bytes of committed art. A bake with the old writer and one with the new are byte-identical, and both match `assets/siege/bake`.
+
+#### 2026-10-31: `siege/view/v2` and `SiegeV2*` keep their names
+
+- **Decision:** no rename, though v2 is the only view.
+- **Alternatives:** rename to drop the "v2".
+- **Reason:** it touches more than 30 files and changes no behaviour.
+
+### cleanup-c8
+
+#### 2026-10-31: CI goes from 20 workflows to 7
+
+- **Decision (the lead's ruling):** keep `lead.yml`, `game-{fishing,siege,tank,workout}.yml` and `relay.yml`, add `trainer-bridge.yml`, and delete the 14 workflows named after W1 agents, `ble.yml` among them. `lead.yml` gains `node tools/fit_check/check.mjs build/rides_test --expect-laps=5` right after `tools/run_tests`.
+- **BRIEF 7.9:** it asks for "one workflow per owner" that together run unit, static, conformance, simulation, rides, relay, mock fal and end-to-end tests. `lead.yml` runs all of those through `tools/run_tests` on every push. The owners are now the lead, each game, the relay and the bridge, and each has a workflow. BRIEF itself is not edited.
+- **Checked one by one, so no coverage goes:** every step of the 14 is a GUT directory, a Node suite or `check_scripts`, and `tools/run_tests` runs them all, with these exceptions, which stay: the Python bridge suite (`tools/run_tests` never runs it, so it moves to `trainer-bridge.yml` with `ble.yml`'s `addons/wattlands/trainer/ble/**` trigger kept) and the lap count from `rides.yml` (the `fit` step checks the same folder without `--expect-laps`, so it moves to `lead.yml`). `relay.yml` stays for the only `docker build` of the relay.
+- **Alternatives:** keep the 14 (each repeats a part of `lead.yml`, under the name of an agent that no longer exists); one workflow for everything (the game subsets and the Docker build would have to run on every push).
+- **Reason:** the owner asked for a more maintainable codebase, and 14 of the 20 repeat what `lead.yml` already runs.
+- **Cost:** a push no longer gets a quick red from one module's workflow on GitHub, only `lead.yml`'s full run and the game's subset. `tools/gate fast` gives that answer locally.
+
+#### 2026-10-31: the games' lexer and sim helpers move, and only they do
+
+- **Decision:** `lex` moves byte-identical from the Tank and Siege static suites to `TestGdLex` in `tests/lib/gd_lex.gd`. `result` and `pick` move from the Tank and Siege `check_sims.mjs` to `tools/lib/sim_report.mjs`, and `tools/gate check` follows the import to their pins. Each static suite still proves the lexer and its scans on bad snippets.
+- **Left where they are:** `test_no_bypass.gd`'s own `lex` (arch tests are pinned), and in `check_sims.mjs` the pinned functions and the one-line `skip`, which the spec does not move. The suites' `files`, `read`, `first_name` and `hit` are not moved either, since the spec's row names only `lex`; the lead can add them to `TestGdLex` later.
+- **Alternatives:** keep the copies (a fix to one scanner could miss the other, and these scans are the games' no-trainer-bypass check); a delegate named `lex` in each suite (a second name for one function).
+- **Reason:** a third game's static suite should not need a third lexer. This touches no BRIEF 4.6 path, threshold or BRIEF 7 assertion, and the test count does not change.
+
+### cleanup-int
+
+#### 2026-10-31: the wrappers the batches kept for their tests go
+
+- **Decision:** after the senior review of `cleanup/int`, remove `TankRenderClock`, `WorkoutRideView`'s four clock aliases, `SiegeSnapHistory.DELAY_MIN_S`, `FishingHudControl.ap`, `FishingRig.bresenham`, `HudHelp.line_pixels` and `TankMech`'s nine forwarders to `TankMechRepair`. Callers and tests name `SnapRenderClock`, `u()`, `PixelPainter` and `TankMechRepair` directly. `SnapRenderClock` gains an optional constructor argument for its smallest delay, so Tank's view still starts at one tick. This overrides SPEC_CLEANUP 5.4 and 5.6, which kept them so that tests would not change. `test_the_help_overlay_draws_the_same_line` compared the forwarder with its target; it becomes `test_a_line_and_its_reverse_span_the_same_length`, so the count holds.
+- **Kept:** `TankRecord`, `SiegeRecord` and `FishingRecord`, which name the G0 contract base. `interp_delay()` on `WorkoutRideView`, which reads a clock and is not a forwarder of a constant.
+- **Alternatives:** keep the wrappers (a second name for each thing, which the next reader has to look through).
+- **Reason:** the cleanup's purpose is one name per thing. No number moves: `behaviour_hash`, the GUT view suites and the unchanged constants are the proof.
+
+#### 2026-10-31: IntentValue holds the intent readers, before GAME_SDK documents the API
+
+- **Decision:** `truthy` moves from `IntentRateLimiter` to a new `IntentValue`, joined by `whole`, which Tank and Siege each held as `_whole`. `IntentRateLimiter` does only rate limiting.
+- **Alternatives:** leave `truthy` where C5 put it (a game's `normalize()` would call a rate limiter to read a flag); merge `whole` with `WlGameRegistry.is_whole` (it also caps the magnitude, so it could refuse an intent that passes today).
+- **Reason:** renaming after C9 documents it would break the additive rule.
+
+#### 2026-10-31: tests/lib holds what the games' test suites share
+
+- **Decision:** `TestGameFakes` (the recording `Hud`, `Intents`, `Stats`, `option_defaults`, `with_cooldown`, `plans_of`), `TestGameSuite` (file walk, `csv_keys`, the option-entry check, the required manifest fields), `TestGameStaticSuite` (the trainer name list, the clock and RNG patterns, the lexer and determinism proofs) and `TestGameSessionSuite` (temp dirs, runner cleanup, `run_session`). Tank, Siege, Fishing and the template extend them, so a new game starts without these copies. Tank's extra `Hud` fields (`t`, `power_band_at`) are now on the shared one: the others ignore them. Every test function stays in its game's file, and each game's scans still run on its own folders, so the trainer scan stays per game and no count falls.
+- **Left per game:** `frame` and `phase_at` (Fishing's and the template's match, Tank's and Siege's differ), each `Directives`, each game's `WORLD` pattern and its self-test (it names that game's classes), the real scans, Siege's `_csv_keys` (another return type), Fishing's `_run` (it watches `fx_event` during the run). `e2e_check.mjs` stays too: only one-liners match once the game's events are set aside, and `tools/e2e/lib/checks.mjs` is pinned.
+- **Reason:** about 900 copied lines become about 320 shared ones, and a fix to one scanner could no longer miss the other. These scans are the no-trainer-bypass check for games, so the list lives in one place and each suite still proves it on bad snippets.
+
+#### 2026-10-31: three view-only changes in this release, all sub-visible
+
+- **Decision:** the changelog names all three: `SAME_T_S` in `SnapHistory` (C4), the Tank card crank standing still at or below 1 rpm (C6), `FishingHudModel.clock` through `HudWidget.clock_text` (C6). The batch ADRs hold the reasons. None is read by rules, directives, effort, FIT or snapshots.
+
+#### 2026-10-31: WorkoutHudTimeline's missing super() is not fixed here
+
+- **Decision:** `WorkoutHudTimeline._init` does not call `super()`, so it skips `HudArtControl`'s setup. Adding it was tried and measured with `tools/screenshot --game=workout --content=e2e --seed=1`: a repeat of the same frame differs by 0 px at 30 s, and the fix changes about 1,190 px there, all in the plate. Its text goes from blurred to sharp and the rest stays, so it is right, but it moves pixels, which this pass may not do. It goes to the lead as a request.
+- **Alternatives:** land it here (this pass's rule is no pixel moves).
+
+### cleanup-c9
+
+#### 2026-10-31: Turbo Reel's credit says no fal output ships, and how we know
+
+- **Decision:** keep "no generated art ships" in `docs/credits.d/fishing.md`, and name the 53 fal requests of 2026-10-23 in `assets/fishing/art_manifest.json` as a first attempt whose output does not ship.
+- **Evidence:** none of the 31 images under `assets/fishing/` has a SHA-256 in the manifest (though the manifest hashes the raw results, not the pixelated sprites), and none is the same git blob as any PNG of `08036c31`, the commit that wrote the fal sprites. `bff49a6a` deleted those sprites and added the grids. The five ids in both sets have other sizes (`fish_marlin` 64 x 22 then, 420 x 45 now). `art.json` marks all 30 sprites as hand-authored grids, and `tests/games/fishing/art/test_fishing_art.gd` proves every PNG is what `FishingArtGrids` draws (19 tests pass). `bff49a6a`'s message says the generated sprites are gone.
+- **Limit:** git cannot prove nobody looked at a generated picture while typing a grid. No tool in the game's history reads `.art_cache` or turns a generated picture into a grid.
+- **Alternatives:** drop the manifest from the credit (a reader who finds it would rightly ask); credit fal (false for what ships).
+
+#### 2026-10-31: Tank's credit names the reference's source only as far as the repo records it
+
+- **Decision:** the credit no longer says "made for this project" or "no generated sprites". It says what `docs/games/tank.md` says: Simon's image, with the prompt that made it quoted, the tool not recorded. The path stays as a history pointer at d82d901c.
+- **Alternatives:** call it generated (the repo doesn't say by what); leave it out (the base art derives from it).
+- **Reason:** `CREDITS.md` ships next to the exe. The owner should confirm the tool and its terms before the public release.
+
+#### 2026-10-31: DECISIONS.md takes the platform fragments of the v1 run
+
+- **Decision:** merge `gate`, `audio-dsp`, `audio-kit`, `audio-sync`, every `cleanup-*` and the lead's two new ADRs. `fishing`, `siege`, `tank`, `workout` and `audio-<game>` stay in their fragments, with a pointer.
+- **Alternatives:** merge all of them (about 2,000 more lines, against the file's own header: game sessions keep theirs).
+- **Reason:** existing practice since v0.1.0. Where an older fragment and `docs/DECISIONS.md` differ, the merged text was the one edited later and matches the code (pedal navigation, the rescue banner), so the older merge stands.
+
+#### 2026-10-31: OWNERSHIP 1.3 keeps a list of the frozen seams
+
+- **Decision:** 1.1 and 1.2 are rewritten to match `tools/lib/gate_manifest.json`; 1.3 stays as one paragraph, without its owner table.
+- **Alternatives:** delete 1.3, as the spec's one-screen table implies.
+- **Reason:** `tests/governor/test_api.gd:2` cites the "Governor" seam of 1.3, and that path is denied to cleanup.

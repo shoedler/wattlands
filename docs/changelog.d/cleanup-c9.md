@@ -1,0 +1,2 @@
+- `docs/GAME_SDK.md`, `docs/ARCHITECTURE.md` and the world2d page document the shared classes and `tests/lib`; `docs/OWNERSHIP.md`, `docs/BACKLOG.md`, `docs/ART_PIPELINE.md` and Tank's READMEs say what is true now.
+- `CREDITS.md` is rebuilt for the public release, game by game. `docs/DECISIONS.md` takes the platform decisions of the v1 run.
