@@ -11,8 +11,8 @@ out=build/picker_cards/frames
 rm -rf "$out"
 mkdir -p "$out"
 
-# Castellum Rotae: the view's own demo, every treadwheel routed, tilt-shift off.
-tools/screenshot --scene=res://src/games/siege/view/v2/siege_v2_demo.tscn --frames=60 --size=1920x1080 \
+# Castellum Rotae: the view's own demo with every treadwheel routed and no tar, tilt-shift off.
+tools/screenshot --scene=res://tests/games/siege/view2/siege_card_scene.tscn --frames=60 --size=1920x1080 \
   --siege-demo-mock-pose --siege-demo-sharp "--out=$out/siege" --timeout=300
 
 # Diesel Domestiques: the four-rider landship, gun raised, lamps on. nohud and nopip drop the HUD and the shell screen.
