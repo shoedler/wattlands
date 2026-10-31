@@ -107,3 +107,45 @@ func test_the_click_is_a_locked_file() -> void:
 func test_the_bank_validates_on_an_existing_bus() -> void:
 	assert_eq(AudioBank.validate(Bench.bank_doc(AudioBuses.MACHINES)), [] as Array[String])
 	assert_ne(AudioBank.validate(Bench.bank_doc("NotABus")), [] as Array[String])
+
+
+func test_the_sprint_ramps_once_and_holds() -> void:
+	assert_eq(Bench.sprint_rpm(0.0), Bench.SPRINT_FROM_RPM)
+	assert_eq(Bench.sprint_rpm(Bench.SPRINT_START_S), Bench.SPRINT_FROM_RPM)
+	assert_almost_eq(
+		Bench.sprint_rpm(Bench.SPRINT_START_S + Bench.SPRINT_RAMP_S / 2.0), 100.0, 1e-6, "halfway"
+	)
+	assert_eq(Bench.sprint_rpm(Bench.SPRINT_START_S + Bench.SPRINT_RAMP_S), Bench.SPRINT_TO_RPM)
+	assert_eq(Bench.sprint_rpm(1000.0), Bench.SPRINT_TO_RPM)
+	assert_gt(Bench.SPRINT_SETTLED_S, Bench.SPRINT_START_S + Bench.SPRINT_RAMP_S)
+	assert_gt(Bench.SPRINT_MIN_RUN_S, Bench.SPRINT_SETTLED_S)
+
+
+## Half a run at another cadence, then the settled half: only the settled half counts against the line.
+func _sprint_onsets() -> PackedFloat64Array:
+	var out := _onsets(70.0, 10, _none)
+	var last := out[out.size() - 1]
+	for t in _onsets(130.0, 30, _none):
+		out.append(last + 1.0 + t)
+	return out
+
+
+func test_a_sprint_is_judged_on_what_follows_it() -> void:
+	var onsets := _sprint_onsets()
+	var run := Bench.analyse_sprint(onsets, 30, onsets.size())
+	assert_true(run["pass"], str(run))
+	assert_eq(run["onsets"], 120)
+	assert_eq(run["onsets_settled"], 90)
+	assert_false(
+		Bench.analyse(130.0, onsets, onsets.size())["pass"], "the ramp is no straight line"
+	)
+
+
+func test_a_sprint_that_lost_a_stroke_misses() -> void:
+	var onsets := _sprint_onsets()
+	assert_false(Bench.analyse_sprint(onsets, 30, onsets.size() + 1)["pass"])
+
+
+func test_a_sprint_that_never_settled_misses() -> void:
+	var onsets := _sprint_onsets()
+	assert_false(Bench.analyse_sprint(onsets, -1, onsets.size())["pass"])
