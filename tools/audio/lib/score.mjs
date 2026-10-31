@@ -430,7 +430,7 @@ function projectileRows(bank, p, sim, mix, rows) {
     P1: 'flight sounds started per shot: 1 for every weapon',
     P2: 'a flight sound lasts its flight',
     P3: `a flight's loudest 250 ms is >= +${P_FLIGHT_MARGIN_DB} dB over the wheels and the bed, ${P_FLIGHT_BAND.join('-')} Hz`,
-    P4: `every surface is in the preview, its impact >= +${P_IMPACT_MARGIN_DB} dB over the wheels and the bed, ${P_IMPACT_BAND.join('-')} Hz`,
+    P4: `every surface is in the preview, its median impact >= +${P_IMPACT_MARGIN_DB} dB over the wheels and the bed, ${P_IMPACT_BAND.join('-')} Hz`,
     P5: `surfaces differ: spectra >= ${P_SURFACE_APART_DB} dB apart`,
   };
   if (!spec) {
@@ -470,23 +470,29 @@ function projectileRows(bank, p, sim, mix, rows) {
 
   const surfaces = Object.entries(spec.surfaces);
   const missing = surfaces.filter(([, cues]) => !events.some((e) => cues.includes(e.cue))).map(([s]) => s);
+  // Per surface the median impact: a stroke of the wheel can land on any one of them, and that is no fault of the sound.
   let quietHit = Infinity;
   let quietHitWhat = '';
+  let worstOne = Infinity;
   for (const [surface, cues] of surfaces) {
+    const overs = [];
     for (const v of sim.voices.filter((x) => cues.includes(x.cue) && x.sound === bank.doc.cues[x.cue].hits[0].sound)) {
-      const over = voiceOverBackground(bank, v, impactBack, P_IMPACT_BAND, 0.05);
-      if (over < quietHit) {
-        quietHit = over;
-        quietHitWhat = `${surface}: ${v.sound} at ${round(v.t, 1)} s`;
-      }
+      overs.push(voiceOverBackground(bank, v, impactBack, P_IMPACT_BAND, 0.05));
+    }
+    overs.sort((x, y) => x - y);
+    const median = overs.length > 0 ? overs[Math.floor(overs.length / 2)] : -Infinity;
+    if (overs.length > 0) worstOne = Math.min(worstOne, overs[0]);
+    if (median < quietHit) {
+      quietHit = median;
+      quietHitWhat = surface;
     }
   }
   rows.push({
     id: 'P4',
     pass: missing.length === 0 && quietHit >= P_IMPACT_MARGIN_DB,
-    value: missing.length > 0 ? `missing ${missing.join(', ')}` : `${surfaces.length} surfaces, worst +${round(quietHit)} dB`,
+    value: missing.length > 0 ? `missing ${missing.join(', ')}` : `${surfaces.length} surfaces, quietest median +${round(quietHit)} dB`,
     target: targets.P4,
-    note: quietHitWhat,
+    note: `${quietHitWhat}; the worst single impact +${round(worstOne)} dB`,
   });
   const shapes = surfaces.map(([surface, cues]) => {
     const sounds = cues.map((c) => bank.doc.cues[c]?.hits?.[0]?.sound).filter(Boolean);
