@@ -8,8 +8,10 @@ import { dirname, join, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readPng } from '../../../../src/games/workout/art/png.mjs';
-import { CRANK_FRAMES, crankTheta, chainOffset, nearPedalTable } from '../../../../src/games/workout/art/rig.mjs';
-import { WALL, WINDOW } from '../../../../src/games/workout/art/palette.mjs';
+import { BB, CRANK, CHAIN_PERIOD, CRANK_FRAMES, crankTheta, chainOffset, nearPedalTable, pedalAt } from '../../../../src/games/workout/art/rig.mjs';
+import { GLOW, MIST, MIST_GROUND, RESERVE, STAR, WALL, WINDOW } from '../../../../src/games/workout/art/palette.mjs';
+import { HOLLOW_BODY, PEDAL, SLOT_COLORS, slotLook } from '../../../../src/games/workout/art/riders.mjs';
+import { hex } from '../../../../src/games/workout/art/raster.mjs';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const assets = join(repo, 'assets/workout');
@@ -172,4 +174,159 @@ test('crowd flags have a hand to go in: hand_up is a raised hand in row 1 and em
   for (let f = 0; f < flag.frames; f++) {
     assert.ok(pixel(flags, f * flag.cell[0] + flag.grip[0], flag.grip[1]).alpha > 0, `flag frame ${f} has its pole there`);
   }
+});
+
+/** How many pixels of the cell at (cx, cy) have exactly this [r, g, b]. */
+function countColour(png, cx, cy, w, h, [r, g, b]) {
+  let n = 0;
+  for (let y = cy; y < cy + h; y++) {
+    for (let x = cx; x < cx + w; x++) {
+      const i = (y * png.width + x) * 4;
+      if (png.data[i + 3] > 0 && png.data[i] === r && png.data[i + 1] === g && png.data[i + 2] === b) n++;
+    }
+  }
+  return n;
+}
+
+test('a pedal-coloured pixel sits within 1 px of near_pedal in every seat and stand frame', () => {
+  const { pose_rows: rows, cell, cols, frames, slots, near_pedal: table } = kit.rider;
+  for (const path of slots) {
+    const sheet = readPng(fromRes(path));
+    for (const name of ['seat', 'stand']) {
+      for (let k = 0; k < frames; k++) {
+        const cx = (k % cols) * cell[0];
+        const cy = (rows[name] + Math.floor(k / cols)) * cell[1];
+        const [px, py] = table[k];
+        assert.ok(countColour(sheet, cx + px - 2, cy + py - 1, 5, 3, PEDAL) > 0, `${path} ${name} frame ${k}`);
+      }
+    }
+  }
+});
+
+test('near_pedal follows the angle formula; the far pedal is opposite', () => {
+  for (let k = 0; k < CRANK_FRAMES; k++) {
+    const a = ((-90 + k * 15) * Math.PI) / 180;
+    const [x, y] = kit.rider.near_pedal[k];
+    assert.ok(Math.abs(x - (BB[0] + CRANK * Math.cos(a))) <= 1, `frame ${k} x`);
+    assert.ok(Math.abs(y - (BB[1] + CRANK * Math.sin(a))) <= 1, `frame ${k} y`);
+    const near = pedalAt(k);
+    const far = pedalAt(k + CRANK_FRAMES / 2);
+    assert.ok(Math.abs(near[0] + far[0] - 2 * BB[0]) < 1e-9 && Math.abs(near[1] + far[1] - 2 * BB[1]) < 1e-9, `frame ${k}`);
+  }
+});
+
+test('frame 23 runs into frame 0: the chain and the cranks close the revolution with the same step', () => {
+  const step = (a, b) => (b - a + CHAIN_PERIOD) % CHAIN_PERIOD;
+  const steps = [];
+  for (let k = 0; k < CRANK_FRAMES; k++) steps.push(step(chainOffset(k), chainOffset((k + 1) % CRANK_FRAMES)));
+  for (const s of steps) assert.ok(s === 1 || s === 2, `steps ${steps}`);
+  assert.equal(steps.reduce((u, v) => u + v, 0), 32, 'exactly 32 px of chain per revolution');
+  // The pixels agree: frames 23 and 0 differ by about as much as any neighbouring frames do.
+  const sheet = readPng(fromRes(kit.rider.slots[0]));
+  const { cell, cols } = kit.rider;
+  const diff = (a, b) => {
+    let n = 0;
+    for (let y = 0; y < cell[1]; y++) {
+      for (let x = 0; x < cell[0]; x++) {
+        const ia = ((Math.floor(a / cols) * cell[1] + y) * sheet.width + (a % cols) * cell[0] + x) * 4;
+        const ib = ((Math.floor(b / cols) * cell[1] + y) * sheet.width + (b % cols) * cell[0] + x) * 4;
+        if (sheet.data[ia] !== sheet.data[ib] || sheet.data[ia + 3] !== sheet.data[ib + 3]) n++;
+      }
+    }
+    return n;
+  };
+  const inner = [];
+  for (let k = 0; k < CRANK_FRAMES - 1; k++) inner.push(diff(k, k + 1));
+  assert.ok(diff(23, 0) <= Math.max(...inner), `seam ${diff(23, 0)}, the largest inner step ${Math.max(...inner)}`);
+  assert.ok(diff(23, 0) > 0, 'the frames do move');
+});
+
+test('slot looks: colours and patterns as Wl.slot_look; jersey colours are on the sprite', () => {
+  const wl = readFileSync(join(repo, 'addons/wattlands/contracts/wl.gd'), 'utf8');
+  const block = wl.slice(wl.indexOf('const SLOT_COLORS'), wl.indexOf('const SLOT_COLOR_NAMES'));
+  const colours = [...block.matchAll(/Color\("(#[0-9A-Fa-f]{6})"\)/g)].map((m) => m[1].toUpperCase());
+  assert.deepEqual(SLOT_COLORS, colours);
+  assert.deepEqual(kit.rider.slot_colors, colours);
+  const patterns = [...wl.match(/SLOT_PATTERNS: Array\[String\] = \[(.*)\]/)[1].matchAll(/"(\w+)"/g)].map((m) => m[1]);
+  const { cell, slots } = kit.rider;
+  slots.forEach((path, s) => {
+    const look = slotLook(s);
+    assert.equal(look.pattern, patterns[s % 4], `slot ${s}`);
+    const sheet = readPng(fromRes(path));
+    const colour = hex(SLOT_COLORS[s % 4]);
+    if (s < 4) {
+      assert.ok(countColour(sheet, 0, 0, cell[0], cell[1], colour) >= 40, `slot ${s} wears its colour`);
+    } else {
+      assert.ok(countColour(sheet, 0, 0, cell[0], cell[1], hex(HOLLOW_BODY)) >= 25, `slot ${s} has the hollow body`);
+      assert.ok(countColour(sheet, 0, 0, cell[0], cell[1], colour) >= 8, `slot ${s} keeps its colour on the sleeve`);
+    }
+  });
+  // Same colour, different pattern or body: no two sheets are the same.
+  const first = slots.map((p) => Buffer.from(readPng(fromRes(p)).data).toString('latin1'));
+  assert.equal(new Set(first).size, slots.length);
+});
+
+/** Palette index and height of a column's first opaque pixel; mist that burns off does not count. */
+function firstLand(png, x) {
+  for (let y = 0; y < png.height; y++) {
+    const p = pixel(png, x, y);
+    if (p.alpha > 0 && p.index !== MIST && p.index !== MIST + 1) return { y, index: p.index };
+  }
+  return null;
+}
+
+test('strips are seamless: the first and last columns meet within 3 px', () => {
+  const files = ['clouds_hi', 'clouds_lo', 'far_hills', 'mid_hills', 'near_trees', 'poles', 'road'];
+  for (let f = 0; f < 4; f++) files.push(`verge_far_${f}`, `verge_near_${f}`);
+  files.push('foreground_0', 'foreground_1');
+  for (const name of files) {
+    const png = readPng(join(assets, 'world', `${name}.png`));
+    const a = firstLand(png, 0);
+    const b = firstLand(png, png.width - 1);
+    assert.equal(a === null, b === null, `${name}: one edge is empty`);
+    if (a) assert.ok(Math.abs(a.y - b.y) <= 3, `${name}: ${a.y} against ${b.y}`);
+  }
+});
+
+test('no world plane uses a reserved index', () => {
+  for (const path of walk(join(assets, 'world')).filter((p) => p.endsWith('.png') && !/tod_lut|sun/.test(p))) {
+    const { data } = readPng(path);
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] > 0) assert.ok(data[i] / 2 < RESERVE, `${path}: index ${data[i] / 2}`);
+    }
+  }
+});
+
+test('one morning in the LUT: stars gone by sunrise, windows lit then dark, mist burns off, no holes', () => {
+  const lut = readPng(fromRes(kit.lut.path));
+  assert.equal(kit.lut.rows, 32);
+  const at = (index, row) => {
+    const i = (row * lut.width + index) * 4;
+    return [lut.data[i], lut.data[i + 1], lut.data[i + 2], lut.data[i + 3]];
+  };
+  const luma = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  const sunrise = Math.floor(0.22 * 31);
+  assert.equal(at(STAR, 0)[3], 255, 'stars at blue hour');
+  assert.equal(at(STAR, sunrise + 1)[3], 0, 'no stars after sunrise');
+  assert.equal(at(MIST, 0)[3], 255, 'mist at blue hour');
+  assert.equal(at(MIST, Math.floor(0.65 * 31))[3], 0, 'mist gone by the morning');
+  assert.ok(luma(at(WINDOW, 0)) > 150, 'windows lit at dawn');
+  assert.ok(luma(at(WINDOW, 31)) < 80, 'windows dark by day');
+  for (let r = 0; r < 32; r++) {
+    for (const i of [WINDOW, GLOW, MIST_GROUND, MIST_GROUND + 1]) assert.equal(at(i, r)[3], 255, `index ${i} row ${r} would be a hole`);
+  }
+  const sky = (row) => luma(at(0, row));
+  assert.ok(sky(0) < sky(6) && sky(6) < sky(12), 'the top of the sky lightens through the morning');
+});
+
+test('every wheel frame has its valve and a different picture', () => {
+  const wheel = readPng(fromRes(kit.wheel.path));
+  const seen = new Set();
+  for (let f = 0; f < kit.wheel.frames; f++) {
+    assert.ok(countColour(wheel, f * 27, 0, 27, 27, [232, 232, 224]) >= 1, `frame ${f}`);
+    let s = '';
+    for (let y = 0; y < 27; y++) for (let x = 0; x < 27; x++) s += wheel.data[(y * wheel.width + f * 27 + x) * 4];
+    seen.add(s);
+  }
+  assert.equal(seen.size, kit.wheel.frames);
 });

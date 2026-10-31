@@ -693,8 +693,8 @@ export function vergeFarPlane(seed, f) {
   // Fence: posts, two strands, one leaning post.
   c.rect(0, 9, c.w, 1, ix(P.WIRE));
   c.rect(0, 13, c.w, 1, ix(P.WIRE));
-  for (let x = 0; x < c.w; x += 48) {
-    const lean = x === 96 ? 1 : 0;
+  for (let x = 24; x < c.w; x += 48) {
+    const lean = x === 120 ? 1 : 0;
     for (let y = 5; y < 20; y++) {
       const px = x + (y < 10 ? lean : 0);
       c.px(px, y, ix(P.WOOD + 1));
@@ -703,8 +703,8 @@ export function vergeFarPlane(seed, f) {
     c.px(x, 5, ix(P.WOOD + 2));
   }
   // A white marker post with a dark band, once a tile.
-  c.rect(130, 8, 3, 13, ix(P.PAINT + 1));
-  c.rect(130, 10, 3, 2, ix(P.WIRE));
+  c.rect(146, 8, 3, 13, ix(P.PAINT + 1));
+  c.rect(146, 10, 3, 2, ix(P.WIRE));
   blades(c, { rows: [11, 13, 15, 17, 19, 21, 23, 25], density: 0.32, seed: seed ^ 0x88, frame: f, frames: 4, base: P.GRASS + 2, spread: 3, maxH: 5 });
   // A few taller seed stalks along the fence.
   const rnd = mulberry32(seed ^ 0x89);
@@ -751,6 +751,8 @@ export function foregroundPlane(seed, f) {
     const w = 12 + Math.floor(rnd() * 34);
     const tall = 6 + Math.floor(rnd() * 12);
     const stone = rnd() < 0.24;
+    // The seam stays on bare bank, so tiles meet without a cut clump.
+    if (cx < w / 2 + 6 || cx > c.w - w / 2 - 6) continue;
     const stems = Math.round(w * 0.9);
     for (let k = 0; k < stems; k++) {
       const u = (k + rnd()) / stems;
