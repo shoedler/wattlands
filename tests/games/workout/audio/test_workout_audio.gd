@@ -228,7 +228,9 @@ func test_fractions_come_from_the_rider_sheet() -> void:
 	var events: Array = _doc()["machines"]["bike"]["events"]
 	var at_of := {}
 	for e: Dictionary in events:
-		at_of[e["sound"]] = e["at"]
+		var ats: Array = at_of.get(e["sound"], [])
+		ats.append_array(e["at"])
+		at_of[e["sound"]] = ats
 	# The press sounds where the foot pushes hardest: the pedal furthest forward, near then far.
 	assert_eq(xs[WorkoutRig.crank_frame(float(at_of["pedal_press"][0]))], xs.max())
 	assert_eq(xs[WorkoutRig.crank_frame(float(at_of["pedal_press"][1]))], xs.min())
@@ -631,11 +633,13 @@ func test_a_steady_block_is_not_frozen_the_road_and_the_gusts_move_the_loops() -
 	r.speed.distance_m = lo_d
 	_ride(view, 90.0, 0.5)
 	var smooth := kit.entry_loop("tyre_hum").db[0]
+	var rattle_smooth := kit.machine_loop("bike1").db[1]
 	r.speed.distance_m = hi_d
 	_ride(view, 90.0, 0.5)
 	assert_gt(
 		kit.entry_loop("tyre_hum").db[0], smooth + 3.0, "rough tarmac over smooth, same speed"
 	)
+	assert_gt(kit.machine_loop("bike1").db[1], rattle_smooth + 3.0, "and the chain shakes on it")
 	# The air: its strongest and its slackest moment in the first five minutes.
 	var strong_t := 0.0
 	var slack_t := 0.0

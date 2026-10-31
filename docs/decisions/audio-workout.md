@@ -64,7 +64,7 @@
 
 ## 2026-10-31: A phase change stacks chime, dyad, toast, then bell
 
-- Decision: levels stay. Measured over the road and bike with the platform's `phase` and `toast` at `HudLayer`'s -4 dB: first 250 ms +9 dB in 1-4 kHz, bell +8.8 dB, chime 9 dB over `phase` and `toast` in its own band, no clipping. `workout_bank.test.mjs` renders this, since a bank's preview block cannot play a `_shared` sound.
+- Decision: levels stay. Measured over the road and bike with the platform's `phase` and `toast` at `HudLayer`'s -4 dB: first 250 ms +9 dB in 1-4 kHz, bell +8.8 dB, chime 9 dB over `phase` and `toast` in its own band, no clipping. `workout_bank.test.mjs` renders this. The preview block now plays them too (`preview.hud`), so `workout.mp3` and D5 have the real stack.
 - `warning` is not in the stack: `HudLayer.show_banner` played it on every non-cool-down interval, a safety prompt that cried wolf and ducked all of the above, 8 false alarms in Easy 30. The platform's `HudSpec.banner_sound` (default unchanged) lets Workout set it to `""`: the banner still shows, the chime and bell carry the change, and `warning` means a real safety prompt. `test_a_routine_banner_cries_no_wolf_through_the_real_hud` holds it. Tank's segment banner has the same sound.
 
 ## 2026-10-31: A safety prompt stays clear at the loudest moment, on every game
@@ -89,3 +89,38 @@
 - The dog reads alike at every speed: `dog_far` [-11, -7], plus `db_by` speed -4 at 5, 0 at 8.5, +3 at 13 m/s. Its median play's best third-octave reads +0.3, -1.1, -2.3, -2.2 dB at 5.5, 8.5, 11, 13 m/s, was +1.1, -3.8, -6.4, -7.6.
 - The fatigue rule, read as a group: seven riders, ticks rate-weighted, stay at least 16 dB above 2 kHz under your two presses. A test holds it.
 - SPEC_AUDIO 3.4 allows WAVs to be committed twice a branch, and this branch has three (a346a45c, 70a49c3c, 5c60609d): the third carried the group's own tick and the road's new tiles. An exception, named here. This round changes runtime JSON only and renders nothing.
+
+## 2026-10-31: The UI cannot cover a prompt, and D5 reads it
+
+- Decision: `WlSfx` trims the UI's own voices 10 dB under `warning` and `rescue`, those playing and those that start, on the ducks' 20 ms attack and 2 s release (`SAFETY_UI_DB`). `countdown` and the metronome keep their level. The UI bus itself stays unducked. The +6 LU stays. `preview.hud` puts what `HudLayer` plays over a moment in the preview, and D5 plays prompts on it and 0.2 and 0.4 s ahead of it.
+- Numbers: Workout at a sprint's end with `phase` and `toast` in the preview. No trim: +5.34 LU (`warning` at 93.5 s), which misses the +6 by .66, as the critic read it. Trimmed: +8.66 LU (`warning` at 93.7 s). The mix alone reads +11.2.
+- Alternatives: a lower `toast` only: `phase` alone reads +7.25 at best, and a sound other than these two could stack the same way. A real duck on the UI bus: SPEC_AUDIO 5 keeps the countdown, on UI, undimmed, and the bank validator, `AudioBuses.duck` and their tests hold that. A sound at a sprint's end moved: it would still be on UI the next time.
+- Reason: BRIEF 4.6 outranks a phase chime. A trimmed toast still shows its text. The other banks have no `preview.hud` yet, so their D5 does not read this stack; they get the same trim in the game.
+
+## 2026-10-31: A pause saves up no bed spots
+
+- Decision: a bed spot's follow-ups run on the bed's clock under a pause, as its timers and first hits already did (`GameAudioKit._run_pending`). Delayed cues stay held, as SPEC_AUDIO 2.5 says.
+- Alternatives: dropping the follow-ups while paused, the critic's other option: bursts would thin out under a pause for no gain. Holding the bed's timers: the road is silent then, and the bed is all there is to hear.
+- Reason: with the real bank, a 120 s pause at day .2 started 41 records in the first second of the resume. Now at most 4, and a test holds it.
+
+## 2026-10-31: The scorecard reads the game
+
+- D6 has the lead's own machines, every `preview.loops` id held open, the cues folded into 30 s and a coast. It reads 6/7/12 here, against 5/0/5 before. Tank 10/6/16, Fishing 7/3/23, Siege 8/7/16 on their current branches, read only.
+- D4 reads every stroke's own ring from 400 ms after the worst stop for it. It reads -300 here since `breath` went from .38 to .34 s: the critic's one stop in 80 at -56.3 dB was its tail. Tank, Fishing and Siege read -300 too.
+- A loops id keeps one track across its entries, as `set_loop` does. `workout.mp3` loses the dip of about 14 dB and the restart at each entry, on a 6 s beat, which was the preview's, not the game's.
+- A bed's round-robin runs per sound: split in two by a `when`, `wood_call` played one variant twice running at day .6, which A13 caught.
+- This branch's fourth WAV commit: three `breath` files only, the D4 fix, an exception like the third, named here. `audio.json` carried everything else.
+
+## 2026-10-31: A steady ride moves, repeats less, and the bike has a detail at endurance
+
+Everything here is runtime JSON, the critic's numbers except where it says.
+
+- The road and air swing more: `wind_rush` gust -11.5..+5.5 dB (was -8..+2), `tyre_hum` road -5.5..+5.5 (was -3..+3), `chain_rattle` by road -5..+5 and the adapter passes `road` to the local bike. A rendered 180 s block at ERG .65, 88 rpm wandering 1.5 rpm, real `air_at` and `road_at`: LRA 2.42 LU (was 1.17). 3 s level, p5-p95: 1.43 / 2.57 / 2.81 / 3.58 / 5.93 dB in 40-150, 150-500, 500-1500, 1500-4000, 4000-9000 Hz (was 1.07 / 1.49 / 1.27 / 1.89 / 3.45), mean level within 1 dB in every band. A test holds LRA >= 2 and these ranges. A human has to say if this is enough.
+- A detail at endurance: `bb_creak` at .33 at -13 dB, on road above .74, 38 in that 180 s, with a 7-step table. If it reads as a broken bike, lower -13 before removing it.
+- Two legs: `pedal_press` at .25 db 2.6 with the 4-step table, at .75 db 1.3 with a 5-step one. The press alone now comes round at 20 revolutions (was 10), press and tick together at 140 (was 70). A5 still .94-.96. Whether 1.3 dB feels like a natural leg or a limp only an ear can say.
+- Twins, no bytes: `birds_day`, `wind_grass_lo` and `tyre_hum` each go 3 dB down and get a second player at a fixed pitch (1.0667, 1.09, 1.13 through a one-point `pitch_by` on a param nobody sets). On a ride, how far correlation at the tile stands over the lags beside it: bed 60-300 Hz at 11 s about .15 (was .72), bed 4-9 kHz at 3 s about .01 (was .49), mix 4-9 kHz at 3 s none (was .16). Loops 12 of 24 in D6.
+- `mix.other_doubling_db` -3.3 from -3: with the road's new swing seven scattered riders cost your rhythm 1.05 dB in 1.5-4 kHz, past the test's 1 dB; this takes it back with no change to one other rider's level, which A2 holds at -11.75 LU.
+- `dog_far` gap [70, 170] and `church_bell_far` [150, 320]. `wood_call` keeps its dawn gap to day .6, then [6, 45] at [-34, -28]. Tests hold at most 26 dogs and 9 bells in 25 minutes on four seeds.
+- `wind_grass_hi` -12 from -15, for depth. Ambience -33.01. The whole mix's side over mid barely moves in the 180 s block, -14.7 dB from -15.1; the critic read more in its upper bands.
+- The dawn loop test takes the air's swell out before it reads the 4 s: the wider gust range lifted every short lag alike, and read .51 where nothing shows at 4 s more than beside it. Its bound stays .35, and `birds_dawn` raised 12 dB reads .87.
+- Not done. A stereo `wind_rush`: about +325 KB against 3.99 of 4 MB, and the trade, cutting `wind_grass_lo` to 5.5 s, was not trialled and shortens the loop you hear when coasting. `pedal_press`'s modal gain .55 to .38: rendered and scored, the 317 Hz hump moved .2 dB, because the file is peak-normalized, so it went back and spared five WAVs. A hum that low wants the mode's level against the other layers changed in a way that can be heard, which is for the Listen step. The GUT run of eight riders still has no coast or scored sprint; D6 now does.

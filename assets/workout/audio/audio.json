@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "game": "workout",
-  "mix": {"other_db": -4, "other_doubling_db": -3, "other_min_gap_s": 0.06, "machine_voices": 16, "sfx_voices": 16, "spot_voices": 6, "max_loop_players": 24},
+  "mix": {"other_db": -4, "other_doubling_db": -3.3, "other_min_gap_s": 0.06, "machine_voices": 16, "sfx_voices": 16, "spot_voices": 6, "max_loop_players": 24},
   "sounds": {
     "chain_tick": {
       "dur": 0.09, "rate": 22050, "ch": 1, "seed": 2101, "variants": 5, "locked": true,
@@ -40,10 +40,10 @@
       ]
     },
     "breath": {
-      "dur": 0.38, "rate": 22050, "ch": 1, "seed": 2104, "variants": 3, "locked": true, "band": [90, 1400],
+      "dur": 0.34, "rate": 22050, "ch": 1, "seed": 2104, "variants": 3, "locked": true, "band": [90, 1400],
       "per_variant": [{"pitch": 1.0}, {"pitch": 0.96}, {"pitch": 1.04}],
       "layers": [
-        {"src": "noise", "color": "pink", "gain": 1.0, "env": {"points": [[0, 0], [0.05, 1], [0.16, 0.65], [0.3, 0.12], [0.38, 0]]}, "fx": [{"bp": {"f": [1050, 600], "q": 1.1, "glide": "exp"}}, {"lp": {"f": 1500, "q": 0.6}}, {"lp": {"f": 1700, "q": 0.6}}]}
+        {"src": "noise", "color": "pink", "gain": 1.0, "env": {"points": [[0, 0], [0.05, 1], [0.16, 0.65], [0.27, 0.12], [0.34, 0]]}, "fx": [{"bp": {"f": [1050, 600], "q": 1.1, "glide": "exp"}}, {"lp": {"f": 1500, "q": 0.6}}, {"lp": {"f": 1700, "q": 0.6}}]}
       ]
     },
     "chain_hum": {
@@ -267,11 +267,16 @@
       "events": [
         {"at": [0.0], "sound": "chain_tick", "db": 1.5, "priority": 5,
          "db_by": [{"param": "power", "points": [[0, -7], [1.3, 0]]}], "pitch_table": [0, 0.012, -0.018, 0.006, -0.009, 0.015, -0.004]},
-        {"at": [0.25, 0.75], "sound": "pedal_press", "db": 2, "lead_only": true, "priority": 5,
+        {"at": [0.25], "sound": "pedal_press", "db": 2.6, "lead_only": true, "priority": 5,
          "db_by": [{"param": "power", "points": [[0, -8], [1.3, 0]]}], "pitch_table": [0, -0.012, 0.008, -0.005]},
+        {"at": [0.75], "sound": "pedal_press", "db": 1.3, "lead_only": true, "priority": 5,
+         "db_by": [{"param": "power", "points": [[0, -8], [1.3, 0]]}], "pitch_table": [0.006, -0.016, 0.012, -0.008, 0.003]},
         {"at": [0.31, 0.81], "sound": "bb_creak", "db": -2, "lead_only": true, "priority": 4,
          "when": {"param": "power", "min": 1.05},
-         "db_by": [{"param": "power", "points": [[1.05, -8], [1.5, 0]]}], "pitch_table": [0, -0.015, 0.01, 0.02, -0.01]}
+         "db_by": [{"param": "power", "points": [[1.05, -8], [1.5, 0]]}], "pitch_table": [0, -0.015, 0.01, 0.02, -0.01]},
+        {"at": [0.33], "sound": "bb_creak", "db": -13, "lead_only": true, "priority": 4,
+         "when": {"param": "road", "min": 0.74},
+         "db_by": [{"param": "road", "points": [[0.74, -6], [0.95, 0]]}], "pitch_table": [0, -0.03, 0.02, 0.035, -0.02, 0.01, -0.04]}
       ],
       "loops": [
         {"sound": "chain_hum", "db": -7, "min_rpm": 8, "slew_s": 0.25,
@@ -279,7 +284,7 @@
          "db_by": [{"param": "power", "points": [[0, -9], [1.2, 0]]}]},
         {"sound": "chain_rattle", "db": -10, "min_rpm": 8, "slew_s": 0.25,
          "pitch_by": [{"param": "rpm", "ratio": 90}],
-         "db_by": [{"param": "power", "points": [[0.35, -20], [0.7, -11], [1.05, -3], [1.3, 0]]}]}
+         "db_by": [{"param": "power", "points": [[0.35, -20], [0.7, -11], [1.05, -3], [1.3, 0]]}, {"param": "road", "points": [[0.2, -5], [0.8, 5]]}]}
       ]
     },
     "peer_bike": {
@@ -319,10 +324,14 @@
   },
   "loops": {
     "tyre_hum": {"bus": "Sfx", "layers": [
-      {"sound": "tyre_hum", "db": -7.5, "slew_s": 0.4,
+      {"sound": "tyre_hum", "db": -10.5, "slew_s": 0.4,
        "when": {"param": "speed", "min": 0.5},
        "pitch_by": [{"param": "speed", "ratio": 9}],
-       "db_by": [{"param": "speed", "points": [[0.5, -30], [5, -9], [9, -3], [14, 0]]}, {"param": "road", "points": [[0, -3], [1, 3]]}]},
+       "db_by": [{"param": "speed", "points": [[0.5, -30], [5, -9], [9, -3], [14, 0]]}, {"param": "road", "points": [[0, -5.5], [1, 5.5]]}]},
+      {"sound": "tyre_hum", "db": -10.5, "slew_s": 0.4,
+       "when": {"param": "speed", "min": 0.5},
+       "pitch_by": [{"param": "speed", "ratio": 9}, {"param": "twin", "points": [[0, 1.13]]}],
+       "db_by": [{"param": "speed", "points": [[0.5, -30], [5, -9], [9, -3], [14, 0]]}, {"param": "road", "points": [[0, -5.5], [1, 5.5]]}]},
       {"sound": "tyre_grit", "db": -9.5, "slew_s": 0.4,
        "when": {"param": "speed", "min": 0.5},
        "pitch_by": [{"param": "speed", "ratio": 9}],
@@ -332,7 +341,7 @@
       {"sound": "wind_rush", "db": -4.5, "slew_s": 0.5,
        "when": {"param": "speed", "min": 2},
        "pitch_by": [{"param": "speed", "ratio": 12}, {"param": "gust", "points": [[0, 0.9], [1, 1.12]]}],
-       "db_by": [{"param": "speed", "points": [[2, -40], [6, -16], [10, -6], [15, 0]]}, {"param": "gust", "points": [[0, -8], [1, 2]]}]}
+       "db_by": [{"param": "speed", "points": [[2, -40], [6, -16], [10, -6], [15, 0]]}, {"param": "gust", "points": [[0, -11.5], [1, 5.5]]}]}
     ]},
     "crowd_loop": {"bus": "Sfx", "layers": [
       {"sound": "crowd_loop", "db": -8,
@@ -344,24 +353,31 @@
     "dawn_road": {
       "spot_min_gap_s": 2.2,
       "layers": [
-        {"sound": "wind_grass_lo", "db": -12.5,
+        {"sound": "wind_grass_lo", "db": -15.5,
          "db_by": [{"param": "gust", "points": [[0, -5], [1, 0]]}, {"param": "speed", "points": [[0, -4], [12, 0]]}]},
-        {"sound": "wind_grass_hi", "db": -15,
+        {"sound": "wind_grass_lo", "db": -15.5,
+         "pitch_by": [{"param": "twin", "points": [[0, 1.09]]}],
+         "db_by": [{"param": "gust", "points": [[0, -5], [1, 0]]}, {"param": "speed", "points": [[0, -4], [12, 0]]}]},
+        {"sound": "wind_grass_hi", "db": -12,
          "db_by": [{"param": "gust", "points": [[0, -10], [1, 0]]}, {"param": "speed", "points": [[0, -8], [12, 0]]}]},
         {"sound": "birds_dawn", "db": -25,
          "db_by": [{"param": "day", "points": [[0, 0], [0.3, -0.5], [0.45, -3], [0.62, -60]]}]},
-        {"sound": "birds_day", "db": -25,
+        {"sound": "birds_day", "db": -28,
+         "db_by": [{"param": "day", "points": [[0.15, -60], [0.3, -12], [0.45, -1.5], [0.55, 0], [1, 0]]}]},
+        {"sound": "birds_day", "db": -28,
+         "pitch_by": [{"param": "twin", "points": [[0, 1.0667]]}],
          "db_by": [{"param": "day", "points": [[0.15, -60], [0.3, -12], [0.45, -1.5], [0.55, 0], [1, 0]]}]}
       ],
       "spots": [
         {"sound": "chirrup", "gap_s": [1.2, 8], "db": [-34, -27], "pitch": [0.88, 1.14], "burst": [1, 3], "burst_gap_s": 0.27, "when": {"param": "day", "max": 0.4}},
         {"sound": "chirrup", "gap_s": [5, 24], "db": [-36, -29], "pitch": [0.88, 1.14], "burst": [1, 2], "burst_gap_s": 0.27, "when": {"param": "day", "min": 0.4}},
-        {"sound": "wood_call", "gap_s": [1.9, 32], "db": [-31, -25], "pitch": [0.92, 1.1], "burst": [1, 2], "burst_gap_s": 0.5, "when": {"param": "day", "min": 0.08}},
+        {"sound": "wood_call", "gap_s": [1.9, 32], "db": [-31, -25], "pitch": [0.92, 1.1], "burst": [1, 2], "burst_gap_s": 0.5, "when": {"param": "day", "min": 0.08, "max": 0.6}},
+        {"sound": "wood_call", "gap_s": [6, 45], "db": [-34, -28], "pitch": [0.92, 1.1], "burst": [1, 2], "burst_gap_s": 0.5, "when": {"param": "day", "min": 0.6}},
         {"sound": "lark", "gap_s": [13, 29], "db": [-29, -24], "pitch": [0.95, 1.05], "when": {"param": "day", "min": 0.04, "max": 0.6}},
         {"sound": "rooster", "gap_s": [30, 120], "db": [-29, -25], "pitch": [0.96, 1.03], "when": {"param": "day", "max": 0.12}},
-        {"sound": "dog_far", "gap_s": [24, 70], "db": [-11, -7], "pitch": [0.94, 1.06], "burst": [1, 2], "burst_gap_s": 0.7, "db_by": [{"param": "speed", "points": [[5, -4], [8.5, 0], [13, 3]]}]},
+        {"sound": "dog_far", "gap_s": [70, 170], "db": [-11, -7], "pitch": [0.94, 1.06], "burst": [1, 2], "burst_gap_s": 0.7, "db_by": [{"param": "speed", "points": [[5, -4], [8.5, 0], [13, 3]]}]},
         {"sound": "tractor_far", "gap_s": [19, 41], "db": [-24, -19], "pitch": [0.94, 1.06], "when": {"param": "tractor", "min": 0.5}},
-        {"sound": "church_bell_far", "gap_s": [90, 200], "db": [-18, -14], "pitch": 1.0}
+        {"sound": "church_bell_far", "gap_s": [150, 320], "db": [-18, -14], "pitch": 1.0}
       ]
     }
   },
@@ -393,15 +409,15 @@
     "bed_params": {"gust": 0.55, "tractor": 1},
     "seed": 12,
     "segments": [
-      {"rpm": 60, "s": 18, "params": {"power": 0.6, "speed": 6.5, "day": 0.08, "coast": 0, "crowd": 0}},
-      {"rpm": 90, "s": 22, "params": {"power": 0.95, "speed": 9.5, "day": 0.45, "coast": 0, "crowd": 0}},
-      {"rpm": 90, "s": 6, "params": {"power": 0.65, "speed": 8.5, "day": 0.6, "coast": 0, "crowd": 0, "gust": 0.15}},
-      {"rpm": 90, "s": 6, "params": {"power": 0.65, "speed": 8.5, "day": 0.6, "coast": 0, "crowd": 0, "gust": 0.7}},
-      {"rpm": 90, "s": 6, "params": {"power": 0.65, "speed": 8.5, "day": 0.6, "coast": 0, "crowd": 0, "gust": 1}},
-      {"rpm": 90, "s": 6, "params": {"power": 0.65, "speed": 8.5, "day": 0.6, "coast": 0, "crowd": 0, "gust": 0.45}},
-      {"rpm": 90, "s": 6, "params": {"power": 0.65, "speed": 8.5, "day": 0.6, "coast": 0, "crowd": 0, "gust": 0.1}},
-      {"rpm": 90, "s": 6, "params": {"power": 0.65, "speed": 8.5, "day": 0.6, "coast": 0, "crowd": 0, "gust": 0.8}},
-      {"rpm": 110, "s": 18, "params": {"power": 1.3, "speed": 13, "day": 0.85, "coast": 0, "crowd": 1}},
+      {"rpm": 60, "s": 18, "params": {"power": 0.6, "speed": 6.5, "day": 0.08, "coast": 0, "crowd": 0, "road": 0.5}},
+      {"rpm": 90, "s": 22, "params": {"power": 0.95, "speed": 9.5, "day": 0.45, "coast": 0, "crowd": 0, "road": 0.5}},
+      {"rpm": 90, "s": 6, "params": {"power": 0.65, "speed": 8.5, "day": 0.6, "coast": 0, "crowd": 0, "gust": 0.15, "road": 0.45}},
+      {"rpm": 90, "s": 6, "params": {"power": 0.65, "speed": 8.5, "day": 0.6, "coast": 0, "crowd": 0, "gust": 0.7, "road": 0.9}},
+      {"rpm": 90, "s": 6, "params": {"power": 0.65, "speed": 8.5, "day": 0.6, "coast": 0, "crowd": 0, "gust": 1, "road": 0.55}},
+      {"rpm": 90, "s": 6, "params": {"power": 0.65, "speed": 8.5, "day": 0.6, "coast": 0, "crowd": 0, "gust": 0.45, "road": 0.1}},
+      {"rpm": 90, "s": 6, "params": {"power": 0.65, "speed": 8.5, "day": 0.6, "coast": 0, "crowd": 0, "gust": 0.1, "road": 0.75}},
+      {"rpm": 90, "s": 6, "params": {"power": 0.65, "speed": 8.5, "day": 0.6, "coast": 0, "crowd": 0, "gust": 0.8, "road": 0.3}},
+      {"rpm": 110, "s": 18, "params": {"power": 1.3, "speed": 13, "day": 0.85, "coast": 0, "crowd": 1, "road": 0.5}},
       {"rpm": 0, "s": 7, "params": {"power": 0, "speed": 8.5, "day": 0.85, "coast": 1, "crowd": 0}},
       {"rpm": 0, "s": 3, "params": {"power": 0, "speed": 0, "day": 0.85, "coast": 0, "crowd": 0}}
     ],
@@ -439,6 +455,13 @@
       {"t": 31.17, "cue": "gear_shift", "vars": {}},
       {"t": 93.6, "cue": "sprint", "vars": {"hit_db": 2}},
       {"t": 93.7, "cue": "interval_end", "vars": {}}
+    ],
+    "hud": [
+      {"t": 3, "sound": "phase"},
+      {"t": 17.8, "sound": "phase"},
+      {"t": 17.8, "sound": "toast"},
+      {"t": 93.7, "sound": "phase"},
+      {"t": 93.7, "sound": "toast"}
     ],
     "checks": {
       "a6": {"param": "power", "from": 0.5, "to": 1.2},

@@ -8,3 +8,6 @@
 
 - Safety prompts stay clear at the loudest moment of a ride, not just at a calm one: `warning` and `rescue` now push everything else down further and for longer, on every game.
 - Workout's routine interval banner is silent: the warning sound means a real safety prompt again.
+- Interface sounds step back under a safety prompt too, on every game; a start countdown and the metronome keep their level.
+- A long pause no longer saves up the far sounds of the landscape to play them all at once when you ride on, on every game.
+- A steady block moves more: stronger gusts and rough patches you hear in the tyres and the chain, a frame creak on the roughest road. The road, grass and birds repeat less, the dog and the church bell come round less often, and each revolution has a stronger and a weaker leg.

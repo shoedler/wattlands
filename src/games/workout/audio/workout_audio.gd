@@ -97,7 +97,7 @@ static func air_at(env_t: float) -> float:
 
 ## The road surface under the tyres, 0..1, by the metre: patches of rougher tarmac that come and go
 ## over a few hundred metres, on three lengths that do not line up. The same stretch of road sounds the
-## same each time you ride it.
+## same each time you ride it. It shakes the bike too: the chain's rattle, and a creak on the roughest.
 static func road_at(distance_m: float) -> float:
 	var long_wave := 0.15 * sin(distance_m / 157.0 + 1.0) + 0.1 * sin(distance_m / 367.0 + 2.0)
 	return 0.5 + 0.25 * sin(distance_m / 59.0) + long_wave
@@ -135,7 +135,7 @@ func _drive_bikes(game: WorkoutGame) -> void:
 			"bike" if peer == me else "peer_bike",
 			game.cranks.revs(peer),
 			game.cadence_of(peer),
-			{"power": _power_of(game, peer)},
+			{"power": _power_of(game, peer), "road": road_at(view.shown_distance(peer))},
 			peer == me
 		)
 

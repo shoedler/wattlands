@@ -10,7 +10,7 @@ import { CRANK_FRAMES, crankTheta, pedalAt } from '../../../../src/games/workout
 import { loadBank } from '../../../../tools/audio/lib/bank.mjs';
 import { biquad, fft, powerSpectrum, rbj } from '../../../../tools/audio/lib/dsp.mjs';
 import { BankAudio, FRAME_DT, MIX_RATE, mixdown, simulate } from '../../../../tools/audio/lib/offline_mix.mjs';
-import { integratedLufs } from '../../../../tools/audio/lib/lufs.mjs';
+import { integratedLufs, loudnessRange } from '../../../../tools/audio/lib/lufs.mjs';
 import { previewScenario } from '../../../../tools/audio/lib/score.mjs';
 import { curveEval, curveSumDb } from '../../../../tools/audio/lib/pattern.mjs';
 
@@ -27,11 +27,14 @@ function bikeEvent(sound) {
   return e;
 }
 
+// The press's two legs, the strong one first.
+const pressLegs = () => doc.machines.bike.events.filter((e) => e.sound === 'pedal_press');
+
 test('the press sounds where the rider sheet has a pedal furthest forward', () => {
   const xs = Array.from({ length: CRANK_FRAMES }, (_, k) => pedalAt(k)[0]);
   const front = Math.max(...xs);
   const back = Math.min(...xs);
-  const [near, far] = bikeEvent('pedal_press').at;
+  const [near, far] = pressLegs().flatMap((e) => e.at);
   assert.equal(xs[Math.floor(near * CRANK_FRAMES)], front, 'near pedal forward');
   assert.equal(xs[Math.floor(far * CRANK_FRAMES)], back, 'near pedal back, so the far one forward');
   assert.equal(Math.cos(crankTheta(near * CRANK_FRAMES)), 1);
@@ -74,9 +77,9 @@ function energy(id, lo, hi) {
 }
 
 test('fatigue: nothing locked above 2 kHz within 16 dB of the main stroke, by energy, at any load', () => {
-  const press = bikeEvent('pedal_press');
+  const press = pressLegs()[1];
   for (const power of [0.3, 0.65, 1.0, 1.3, 1.5]) {
-    const at = { power, crowd: 1, speed: 15, coast: 1, rpm: 110 };
+    const at = { power, crowd: 1, speed: 15, coast: 1, rpm: 110, road: 1 };
     const levelOf = (e) => (e.db ?? 0) + (e.db_by ?? []).reduce((a, c) => a + curveEval(c, at), 0);
     const main = energy('pedal_press', 0, 1e6) + levelOf(press);
     for (const machine of ['bike', 'breath', 'wheel']) {
@@ -93,7 +96,6 @@ test('fatigue: nothing locked above 2 kHz within 16 dB of the main stroke, by en
 });
 
 test('fatigue, read as the whole group: seven ticks a revolution, once the riders have scattered, against your two presses', () => {
-  const press = bikeEvent('pedal_press');
   const peer = doc.machines.peer_bike.events[0];
   for (const power of [0.5, 0.65, 1.0]) {
     const at = { power };
@@ -102,7 +104,7 @@ test('fatigue, read as the whole group: seven ticks a revolution, once the rider
     const trim = doc.mix.other_db + doc.mix.other_doubling_db * Math.log2(n / 2);
     const perRev = 10 * Math.log10(n * peer.at.length);
     const group = energy(peer.sound, 2000, 1e6) + levelOf(peer) + trim + perRev;
-    const main = energy('pedal_press', 0, 1e6) + levelOf(press) + 10 * Math.log10(press.at.length);
+    const main = energy('pedal_press', 0, 1e6) + 10 * Math.log10(pressLegs().reduce((a, e) => a + Math.pow(10, levelOf(e) / 10), 0));
     assert.ok(group <= main - 16, `seven at ${power}: ${(group - main).toFixed(1)} dB`);
   }
 });
@@ -248,7 +250,7 @@ test('eight riders sound unlike one, and your own rhythm holds through them', ()
   const power = 0.65;
   const speed = 8.5;
   const scene = {
-    segments: [{ rpm: 90, s: 30, params: { power, speed, day: 0.3, coast: 0, crowd: 0 } }],
+    segments: [{ rpm: 90, s: 30, params: { power, speed, day: 0.3, coast: 0, crowd: 0, road: 0.5 } }],
     bed: 'dawn_road',
     bed_params: { gust: 0.5, tractor: 0 },
     seed: 3,
@@ -283,7 +285,7 @@ function rhythmAmong(scales, s, from) {
   const power = 0.65;
   const speed = 8.5;
   const scene = {
-    segments: [{ rpm: 90, s, params: { power, speed, day: 0.3, coast: 0, crowd: 0 } }],
+    segments: [{ rpm: 90, s, params: { power, speed, day: 0.3, coast: 0, crowd: 0, road: 0.5 } }],
     bed: 'dawn_road',
     bed_params: { gust: 0.5, tractor: 0 },
     seed: 3,
@@ -312,16 +314,16 @@ test('your own rhythm holds once seven riders have scattered: at most 1 dB after
   }
 });
 
-test('no three-beat loop: the strokes come round only after 70 revolutions', () => {
+test('no three-beat loop: the strokes come round only after 140 revolutions', () => {
   const tick = bikeEvent('chain_tick');
-  const press = bikeEvent('pedal_press');
   const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b));
   const lcm = (a, b) => (a * b) / gcd(a, b);
   const tickRevs = lcm(doc.sounds.chain_tick.variants, tick.pitch_table.length);
-  const pressStrokes = lcm(doc.sounds.pedal_press.variants, press.pitch_table.length);
-  const pressRevs = lcm(pressStrokes, press.at.length) / press.at.length;
+  // Round-robin runs across both legs, so each leg takes every 2nd variant, one a revolution: 5 revolutions round.
+  const pressRevs = pressLegs().reduce((a, leg) => lcm(a, lcm(doc.sounds.pedal_press.variants, leg.pitch_table.length)), 1);
+  assert.equal(pressRevs, 20, 'the press alone: no exact repeat at 10 revolutions');
   const cycle = lcm(tickRevs, pressRevs);
-  assert.equal(cycle, 70, `tick ${tickRevs}, press ${pressRevs}`);
+  assert.equal(cycle, 140, `tick ${tickRevs}, press ${pressRevs}`);
   const levels = doc.sounds.chain_tick.per_variant.map((v) => v.norm.peak);
   assert.ok(Math.max(...levels) - Math.min(...levels) <= 1.5, 'no accent the legs do not have');
   const sim = simulate(bank, { segments: [{ rpm: 90, s: 30, params: { power: 0.65 } }], machines: [{ id: 'lead', machine: 'bike', lead: true, loops: false }] });
@@ -385,6 +387,32 @@ test('no 2:3 against the tick: the press has no three-stroke accent', () => {
   assert.ok(wave < 0.9, `waveform at 1.5 revolutions: ${wave.toFixed(2)}, was 0.97`);
 });
 
+test('each revolution has a strong leg and a weak one, within what a leg can be', () => {
+  const [strong, weak] = pressLegs();
+  assert.ok(strong.db - weak.db >= 1 && strong.db - weak.db <= 1.5, `${strong.db} against ${weak.db}`);
+});
+
+test('at endurance the frame creaks now and then on rough road, and never on smooth', () => {
+  const run = (road) => simulate(bank, { segments: [{ rpm: 90, s: 40, params: { power: 0.65, speed: 8.5, road } }], machines: [{ id: 'lead', machine: 'bike', lead: true }] }).voices.filter((v) => v.sound === 'bb_creak');
+  assert.equal(run(0.5).length, 0, 'smooth');
+  const rough = run(0.85);
+  assert.ok(rough.length >= 40, `${rough.length} creaks`);
+  // A 7-step table on 3 variants: an exact cycle of 21, no repeat at three.
+  const same = (a, b) => a.variant === b.variant && Math.abs(a.pitch - b.pitch) < 1e-9;
+  assert.equal(rough.slice(3).filter((v, i) => same(v, rough[i])).length, 0);
+  assert.ok(simulate(bank, { segments: [{ rpm: 90, s: 40, params: { power: 1.3, speed: 8.5, road: 0.5 } }], machines: [{ id: 'lead', machine: 'bike', lead: true }] }).voices.some((v) => v.sound === 'bb_creak'), 'under load on any road');
+});
+
+test('the most memorable sounds come round seldom in half an hour', () => {
+  for (const [sound, most] of [['dog_far', 26], ['church_bell_far', 9]]) {
+    for (const seed of [3, 7, 11, 19]) {
+      const sim = simulate(bank, { segments: ridePlan(), machines: [{ id: 'lead', machine: 'bike', lead: true, strokes: false, loops: false }], bed: 'dawn_road', bed_params: {}, seed });
+      const n = sim.events.filter((e) => e.kind === 'spot' && e.sound === sound).length;
+      assert.ok(n >= 2 && n <= most, `seed ${seed}: ${sound} ${n} times in 25 minutes`);
+    }
+  }
+});
+
 test('no stroke comes round on three: every event with three variants has a pitch table to break them', () => {
   const scene = (machine, params, rpm) => ({ segments: [{ rpm, s: 40, params }], machines: [{ id: 'lead', machine, lead: true, loops: false }] });
   const cases = [
@@ -404,7 +432,7 @@ test('no stroke comes round on three: every event with three variants has a pitc
 });
 
 function ridePlan(segments = 50, each = 30) {
-  return Array.from({ length: segments }, (_, i) => ({ rpm: 90, s: each, params: { power: 0.65, speed: 8.5, day: (i + 0.5) / segments, coast: 0, crowd: 0, gust: 0.5, tractor: 0 } }));
+  return Array.from({ length: segments }, (_, i) => ({ rpm: 90, s: each, params: { power: 0.65, speed: 8.5, day: (i + 0.5) / segments, coast: 0, crowd: 0, gust: 0.5, tractor: 0, road: 0.5 } }));
 }
 
 test('the ride has an arc you can hear: a dawn chorus that thins as the day comes up, and never a silence', () => {
@@ -509,7 +537,7 @@ function stack(cues, ui) {
   const T = 8;
   const speed = 8.5;
   const sim = simulate(bank, {
-    segments: [{ rpm: 90, s: 12, params: { power: 0.65, speed, day: 0.3, coast: 0, crowd: 0 } }],
+    segments: [{ rpm: 90, s: 12, params: { power: 0.65, speed, day: 0.3, coast: 0, crowd: 0, road: 0.5 } }],
     machines: [{ id: 'lead', machine: 'bike', lead: true }],
     bed: 'dawn_road',
     bed_params: { gust: 0.5, tractor: 0 },
@@ -577,7 +605,7 @@ test('these formulas are the table the adapter is held to', () => {
 // A steady block with air and road moving as in the game, frame by frame over the fixed parameters.
 function steadyBlock(rpm, power, speed, s, day = 0.3) {
   const sim = simulate(bank, {
-    segments: [{ rpm, s, params: { power, speed, day, coast: 0, crowd: 0, gust: 0.5, tractor: 0 } }],
+    segments: [{ rpm, s, params: { power, speed, day, coast: 0, crowd: 0, gust: 0.5, tractor: 0, road: 0.5 } }],
     machines: [{ id: 'lead', machine: 'bike', lead: true }, ...(power >= 1 ? [{ id: 'breath', machine: 'breath', lead: true, rpm_scale: 0.5 }] : [])],
     bed: 'dawn_road',
     bed_params: {},
@@ -594,6 +622,7 @@ function steadyBlock(rpm, power, speed, s, day = 0.3) {
   };
   for (const track of sim.tracks) {
     const [kind, id, sound] = track.label.split(':');
+    if (id === 'chain_rattle') follow(track, doc.machines.bike.loops.find((l) => l.sound === id), 'road', (t) => roadAt(t * speed));
     if (kind === 'loop' && id === 'tyre_hum') follow(track, doc.loops.tyre_hum.layers.find((l) => l.sound === sound), 'road', (t) => roadAt(t * speed));
     if (kind === 'loop' && id === 'wind_rush') follow(track, doc.loops.wind_rush.layers[0], 'gust', airAt);
     if (kind === 'bed' && id.startsWith('wind_grass')) follow(track, doc.beds.dawn_road.layers.find((l) => l.sound === id), 'gust', airAt);
@@ -621,6 +650,95 @@ test('a steady block repeats no swell: 1 s levels correlate under .7 at every la
       assert.ok(r < 0.7, `${name} at ${lag} s: ${r.toFixed(2)}`);
     }
   }
+});
+
+// A real steady block: ERG power, cadence wandering about a target, air and road moving as in the game, 0.5 s a step.
+function rideBlock(s, { rpm = 88, power = 0.65, speed = 8.5, day = 0.5, seed = 3 } = {}) {
+  const segments = [];
+  const tyres = [];
+  const wind = [];
+  for (let k = 0; k * 0.5 < s; k++) {
+    const t = k * 0.5;
+    const road = roadAt(t * speed);
+    const gust = airAt(t);
+    segments.push({ rpm: rpm + Math.sin(t * 0.7) + 0.5 * Math.sin(t * 1.9), s: 0.5, params: { power, speed, day, coast: 0, crowd: 0, gust, road, tractor: 0 } });
+    tyres.push({ id: 'tyre_hum', t0: t, t1: t + 0.5, params: { speed, road } });
+    wind.push({ id: 'wind_rush', t0: t, t1: t + 0.5, params: { speed, gust } });
+  }
+  const sim = simulate(bank, { segments, machines: [{ id: 'lead', machine: 'bike', lead: true }], bed: 'dawn_road', bed_params: {}, seed, loops: [...tyres, ...wind] });
+  return { sim, mix: mixdown(bank, sim, { tail: 0 }) };
+}
+
+// A band's level correlated with itself at a lag: what a repeating tile shows.
+function bandCorrAt(x, lo, hi, lagS, from = 5) {
+  const c = rbj('bp', Math.sqrt(lo * hi), Math.sqrt(lo * hi) / (hi - lo), MIX_RATE);
+  const y = biquad(biquad(x, c), c);
+  const hop = Math.round(0.05 * MIX_RATE);
+  const v = [];
+  for (let at = from * MIX_RATE; at + hop <= y.length; at += hop) {
+    let e = 0;
+    for (let i = at; i < at + hop; i++) e += y[i] * y[i];
+    v.push(10 * Math.log10(e / hop + 1e-30));
+  }
+  const lag = Math.round(lagS / 0.05);
+  return pearson(v.slice(0, v.length - lag), v.slice(lag));
+}
+
+function steadyRoad(s, speed = 8.5, road = 0.5) {
+  const sim = simulate(bank, { segments: [{ rpm: 0, s, params: {} }], machines: [], loops: [{ id: 'tyre_hum', t0: 0, t1: s, params: { speed, road } }] });
+  return mixdown(bank, sim, { tail: 0 }).stems.Sfx[0];
+}
+
+function rangeP5P95(v) {
+  const sorted = [...v].sort((p, q) => p - q);
+  return sorted[Math.floor(sorted.length * 0.95)] - sorted[Math.floor(sorted.length * 0.05)];
+}
+
+test('a steady ride is not monotone: three minutes of ERG at .65 has a loudness range, and every band moves', () => {
+  const { mix } = rideBlock(180);
+  const lra = loudnessRange(mix.master, MIX_RATE);
+  assert.ok(lra >= 2, `LRA ${lra.toFixed(2)} LU, was 1.1`);
+  const at = (lo, hi) => {
+    const c = rbj('bp', Math.sqrt(lo * hi), Math.sqrt(lo * hi) / (hi - lo), MIX_RATE);
+    return rangeP5P95(levels(biquad(biquad(mix.master[0], c), c), 3).slice(1));
+  };
+  for (const [lo, hi, min] of [[150, 500, 1.6], [500, 1500, 1.6], [1500, 4000, 1.9], [4000, 9000, 3]]) {
+    assert.ok(at(lo, hi) >= min, `${lo}-${hi} Hz moves ${at(lo, hi).toFixed(2)} dB over 3 s steps`);
+  }
+});
+
+// How far a band's level correlation at a tile's length stands over the lags just beside it: a tile, not a slow swell.
+function tilePeak(x, lo, hi, lagS) {
+  return bandCorrAt(x, lo, hi, lagS) - Math.max(bandCorrAt(x, lo, hi, lagS - 0.5), bandCorrAt(x, lo, hi, lagS + 0.5));
+}
+
+test('a tile does not show in its own band, on a ride or alone in the bed', () => {
+  const { mix } = rideBlock(120);
+  const bed = mix.stems.Ambience[0];
+  // The old bank reads .72, .49 and .16 here.
+  assert.ok(tilePeak(bed, 60, 300, 11) < 0.25, `the bed, 60-300 Hz at 11 s: ${tilePeak(bed, 60, 300, 11).toFixed(2)}`);
+  assert.ok(tilePeak(bed, 4000, 9000, 3) < 0.2, `the bed, 4-9 kHz at 3 s: ${tilePeak(bed, 4000, 9000, 3).toFixed(2)}`);
+  assert.ok(tilePeak(mix.master[0], 4000, 9000, 3) < 0.1, `the mix, 4-9 kHz at 3 s: ${tilePeak(mix.master[0], 4000, 9000, 3).toFixed(2)}`);
+  // Air and road held still, nothing but the tile can show: the old bank reads .53 on the plain correlation at 9 s.
+  const held = steadyRoad(120);
+  assert.ok(bandCorrAt(held, 150, 500, 9.05) < 0.3, `the road, 150-500 Hz at 9 s: ${bandCorrAt(held, 150, 500, 9.05).toFixed(2)}`);
+});
+
+test('the twins add no level: two players at -3 dB for one, in the three loops that have one', () => {
+  const twin = (layers, sound) => layers.filter((l) => l.sound === sound);
+  for (const [layers, sound] of [[doc.loops.tyre_hum.layers, 'tyre_hum'], [doc.beds.dawn_road.layers, 'wind_grass_lo'], [doc.beds.dawn_road.layers, 'birds_day']]) {
+    const [a, b] = twin(layers, sound);
+    assert.ok(a && b, sound);
+    assert.equal(a.db, b.db, sound);
+    assert.deepEqual(a.db_by, b.db_by, sound);
+    assert.ok(curveEval(b.pitch_by.at(-1), {}) > 1.05, `${sound}: at a pitch of its own`);
+  }
+});
+
+test('the preview plays the HUD the game plays at a sprint end, for D5 to read', () => {
+  const end = doc.preview.events.filter((e) => e.cue === 'interval_end').at(-1).t;
+  const at = doc.preview.hud.filter((h) => h.t === end).map((h) => h.sound).sort();
+  assert.deepEqual(at, ['phase', 'toast']);
 });
 
 // A band's 200 ms levels through a loop's own file.
@@ -653,12 +771,23 @@ test('the dawn loop sits under its birds and does not show its 4 s', () => {
   const c = rbj('bp', 5600, 5600 / 4000, MIX_RATE);
   const y = biquad(biquad(mix.master[0], c), c);
   const hop = Math.round(0.02 * MIX_RATE);
-  const v = [];
+  const raw = [];
   for (let at = 0; at + hop <= y.length; at += hop) {
     let e = 0;
     for (let i = at; i < at + hop; i++) e += y[i] * y[i];
-    v.push(Math.log10(e / hop + 1e-30));
+    raw.push(Math.log10(e / hop + 1e-30));
   }
+  // Less the air's swell of many seconds, which correlates at any short lag: only a tile is left to show.
+  const reach = 50;
+  const v = raw.map((x, i) => {
+    let sum = 0;
+    let n = 0;
+    for (let k = Math.max(0, i - reach); k <= Math.min(raw.length - 1, i + reach); k += 5) {
+      sum += raw[k];
+      n++;
+    }
+    return x - sum / n;
+  });
   const at = (s) => {
     const lag = Math.round(s / 0.02);
     return pearson(v.slice(100, v.length - lag), v.slice(100 + lag));
@@ -721,7 +850,7 @@ test('the far stratum reads at endurance: a dog and a bell now and then', () => 
   const b = new BankAudio(near, DIR);
   const speed = 8.5;
   const sim = simulate(b, {
-    segments: [{ rpm: 90, s: 90, params: { power: 0.65, speed, day: 0.3, coast: 0, crowd: 0, gust: 0.5, tractor: 0 } }],
+    segments: [{ rpm: 90, s: 90, params: { power: 0.65, speed, day: 0.3, coast: 0, crowd: 0, gust: 0.5, tractor: 0, road: 0.5 } }],
     machines: [{ id: 'lead', machine: 'bike', lead: true }],
     bed: 'dawn_road',
     bed_params: {},
@@ -744,7 +873,7 @@ test('the far dog reads alike at every speed: near on a slow road would be as wr
   const b = new BankAudio(near, DIR);
   const read = (speed, rpm, power) => {
     const sim = simulate(b, {
-      segments: [{ rpm, s: 90, params: { power, speed, day: 0.3, coast: 0, crowd: 0, gust: 0.5, tractor: 0 } }],
+      segments: [{ rpm, s: 90, params: { power, speed, day: 0.3, coast: 0, crowd: 0, gust: 0.5, tractor: 0, road: 0.5 } }],
       machines: [{ id: 'lead', machine: 'bike', lead: true }],
       bed: 'dawn_road',
       bed_params: {},
