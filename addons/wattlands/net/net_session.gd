@@ -264,6 +264,8 @@ var _tokens: float = -1.0
 var _tokens_t: float = 0.0
 var _still_polls: int = 0
 var _outq: Array = []
+## leave_when_flushed() waits for _outq.
+var _leave_when_flushed: bool = false
 # The lobby_state text clients get (_redacted_lobby); _lobby_text is the host's own.
 var _lobby_wire: String = ""
 
@@ -319,6 +321,7 @@ func use_transport(t: Transport) -> void:
 
 ## Offline lobby for SOLO play (no transport; the local rider is peer 1).
 func start_offline() -> void:
+	_settle_leave()
 	_explicit_leave = true
 	_leave_transport()
 	stop_lan_discovery()
@@ -343,6 +346,7 @@ func start_offline() -> void:
 ## session asks once more without the code, so hosting never fails because of it. An empty or
 ## invalid preferred code asks for a new code. room_code is the code actually granted.
 func host_room(max_peers: int = 8, preferred_code: String = "") -> void:
+	_settle_leave()
 	stop_lan_discovery()
 	_restore_relay_transport()
 	_ensure_transport()
@@ -362,6 +366,7 @@ func host_room(max_peers: int = 8, preferred_code: String = "") -> void:
 
 
 func join_room(code: String) -> void:
+	_settle_leave()
 	stop_lan_discovery()
 	_restore_relay_transport()
 	_join(code)
@@ -394,6 +399,16 @@ func leave() -> void:
 	_reset_room_state()
 	offline = false
 	_set_state(STATE_OFFLINE, "left")
+
+
+## leave(), once every queued frame is out (leave() itself drops what the send budget holds back):
+## at once when nothing waits, else from poll(). A host that leaves right after its last messages
+## uses it. A new room or an offline start leaves first.
+func leave_when_flushed() -> void:
+	if _outq.is_empty() or not _in_room():
+		leave()
+	else:
+		_leave_when_flushed = true
 
 
 ## This rider's player_info (BRIEF 5.5): name, color, ftp, ftp_verified, p_eff_per_w,
@@ -724,6 +739,8 @@ func poll() -> void:
 	if role == Wl.CLIENT and state == STATE_JOINED and _clock_now() >= _clock_next_at:
 		_send_clock_ping()
 	_pump_out(true)
+	if _leave_when_flushed and _outq.is_empty():
+		leave()
 
 
 ## Frames waiting for the send budget (W3 NET-4).
@@ -1005,6 +1022,7 @@ func stop_lan_discovery() -> void:
 ## before (the relay) comes back with the next host_room(), join_room() or start_offline().
 ## A room without a valid code, address or port is refused as room_not_found.
 func join_lan(room: Dictionary) -> void:
+	_settle_leave()
 	stop_lan_discovery()
 	var code := RoomCode.normalize(str(room.get("code", "")))
 	var address := str(room.get("address", "")).strip_edges()
@@ -2288,7 +2306,14 @@ func _end(reason: String, end_state: String) -> void:
 	_emit_bus("session_refused", [reason])
 
 
+## The next room starts now: a leave still waiting for the queue happens first.
+func _settle_leave() -> void:
+	if _leave_when_flushed:
+		leave()
+
+
 func _reset_room_state() -> void:
+	_leave_when_flushed = false
 	role = ""
 	local_peer = 0
 	host_peer = Wl.HOST_PEER
