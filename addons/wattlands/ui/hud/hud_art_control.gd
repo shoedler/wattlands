@@ -6,6 +6,11 @@ extends Control
 ## with nearest filtering, so everything lands on the art grid. It ignores the mouse, refreshes every
 ## frame and gets the local rider's telemetry from the HudLayer (set_telemetry, found by has_method).
 ## A game's base adds its typed game and state and overrides has_state().
+##
+## paint() under that scale is the default path, and a new game should use it. Two games step off it,
+## which is why neither part is a rule of this class: FishingHudControl's panels override _draw and
+## draw in HUD px, and its place_at keeps the Control's name; SiegeHudCtl overrides _process and _draw
+## to refresh its model every 0.1 s, so tick() and refresh() never run there.
 
 ## The rect the spec places it in (art px).
 var art_rect: Rect2i = Rect2i(0, 0, 960, 540)
