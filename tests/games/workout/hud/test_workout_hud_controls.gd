@@ -19,6 +19,13 @@ func after_all() -> void:
 	U.unregister_strings(_tr)
 
 
+func test_the_timeline_keeps_the_shared_setup_of_a_hud_control() -> void:
+	var c: WorkoutHudTimeline = autofree(WorkoutHudTimeline.new())
+	assert_eq(c.mouse_filter, Control.MOUSE_FILTER_IGNORE, "it must not eat the mouse")
+	assert_eq(c.texture_filter, CanvasItem.TEXTURE_FILTER_NEAREST, "its text stays on the art grid")
+	assert_eq(c.texture_repeat, CanvasItem.TEXTURE_REPEAT_ENABLED, "the strip still tiles")
+
+
 func _game_at(content: String, t: float, humans: int = 2, bots: int = 0) -> WorkoutGame:
 	var g: WorkoutGame = autofree(U.game(content, U.players(humans, bots)))
 	g.state.plan_t = t
