@@ -7,7 +7,7 @@
 //   tools/screenshot --scene=<res path> [--frames=<n>]
 //   tools/screenshot --app-screen=title|picker|lobby [--app-game=<id>]
 //   tools/screenshot --app-screen=session [--app-role=client|host|solo] [--app-game=<id>]
-//                    [--content=<id>] [--at=<s>,...] [--app-overlay=menu|panic|none]
+//                    [--content=<id>] [--at=<s>,...] [--app-overlay=menu|panic|discard|none]
 //   tools/screenshot --app-screen=results [--app-riders=<1..8>]
 //
 // Runs Godot windowed (never headless) through tools/godot.sh (bash) or tools/godot.ps1
@@ -40,7 +40,7 @@ export const USAGE = `usage: tools/screenshot --game=<id> --at=<s>[,<s>...] [--c
        tools/screenshot --scene=<res://path.tscn> [--frames=<n>] [--out=<dir>]
        tools/screenshot --app-screen=title|picker|lobby [--app-game=<id>] [--frames=<n>] [--out=<dir>]
        tools/screenshot --app-screen=session [--app-role=client|host|solo] [--app-game=<id>] [--content=<id>]
-                        [--at=<s>[,<s>...]] [--app-overlay=menu|panic|none] [--out=<dir>]
+                        [--at=<s>[,<s>...]] [--app-overlay=menu|panic|discard|none] [--out=<dir>]
        tools/screenshot --app-screen=results [--app-riders=<1..8>] [--frames=<n>] [--out=<dir>]
 wrapper flags: --mock-trainer=<profile> (default ${DEFAULT_MOCK}), --size=<W>x<H> (default 1920x1080),
                --timeout=<s> (default 900), --lock-timeout=<s>, --dry-run

@@ -15,7 +15,7 @@ extends RefCounted
 ##                                   --app-role=client|host|solo (default client: the app joins
 ##                                   an in-process host over loopback; tools/qa/screenshot_session.gd),
 ##                                   shot at each --at (platform seconds of the app's session,
-##                                   default 30) plus one with --app-overlay=menu|panic|none
+##                                   default 30) plus one with --app-overlay=menu|panic|discard|none
 ##                                   (default menu)
 ##   --app-screen=results            the app's results screen with a Workout-like GameResults for
 ##                                   --app-riders=<1..8> riders (default 1; tools/qa/screenshot_results.gd)
@@ -27,7 +27,7 @@ extends RefCounted
 
 const APP_SCREENS: Array[String] = ["title", "picker", "lobby", "session", "results"]
 const APP_ROLES: Array[String] = ["client", "host", "solo"]
-const APP_OVERLAYS: Array[String] = ["menu", "panic", "none"]
+const APP_OVERLAYS: Array[String] = ["menu", "panic", "discard", "none"]
 ## Session shots without --at: this many platform seconds into the app's session.
 const DEFAULT_SESSION_AT := 30.0
 ## Results shots: 1 to this many riders (a full Workout room).
