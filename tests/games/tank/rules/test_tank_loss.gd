@@ -89,9 +89,12 @@ func test_the_damage_counts_after_the_difficulty_and_the_hit_event_before_it() -
 		rig.state.hull.hp = 100.0
 		var events: Array[Dictionary] = []
 		var lost := TankHullRules.hit(rig.state, 10.0, TankIds.SHELL_ENEMY, 0.0, events)
-		assert_almost_eq(lost, 10.0 * float(row[1]), 1e-6, str(row[0]))
-		assert_almost_eq(rig.state.hull.hp, 100.0 - 10.0 * float(row[1]), 1e-6, str(row[0]))
-		assert_eq(events[0]["dmg"], 10, "%s: the haptics read the same numbers" % row[0])
+		var crew_hit := 10.0 * rig.content.crew_damage_scale(4)
+		assert_almost_eq(lost, crew_hit * float(row[1]), 1e-6, str(row[0]))
+		assert_almost_eq(rig.state.hull.hp, 100.0 - crew_hit * float(row[1]), 1e-6, str(row[0]))
+		assert_eq(
+			events[0]["dmg"], roundi(crew_hit), "%s: the haptics read the same numbers" % row[0]
+		)
 
 
 func test_the_berm_absorbs_before_the_difficulty() -> void:
@@ -99,7 +102,7 @@ func test_the_berm_absorbs_before_the_difficulty() -> void:
 	rig.state.hull.hp = 100.0
 	rig.state.hull.berm_hp = 4.0
 	var lost := TankHullRules.hit(rig.state, 10.0, TankIds.SHELL_ENEMY, 0.0, [])
-	assert_almost_eq(lost, 6.0 * 1.5, 1e-6)
+	assert_almost_eq(lost, (10.0 * rig.content.crew_damage_scale(4) - 4.0) * 1.5, 1e-6)
 	assert_eq(rig.state.hull.berm_hp, 0.0)
 
 

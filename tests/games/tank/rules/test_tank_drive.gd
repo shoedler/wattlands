@@ -262,17 +262,20 @@ func test_the_berm_absorbs_hits_before_the_hull() -> void:
 	var rig := _gun_line_rig(4)
 	rig.hull().berm_hp = 10.0
 	var events: Array[Dictionary] = []
+	var scale := rig.content.crew_damage_scale(4)
 	var lost := TankHullRules.hit(rig.state, 4.0, TankIds.SHELL_ENEMY, 300.0, events)
 	assert_eq(lost, 0.0)
-	assert_eq(rig.hull().berm_hp, 6.0)
+	assert_almost_eq(rig.hull().berm_hp, 10.0 - 4.0 * scale, 1e-6)
 	assert_eq(rig.hull().hp, rig.hull().hp_max)
-	lost = TankHullRules.hit(rig.state, 10.0, TankIds.SHELL_ENEMY, 300.0, events)
-	assert_eq(lost, 4.0, "6 absorbed, 4 through")
+	var left := rig.hull().berm_hp
+	lost = TankHullRules.hit(rig.state, 20.0, TankIds.SHELL_ENEMY, 300.0, events)
+	var through := 20.0 * scale - left
+	assert_almost_eq(lost, through, 1e-6, "the berm's rest absorbed, the rest through")
 	assert_eq(rig.hull().berm_hp, 0.0)
-	assert_eq(rig.hull().hp, rig.hull().hp_max - 4.0)
+	assert_almost_eq(rig.hull().hp, rig.hull().hp_max - through, 1e-6)
 	assert_eq(
 		[events[1]["dmg"], events[1]["b"]],
-		[10, 6],
+		[roundi(20.0 * scale), roundi(left)],
 		"the event keeps the round's damage and what the berm took"
 	)
 	assert_eq(rig.state.score.berm_absorbed, 10.0)

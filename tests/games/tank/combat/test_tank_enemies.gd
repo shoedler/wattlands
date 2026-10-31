@@ -226,7 +226,7 @@ func test_a_far_hit_lands_after_its_flight_and_costs_the_hull() -> void:
 	assert_eq(rig.hull().hp, full, "nothing before it lands")
 	assert_eq(rig.of_type("hit").size(), 0)
 	rig.run(0.3)
-	assert_eq(rig.hull().hp, full - 4.0)
+	assert_almost_eq(rig.hull().hp, full - 4.0 * rig.content.crew_damage_scale(4), 1e-6)
 	var hits := rig.of_type("hit")
 	assert_eq(hits.size(), 1)
 	assert_eq(
@@ -269,7 +269,7 @@ func test_at_the_shell_cap_a_far_shot_resolves_at_once_evade_first() -> void:
 		rig.state, aux, 1500.0, TankIds.SHELL_ENEMY, 4.0, 1.0, true, 1, 1, rig.events
 	)
 	assert_eq(rig.state.shells.size(), TankConst.MAX_SHELLS, "no 25th shell")
-	assert_eq(rig.hull().hp, full - 4.0, "applied at once")
+	assert_almost_eq(rig.hull().hp, full - 4.0 * rig.content.crew_damage_scale(4), 1e-6, "at once")
 	var kinds: Array = rig.events.map(func(e: Dictionary) -> String: return e["type"])
 	assert_eq(kinds, ["shot", "evade", "hit"], "the evade before the hit")
 
@@ -332,13 +332,14 @@ func test_a_near_shell_that_hits_costs_the_hull_its_damage_when_it_arrives() -> 
 	var full := rig.hull().hp
 	assert_eq(rig.hull().hp, full, "nothing before the shell arrives")
 	rig.run(3.0)
-	assert_eq(rig.hull().hp, full - 4.0)
+	var lost := 4.0 * rig.content.crew_damage_scale(4)
+	assert_almost_eq(rig.hull().hp, full - lost, 1e-6)
 	assert_eq(rig.of_type("hit").size(), 1)
 	assert_eq(rig.state.shells.size(), 0)
 	assert_false(s in rig.state.shells)
 	var miss := _fire_from(rig, 0.0)
 	rig.run(3.0)
-	assert_eq(rig.hull().hp, full - 4.0, "a miss costs nothing")
+	assert_almost_eq(rig.hull().hp, full - lost, 1e-6, "a miss costs nothing")
 	assert_false(miss in rig.state.shells)
 
 
@@ -369,7 +370,7 @@ func test_at_the_shell_cap_a_near_shot_resolves_at_once() -> void:
 		rig.events
 	)
 	assert_eq(rig.state.shells.size(), TankConst.MAX_SHELLS, "no 25th shell")
-	assert_eq(rig.hull().hp, full - 4.0, "applied at once")
+	assert_almost_eq(rig.hull().hp, full - 4.0 * rig.content.crew_damage_scale(4), 1e-6, "at once")
 
 
 ## v3 solo balance (enemies.json crew_damage_scale [0.5, 1, 1, 1]): an enemy shell costs a solo
@@ -384,6 +385,6 @@ func test_a_solo_hull_takes_the_crew_damage_scale_of_an_enemy_shell() -> void:
 		assert_almost_eq(lost, want, 1e-6, "crew %d" % crew)
 		assert_almost_eq(rig.hull().hp, full - want, 1e-6)
 	assert_eq(TankFixtures.content().crew_damage_scale(1), 0.65)
-	assert_eq(TankFixtures.content().crew_damage_scale(2), 0.72)
+	assert_eq(TankFixtures.content().crew_damage_scale(2), 0.65)
 	assert_eq(TankFixtures.content().crew_damage_scale(3), 0.85)
-	assert_eq(TankFixtures.content().crew_damage_scale(4), 1.0)
+	assert_eq(TankFixtures.content().crew_damage_scale(4), 0.9)

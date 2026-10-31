@@ -104,9 +104,9 @@ func test_the_advance_tables() -> void:
 	assert_eq(
 		_table(adv[0]["encounters"], "at_m"),
 		[
-			[130, "light", 1],
+			[130, "medium", 1],
 			[250, "recon", 2],
-			[360, "medium", 1],
+			[360, "light", 1],
 			[600, "destroyer", 1],
 			[700, "tankette", 2],
 			[830, "light", 1]
@@ -452,8 +452,9 @@ func test_ambush_15_defaults_to_hard_and_lists_its_enemies() -> void:
 		]
 	)
 	var hold := c.segment(2)
-	assert_eq(str(hold["enemies"][0]["enemy"]), "heavy")
-	assert_eq(hold["enemies"][1]["hold_m"], [1100.0, 1350.0])
+	assert_eq(str(hold["enemies"][0]["enemy"]), "light", "what a solo rider's 3 shots can finish")
+	assert_eq(str(hold["enemies"][1]["enemy"]), "heavy")
+	assert_eq(hold["enemies"][1]["hold_m"], [1400.0])
 	assert_eq((hold["near"] as Array).size(), 2)
 	assert_eq((c.segment(4)["near"] as Array).size(), 2)
 	assert_eq(float(c.segment(4)["end_hold_s"]), 7.5)
