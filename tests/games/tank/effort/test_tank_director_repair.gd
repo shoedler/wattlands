@@ -31,6 +31,24 @@ func _bay(h: H) -> TankRepairState:
 	return h.state.station(TankIds.ENGINE_REPAIR) as TankRepairState
 
 
+## Lead's ruling 2 at run time, on the director's output: the same state at every difficulty gets the
+## same requests, grades, bands and end_phase calls through a depot, a fight and a checkpoint.
+func test_the_directives_are_the_same_at_every_difficulty() -> void:
+	var seen: Array[String] = []
+	for level: String in TankIds.DIFFICULTIES:
+		var h := _h()
+		h.state.difficulty = level
+		_bay(h).duty = 0.5
+		h.run_s(DEPOT, 20.0)
+		h.run_s(ADV1, 30.0)
+		h.run_s(GUN1, 30.0)
+		h.run_s(CP1, 20.0)
+		assert_gt(h.requests.size() + h.grades.size(), 0, "something was sent")
+		seen.append(JSON.stringify([h.requests, h.grades, h.bands, h.ended]))
+	assert_eq(seen[0], seen[1], "easy and normal")
+	assert_eq(seen[1], seen[2], "normal and hard")
+
+
 func test_the_target_is_55_plus_15_x_duty_inside_the_range() -> void:
 	var c := TankFixtures.content()
 	var ph := TankPlanBuilder.phase_for(c, c.segments()[ADV1], TankIds.ENGINE_REPAIR, ADV1)
