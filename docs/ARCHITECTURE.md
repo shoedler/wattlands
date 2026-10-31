@@ -37,23 +37,23 @@ Telemetry flows up as `TrainerSample {t, power_w, cadence_rpm?, speed_kmh?, flag
 
 Autoload names never change. Each is an instance of a class named `Wl<Name>` (a script class can't share an autoload's name), so tests and in-process simulations can create private instances.
 
-| Autoload | Class | File | Owner |
-| --- | --- | --- | --- |
-| `EventBus` | `WlEventBus` | `contracts/event_bus.gd` | lead |
-| `Settings` | `WlSettings` | `core/settings.gd` | platform |
-| `InputRouter` | `WlInputRouter` | `ui/input_router.gd` | ui-hud |
-| `TrainerService` | `WlTrainerService` | `core/trainer_service.gd` | platform |
-| `NetSession` | `WlNetSession` | `net/net_session.gd` | net-client |
-| `GameRegistry` | `WlGameRegistry` | `sdk/game_registry.gd` | sdk-runtime |
-| `Rides` | `WlRides` | `rides/rides_service.gd` | rides |
-| `Sfx` | `WlSfx` | `audio/sfx.gd` | ui-hud |
-| `App` | `WlApp` | `core/app_state.gd` | platform |
+| Autoload | Class | File |
+| --- | --- | --- |
+| `EventBus` | `WlEventBus` | `addons/wattlands/contracts/event_bus.gd` |
+| `Settings` | `WlSettings` | `addons/wattlands/core/settings.gd` |
+| `InputRouter` | `WlInputRouter` | `addons/wattlands/ui/input_router.gd` |
+| `TrainerService` | `WlTrainerService` | `addons/wattlands/core/trainer_service.gd` |
+| `NetSession` | `WlNetSession` | `addons/wattlands/net/net_session.gd` |
+| `GameRegistry` | `WlGameRegistry` | `addons/wattlands/sdk/game_registry.gd` |
+| `Rides` | `WlRides` | `addons/wattlands/rides/rides_service.gd` |
+| `Sfx` | `WlSfx` | `addons/wattlands/audio/sfx.gd` |
+| `App` | `WlApp` | `addons/wattlands/core/app_state.gd` |
 
 ## Contracts (frozen after W0)
 
 `addons/wattlands/contracts/` holds the SDK and cross-module types: `Wl` (constants, slot looks, rule names), `GameModule`, `GameContext`, `PlayerSlot`, `EffortPlan`, `PlanPhase`, `PhaseState`, `EffortDirective`, `DirectiveResult`, `DirectiveSink`, `InputFrame`, `Telemetry`, `HudSpec`, `HudFeed`, `IntentSink`, `ProgressStore`, `GameStrings`, `GameResults`, `SessionStats`, `TrainerSample`, `TrainerDevice`, `BleTransport`, `Transport`, `NetMessages`, `RideRecorderApi` and `WlEventBus`.
 
-Module classes whose public API other modules call were also written in W0 as stubs with frozen signatures (owners fill the bodies; additive changes only): `SafetyGovernor`, `MockTrainer`, `FtmsClient`, `FtmsTrainer`, `FtmsConnectionManager`, `GestureRecognizer`, `SprintRule`, `ZwoImport` (named `WorkoutImport` until W4), `Bots`, `LocalRider`, `WlSettings`, `WlApp`, `WlTrainerService`, `WlNetSession`, `Protocol`, `LoopbackTransport`, `RoomCode`, `WlGameRegistry`, `PlanValidator`, `GameHost`, `GameSimRunner`, `WlInputRouter`, `PedalScanList`, `HudLayer`, `PixelViewport`, `WlSfx` and `WlRides`. W0 shipped real, tested implementations of the shared pure logic: `SimClock`, `SeededRng`, `WBalance`, `EffortScaling`, `SpeedModel`, `GovernorClamps`, `Paths`, `CmdLine`, `RiderProfile`, `RoomCode`, `Bots`, and a first `MockTrainer` (constant and ramp profiles, a tau = 2 s ERG follower).
+Module classes whose public API other modules call were also written in W0 as stubs with frozen signatures (owners fill the bodies; additive changes only): `SafetyGovernor`, `MockTrainer`, `FtmsClient`, `FtmsTrainer`, `FtmsConnectionManager`, `GestureRecognizer`, `SprintRule`, `ZwoImport`, `Bots`, `LocalRider`, `WlSettings`, `WlApp`, `WlTrainerService`, `WlNetSession`, `Protocol`, `LoopbackTransport`, `RoomCode`, `WlGameRegistry`, `PlanValidator`, `GameHost`, `GameSimRunner`, `WlInputRouter`, `PedalScanList`, `HudLayer`, `PixelViewport`, `WlSfx` and `WlRides`. W0 shipped real, tested implementations of the shared pure logic: `SimClock`, `SeededRng`, `WBalance`, `EffortScaling`, `SpeedModel`, `GovernorClamps`, `Paths`, `CmdLine`, `RiderProfile`, `RoomCode`, `Bots`, and a first `MockTrainer` (constant and ramp profiles, a tau = 2 s ERG follower).
 
 ## Time
 
@@ -105,7 +105,7 @@ The app runs as a scripted peer when started with `--host` or `--join=<code>` (h
 
 ## Multiplayer
 
-Star topology through the relay (`server/relay`, Node, zero-dependency fallback). The relay generates 6-character Crockford codes (`K7Q-X2M`), holds a dropped host's room for 120 s, and never looks inside `d`. Game messages (BRIEF 5.5) are listed in `contracts/net_messages.gd`; `Protocol.decode()` turns ints back into ints (including each game's `int_fields()` paths) and rejects messages that fail their schema or version. See `docs/PROTOCOL.md`.
+Star topology through the relay (`server/relay`, Node, zero-dependency fallback). The relay generates 6-character Crockford codes (`K7Q-X2M`), holds a dropped host's room for 120 s, and never looks inside `d`. Game messages (BRIEF 5.5) are listed in `addons/wattlands/contracts/net_messages.gd`; `Protocol.decode()` turns ints back into ints (including each game's `int_fields()` paths) and rejects messages that fail their schema or version. See `docs/PROTOCOL.md`.
 
 ## Rides
 
@@ -114,6 +114,27 @@ The `RideRecorder` records the local rider at 1 Hz with laps at `lap_marker`, at
 ## Presentation
 
 `PixelViewport` renders a 2D game's Node2D at `pixel_base` with nearest filtering and integer scaling; the HUD draws above it at native resolution. 3D games use `world3d` helpers (`LowPolyMesh`, MultiMesh scatter, a miniature camera rig, sky and ambient for Compatibility). The window's base size is 1920 x 1080 with `canvas_items` stretch, so HUD sizes are given in 1080p pixels.
+
+## What games share
+
+What more than one game needs lives in the platform, with no game's name in it, so a new game writes no copy. `docs/GAME_SDK.md` has the members.
+
+| Need | Class | File | GAME_SDK |
+| --- | --- | --- | --- |
+| A client's moving things between snapshots | `SnapHistory` (a game's subclass names its rows) | `addons/wattlands/sdk/snap_history.gd` | 12.1 |
+| The time to draw them at, behind the newest snapshot | `SnapRenderClock` (`new(min_delay)`) | `addons/wattlands/sdk/snap_render_clock.gd` | 12.1 |
+| Plain-data state to and from a Dictionary | `WlRecord` | `addons/wattlands/sdk/wl_record.gd` | 12.2 |
+| A host's per-peer intent limit, on game ticks | `IntentRateLimiter` | `addons/wattlands/sdk/intent_rate_limiter.gd` | 12.2 |
+| Reading an intent's flags and whole numbers | `IntentValue` | `addons/wattlands/sdk/intent_value.gd` | 12.2 |
+| A game's own HUD Control on the art grid | `HudArtControl` | `addons/wattlands/ui/hud/hud_art_control.gd` | 18 |
+| Pixel patterns and frames in such a Control | `HudArtDraw` | `addons/wattlands/ui/hud/hud_art_draw.gd` | 18 |
+| A pixel font set on its art grid | `PixelFont` | `addons/wattlands/world2d/pixel_font.gd` | 18 |
+| A Bresenham line | `PixelPainter.line_pixels` | `addons/wattlands/world2d/pixel_painter.gd` | 18 |
+| Sound locked to the crank | `GameAudioKit`, `CrankClock`, `FrameClockLock` | `addons/wattlands/audio/` | 18 |
+
+These are view and tooling helpers: rules stay pure, a view only reads state, and none of them reach the trainer stack. Their tests are in `tests/sdk/`, `tests/ui/`, `tests/world/` and `tests/audio/`.
+
+Tests share code the same way. `tests/lib/` holds what a game's suites extend: `TestGameFakes`, `TestGameSuite`, `TestGameStaticSuite`, `TestGameSessionSuite` and `TestGdLex` (GAME_SDK 19.6). `tools/lib/sim_report.mjs` holds the result helpers of Siege's and Tank's `check_sims.mjs`.
 
 ## Safety and test locks
 

@@ -1,10 +1,10 @@
 # world2d: the 2D pixel-art kit
 
-Helpers for 2D games (BRIEF 3.9, 3.10): Diesel Domestiques and Turbo Reel build their views with them. Every class is documented in its script; this page is the overview. Run `addons/wattlands/world2d/demo.tscn` to see all of them at once.
+Helpers for 2D games (BRIEF 3.9, 3.10). Every 2D game runs in a `PixelViewport`, and Workout scrolls its world on `ParallaxStrip`s. The shipped games draw most of their own art (Diesel Domestiques and Castellum Rotae bake theirs, Turbo Reel draws from grids), so the parts and shaders below are there for a new game to start from: no shipped game uses `SpinningPart`, `SlidingPart`, `ScrollingChain`, `PaletteSwap`, `SpriteWobble` or `DitherDissolve` today. Every class is documented in its script; this page is the overview. Run `addons/wattlands/world2d/demo.tscn` to see all of them at once.
 
 ## PixelViewport
 
-The GameHost puts a 2D game's `make_view()` Node2D into a `PixelViewport` at the game's `pixel_base` (usually 640 x 360) with `set_game_view(view)`.
+The GameHost puts a 2D game's `make_view()` Node2D into a `PixelViewport` at the game's `pixel_base` (640 x 360 for Turbo Reel and the template, 960 x 540 for Diesel Domestiques, Castellum Rotae and Workout) with `set_game_view(view)`.
 
 - The view renders into a SubViewport of exactly `pixel_base`, with nearest filtering, no texture repeat and 2D pixel snapping. Everything inside is drawn at art resolution, so rotated parts keep the chunky look.
 - The frame is scaled by a whole number of device pixels (`integer_scale()`: 2 in a 1280 x 720 window, 3 at 1920 x 1080, 4 at 2560 x 1440) and centred. The rest of the control is `bar_color` (black).
@@ -13,7 +13,7 @@ The GameHost puts a 2D game's `make_view()` Node2D into a `PixelViewport` at the
 
 ## Parts: animate by parts, not frames
 
-All parts take `speed` from -1 to 1, clamped. A negative speed runs the part backwards. `drive(value, full_scale)` sets `speed = value / full_scale`, so `drive(cadence, 120)` gives Tank's `speed = cadence / 120`. Each part advances in `tick(dt)`, which `_process` calls while `auto_process` is on. A view that drives everything from sim time turns `auto_process` off.
+All parts take `speed` from -1 to 1, clamped. A negative speed runs the part backwards. `drive(value, full_scale)` sets `speed = value / full_scale`, so `drive(cadence, 120)` gives `speed = cadence / 120`. Each part advances in `tick(dt)`, which `_process` calls while `auto_process` is on. A view that drives everything from sim time turns `auto_process` off.
 
 | Class | Use | Main properties |
 | --- | --- | --- |
@@ -53,7 +53,14 @@ Procedural pixel images, used by the demo and handy for code-drawn parts and pla
 - `vertical_gradient()`, with an ordered dither.
 - `hill_heights()`, which tiles seamlessly.
 - `bands()`.
+- `line_pixels(a, b)`: the pixels of a Bresenham line, both ends included, as an `Array[Vector2i]`. The help overlay's arrows and Turbo Reel's fishing line use it.
+
+## PixelFont
+
+`PixelFont.hang(path, cap_rows, space_advance)` makes a pixel font from Godot's Image Font importer ready to set text on its art grid. The importer hangs a glyph by half its cell, which draws the caps under a Label's box and the descenders out of it. `hang` hangs every glyph `cap_rows` above the baseline and makes the space `space_advance` glyph px wide. It does this once per path, because the resource is shared, so the first call's numbers stand. A Font that is not a FontFile comes back as loaded, and a path that holds no Font gives null.
+
+For a game's own HUD Controls on the art grid, see `HudArtControl` and `HudArtDraw` in `addons/wattlands/ui/hud/` (`docs/GAME_SDK.md` section 18).
 
 ## Performance
 
-Each part is one CanvasItem with a few draw calls, and a ParallaxStrip batches its tiles. A whole Tank or Fishing view is a few hundred canvas items at 640 x 360. That is drawn once into the SubViewport and shown with one textured quad, well inside 60 fps at 1080p on integrated graphics.
+Each part is one CanvasItem with a few draw calls, and a ParallaxStrip batches its tiles. Everything in the view is drawn once into the SubViewport and shown with one textured quad.
