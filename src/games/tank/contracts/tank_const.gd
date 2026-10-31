@@ -22,9 +22,6 @@ const PX_PER_M := WORLD_SCROLL * PX_PER_VISUAL_M
 ## The HUD covers y 0..HUD_TOP_H and HUD_BOTTOM_Y..360 only (brief 3).
 const HUD_TOP_H := 60
 const HUD_BOTTOM_Y := 300
-## The app's PANIC button owns art x >= 503 and y >= 316 (GAME_SDK 10.1).
-const PANIC_X := 503
-const PANIC_Y := 316
 
 ## The first 300 s of the plan: no evade, Overpressure, sprint prompt or haptic
 ## (PhaseState.plan_elapsed_s < FIRST_S), brief 2.3, 2.7.

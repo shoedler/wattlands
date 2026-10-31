@@ -23,7 +23,7 @@ extends GameModule
 ## ctx.local_peer, a client from apply_event / apply_snapshot, so none is ever broadcast.
 ##
 ## Not the module's (contracts/README.md "Module and view"): snapshot interpolation (TankView
-## keeps a WorkoutSnapHistory-style buffer keyed by state.tick, fed from snapshot_applied), Tank
+## keeps a SnapHistory buffer keyed by state.tick, fed from snapshot_applied), Tank
 ## Controls (they send their own intents through game.ctx.intents.send(TankIntents.*)) and
 ## TankAudio (TankView creates it and connects it to cue).
 
