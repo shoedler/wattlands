@@ -3,10 +3,17 @@ extends SceneTree
 ##   tools/godot.sh --path . --timeout=420 -s tools/audio/jitter_bench.gd -- --report=build/audio_jitter.json
 ## A temporary bus with an AudioEffectCapture (muted, so nothing reaches the speakers: the capture sits before the bus
 ## volume) records what the kit's voices mix. The bench drives a CrankClock at each rpm for 25 s, finds the click onsets
-## by sample index, fits a line to them and takes the residual as the jitter, twice per rpm: with the pre-roll seek, and
-## with every stroke started at PREROLL_S, the baseline. It needs no WAV: its stream is built in code.
-## Exit 0 only if every pre-roll run holds p99 <= 12 ms, stddev <= 4 ms and a slope within 0.1 % of 60/rpm; 1 on a miss
+## by sample index, fits a line to them and takes the residual as the jitter. It needs no WAV: its stream is built in
+## code. Three runs per rpm:
+## - "engine": the pre-roll seek, with the frame delta a game's view integrates. This one decides the exit code.
+## - "real": the same, with the crank integrated from real elapsed time, so revs is a straight line in time. Godot's
+##   delta smoothing hands out whole vsyncs and carries the rest over, which puts a sawtooth of up to one vsync on revs
+##   in an "engine" run. The picture has that sawtooth too (S1 holds), but it hides what this run shows: kit and driver.
+## - "baseline": the engine's delta and every stroke started at PREROLL_S, no seek: what the pre-roll is compared with.
+## Exit 0 only if every "engine" run holds p99 <= 12 ms, stddev <= 4 ms and a slope within 0.1 % of 60/rpm; 1 on a miss
 ## (the numbers go in the report, the thresholds do not move); 3 on the Dummy driver, where nothing was measured.
+## For a quick look: --rpms=90,140, --run-s=<n>, --no-baseline. --no-delta-smoothing turns Godot's smoothing off for
+## this run, which shows what application/run/delta_smoothing=false would do to the "engine" numbers.
 
 const RPMS: Array[float] = [60.0, 90.0, 110.0, 140.0]
 const RUN_S := 25.0
@@ -44,10 +51,18 @@ var _runs: Array[Dictionary] = []
 var _commit_clocks: Array[CrankClock] = []
 var _commit_us: PackedFloat64Array = PackedFloat64Array()
 var _report_path: String = ""
+var _run_s: float = RUN_S
+var _ttnm: PackedFloat64Array = PackedFloat64Array()
+var _instance: String = "bench"
+var _mode: String = ""
+var _last_us: int = 0
+var _real_dts: PackedFloat64Array = PackedFloat64Array()
 
 
 func _initialize() -> void:
 	_report_path = CmdLine.get_str("report", "build/audio_jitter.json")
+	if CmdLine.get_bool("no-delta-smoothing"):
+		OS.delta_smoothing = false
 	if AudioServer.get_driver_name() == "Dummy":
 		printerr(
 			"jitter_bench: AudioServer is on the Dummy driver: no real device, nothing was measured"
@@ -63,9 +78,12 @@ func _initialize() -> void:
 	_capture = AudioEffectCapture.new()
 	_capture.buffer_length = 2.0
 	AudioServer.add_bus_effect(_bus_index, _capture)
-	for rpm: float in RPMS:
-		_plan.append({"rpm": rpm, "preroll": true})
-		_plan.append({"rpm": rpm, "preroll": false})
+	_run_s = CmdLine.get_float("run-s", RUN_S)
+	for rpm: float in _rpms():
+		_plan.append({"mode": "engine", "rpm": rpm})
+		_plan.append({"mode": "real", "rpm": rpm})
+		if not CmdLine.get_bool("no-baseline"):
+			_plan.append({"mode": "baseline", "rpm": rpm})
 	_kit = GameAudioKit.new()
 	_kit.force_audio = true
 	root.add_child(_kit)
@@ -78,6 +96,10 @@ func _initialize() -> void:
 
 
 func _process(delta: float) -> bool:
+	var now_us := Time.get_ticks_usec()
+	var real_dt := float(now_us - _last_us) / 1000000.0
+	_last_us = now_us
+	var dt := real_dt if _mode == "real" else delta
 	match _state:
 		"warmup":
 			_frames_seen += 1
@@ -85,16 +107,18 @@ func _process(delta: float) -> bool:
 				_begin_run()
 		"run":
 			_deltas.append(delta)
-			_clock.advance(_rpm, delta)
-			_kit.drive("bench", "bench", _clock.revs, _rpm, {}, true)
-			_kit.commit(delta)
+			_real_dts.append(real_dt)
+			_ttnm.append(AudioServer.get_time_to_next_mix())
+			_clock.advance(_rpm, dt)
+			_kit.drive(_instance, "bench", _clock.revs, _rpm, {}, true)
+			_kit.commit(dt)
 			_pull()
-			_run_t += delta
-			if _run_t >= RUN_S:
+			_run_t += dt
+			if _run_t >= _run_s:
 				_run_t = 0.0
 				_state = "settle"
 		"settle":
-			_kit.drive("bench", "bench", _clock.revs, 0.0, {}, true)
+			_kit.drive(_instance, "bench", _clock.revs, 0.0, {}, true)
 			_kit.commit(delta)
 			_pull()
 			_run_t += delta
@@ -108,35 +132,45 @@ func _process(delta: float) -> bool:
 func _begin_run() -> void:
 	var run := _plan[_plan_i]
 	_rpm = float(run["rpm"])
-	_kit.preroll_on = bool(run["preroll"])
-	_kit.stop_machine("bench")
+	_mode = str(run["mode"])
+	_kit.preroll_on = _mode != "baseline"
+	_kit.stop_machine(_instance)
+	_instance = "bench%d" % _plan_i
 	_clock.reset()
 	_onsets.clear()
 	_deltas.clear()
+	_ttnm.clear()
+	_real_dts.clear()
 	_pull()
 	_onsets.clear()
 	_run_t = 0.0
 	_state = "run"
-	print("jitter_bench: %d rpm, pre-roll %s" % [int(_rpm), str(_kit.preroll_on)])
+	print("jitter_bench: %d rpm, %s" % [int(_rpm), _mode])
 
 
 func _end_run() -> void:
-	var voice := _kit.machine_voice("bench")
+	var voice := _kit.machine_voice(_instance)
 	var run := analyse(_rpm, _onsets, voice.fired)
-	run["preroll"] = _kit.preroll_on
+	run["mode"] = _mode
 	run["late"] = voice.late
 	run["dropped"] = voice.dropped
 	run["voiceless"] = _kit.voiceless
 	run["discarded_frames"] = _capture.get_discarded_frames()
 	run["frame_ms_mean"] = mean(_deltas) * 1000.0
 	run["frame_ms_p99"] = percentile(_deltas, 0.99) * 1000.0
+	run["frame_ms_max"] = percentile(_deltas, 1.0) * 1000.0
+	run["real_frame_ms_mean"] = mean(_real_dts) * 1000.0
+	run["real_frame_ms_p99"] = percentile(_real_dts, 0.99) * 1000.0
+	run["next_mix_ms_mean"] = mean(_ttnm) * 1000.0
+	run["next_mix_ms_max"] = percentile(_ttnm, 1.0) * 1000.0
+	run["next_mix_ms_min"] = -percentile(_negated(_ttnm), 1.0) * 1000.0
 	_runs.append(run)
 	print("jitter_bench: %s" % JSON.stringify(run))
 	_plan_i += 1
 	if _plan_i < _plan.size():
 		_begin_run()
 	else:
-		_kit.stop_machine("bench")
+		_kit.stop_machine(_instance)
 		_kit.preroll_on = true
 		for i in COMMIT_MACHINES:
 			_commit_clocks.append(CrankClock.new())
@@ -161,13 +195,18 @@ func _step_commit_bench(delta: float) -> void:
 
 func _finish() -> void:
 	var ok := true
+	var ok_real := true
 	for run: Dictionary in _runs:
-		if bool(run["preroll"]) and not bool(run["pass"]):
+		if run["mode"] == "engine" and not bool(run["pass"]):
 			ok = false
+		if run["mode"] == "real" and not bool(run["pass"]):
+			ok_real = false
 	var report := {
 		"driver": AudioServer.get_driver_name(),
 		"mix_rate": _mix_rate,
 		"display": DisplayServer.get_name(),
+		"refresh_hz": DisplayServer.screen_get_refresh_rate(),
+		"delta_smoothing": OS.delta_smoothing,
 		"thresholds":
 		{
 			"p99_ms": P99_MAX_MS,
@@ -177,6 +216,7 @@ func _finish() -> void:
 		"commit_8_machines_mean_ms": mean(_commit_us) / 1000.0,
 		"runs": _runs,
 		"pass": ok,
+		"pass_real_clock": ok_real,
 	}
 	var path := _report_path
 	if path.is_relative_path():
@@ -190,6 +230,20 @@ func _finish() -> void:
 	_kit.stop_all()
 	AudioServer.remove_bus(_bus_index)
 	quit(0 if ok else 1)
+
+
+func _rpms() -> Array[float]:
+	var out: Array[float] = []
+	for part: String in CmdLine.get_str("rpms", "").split(",", false):
+		out.append(part.to_float())
+	return out if not out.is_empty() else RPMS
+
+
+func _negated(values: PackedFloat64Array) -> PackedFloat64Array:
+	var out := PackedFloat64Array()
+	for v in values:
+		out.append(-v)
+	return out
 
 
 func _pull() -> void:

@@ -148,9 +148,9 @@ func test_stop_dead() -> void:
 			off_after = t - stop_t
 	assert_eq(kit.played.size(), count, "no stroke starts once the crank stands")
 	assert_true(off_after >= 0.0 and off_after <= 0.12, "loops off in %.3f s" % off_after)
-	for i in 300:
-		if i < kit.played_t.size():
-			assert_lte(kit.played_t[i], stop_t + GameAudioKit.HORIZON_MAX_S, "due by the horizon")
+	assert_gt(count, 0, "precondition: strokes were played")
+	for when: float in kit.played_t:
+		assert_lte(when, stop_t + GameAudioKit.HORIZON_MAX_S, "due by the horizon")
 
 
 func test_restart_is_no_burst_and_no_repeat() -> void:

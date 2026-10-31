@@ -32,3 +32,18 @@
 - `GameAudioKit`: `preroll_on` (the bench's baseline), `voiceless`, test accessors. A stroke that may not steal anything is dropped and counted.
 - `AudioBank`: `duplicate_keys(text)` reads the raw JSON, because `JSON.parse` keeps only the last of a repeated key. A locked sound must be PCM (its seek must be exact).
 - A cue's `duck` runs only for `lead` true: someone else's shot does not duck my machine.
+
+## 2026-10-31: the jitter bench misses with Godot's delta smoothing, and passes without it
+
+Measured on WASAPI, 48 kHz, 59.94 Hz display, with other Godot runs on the machine; residual p99 / stddev in ms, limits 12 / 4, thresholds unchanged. All slopes hold (at most 0.056 %, limit 0.1 %), all onsets found, no stroke late or dropped.
+
+| rpm | engine delta, smoothing on (the exit code) | real clock | engine delta, smoothing off | no pre-roll seek |
+|---|---|---|---|---|
+| 60 | 9.05 / 3.83 | 5.85 / 3.15 | 5.69 / 2.99 | 17.15 / 6.93 |
+| 90 | 12.11 / 5.30 | 5.61 / 3.08 | 5.15 / 3.05 | 19.78 / 7.89 |
+| 110 | 14.18 / 6.88 | 5.70 / 3.40 | 5.52 / 3.16 | 18.48 / 7.86 |
+| 140 | 12.07 / 5.34 | 5.73 / 3.08 | 6.06 / 3.20 | 19.61 / 7.77 |
+
+- **Cause:** at 59.94 Hz Godot's delta smoothing hands out 16.667 ms and carries the rest, then pays it back as a whole vsync. `revs` integrates that delta, so it has a sawtooth of up to one vsync against real time, and a run looks good or bad according to where the jumps fall in it (a 60 rpm run measured 6.27 / 3.18 once and 18.75 / 6.71 once). What remains without it, stddev about 3.1, is a uniform spread over one 512-frame mix step (10.67 ms, stddev 3.08): the spec's own bound.
+- **Decision:** the kit keeps the spec's strategy, horizon and formula. The miss is reported with these numbers; the thresholds stay. S1 and S3 hold against `revs`: the stroke and the picture share the sawtooth.
+- **Alternatives:** `application/run/delta_smoothing=false` in `project.godot` passes every rpm, but it is the lead's file and changes every game's frame delta, so it is the lead's call. Feeding the bench only the real clock would have passed and hidden what a game actually does, so the "engine" run decides the exit code and the "real" run is a diagnosis.
