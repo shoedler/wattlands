@@ -23,6 +23,7 @@ extends Control
 ##   still              the hull holds still
 ##   stats              print frame times after 300 frames (or seconds=<n> of wall time), then quit
 ##   seconds=<n>        with stats: measure for n seconds of wall time instead of 300 frames
+##   novsync            vsync off, so stats read the real frame time and not the display's 16.7 ms
 
 const F := preload("res://tests/games/tank/tank_fakes.gd")
 const U := preload("res://tests/games/tank/view/tank_view_util.gd")
@@ -41,10 +42,13 @@ var _next_shell_id: int = 900
 var _times: Array[float] = []
 var _frames: int = 0
 var _elapsed: float = 0.0
+var _stats_done: bool = false
 
 
 func _ready() -> void:
 	_opts = _options()
+	if _opts.has("novsync"):
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	var crew := clampi(int(_opts.get("crew", 3)), 1, 4)
 	var content := "ashfall_road"
 	match str(_opts.get("kind", "state")):
@@ -220,6 +224,12 @@ func _fire() -> void:
 	game.cue.emit(TankEvents.SHOT, TankEvents.shot(0, TankIds.SHELL_HEAVY, s.id))
 
 
+## tools/screenshot may quit first (--frames, with vsync off): the frames so far still count.
+func _exit_tree() -> void:
+	if _opts.has("stats") and not _stats_done and not _times.is_empty():
+		_print_stats()
+
+
 func _options() -> Dictionary:
 	var out := {}
 	var raw: Array[String] = []
@@ -238,6 +248,7 @@ func _options() -> Dictionary:
 
 
 func _print_stats() -> void:
+	_stats_done = true
 	var sorted := _times.duplicate()
 	sorted.sort()
 	var mean := 0.0
@@ -253,7 +264,10 @@ func _print_stats() -> void:
 			over += 1
 	var worst: float = 0.0 if sorted.is_empty() else sorted.back()
 	var fmt := "tank view fixture: mean %.2f ms, p99 %.2f ms, worst %.2f ms, "
-	fmt += "%d of %d frames over 16.7 ms, %d enemies, %d shells"
+	fmt += "%d of %d frames over 16.7 ms, %d enemies, %d shells, %d draw calls"
+	var calls := RenderingServer.get_rendering_info(
+		RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME
+	)
 	print(
 		(
 			fmt
@@ -264,7 +278,8 @@ func _print_stats() -> void:
 				over,
 				_times.size(),
 				state.enemies.size(),
-				state.shells.size()
+				state.shells.size(),
+				calls
 			]
 		)
 	)
