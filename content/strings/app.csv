@@ -103,6 +103,7 @@ APP_SESSION_DISCARD_TITLE,Discard the ride?
 APP_SESSION_DISCARD_DETAIL,Nothing from this ride is kept.
 APP_SESSION_DISCARD_DETAIL_CLIENT,Nothing from your ride is kept. The others ride on.
 APP_SESSION_DISCARD_DETAIL_HOST,"Nothing from your ride is kept. The session ends for everyone, and the others keep their results and rides."
+APP_SESSION_DISCARD_HOW,Pick Yes with the keyboard or gamepad. The pedals can't.
 APP_SESSION_DISCARD_KEEP,Keep riding
 APP_SESSION_DISCARD_YES,"Yes, discard"
 APP_SESSION_ERROR_TITLE,Can't start

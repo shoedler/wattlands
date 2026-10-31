@@ -9,6 +9,8 @@ extends AppScreen
 ##     after a stop, so a rider still spinning after the results never starts another ride. The
 ##     launch visit is one visit even though the title is built twice at launch (main shows it,
 ##     then the App's deferred boot shows it again; W3 PROF-1).
+##   - params: fresh_start (a discarded ride) asks for that stop with or without a profile, so a
+##     rider still spinning never starts a new ride after discarding one.
 ##   - The first-run profile keeps every choice made in Settings before it existed (haptics
 ##     opt-out, auto-upload, pedal UI, audio; W3 PROF-3).
 ## While that countdown is armed the menu holds its first item, the same quick ride, so a surge
@@ -59,9 +61,10 @@ func _build() -> void:
 		services.title_visits += 1
 	# The launch visit counts a stretch already running; later visits (back from a ride or a
 	# menu) wait for a fresh start, so spinning on after Continue never starts another ride.
-	zero.configure(
-		services.profile().ftp_w, not has_profile, has_profile and services.title_visits > 1
+	var fresh: bool = (
+		(has_profile and services.title_visits > 1) or bool(params.get("fresh_start", false))
 	)
+	zero.configure(services.profile().ftp_w, not has_profile, fresh)
 	if quick_game == "":
 		zero.cancel()
 	push_menu(_menu_items(), _on_pick, Callable(), 0)

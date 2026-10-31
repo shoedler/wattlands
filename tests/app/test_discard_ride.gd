@@ -151,7 +151,8 @@ func test_the_confirm_has_keep_riding_first_and_says_what_happens() -> void:
 		assert_eq(menu(s).text_of("keep"), AppScreen.t("APP_SESSION_DISCARD_KEEP"), role)
 		assert_eq(menu(s).text_of("yes"), AppScreen.t("APP_SESSION_DISCARD_YES"), role)
 		assert_eq(s.overlay_title.text, AppScreen.t("APP_SESSION_DISCARD_TITLE"), role)
-		assert_eq(s.overlay_detail.text, AppScreen.t(details[role]), role)
+		assert_string_starts_with(s.overlay_detail.text, AppScreen.t(details[role]), role)
+		assert_string_ends_with(s.overlay_detail.text, AppScreen.t("APP_SESSION_DISCARD_HOW"), role)
 		assert_true(s.overlay_detail.visible, role)
 		assert_eq(_fake(s).discards, 0, "opening it discards nothing")
 		assert_false(s.finished, role)
@@ -222,18 +223,19 @@ func test_the_session_ending_while_the_confirm_shows_opens_the_results() -> void
 	assert_eq(_fake(s).discards, 0)
 
 
-# --- nothing automatic discards ------------------------------------------------------------------
+# --- pedals and timers never discard --------------------------------------------------------------
 
 
+## The pick handler refuses an auto pick even if the list were set to make one.
 func test_an_automatic_pick_never_discards() -> void:
 	var s := _solo()
 	_open_confirm(s)
 	var m := menu(s)
+	m.pedal_nav = true
 	m.erg_auto_confirm = true
 	m.set_highlight(m.index_of_id("yes"))
-	m.scanning = false
 	_tick_for(s, m.auto_confirm_after_s() + 1.0)
-	assert_eq(m.picks.size() > 0, true, "the list did pick by itself")
+	assert_true(m.picks.size() > 0, "the list did pick by itself")
 	assert_eq((m.picks[0] as Array)[1], "yes")
 	assert_eq((m.picks[0] as Array)[2], "auto")
 	assert_eq(_fake(s).discards, 0)
@@ -242,71 +244,62 @@ func test_an_automatic_pick_never_discards() -> void:
 	assert_eq(menu(s).ids(), ["keep", "yes"], "the confirm stays")
 
 
-func test_a_confirm_left_open_for_ten_minutes_discards_nothing() -> void:
-	var s := _solo()
-	(fx.trainer.local_rider() as FakeRider).tm.mode = Wl.ERG
-	_open_confirm(s)
-	var m := menu(s)
-	assert_false(m.erg_auto_confirm, "no auto-confirm")
-	assert_false(m.follow_local_mode, "ERG does not turn it on")
-	assert_true(m.scanning, "pedal navigation on: it scans")
-	var seen_yes := false
-	for _i in 600 * 20:
-		s.tick(DT)
-		seen_yes = seen_yes or m.highlighted_id() == "yes"
-	assert_true(seen_yes, "the scan went over Yes")
-	assert_eq(m.picks, [], "nothing picked")
-	assert_eq(_fake(s).discards, 0)
-	assert_false(s.finished)
+func test_a_confirm_left_open_for_ten_minutes_sits_on_keep_riding() -> void:
+	for mode: String in [Wl.ERG, Wl.SIM]:
+		var s := _solo()
+		(fx.trainer.local_rider() as FakeRider).tm.mode = mode
+		assert_true(menu_scans_before_confirm(s), "the ride menu scans")
+		_open_confirm(s)
+		var m := menu(s)
+		assert_false(m.pedal_nav, "no pedal navigation on the confirm")
+		assert_false(m.scanning)
+		assert_false(m.erg_auto_confirm)
+		assert_false(m.follow_local_mode)
+		var moved := false
+		for _i in 600 * 20:
+			s.tick(DT)
+			moved = moved or m.highlighted_id() != "keep"
+		assert_false(moved, "the highlight stays on Keep riding in %s" % mode)
+		assert_eq(m.picks, [], "nothing picked")
+		assert_eq(_fake(s).discards, 0)
+		assert_false(s.finished)
 
 
-func test_a_surge_counts_on_yes_only_after_it_rested_there() -> void:
+func menu_scans_before_confirm(s: AppSessionScreen) -> bool:
+	s.open_menu()
+	return menu(s).scanning
+
+
+func test_a_surge_does_nothing_on_the_confirm() -> void:
 	var s := _solo()
 	_open_confirm(s)
 	var m := menu(s)
-	assert_gte(m.scan_interval_s, AppSessionScreen.DISCARD_SCAN_MIN_S)
-	assert_gt(
-		AppSessionScreen.DISCARD_SCAN_MIN_S,
-		AppSessionScreen.DISCARD_SURGE_DWELL_S,
-		"Yes stays highlighted past the dwell"
-	)
-	while m.highlighted_id() != "yes":
-		s.tick(DT)
 	s.feed_gesture(Wl.G_SURGE)
-	assert_eq(m.picks, [], "started while the highlight was on Keep riding: no pick")
+	assert_eq(m.picks, [], "not on Keep riding")
+	assert_true(s.overlay.visible)
+	s.feed_action(&"down")
+	assert_eq(m.highlighted_id(), "yes", "the keyboard moves")
+	_tick_for(s, 30.0)
+	s.feed_gesture(Wl.G_SURGE)
+	assert_eq(m.picks, [], "not on Yes, however long it rested there")
 	assert_eq(_fake(s).discards, 0)
-	_tick_for(s, AppSessionScreen.DISCARD_SURGE_DWELL_S - 0.5)
-	s.feed_gesture(Wl.G_SURGE)
-	assert_eq(_fake(s).discards, 0, "still too soon")
-	_tick_for(s, 0.6)
-	s.feed_gesture(Wl.G_SURGE)
-	assert_eq(_fake(s).discards, 1, "a surge begun on Yes picks it")
+	s.feed_action(&"confirm")
+	assert_eq(_fake(s).discards, 1, "the keyboard picks it")
 	assert_eq(fx.app.state, "title")
 
 
-func test_a_surge_on_keep_riding_picks_it_at_once() -> void:
+func test_a_coast_never_backs_out_in_erg() -> void:
 	var s := _solo()
+	(fx.trainer.local_rider() as FakeRider).tm.mode = Wl.ERG
 	_open_confirm(s)
-	s.feed_gesture(Wl.G_SURGE)
-	assert_false(s.overlay.visible)
-	assert_eq(_fake(s).discards, 0)
+	s.feed_gesture(Wl.G_COAST)
+	assert_eq(menu(s).ids(), ["keep", "yes"], "BRIEF 3.5")
 
 
-func test_a_slower_scan_interval_stays() -> void:
-	var s := _solo()
-	fx.settings.profile.scan_interval_s = 6.0
-	_open_confirm(s)
-	assert_eq(menu(s).scan_interval_s, 6.0)
-
-
-## A rider who stops in the confirm: the highlight goes back to Keep riding and holds, so the surge
-## that restarts the ride never lands on Yes. The keyboard can still discard.
-func test_an_auto_pause_holds_keep_riding() -> void:
+func test_a_pause_does_not_change_the_confirm() -> void:
 	var s := _solo()
 	_open_confirm(s)
 	var m := menu(s)
-	while m.highlighted_id() != "yes":
-		s.tick(DT)
 	_fake(s).pause("coasting")
 	fx.bus.paused_changed.emit(true, "coasting")
 	assert_true(s.auto_paused())
@@ -314,14 +307,10 @@ func test_an_auto_pause_holds_keep_riding() -> void:
 	assert_eq(s.overlay_title.text, AppScreen.t("APP_SESSION_DISCARD_TITLE"))
 	assert_false(m.scanning)
 	assert_eq(m.highlighted_id(), "keep")
-	_tick_for(s, 30.0)
-	assert_eq(m.highlighted_id(), "keep", "it holds")
-	s.feed_action(&"down")
-	assert_eq(m.highlighted_id(), "yes")
-	s.feed_action(&"up")
 	s.feed_gesture(Wl.G_SURGE)
 	assert_eq(_fake(s).discards, 0)
-	assert_eq(_fake(s).resumes, 1, "the surge picked Keep riding")
+	assert_eq(_fake(s).resumes, 0, "a surge does not pick Keep riding either")
+	assert_eq(menu(s), m)
 
 
 func test_pedaling_out_of_an_auto_pause_closes_the_confirm() -> void:
@@ -371,9 +360,10 @@ func test_host_discard_ends_for_everyone_then_leaves_once_flushed() -> void:
 	assert_eq(fx.app.state, "title", "no results screen")
 
 
-## Nothing but gestures, on the main scene: the screen swap hands the rider back to menu time as
-## End's way through the results does.
-func test_discard_by_pedal_through_the_main_scene() -> void:
+## A pedal-only rider on the main scene: the ride menu still scans and End is still in reach, the
+## confirm takes no surge, and a coast leaves it. The keys then discard, and the screen swap hands
+## the rider back to menu time as End's way through the results does.
+func test_pedals_reach_the_confirm_and_only_the_keys_get_past_it() -> void:
 	fx.give_profile()
 	var m := open_main()
 	fx.services.goto("session", {"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30"})
@@ -383,13 +373,23 @@ func test_discard_by_pedal_through_the_main_scene() -> void:
 		return
 	assert_true(fx.trainer.is_external_tick(), "the session ticks the rider")
 	s.open_menu()
-	assert_true(scan_to(s, "discard"), "the scan reaches the item")
+	assert_true(scan_to(s, "end"), "the scan reaches End the ride")
+	assert_true(scan_to(s, "discard"), "and the item")
 	fx.input.inject_gesture(Wl.G_SURGE)
 	assert_eq(menu(s).ids(), ["keep", "yes"])
-	while menu(s).highlighted_id() != "yes":
-		s.tick(DT)
-	_tick_for(s, AppSessionScreen.DISCARD_SURGE_DWELL_S + 0.1)
+	for _i in 10:
+		_tick_for(s, 1.0)
+		fx.input.inject_gesture(Wl.G_SURGE)
+	assert_eq(menu(s).ids(), ["keep", "yes"], "surges change nothing")
+	assert_eq(menu(s).highlighted_id(), "keep")
+	assert_true(current_screen(m) == s, "still riding")
+	fx.input.inject_gesture(Wl.G_COAST)
+	assert_eq(menu(s).ids(), ["resume", "panic", "end", "discard"], "a coast leaves it")
+	assert_true(menu(s).scanning, "the ride menu scans again")
 	fx.input.inject_gesture(Wl.G_SURGE)
+	assert_eq(menu(s).ids(), ["keep", "yes"], "reopened")
+	fx.input.inject_action(&"down")
+	fx.input.inject_action(&"confirm")
 	assert_true(current_screen(m) is AppTitleScreen, "the title")
 	assert_false(fx.trainer.is_external_tick(), "menu time ticks the rider again")
 
@@ -491,18 +491,17 @@ func test_a_real_solo_discard_keeps_nothing() -> void:
 	assert_eq(_ride_files().size(), 0, "no later path saves it")
 
 
-func test_a_discard_from_the_panic_menu_keeps_nothing_and_the_rider_stays_safe() -> void:
+## The trainer after it: tests/app/test_discard_ride_stack.gd, on the real WlTrainerService.
+func test_a_discard_from_the_panic_menu_keeps_nothing() -> void:
 	var s := _open_real_solo()
-	var rider := s.local_rider()
 	for _i in 200:
 		s.host.step()
 	s.panic()
-	assert_true(rider.governor.is_panic(), "the governor is safe")
 	confirm_pick(s, "discard")
 	confirm_pick(s, "yes")
 	assert_eq(fx.app.state, "title")
 	assert_eq(_ride_files().size(), 0)
-	assert_true(rider.governor.is_panic(), "the discard never resumes the trainer")
+	assert_false(FileAccess.file_exists(_progress_file()))
 
 
 func test_a_ride_already_over_can_not_be_discarded() -> void:

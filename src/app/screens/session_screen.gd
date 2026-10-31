@@ -17,9 +17,10 @@ extends AppScreen
 ## (host_left), and NET_STATE_RECONNECTING while this peer's own NetSession reconnects.
 ## Discard the ride, under End/Leave on every overlay menu but the error one, opens a confirm with
 ## Keep riding first (discard_ride(): end_ride() with this machine's ride thrown away, then the
-## title). No automatic pick and no timeout discards: the confirm ignores auto picks, and a surge
-## counts on Yes only after DISCARD_SURGE_DWELL_S there, since a surge fires a second or more after
-## it starts and a scan could have moved onto Yes under it.
+## title). Pedals can never pick Yes: the confirm does not scan or auto-pick and a surge does
+## nothing there, since a surge can fire from riding alone (a rescue's recovery, a hard effort) and
+## the ride can't be had back. Yes takes a keyboard or controller pick. A coast still backs out
+## (never in ERG, BRIEF 3.5), so a pedal-only rider can leave it.
 
 var role: String = Wl.SOLO
 var host: GameHost = null
@@ -64,16 +65,9 @@ var host_dropped: bool = false
 var net_reconnecting: bool = false
 ## The rider confirmed Discard the ride: the session goes to the title, not to results.
 var discarded: bool = false
-## Seconds the confirm's highlight has rested on "Yes, discard".
-var _discard_yes_s: float = 0.0
 
 const SCRIM_COLOR := Color(0.0, 0.0, 0.0, 0.6)
 const OVERLAY_PANEL_COLOR := Color(0.06, 0.07, 0.09, 0.97)
-## A surge fires up to about 1.5 s after it starts (GestureRecognizer), so one that counts on Yes
-## began with Yes already highlighted.
-const DISCARD_SURGE_DWELL_S := 2.0
-## The confirm scans at least this slowly, so Yes stays highlighted past the dwell.
-const DISCARD_SCAN_MIN_S := 4.0
 
 
 func _build() -> void:
@@ -387,7 +381,7 @@ func _show_overlay(force_menu: bool = false) -> void:
 		overlay_detail.text = ""
 	elif discard_confirm_showing():
 		overlay_title.text = t("APP_SESSION_DISCARD_TITLE")
-		overlay_detail.text = discard_detail()
+		overlay_detail.text = "%s\n%s" % [discard_detail(), t("APP_SESSION_DISCARD_HOW")]
 	elif panicked:
 		overlay_title.text = t("APP_SESSION_PANIC_TITLE")
 		overlay_detail.text = t("APP_SESSION_PANIC_DETAIL")
@@ -435,8 +429,6 @@ func _hold_resume_on_auto_pause() -> void:
 			m.set_highlight(i)
 	else:
 		m.scanning = scanning_enabled()
-	if discard_confirm_showing():
-		_hold_keep_riding_on_auto_pause()
 
 
 func overlay_items() -> Array:
@@ -518,17 +510,18 @@ func discard_detail() -> String:
 	return t("APP_SESSION_DISCARD_DETAIL")
 
 
-## Keep riding first and highlighted; nothing in this menu picks by itself.
+## Keep riding first and highlighted, and it stays there: the list runs without pedal navigation,
+## so it never scans or auto-picks and its hint names the keys.
 func open_discard_confirm() -> void:
 	var items: Array = [
 		{"id": "keep", "text": t("APP_SESSION_DISCARD_KEEP")},
 		{"id": "yes", "text": t("APP_SESSION_DISCARD_YES")}
 	]
 	var m := push_menu(items, _on_discard_pick, _on_discard_back, 0)
+	m.pedal_nav = false
+	m.scanning = false
 	m.erg_auto_confirm = false
 	m.follow_local_mode = false
-	m.scan_interval_s = maxf(m.scan_interval_s, DISCARD_SCAN_MIN_S)
-	_discard_yes_s = 0.0
 	_show_overlay()
 
 
@@ -561,17 +554,6 @@ func _keep_riding() -> void:
 		_on_overlay_pick(0, "resume", false)
 
 
-## A rider who stopped in the confirm: a surge from rest must not land on Yes (see
-## _hold_resume_on_auto_pause). The keyboard and the controller still move and pick.
-func _hold_keep_riding_on_auto_pause() -> void:
-	var m := active_menu()
-	if auto_paused():
-		m.scanning = false
-		m.set_highlight(item_index("keep", m))
-	else:
-		m.scanning = scanning_enabled()
-
-
 ## Throw this machine's ride away and end the session on End/Leave's path, then go to the title.
 ## A host leaves the room only once the results and session_end are out, so the other riders get
 ## them; a client has already left in end_ride().
@@ -583,23 +565,8 @@ func discard_ride() -> void:
 	finished = true
 	if role != Wl.CLIENT and services.net != null:
 		services.net.leave_when_flushed()
-	goto("title")
-
-
-func _tick(dt: float) -> void:
-	if discard_confirm_showing() and str(active_menu().highlighted_id()) == "yes":
-		_discard_yes_s += dt
-	else:
-		_discard_yes_s = 0.0
-
-
-## A surge that fired too soon after the scan reached Yes (see DISCARD_SURGE_DWELL_S).
-func _surge_too_soon_on_yes() -> bool:
-	return (
-		discard_confirm_showing()
-		and str(active_menu().highlighted_id()) == "yes"
-		and _discard_yes_s < DISCARD_SURGE_DWELL_S
-	)
+	# The rider may still be spinning: that stretch must not start a new ride from the title.
+	goto("title", {"fresh_start": true})
 
 
 func _fail(reason: String) -> void:
@@ -646,7 +613,9 @@ func _help_open() -> bool:
 
 ## A pause on not pedaling ends in the GameHost (1 s of pedaling at >= 30 rpm, BRIEF 3.5).
 func _handle_gesture(gesture: StringName) -> bool:
-	if gesture == Wl.G_SURGE and _surge_too_soon_on_yes():
+	if discard_confirm_showing():
+		if gesture == Wl.G_COAST and local_trainer_mode() != Wl.ERG:
+			active_menu().feed_action(&"back")
 		return true
 	return not overlay.visible
 
