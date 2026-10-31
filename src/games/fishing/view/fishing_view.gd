@@ -26,10 +26,6 @@ extends Node2D
 ## FishingAudio is a child. The HUD finds the view through the game's "fishing_view" meta and
 ## reads `model`.
 
-const INTERP_DELAY_S := 0.1
-const CLOCK_RESYNC_S := 1.5
-const INTERP_DELAY_MAX_S := CLOCK_RESYNC_S - 0.1
-const CLOCK_CATCHUP_TAU_S := 0.25
 ## Camera: the local boat's screen x while driving (heading right; mirrored heading left) as a
 ## share of the view's width, and the easing.
 const CAM_DRIVE_U := 210.0 / 640.0
@@ -120,7 +116,11 @@ var boats: Dictionary = {}
 ## World x (m) at the view's left edge.
 var cam_m: float = 0.0
 ## The game time (s) boats and fish are drawn at (the host's on a client).
-var render_t: float = 0.0
+var render_t: float:
+	get:
+		return _clock.render_t
+	set(value):
+		_clock.render_t = value
 var events_connected: bool = false
 ## Every cue handled so far, newest last (tests read it; capped).
 var cue_log: Array[Dictionary] = []
@@ -131,7 +131,7 @@ var model: Dictionary = {}
 var _history: FishingSnapHistory = FishingSnapHistory.new()
 var _own_history: bool = true
 var _seen_tick: int = -1
-var _clock_set: bool = false
+var _clock: SnapRenderClock = SnapRenderClock.new()
 var _built: bool = false
 var _cam_set: bool = false
 var _local_slot: int = -1
@@ -184,7 +184,7 @@ func advance(delta: float) -> void:
 		scenery.set_size((vp as SubViewport).size)
 	_track_snapshots(st)
 	if _is_client():
-		_advance_clock(delta)
+		_clock.advance(delta, _history)
 	else:
 		_advance_local_clock(delta)
 	for r in st.riders:
@@ -227,11 +227,6 @@ func local_slot() -> int:
 ## The boat view of `slot` (null when there is none).
 func boat_view(slot: int) -> FishingBoatView:
 	return boats.get(slot)
-
-
-## Client: how far render_t runs behind the newest snapshot.
-func interp_delay() -> float:
-	return clampf(_history.mean_spacing(), INTERP_DELAY_S, INTERP_DELAY_MAX_S)
 
 
 ## The module's fx_event handler: queues the event's cues for the next frame.
@@ -366,9 +361,8 @@ func _advance_local_clock(delta: float) -> void:
 	var newest := _history.newest_t()
 	var goal := newest - Wl.SIM_DT + minf(_since, Wl.SIM_DT)
 	_since += maxf(delta, 0.0)
-	if not _clock_set or absf(goal - render_t) > CLOCK_RESYNC_S:
-		render_t = goal
-		_clock_set = true
+	if not _clock.is_set() or absf(goal - render_t) > SnapRenderClock.RESYNC_S:
+		_clock.place(goal)
 		return
 	var next := maxf(render_t + maxf(delta, 0.0), goal - Wl.SIM_DT)
 	render_t = clampf(next, render_t, newest)
@@ -393,27 +387,9 @@ func _ease_depth(delta: float) -> void:
 		scenery.view_depth_m = _depth_goal
 
 
-## render_t moves with the frame clock, catches up softly toward newest - interp_delay() and
-## stops at the newest snapshot; it never runs backwards except by a resync jump.
-func _advance_clock(delta: float) -> void:
-	if _history.is_empty():
-		return
-	var newest := _history.newest_t()
-	var goal := newest - interp_delay()
-	if not _clock_set or absf(goal - render_t) > CLOCK_RESYNC_S:
-		render_t = goal
-		_clock_set = true
-		return
-	render_t += maxf(delta, 0.0)
-	var behind := goal - render_t
-	if behind > 0.0:
-		render_t += behind * (1.0 - exp(-maxf(delta, 0.0) / CLOCK_CATCHUP_TAU_S))
-	render_t = minf(render_t, newest)
-
-
 func _values(r: FishingRiderState) -> Dictionary:
 	var v := FishingSnapHistory.values_of(r)
-	if _clock_set:
+	if _clock.is_set():
 		for k: String in FishingSnapHistory.KEYS:
 			v[k] = _history.value_at(r.slot, k, render_t, float(v[k]))
 	return v
@@ -712,10 +688,6 @@ func _line_end(r: FishingRiderState) -> Vector2:
 	return Vector2.INF
 
 
-func _fish_id(r: FishingRiderState) -> String:
-	return FishingSprites.fish_id(r.fish.sp)
-
-
 func _handle(c: Dictionary) -> void:
 	cue_log.append(c)
 	if cue_log.size() > 64:
@@ -803,11 +775,6 @@ func _step_rope(r: FishingRiderState, delta: float) -> void:
 	var flow := -float(r.heading) * absf(r.v_mps) * FLOW_PER_MPS
 	var surf := float(FishingScenery.SURF_Y)
 	rope.step(Vector2(start), end, slack, strain, delta, surf, flow, fight)
-
-
-## Rider `slot`'s rope (null without a line out).
-func rope_of(slot: int) -> FishingRope:
-	return _ropes.get(slot)
 
 
 func _paint_lines(c: CanvasItem) -> void:
