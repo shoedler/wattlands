@@ -15,6 +15,11 @@ extends AppScreen
 ## Network notice (BRIEF 5.5, W3 NET-6), a banner at the top of the screen: on a client,
 ## NET_HOST_DROPPED from the host's peer_left until it is back (peer_joined) or gone
 ## (host_left), and NET_STATE_RECONNECTING while this peer's own NetSession reconnects.
+## Discard the ride, under End/Leave on every overlay menu but the error one, opens a confirm with
+## Keep riding first (discard_ride(): end_ride() with this machine's ride thrown away, then the
+## title). No automatic pick and no timeout discards: the confirm ignores auto picks, and a surge
+## counts on Yes only after DISCARD_SURGE_DWELL_S there, since a surge fires a second or more after
+## it starts and a scan could have moved onto Yes under it.
 
 var role: String = Wl.SOLO
 var host: GameHost = null
@@ -57,9 +62,18 @@ var overlay_scrim: ColorRect = null
 var net_notice: Label = null
 var host_dropped: bool = false
 var net_reconnecting: bool = false
+## The rider confirmed Discard the ride: the session goes to the title, not to results.
+var discarded: bool = false
+## Seconds the confirm's highlight has rested on "Yes, discard".
+var _discard_yes_s: float = 0.0
 
 const SCRIM_COLOR := Color(0.0, 0.0, 0.0, 0.6)
 const OVERLAY_PANEL_COLOR := Color(0.06, 0.07, 0.09, 0.97)
+## A surge fires up to about 1.5 s after it starts (GestureRecognizer), so one that counts on Yes
+## began with Yes already highlighted.
+const DISCARD_SURGE_DWELL_S := 2.0
+## The confirm scans at least this slowly, so Yes stays highlighted past the dwell.
+const DISCARD_SCAN_MIN_S := 4.0
 
 
 func _build() -> void:
@@ -342,6 +356,7 @@ func panic() -> void:
 	var r := local_rider()
 	if r != null:
 		r.panic()
+	_close_discard_confirm()
 	_show_overlay()
 
 
@@ -370,6 +385,9 @@ func _show_overlay(force_menu: bool = false) -> void:
 	if error != "":
 		overlay_title.text = t("APP_SESSION_ERROR_TITLE")
 		overlay_detail.text = ""
+	elif discard_confirm_showing():
+		overlay_title.text = t("APP_SESSION_DISCARD_TITLE")
+		overlay_detail.text = discard_detail()
 	elif panicked:
 		overlay_title.text = t("APP_SESSION_PANIC_TITLE")
 		overlay_detail.text = t("APP_SESSION_PANIC_DETAIL")
@@ -417,6 +435,8 @@ func _hold_resume_on_auto_pause() -> void:
 			m.set_highlight(i)
 	else:
 		m.scanning = scanning_enabled()
+	if discard_confirm_showing():
+		_hold_keep_riding_on_auto_pause()
 
 
 func overlay_items() -> Array:
@@ -432,6 +452,7 @@ func overlay_items() -> Array:
 	items.append(
 		{"id": "end", "text": t("APP_SESSION_END") if role != Wl.CLIENT else t("APP_SESSION_LEAVE")}
 	)
+	items.append({"id": "discard", "text": t("APP_SESSION_DISCARD")})
 	return items
 
 
@@ -449,6 +470,8 @@ func _on_overlay_pick(_index: int, id: Variant, _auto: bool) -> void:
 			panic()
 		"end":
 			end_ride()
+		"discard":
+			open_discard_confirm()
 		"leave":
 			goto("title")
 
@@ -476,6 +499,107 @@ func end_ride() -> void:
 			host.end_session("ended_by_rider")
 			if host.is_finished() and not finished:
 				_finish(host.final_results())
+
+
+# --- discard the ride -----------------------------------------------------------------------
+
+
+## The confirm is the menu on top of the ride menu (the overlay's only sub-menu).
+func discard_confirm_showing() -> bool:
+	return menus.size() > 1
+
+
+func discard_detail() -> String:
+	match role:
+		Wl.HOST:
+			return t("APP_SESSION_DISCARD_DETAIL_HOST")
+		Wl.CLIENT:
+			return t("APP_SESSION_DISCARD_DETAIL_CLIENT")
+	return t("APP_SESSION_DISCARD_DETAIL")
+
+
+## Keep riding first and highlighted; nothing in this menu picks by itself.
+func open_discard_confirm() -> void:
+	var items: Array = [
+		{"id": "keep", "text": t("APP_SESSION_DISCARD_KEEP")},
+		{"id": "yes", "text": t("APP_SESSION_DISCARD_YES")}
+	]
+	var m := push_menu(items, _on_discard_pick, _on_discard_back, 0)
+	m.erg_auto_confirm = false
+	m.follow_local_mode = false
+	m.scan_interval_s = maxf(m.scan_interval_s, DISCARD_SCAN_MIN_S)
+	_discard_yes_s = 0.0
+	_show_overlay()
+
+
+func _close_discard_confirm() -> void:
+	if discard_confirm_showing():
+		pop_menu()
+
+
+func _on_discard_pick(_index: int, id: Variant, auto: bool) -> void:
+	if auto:
+		return
+	match str(id):
+		"keep":
+			_keep_riding()
+		"yes":
+			discard_ride()
+
+
+func _on_discard_back() -> void:
+	_close_discard_confirm()
+	_show_overlay()
+
+
+## Like the ride menu's Resume. In a panic only Resume the trainer leaves it, so back to that menu.
+func _keep_riding() -> void:
+	_close_discard_confirm()
+	if panicked:
+		_show_overlay()
+	else:
+		_on_overlay_pick(0, "resume", false)
+
+
+## A rider who stopped in the confirm: a surge from rest must not land on Yes (see
+## _hold_resume_on_auto_pause). The keyboard and the controller still move and pick.
+func _hold_keep_riding_on_auto_pause() -> void:
+	var m := active_menu()
+	if auto_paused():
+		m.scanning = false
+		m.set_highlight(item_index("keep", m))
+	else:
+		m.scanning = scanning_enabled()
+
+
+## Throw this machine's ride away and end the session on End/Leave's path, then go to the title.
+## A host leaves the room only once the results and session_end are out, so the other riders get
+## them; a client has already left in end_ride().
+func discard_ride() -> void:
+	if host == null or finished or not host.discard_own_ride():
+		return
+	discarded = true
+	end_ride()
+	finished = true
+	if role != Wl.CLIENT and services.net != null:
+		services.net.leave_when_flushed()
+	goto("title")
+
+
+func _tick(dt: float) -> void:
+	if discard_confirm_showing() and str(active_menu().highlighted_id()) == "yes":
+		_discard_yes_s += dt
+	else:
+		_discard_yes_s = 0.0
+
+
+## A surge that fired too soon after the scan reached Yes (see DISCARD_SURGE_DWELL_S).
+func _surge_too_soon_on_yes() -> bool:
+	return (
+		discard_confirm_showing()
+		and str(active_menu().highlighted_id()) == "yes"
+		and _discard_yes_s < DISCARD_SURGE_DWELL_S
+	)
 
 
 func _fail(reason: String) -> void:
@@ -521,7 +645,9 @@ func _help_open() -> bool:
 
 
 ## A pause on not pedaling ends in the GameHost (1 s of pedaling at >= 30 rpm, BRIEF 3.5).
-func _handle_gesture(_gesture: StringName) -> bool:
+func _handle_gesture(gesture: StringName) -> bool:
+	if gesture == Wl.G_SURGE and _surge_too_soon_on_yes():
+		return true
 	return not overlay.visible
 
 
@@ -608,6 +734,7 @@ func _pause_ended() -> void:
 func _on_panic_requested() -> void:
 	if not panicked:
 		panicked = true
+		_close_discard_confirm()
 		_show_overlay()
 
 
@@ -631,6 +758,9 @@ func _on_refused(reason: String) -> void:
 	if reason == "host_left" and role == Wl.CLIENT and not finished:
 		host_left = true
 		if host != null:
+			# The host's results can arrive in the same poll as its leave.
+			host.apply_pending_results()
+		if host != null and not finished:
 			host.end_session("host_left")
 		if not finished:
 			_finish(host.final_results() if host != null else null)
@@ -645,6 +775,8 @@ func _finish(r: GameResults) -> void:
 	if finished:
 		return
 	finished = true
+	if discarded:
+		return
 	if r != null:
 		results = r
 	if host != null and is_instance_valid(host):
