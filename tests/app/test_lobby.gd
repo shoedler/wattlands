@@ -507,6 +507,17 @@ func test_rejoin_opens_the_running_session() -> void:
 	assert_eq(fx.app.params.get("replay"), [{"from": 1, "data": plan_msg}])
 
 
+func test_a_broadcast_before_the_lobby_waits_for_the_lobby() -> void:
+	_client_lobby({})
+	fx.fake_net().receive(1, {"type": "snapshot", "v": 1, "state": {}})
+	assert_ne(fx.app.state, "session", "no game yet: the host's catch-up comes after the lobby")
+	fx.fake_net().lobby = workout_lobby()
+	var plan_msg := {"type": "plan", "v": 1, "plan": {}}
+	fx.fake_net().receive(1, plan_msg)
+	assert_eq(fx.app.state, "session")
+	assert_eq(fx.app.params.get("replay"), [{"from": 1, "data": plan_msg}])
+
+
 func test_hosting_remembers_the_room_and_reclaims_it() -> void:
 	_host_lobby()
 	var recent: Array = fx.settings.get_value("recent_rooms", [])
