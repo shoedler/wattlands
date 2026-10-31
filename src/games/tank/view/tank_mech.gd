@@ -114,7 +114,6 @@ const LEATHER: Array[Color] = [
 const WALL := Color(0.24, 0.19, 0.145)
 const WALL_DK := Color(0.11, 0.09, 0.07)
 const WALL_LT := Color(0.33, 0.265, 0.20)
-const SOOT := Color(0.05, 0.042, 0.035)
 const VOID := Color(0.045, 0.038, 0.032)
 const PAPER := Color(0.90, 0.84, 0.68)
 const NEEDLE := Color(0.10, 0.04, 0.03)
@@ -123,8 +122,6 @@ const GLASS := Color(0.55, 0.64, 0.66)
 const WARM := Color(1.0, 0.66, 0.34)
 const ARC_CORE := Color(0.85, 0.92, 1.0)
 const ARC_GLOW := Color(0.45, 0.55, 1.0)
-## The ambient light (a cool night fill; the lamps are warm).
-const AMBIENT := Color(0.15, 0.14, 0.16)
 ## Each machine's key: the colour of its room lamp (diesel orange, dynamo pale amber, steam a cool
 ## brass-white, arc a cold white, repair a pinker copper) and of its ambient fill.
 const KEYS := {
