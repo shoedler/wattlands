@@ -72,7 +72,7 @@ const PALETTE := {
 ## Their arrows end on the panel or the card they explain.
 const HELP_V4 := [
 	["TANK_HELP_RANGE", Vector2(780, 300), Vector2(800, 350)],
-	["TANK_HELP_PIP", Vector2(760, 240), Vector2(760, 200)],
+	["TANK_HELP_PIP", Vector2(760, 240), Vector2(836, 190)],
 	["TANK_HELP_NEAR", Vector2(540, 345), Vector2(600, 385)],
 	["TANK_HELP_REPAIR", Vector2(760, 400), Vector2(690, 470)],
 ]

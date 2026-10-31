@@ -1,8 +1,9 @@
 class_name TankFarPanel
 extends SubViewport
 ## v4: the far panel (SPEC_TANK 4.2, 4.3): a long-lens view of the enemy, in its own SubViewport so it never
-## runs the depth of field. `Back` is the same night forest at a third of the near panel's parallax and
-## lower (a long lens sees less sky), over the ground band; `World` a stage's little base (TankForest.far_base),
+## runs the depth of field. `Back` is the night sky and ridge at a third of the near panel's parallax and lower
+## (a long lens sees less sky), a glow of moonlit air on the horizon, three walls of firs with mist at their feet
+## and the ground band over them; `Base` a stage's little base (TankForest.far_base) and `BaseLight` its lamps, behind every enemy; `World`
 ## the wrecks, the far enemies by lane back to front and the Behemoth; `Light` (additive) the base's lamps, slit
 ## glows, telegraph pulses, the searchlight's cold pool on the target, fires, shells and impact flashes from
 ## the panel's own TankFx; `Veil` the black a tow fades it to, with rows of noise. TankView draws its texture over
@@ -20,10 +21,26 @@ const GROUND_H := 170.0
 const GROUND_EARTH := Color(0.062, 0.07, 0.058)
 const GROUND_DARK := Color(0.03, 0.036, 0.032)
 const GROUND_LIP := Color(0.1, 0.12, 0.09)
-const SHADE_TOP := Color(0, 0, 0, 0.3)
-const SHADE_BOTTOM := Color(0, 0, 0, 0.5)
-const SHADE_TOP_END := 215.0
-const SHADE_BOTTOM_START := 400.0
+const SHADE_TOP := Color(0, 0, 0, 0.22)
+const SHADE_BOTTOM := Color(0, 0, 0, 0.4)
+const SHADE_TOP_END := 150.0
+const SHADE_BOTTOM_START := 440.0
+## The moonlit air the treeline stands against: from clear at its top to this at the horizon.
+const HORIZON_GLOW := Color(0.2, 0.34, 0.38, 0.5)
+const HORIZON_TOP := 150.0
+const HORIZON_END := 300.0
+## The firs, far to near (TankEnemyKit.far_forest_rects): the stage y of each wall's foot, how fast it slides against
+## the near panel's road. Each wall's foot row is stretched down to the next, so no sky shows under a wall.
+const FOREST_FOOT: Array[float] = [270.0, 296.0, 334.0]
+const FOREST_SLIDE: Array[float] = [0.18, 0.34, 0.6]
+## The mist at a wall's foot: its rows up from the foot, its colour at the foot, by steps as the art's.
+const MIST := Color(0.3, 0.45, 0.48, 0.34)
+const MIST_ROWS := 20.0
+const MIST_STEP := 4.0
+## Dim moonlight on an enemy: a cold wash over its top, its pool on the ground.
+const MOON := Color(0.5, 0.68, 0.82)
+const MOON_WASH := 0.06
+const MOON_POOL := 0.07
 const OVERDRAW := 4.0
 ## A sprite's haze across the field; the night it comes out of over the first third of its entry.
 const HAZE_NEAR := 0.12
@@ -81,6 +98,8 @@ var veil: float = 0.0
 
 var _root: Node2D = null
 var _back: Node2D = null
+var _base: Node2D = null
+var _base_light: Node2D = null
 var _world: Node2D = null
 var _light: Node2D = null
 var _veil: Node2D = null
@@ -105,14 +124,19 @@ func _init(view: TankView, sd: int) -> void:
 	add_child(_root)
 	_back = _layer("Back")
 	_back.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	_base = _layer("Base")
+	_base_light = _layer("BaseLight")
 	_world = _layer("World")
 	_light = _layer("Light")
 	var add := CanvasItemMaterial.new()
 	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	_light.material = add
-	_light.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	for l: Node2D in [_base_light, _light]:
+		l.material = add
+		l.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	_veil = _layer("Veil")
 	_back.draw.connect(_draw_back)
+	_base.draw.connect(_draw_base)
+	_base_light.draw.connect(_draw_base_light)
 	_world.draw.connect(_draw_world)
 	_light.draw.connect(_draw_light)
 	_veil.draw.connect(_draw_veil)
@@ -137,7 +161,7 @@ func layout(canvas: Vector2, mirrored: bool, y_off: float) -> void:
 	var want := Vector2i(int(far_w), int(canvas.y))
 	if size != want:
 		size = want
-	for l: Node2D in [_world, _light]:
+	for l: Node2D in [_base, _base_light, _world, _light]:
 		l.scale = Vector2(-1, 1) if mirrored else Vector2.ONE
 		l.position = Vector2(far_w, 0) if mirrored else Vector2.ZERO
 
@@ -196,7 +220,7 @@ func frame(state: TankState, dt: float) -> void:
 	veil = move_toward(
 		veil, 1.0 if towed else 0.0, dt / (VEIL_IN_S if towed else TankView.RESTART_FADE_S)
 	)
-	for l: Node2D in [_back, _world, _light, _veil]:
+	for l: Node2D in [_back, _base, _base_light, _world, _light, _veil]:
 		l.queue_redraw()
 
 
@@ -582,8 +606,10 @@ func _draw_back() -> void:
 	ci.draw_rect(Rect2(-OVERDRAW, top, w, bottom - top), TankForest.SKY)
 	var tint := TankForest.forest_tint(v, v.game.state)
 	for p in v.rig.planes:
-		if str(p["layer"]) == "back":
-			_plane(ci, p, tint if str(p["name"]) in ["forest", "ridge"] else Color.WHITE)
+		if str(p["layer"]) == "back" and str(p["name"]) != "forest":
+			_plane(ci, p, tint if str(p["name"]) == "ridge" else Color.WHITE)
+	_band(ci, HORIZON_TOP, HORIZON_END, Color(HORIZON_GLOW, 0.0), HORIZON_GLOW)
+	_forest(ci, tint)
 	_ground(ci, bottom)
 	var clear := Color(0, 0, 0, 0)
 	_band(ci, top, SHADE_TOP_END, SHADE_TOP, clear)
@@ -592,6 +618,39 @@ func _draw_back() -> void:
 
 func _ready_to_draw() -> bool:
 	return v.game != null and v.game.state != null and v.rig != null
+
+
+## The treeline, far to near, each wall's foot in its mist.
+func _forest(ci: CanvasItem, tint: Color) -> void:
+	var tex := kit.far_forest()
+	var rects := kit.far_forest_rects()
+	if tex == null:
+		return
+	for i in mini(rects.size(), FOREST_FOOT.size()):
+		var r: Rect2 = rects[i]
+		var foot := FOREST_FOOT[i]
+		var low := GROUND_TOP + GROUND_H * 0.1
+		var slide := v.plane_x * TankView.S * PLANE_PARALLAX * FOREST_SLIDE[i]
+		var x := -fposmod(slide, r.size.x) - r.size.x
+		var last := Rect2(r.position.x, r.end.y - 1.0, r.size.x, 1.0)
+		while x < far_w + OVERDRAW:
+			var at := Vector2(roundf(x), foot - r.size.y)
+			ci.draw_texture_rect_region(tex, Rect2(at, r.size), r, tint)
+			if low > foot:
+				ci.draw_texture_rect_region(
+					tex, Rect2(at.x, foot, r.size.x, low - foot), last, tint
+				)
+			x += r.size.x
+		_mist(ci, foot)
+
+
+func _mist(ci: CanvasItem, foot: float) -> void:
+	var y := 0.0
+	while y < MIST_ROWS:
+		var k := 1.0 - y / MIST_ROWS
+		var row := Rect2(-OVERDRAW, foot - y - MIST_STEP, far_w + OVERDRAW * 2.0, MIST_STEP)
+		ci.draw_rect(row, Color(MIST, MIST.a * k * k))
+		y += MIST_STEP
 
 
 func _plane(ci: CanvasItem, p: Dictionary, mod: Color) -> void:
@@ -645,14 +704,28 @@ func _band(ci: CanvasItem, y0: float, y1: float, c0: Color, c1: Color) -> void:
 	)
 
 
+## A stage's little base stands behind every enemy: its lamps light the base, never through a hull.
+func _draw_base() -> void:
+	if v == null or not _ready_to_draw():
+		return
+	var bx := TankForest.far_base(v, v.game.state)
+	if not is_nan(bx):
+		TankForest.draw_base(_base, v, bx)
+
+
+func _draw_base_light() -> void:
+	if v == null or not _ready_to_draw():
+		return
+	var bx := TankForest.far_base(v, v.game.state)
+	if not is_nan(bx):
+		TankForest.draw_base_light(_base_light, v, bx)
+
+
 func _draw_world() -> void:
 	if v == null or not _ready_to_draw():
 		return
 	var state := v.game.state
 	var ci := _world
-	var bx := TankForest.far_base(v, state)
-	if not is_nan(bx):
-		TankForest.draw_base(ci, v, bx)
 	if boss_box.size != Vector2.ZERO:
 		TankEnemyDraw.draw(ci, kit, TankIds.BOSS_ID, boss_foot, boss_pose(state))
 	for lane in [3, 2, 1, 0]:
@@ -706,15 +779,13 @@ func _draw_light() -> void:
 		return
 	var state := v.game.state
 	var ci := _light
-	var bx := TankForest.far_base(v, state)
-	if not is_nan(bx):
-		TankForest.draw_base_light(ci, v, bx)
 	_search_pool(ci, state)
 	for e in state.enemies:
 		if not feet.has(e.id):
 			continue
 		var foot: Vector2 = feet[e.id]
 		var pose := pose_of(e, foot)
+		_moonlight(ci, rects[e.id])
 		TankEnemyDraw.draw_light(ci, kit, TankIds.enemy_of(e.code), foot, pose)
 		if e.telegraph_s > 0.0:
 			_telegraph(ci, muzzle_of(e), 12.0)
@@ -726,6 +797,14 @@ func _draw_light() -> void:
 	if fx.wash > 0.0:
 		var c := fx.wash_color
 		TankDraw.glow_at(ci, fx.wash_pos, 160.0, Color(c.r, c.g, c.b, 0.16 * fx.wash))
+
+
+## The moon on a far sprite: a cold wash from above its top, a dim pool on the earth beside its tracks.
+func _moonlight(ci: CanvasItem, r: Rect2) -> void:
+	var top := r.position + Vector2(r.size.x * 0.42, r.size.y * 0.22)
+	TankDraw.glow_at(ci, top, r.size.x * 0.62, Color(MOON, MOON_WASH))
+	var pool := Vector2(r.get_center().x, r.end.y + 1.0)
+	TankLightDraw.ground_glow(ci, pool, r.size.x * 0.6, Color(MOON, MOON_POOL))
 
 
 func _telegraph(ci: CanvasItem, at: Vector2, r: float) -> void:
@@ -754,6 +833,7 @@ func _boss_light(ci: CanvasItem, state: TankState) -> void:
 	if boss_box.size == Vector2.ZERO:
 		return
 	var pose := boss_pose(state)
+	_moonlight(ci, boss_box)
 	TankEnemyDraw.draw_light(ci, kit, TankIds.BOSS_ID, boss_foot, pose)
 	var b := state.boss
 	for i in mini(b.bogie_hp.size(), BOGIE_U.size()):

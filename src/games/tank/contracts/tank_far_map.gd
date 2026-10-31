@@ -6,10 +6,11 @@ const SEAM_W := 8.0
 const FAR_W_MIN := 286.0
 const FAR_W_BASE := 330.0
 const FAR_W_MAX := 420.0
-## Below the banner rect (tank_hud.gd LAYOUT banners y 112..148), above every far sprite's top (244).
+## The little shell screen, centred in the panel: below the banner rect (tank_hud.gd LAYOUT banners y 112..148), above
+## every far sprite's top (244).
 const PIP_Y := 150.0
-const PIP_H := 60.0
-const PIP_INSET := 6.0
+const PIP_W := 176.0
+const PIP_H := 52.0
 const RANGE_NEAR_M := 700.0
 const RANGE_FAR_M := 2600.0
 const EDGE_PAD := 30.0
@@ -39,7 +40,7 @@ static func panels(canvas: Vector2, mirrored: bool) -> Dictionary:
 		far = Rect2(0, 0, fw, h)
 		seam = Rect2(fw, 0, SEAM_W, h)
 		near = Rect2(fw + SEAM_W, 0, nw, h)
-	var pip := Rect2(far.position.x + PIP_INSET, PIP_Y, fw - 2.0 * PIP_INSET, PIP_H)
+	var pip := Rect2(roundf(far.get_center().x - PIP_W * 0.5), PIP_Y, PIP_W, PIP_H)
 	return {"near": near, "seam": seam, "far": far, "pip": pip}
 
 

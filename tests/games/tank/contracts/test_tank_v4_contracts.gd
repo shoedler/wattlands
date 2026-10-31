@@ -120,7 +120,7 @@ func test_the_panels_match_the_layout_table() -> void:
 			Rect2(0, 0, 622, 540),
 			Rect2(622, 0, 8, 540),
 			Rect2(630, 0, 330, 540),
-			Rect2(636, 150, 318, 60)
+			Rect2(707, 150, 176, 52)
 		]
 	)
 	assert_eq(
@@ -129,7 +129,7 @@ func test_the_panels_match_the_layout_table() -> void:
 			Rect2(0, 0, 558, 480),
 			Rect2(558, 0, 8, 480),
 			Rect2(566, 0, 286, 480),
-			Rect2(572, 150, 274, 60)
+			Rect2(621, 150, 176, 52)
 		]
 	)
 	assert_eq(
@@ -138,7 +138,7 @@ func test_the_panels_match_the_layout_table() -> void:
 			Rect2(0, 0, 852, 680),
 			Rect2(852, 0, 8, 680),
 			Rect2(860, 0, 420, 680),
-			Rect2(866, 150, 408, 60)
+			Rect2(982, 150, 176, 52)
 		]
 	)
 	assert_eq(
@@ -147,7 +147,7 @@ func test_the_panels_match_the_layout_table() -> void:
 			Rect2(338, 0, 622, 540),
 			Rect2(330, 0, 8, 540),
 			Rect2(0, 0, 330, 540),
-			Rect2(6, 150, 318, 60)
+			Rect2(77, 150, 176, 52)
 		]
 	)
 

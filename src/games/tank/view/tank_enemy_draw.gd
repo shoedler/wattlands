@@ -13,8 +13,9 @@ extends RefCounted
 ## their bow to the left, near kinds to the right; `flip` mirrors about foot.x.
 
 ## The night's haze: the far air of the game's own frame (sky #081519, ridges #0e2429, hue about 192), so far kinds
-## fade into what is behind them and lose contrast without lifting past the tank's armour.
-const HAZE := Color(0.11, 0.19, 0.21)
+## fade into what is behind them. Dark, so a far kind sinks into the night and keeps its blacks: hull, turret and
+## running gear still part by value at the far panel's scale, never a pale ghost.
+const HAZE := Color(0.06, 0.105, 0.118)
 ## The veil's alpha for a pose's haze: nothing up close, steady across the field's 0.12..0.5. It stops at half, so the
 ## farthest kind keeps its plate seams.
 const HAZE_FROM := 0.08
@@ -23,7 +24,18 @@ const HAZE_MAX := 0.5
 const FLASH := Color(1.0, 1.0, 0.9)
 const SLIT := Color(0.5, 0.88, 0.82)
 const SLIT_CORE := Color(0.85, 1.0, 0.96)
-## A wreck's fire, the one warm thing an enemy shows: hot at its core, red at its edge.
+## The warmth beside the cold slits, so the enemy lives in our tank's night: engine vents, a hatch's lit crack, the
+## exhaust's glow and the Behemoth's furnace. Light only: the atlas stays cold.
+const WARM := Color(1.0, 0.5, 0.18)
+const WARM_CORE := Color(1.0, 0.8, 0.46)
+## How a vent, a hatch and the exhaust burn, and the spill on the plates round them.
+const VENT_K := 0.5
+const VENT_SPILL := 0.3
+const HATCH_K := 0.85
+const HATCH_SPILL := 0.26
+const EXHAUST_K := 0.7
+const EXHAUST_SPILL := 0.34
+## A wreck's fire: hot at its core, red at its edge.
 const FIRE_CORE := Color(1.0, 0.95, 0.68)
 const FIRE := Color(1.0, 0.66, 0.16)
 const FIRE_EDGE := Color(0.94, 0.27, 0.05)
@@ -121,6 +133,7 @@ static func draw_light(
 		ci.draw_rect(
 			Rect2(r.position.x + floorf(r.size.x * 0.5), r.position.y, 1.0, 1.0), SLIT_CORE * k
 		)
+	_warm_lights(ci, kit.texture(), row, xf, txf, k, float(pose.get("time", 0.0)))
 	_set_xf(ci, xf)
 	for lamp: Array in row.get("lamps", []):
 		var c := Vector2(float(lamp[0]), float(lamp[1]))
@@ -132,7 +145,52 @@ static func draw_light(
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
 
 
-## The Behemoth's furnace: the slit's own hue, white-hot in the gaps between the louvre's bars, each gap at its own
+## The vents' slats and spill, the hatches' cracks and the exhaust, a slow unsteady burn as an engine's.
+static func _warm_lights(
+	ci: CanvasItem,
+	tex: Texture2D,
+	row: Dictionary,
+	xf: Transform2D,
+	txf: Transform2D,
+	k: float,
+	time: float
+) -> void:
+	var glow: Rect2 = row.get("glow", Rect2())
+	var t := floorf(time * FIRE_STEPS) / FIRE_STEPS
+	var breath := 0.86 + 0.14 * sin(t * 5.3) * sin(t * 2.1)
+	for v: Array in row.get("vents", []):
+		_set_xf(ci, txf if int(v[4]) == 1 else xf)
+		var r := Rect2(float(v[0]), float(v[1]), float(v[2]), float(v[3]))
+		if tex != null and glow.size.x > 0.0:
+			var c := r.get_center()
+			_glow(ci, tex, glow, c, r.size.x * 0.9 + 4.0, WARM, VENT_SPILL * k * breath)
+		var y := r.position.y
+		while y < r.end.y:
+			ci.draw_rect(Rect2(r.position.x, y, r.size.x, 1.0), WARM * (VENT_K * k * breath))
+			y += 2.0
+	for h: Array in row.get("hatches", []):
+		_set_xf(ci, txf if int(h[4]) == 1 else xf)
+		var hr := Rect2(float(h[0]), float(h[1]), float(h[2]), float(h[3]))
+		var crack := Rect2(hr.position.x + 1.0, hr.end.y - 2.0, hr.size.x - 2.0, 1.0)
+		if tex != null and glow.size.x > 0.0:
+			_glow(ci, tex, glow, crack.get_center(), hr.size.x * 0.8 + 3.0, WARM, HATCH_SPILL * k)
+		ci.draw_rect(crack, WARM * (HATCH_K * k))
+		ci.draw_rect(
+			Rect2(crack.get_center().x - 1.0, crack.position.y, 2.0, 1.0), WARM_CORE * (HATCH_K * k)
+		)
+	var ex: Variant = row.get("exhaust")
+	if ex is Vector2:
+		_set_xf(ci, xf)
+		var at: Vector2 = ex
+		var fl := 0.72 + 0.28 * sin(t * 11.0 + at.x)
+		if tex != null and glow.size.x > 0.0:
+			var rad := 5.0 + float(row["size"].x) * 0.035
+			_glow(ci, tex, glow, at, rad, WARM, EXHAUST_SPILL * k * fl)
+		ci.draw_rect(Rect2(at + Vector2(-1, -1), Vector2(3, 2)), WARM * (EXHAUST_K * k * fl))
+		ci.draw_rect(Rect2(at + Vector2(0, -1), Vector2(1, 1)), WARM_CORE * (EXHAUST_K * k * fl))
+
+
+## The Behemoth's furnace: white-hot in the gaps between the louvre's bars, each gap at its own
 ## heat, a soft steady spill on the plate under it. Only the core flickers. The transform is already set.
 static func _furnace(
 	ci: CanvasItem, tex: Texture2D, row: Dictionary, k: float, time: float
@@ -141,16 +199,16 @@ static func _furnace(
 	var glow: Rect2 = row.get("glow", Rect2())
 	if tex != null and glow.size.x > 0.0:
 		var under := fr.position + Vector2(fr.size.x * 0.5, fr.size.y + 2.0)
-		_glow(ci, tex, glow, under, fr.size.x * 0.75, SLIT, 0.42 * k)
+		_glow(ci, tex, glow, under, fr.size.x * 0.75, WARM, 0.42 * k)
 	var t := floorf(time * FIRE_STEPS) / FIRE_STEPS
 	var gaps := furnace_gaps(fr)
 	for i in gaps.size():
 		var heat := furnace_heat(i)
 		var gap: Rect2 = gaps[i]
-		ci.draw_rect(gap, SLIT * (0.6 * k))
+		ci.draw_rect(gap, WARM * (0.6 * k))
 		var fl := 0.82 + 0.18 * sin(t * 9.0 + float(i) * 2.1)
 		var hot := Rect2(gap.position.x, gap.end.y - 2.0, gap.size.x, 2.0)
-		ci.draw_rect(hot, SLIT_CORE * (heat * k * fl))
+		ci.draw_rect(hot, WARM_CORE * (heat * k * fl))
 
 
 ## The furnace louvre's open gaps: its bars stand every 4th px (enemy_bake.gd _furnace).

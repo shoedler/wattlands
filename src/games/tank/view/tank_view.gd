@@ -447,6 +447,7 @@ func _panels_frame() -> void:
 ## The far panel's frame, and its enemies' and the Behemoth's rects on the canvas.
 func _far_frame(state: TankState, step_dt: float) -> void:
 	far.frame(state, step_dt)
+	pip.frame(state, step_dt)
 	far.age_wrecks(state.t)
 	far_rects.clear()
 	for id: int in far.rects:

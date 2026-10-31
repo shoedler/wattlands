@@ -6,6 +6,7 @@ extends RefCounted
 ## holds two top-level keys, for the art the near and far scenes draw (4.3, 4.7):
 ##   "bushes": {"atlas": "bushes.png", "rects": [[x, y, w, h], ...]}
 ##   "far_ground": "far_ground.png"
+##   "far_forest": {"atlas": "far_forest.png", "rects": [[x, y, w, h], ...]} (far to near)
 ## Without the manifest (a broken bake) every kind still has its frozen size and the art is null, so a view
 ## guards on null and draws nothing.
 
@@ -37,6 +38,8 @@ var _tex: Texture2D = null
 var _bushes: Texture2D = null
 var _bush_rects: Array[Rect2] = []
 var _ground: Texture2D = null
+var _forest: Texture2D = null
+var _forest_rects: Array[Rect2] = []
 
 
 static func shared() -> TankEnemyKit:
@@ -66,6 +69,11 @@ func load_all() -> void:
 		for r: Array in bushes_row.get("rects", []):
 			_bush_rects.append(rect_of(r))
 	_ground = _load(str(manifest.get("far_ground", "far_ground.png")))
+	var forest_row: Dictionary = manifest.get("far_forest", {})
+	if not forest_row.is_empty():
+		_forest = _load(str(forest_row.get("atlas", "far_forest.png")))
+		for r2: Array in forest_row.get("rects", []):
+			_forest_rects.append(rect_of(r2))
 
 
 static func _load(file: String) -> Texture2D:
@@ -217,8 +225,17 @@ func far_ground() -> Texture2D:
 	return _ground
 
 
+## The far panel's treeline sheet (null without the bake). Strips in far_forest_rects(), far to near.
+func far_forest() -> Texture2D:
+	return _forest
+
+
+func far_forest_rects() -> Array[Rect2]:
+	return _forest_rects
+
+
 ## Every problem of manifest `m` (empty when sound): a kind missing or without a size, no bushes, no
-## far ground.
+## far ground, no treeline.
 static func check(m: Dictionary) -> Array[String]:
 	var out: Array[String] = []
 	var kinds: Variant = m.get("kinds")
@@ -233,4 +250,7 @@ static func check(m: Dictionary) -> Array[String]:
 		out.append("no bushes")
 	if not (m.get("far_ground") is String):
 		out.append("no far_ground")
+	var forest: Variant = m.get("far_forest")
+	if not (forest is Dictionary) or (forest as Dictionary).get("rects", []).is_empty():
+		out.append("no far_forest")
 	return out

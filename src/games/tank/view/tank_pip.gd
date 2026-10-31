@@ -1,32 +1,62 @@
 class_name TankPip
 extends Node2D
-## v4: the shell screen (SPEC_TANK 4.5): a small riveted plate in the far panel's top with the ballistic
-## arc in side profile, distance-compressed. The hull at range 0 and a tick per far enemy on the ground
-## line; each far shell a dot on its predicted arc, ours amber, theirs red and blinking while Surge can
-## still make it miss; the target's range at the right. Mirrored with the far panel (free roam, west);
-## its text never mirrors.
+## v4: the shell screen (SPEC_TANK 4.5): a little riveted screen in the far panel's sky that shows how a
+## shell travels, in side profile, distance-compressed. The hull at range 0 and a mark per far enemy on the
+## ground line, the target's bright, a shooter's red; the gun's arc to the target, faint, while nothing of
+## ours flies. A shell is a tracer on its predicted arc with a fading trail, ours amber, theirs red and
+## blinking while Surge can still make it miss; a flash where it leaves, a puff where it lands. The seconds
+## the newest shell has left on the top near-side corner, the target's range on the other. A slow sweep keeps
+## the screen alive. Mirrored with the far panel (free roam, west); its text never mirrors. Pure view: it
+## reads the snapshot's fields and never writes them.
 
-const PLATE := Color("#100e0b")
-const FRAME := Color("#8a6a3a")
-const GROUND := Color("#3a3128")
-const OURS := Color("#e3a24a")
-const THEIRS := Color("#d8452a")
+const BEZEL := Color("#17140f")
+const FRAME := Color("#6b5230")
+const SCREEN := Color("#0a1412")
+const SCAN := Color(0, 0, 0, 0.22)
+const SWEEP := Color(0.5, 0.85, 0.75)
+const SWEEP_A := 0.05
+const SWEEP_S := 5.0
+const SWEEP_TAIL := 7
+const GROUND := Color("#35554c")
+const GROUND_TICK := Color("#27403a")
+const GROUND_TICK_M := 500.0
+const OURS := Color("#f0b45a")
+const THEIRS := Color("#e8502e")
 const THEIRS_DIM := Color("#6e2616")
-const TICK := Color("#6f6450")
-const TICK_TARGET := Color("#e8dcc0")
-const HULL := Color("#a3937a")
+const CORE := Color("#fff4d8")
+const AIM := Color(0.62, 0.78, 0.68, 0.34)
+const MARK := Color("#6f8a7c")
+const MARK_TARGET := Color("#e8dcc0")
+const HULL := Color("#c2ab84")
+const LABEL := Color("#a9c2b0")
 const END_PAD := 10.0
 const GROUND_ABOVE := 7.0
 const FLOOR_ABOVE := 9.0
 const PX_PER_M_UP := 0.2
 const DASH_EVERY := 6.0
-const TRAIL_PX := 4.0
+const AIM_EVERY := 8.0
 const BLINK_HZ := 5.0
-const PLATE_W := 42.0
 const UNIT := "M"
+const SECONDS := "S"
+## The tracer's trail: samples back along the arc, a step (m) between them, how bright it starts.
+const TRAIL_N := 9
+const TRAIL_STEP_M := 22.0
+const TRAIL_A := 0.7
+## The flash where a shell leaves the gun (s).
+const FLASH_S := 0.22
+## A landing's puff: how long it lasts (s), how far it grows, its motes.
+const PUFF_S := 0.9
+const PUFF_R := 7.0
+const PUFF_MOTES := 7
+## A shell that vanishes with more than this left never landed: the field was cleared (a tow, a new stage).
+const LANDED_LEFT_S := 0.5
 
 var v: TankView = null
 var rect: Rect2 = Rect2()
+## Live puffs: [{r (m), t (s), friendly, seed}].
+var puffs: Array[Dictionary] = []
+## Shell id -> {land (m), left (s), friendly}: what each far shell was doing last frame.
+var _flying: Dictionary = {}
 
 
 func _init(view: TankView) -> void:
@@ -39,6 +69,11 @@ static func range_label(range_m: float) -> String:
 	return "--" if range_m <= 0.0 else "%d %s" % [roundi(range_m), UNIT]
 
 
+## "2.4 S": a shell's seconds until it lands.
+static func flight_label(left_s: float) -> String:
+	return "%.1f %s" % [maxf(left_s, 0.0), SECONDS]
+
+
 ## Plate-local px of range `r`, height `hm` (m), on a plate of `size`.
 static func to_px(r: float, hm: float, size: Vector2, mirrored: bool) -> Vector2:
 	var x := END_PAD + r / TankFarMap.RANGE_FAR_M * (size.x - 2.0 * END_PAD)
@@ -47,7 +82,7 @@ static func to_px(r: float, hm: float, size: Vector2, mirrored: bool) -> Vector2
 	return Vector2(roundf(x), roundf(size.y - FLOOR_ABOVE - hm * PX_PER_M_UP))
 
 
-## The far shells as dots: [{p, from (the trail's far end), friendly, evadable, arc (dashes)}].
+## The far shells as tracers: [{p, trail (head first), friendly, evadable, arc (dashes), launch (px), age, left}].
 func dots(state: TankState) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var g := v.far_g()
@@ -55,25 +90,36 @@ func dots(state: TankState) -> Array[Dictionary]:
 		if not s.far:
 			continue
 		var at := v.shell_pos(s)
-		var p := to_px(at.x, at.y, rect.size, v.mirrored)
 		var land := TankShellPath.landing_m(s.x, s.vx, s.left_s)
 		var age := TankShellPath.age_s(s.left_s, s.vy, g)
 		var launch := TankShellPath.launch_m(s.x, s.vx, age)
-		var ahead := at.x - signf(s.vx) * 40.0
-		var back := TankShellPath.height_at(ahead, s.x, s.y, s.vx, s.vy, g)
-		var dir := (p - to_px(ahead, back, rect.size, v.mirrored)).normalized()
 		(
 			out
 			. append(
 				{
-					"p": p,
-					"from": p - dir * TRAIL_PX,
+					"p": to_px(at.x, at.y, rect.size, v.mirrored),
+					"trail": _trail(s, at.x, launch, g),
 					"friendly": s.friendly,
 					"evadable": s.evadable,
 					"arc": _arc(s, launch, land, g),
+					"launch": to_px(launch, 0.0, rect.size, v.mirrored),
+					"age": age,
+					"left": v.shell_left(s),
 				}
 			)
 		)
+	return out
+
+
+func _trail(s: TankShellState, r: float, launch: float, g: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var back := -signf(s.vx) * TRAIL_STEP_M
+	for i in range(1, TRAIL_N + 1):
+		var q := r + back * float(i)
+		if (q - launch) * signf(s.vx) < 0.0:
+			break
+		var hm := TankShellPath.height_at(q, s.x, s.y, s.vx, s.vy, g)
+		out.append(to_px(q, hm, rect.size, v.mirrored))
 	return out
 
 
@@ -89,66 +135,212 @@ func _arc(s: TankShellState, launch: float, land: float, g: float) -> PackedVect
 	return out
 
 
+## The arc the gun would fly to `range_m` (px), faint; empty out of the gun's reach.
+func aim_arc(range_m: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var v0 := v.far_v0()
+	var g := v.far_g()
+	if range_m <= 0.0 or v0 <= 0.0:
+		return out
+	var elev := TankBallistics.far_elevation(range_m, v0, g)
+	if is_nan(elev):
+		return out
+	var rad := deg_to_rad(elev)
+	var vx := v0 * cos(rad)
+	var vy := v0 * sin(rad)
+	var a := to_px(0.0, 0.0, rect.size, v.mirrored)
+	var b := to_px(range_m, 0.0, rect.size, v.mirrored)
+	var n := maxi(int(absf(b.x - a.x) / AIM_EVERY), 1)
+	for i in n + 1:
+		var r := range_m * float(i) / float(n)
+		var t := r / vx
+		out.append(to_px(r, maxf(vy * t - 0.5 * g * t * t, 0.0), rect.size, v.mirrored))
+	return out
+
+
+## One frame: a far shell gone since the last one, near its end, leaves a puff where it landed.
+func frame(state: TankState, dt: float) -> void:
+	for i in range(puffs.size() - 1, -1, -1):
+		puffs[i]["t"] = float(puffs[i]["t"]) + dt
+		if float(puffs[i]["t"]) >= PUFF_S:
+			puffs.remove_at(i)
+	var now := {}
+	for s in state.shells:
+		if s.far:
+			now[s.id] = {
+				"land": TankShellPath.landing_m(s.x, s.vx, s.left_s),
+				"left": s.left_s,
+				"friendly": s.friendly,
+			}
+	for id: int in _flying:
+		var was: Dictionary = _flying[id]
+		if not now.has(id) and float(was["left"]) <= LANDED_LEFT_S:
+			puffs.append({"r": was["land"], "t": 0.0, "friendly": was["friendly"], "seed": id})
+	_flying = now
+
+
 func _draw() -> void:
 	if v == null or v.game == null or v.game.state == null:
 		return
 	var state := v.game.state
 	var size := rect.size
-	draw_rect(Rect2(Vector2.ZERO, size), PLATE)
-	TankHudDraw.frame(self, Rect2(Vector2.ZERO, size), FRAME)
-	for c: Vector2 in [
-		Vector2(2, 2),
-		Vector2(size.x - 4.0, 2),
-		Vector2(2, size.y - 4.0),
-		Vector2(size.x - 4.0, size.y - 4.0)
-	]:
-		TankHudDraw.rivet(self, c)
+	_screen(size)
 	var ground := size.y - GROUND_ABOVE
-	draw_rect(Rect2(Vector2(5, ground), Vector2(size.x - 10.0, 1)), GROUND)
+	_ground(size, ground)
+	var shown := dots(state)
+	var target := v.target_range_m(state)
+	if not _has_ours(shown):
+		for q in aim_arc(target):
+			draw_rect(Rect2(q, Vector2.ONE), AIM)
 	_hull(size, ground)
-	_ticks(state, size, ground)
-	for d in dots(state):
-		_dot(d)
-	var label := range_label(v.target_range_m(state))
-	TankHudDraw.text_r(self, size.x - 6.0, 4.0, label, TankHudDraw.NUM)
+	_marks(state, size, ground)
+	for p in puffs:
+		_puff(p, size)
+	for d in shown:
+		_tracer(d)
+	_labels(size, shown, target)
+
+
+func _has_ours(shown: Array[Dictionary]) -> bool:
+	for d in shown:
+		if bool(d["friendly"]):
+			return true
+	return false
+
+
+## The bezel, the dark glass, its scan rows and the slow sweep from the hull out.
+func _screen(size: Vector2) -> void:
+	draw_rect(Rect2(Vector2.ZERO, size), BEZEL)
+	TankHudDraw.frame(self, Rect2(Vector2.ZERO, size), FRAME)
+	var glass := Rect2(Vector2(2, 2), size - Vector2(4, 4))
+	draw_rect(glass, SCREEN)
+	var y := glass.position.y + 1.0
+	while y < glass.end.y:
+		draw_rect(Rect2(glass.position.x, y, glass.size.x, 1.0), SCAN)
+		y += 2.0
+	var u := fposmod(v.time / SWEEP_S, 1.0)
+	var at := lerpf(glass.position.x, glass.end.x - 1.0, 1.0 - u if v.mirrored else u)
+	var back := 1.0 if v.mirrored else -1.0
+	for i in SWEEP_TAIL:
+		var x := roundf(at + back * float(i))
+		if x >= glass.position.x and x < glass.end.x:
+			var a := SWEEP_A * (1.0 - float(i) / float(SWEEP_TAIL))
+			draw_rect(Rect2(x, glass.position.y, 1.0, glass.size.y), Color(SWEEP, a))
+
+
+## The ground line and a tick every 500 m.
+func _ground(size: Vector2, ground: float) -> void:
+	draw_rect(Rect2(Vector2(4, ground), Vector2(size.x - 8.0, 1)), GROUND)
+	var r := GROUND_TICK_M
+	while r < TankFarMap.RANGE_FAR_M:
+		draw_rect(
+			Rect2(Vector2(to_px(r, 0.0, size, v.mirrored).x, ground + 1.0), Vector2(1, 2)),
+			GROUND_TICK
+		)
+		r += GROUND_TICK_M
 
 
 ## The tiny hull (9 x 5) at range 0, its gun toward the field.
 func _hull(size: Vector2, ground: float) -> void:
 	var x := to_px(0.0, 0.0, size, v.mirrored).x
-	var sgn := -1.0 if v.mirrored else 1.0
 	var left := x - 9.0 if v.mirrored else x
 	draw_rect(Rect2(Vector2(left, ground - 3.0), Vector2(9, 3)), HULL)
-	var tx := x + sgn * 3.0 if not v.mirrored else x - 6.0
+	var tx := x - 6.0 if v.mirrored else x + 3.0
 	draw_rect(Rect2(Vector2(tx, ground - 5.0), Vector2(3, 2)), HULL)
-	var gx := x + 6.0 if not v.mirrored else x - 9.0
+	var gx := x - 9.0 if v.mirrored else x + 6.0
 	draw_rect(Rect2(Vector2(gx, ground - 5.0), Vector2(3, 1)), HULL)
 
 
-## One tick per far enemy at its range (the Behemoth's wider), the target's bright.
-func _ticks(state: TankState, size: Vector2, ground: float) -> void:
+## A mark per far enemy at its range (the Behemoth's wider): the target's bright with a caret over it, a
+## shooter in its telegraph red.
+func _marks(state: TankState, size: Vector2, ground: float) -> void:
 	var target := state.hull.target_id
 	for e in state.enemies:
 		if e.is_near() or e.mode == TankIds.EM_DEAD:
 			continue
 		var x := to_px(v.far_range_of(e), 0.0, size, v.mirrored).x
-		var col := TICK_TARGET if e.id == target else TICK
-		draw_rect(Rect2(Vector2(x, ground - 4.0), Vector2(1, 4)), col)
+		_mark(x, ground, 1.0, e.id == target, e.telegraph_s > 0.0)
 	if v.boss_visible(state):
 		var bx := to_px(v.far_boss_range(state), 0.0, size, v.mirrored).x
-		var col2 := TICK_TARGET if TankBossState.is_part_id(target) else TICK
-		draw_rect(Rect2(Vector2(bx - 1.0, ground - 6.0), Vector2(3, 6)), col2)
+		_mark(bx, ground, 2.0, TankBossState.is_part_id(target), state.boss.telegraph_s > 0.0)
 
 
-func _dot(d: Dictionary) -> void:
+func _mark(x: float, ground: float, half: float, target: bool, shooting: bool) -> void:
+	var col := MARK_TARGET if target else MARK
+	if shooting and fposmod(v.time * BLINK_HZ, 1.0) < 0.5:
+		col = THEIRS
+	var h := 3.0 + half
+	draw_rect(Rect2(Vector2(x - half, ground - h), Vector2(half * 2.0 + 1.0, h)), col)
+	if target:
+		draw_rect(Rect2(Vector2(x, ground - h - 3.0), Vector2.ONE), col)
+		draw_rect(Rect2(Vector2(x - 1.0, ground - h - 4.0), Vector2(3, 1)), col)
+
+
+## The tracer on its dashes: a flash where it left, a trail that fades, a hot head with a soft halo.
+func _tracer(d: Dictionary) -> void:
 	var friendly := bool(d["friendly"])
 	var col := OURS if friendly else THEIRS
 	var arc: PackedVector2Array = d["arc"]
-	var dash := Color(col, 0.45)
+	var dash := Color(col, 0.55)
 	for q in arc:
 		draw_rect(Rect2(q, Vector2.ONE), dash)
+	var age := float(d["age"])
+	if age < FLASH_S:
+		_burst(d["launch"], col, 1.0 - age / FLASH_S)
 	var p: Vector2 = d["p"]
 	if bool(d["evadable"]) and fposmod(v.time * BLINK_HZ, 1.0) >= 0.5:
 		col = THEIRS_DIM
-	draw_line(d["from"], p, Color(col, 0.6), 1.0)
+	var trail: PackedVector2Array = d["trail"]
+	for i in trail.size():
+		var a := TRAIL_A * (1.0 - float(i) / float(TRAIL_N))
+		draw_rect(Rect2(trail[i], Vector2.ONE), Color(col, a))
+	draw_rect(Rect2(p - Vector2(2, 2), Vector2(4, 4)), Color(col, 0.28))
 	draw_rect(Rect2(p - Vector2.ONE, Vector2(2, 2)), col)
+	draw_rect(Rect2(p, Vector2.ONE), CORE)
+
+
+func _burst(at: Vector2, col: Color, k: float) -> void:
+	var c := Color(CORE, k)
+	draw_rect(Rect2(at + Vector2(-1, -2), Vector2(3, 1)), c)
+	draw_rect(Rect2(at + Vector2(0, -4), Vector2(1, 5)), Color(col, k))
+	draw_rect(Rect2(at + Vector2(-3, -1), Vector2(7, 1)), Color(col, k * 0.7))
+
+
+## A landing: a hot flash, then motes of earth thrown up and out, fading.
+func _puff(p: Dictionary, size: Vector2) -> void:
+	var u := float(p["t"]) / PUFF_S
+	var at := to_px(float(p["r"]), 0.0, size, v.mirrored) + Vector2(0, 2)
+	var col := OURS if bool(p["friendly"]) else THEIRS
+	if u < 0.2:
+		draw_rect(Rect2(at + Vector2(-2, -4), Vector2(5, 4)), Color(CORE, 1.0 - u * 5.0))
+	var seed_x := float(p["seed"])
+	for i in PUFF_MOTES:
+		var h := TankDraw.hash01(seed_x * 0.37 + float(i) * 1.9)
+		var dir := (float(i) + 0.5) / float(PUFF_MOTES) * 2.0 - 1.0
+		var q := (
+			at
+			+ Vector2(dir * PUFF_R * u, -(2.0 + h * PUFF_R) * sin(minf(u * 1.6, 1.0) * PI * 0.75))
+		)
+		var c := col.lerp(LABEL, u)
+		draw_rect(Rect2(q.round(), Vector2.ONE), Color(c, (1.0 - u) * 0.9))
+
+
+## The newest shell's seconds on the near side's corner, the target's range on the other.
+func _labels(size: Vector2, shown: Array[Dictionary], target: float) -> void:
+	var near := {}
+	for d in shown:
+		if near.is_empty() or float(d["left"]) > float(near["left"]):
+			near = d
+	var range_text := range_label(target)
+	if v.mirrored:
+		TankHudDraw.text(self, 5.0, 3.0, range_text, LABEL)
+	else:
+		TankHudDraw.text_r(self, size.x - 5.0, 3.0, range_text, LABEL)
+	if near.is_empty():
+		return
+	var col := OURS if bool(near["friendly"]) else THEIRS
+	var flight := flight_label(float(near["left"]))
+	if v.mirrored:
+		TankHudDraw.text_r(self, size.x - 5.0, 3.0, flight, col)
+	else:
+		TankHudDraw.text(self, 5.0, 3.0, flight, col)

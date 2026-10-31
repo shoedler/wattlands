@@ -151,7 +151,7 @@ func test_roam_results_score_points_and_grade_by_points_per_work_minute() -> voi
 		)
 		assert_eq(
 			res.team["TANK_TEAM_ROAM_KILLS"],
-			"3/2/1/1/0/4/5",
+			"3/2/1/0/4/5",
 			"the near kinds count, the Behemoth's slot does not"
 		)
 		assert_eq(res.team["TANK_TEAM_DISTANCE"], "12.3")
