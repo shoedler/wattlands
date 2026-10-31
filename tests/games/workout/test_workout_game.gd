@@ -54,25 +54,33 @@ func test_hud_spec() -> void:
 	var g := U.game("easy_30", U.players(1))
 	autofree(g)
 	var spec := g.hud_spec()
-	var at := {}
-	for w in spec.widgets:
-		assert_true(HudSpec.is_valid_position(w["at"]))
-		at[w["widget"]] = at.get(w["widget"], []) + [w["at"]]
-	assert_eq(at[HudSpec.TIMELINE], [HudSpec.TOP])
-	assert_eq(at[HudSpec.POWER_GAUGE], [HudSpec.BOTTOM_LEFT])
-	assert_eq(at[HudSpec.CADENCE], [HudSpec.BOTTOM_LEFT])
-	assert_eq(at[HudSpec.WBAL], [HudSpec.BOTTOM_LEFT])
-	assert_eq(at[HudSpec.TEAMMATES], [HudSpec.BOTTOM])
-	assert_eq(at[HudSpec.GEAR], [HudSpec.BOTTOM_RIGHT])
-	assert_eq(at[HudSpec.READOUT], [HudSpec.TOP_RIGHT, HudSpec.TOP_RIGHT])
-	assert_eq(spec.widgets[1]["options"]["source"], "power_w", "the big watts readout")
-	assert_eq(
-		spec.widgets[2]["options"],
-		{"source": "custom", "id": WorkoutHud.READOUT_TIB, "label": "WORKOUT_HUD_IN_BAND"}
-	)
-	assert_eq(spec.toast_area, HudSpec.TOP_LEFT)
-	assert_eq(spec.banner_area, HudSpec.TOP)
+	assert_eq(spec.widgets.size(), 0, "no kit widgets")
+	assert_eq(spec.controls.size(), 4)
+	var keys: Array[String] = ["timeline", "mine", "crew", "score"]
+	var plates: Array[Rect2i] = []
+	for i in keys.size():
+		var rect: Rect2i = WorkoutHud.LAYOUT[keys[i]]
+		plates.append(rect)
+		assert_eq(spec.controls[i]["at"], rect, keys[i])
+		assert_true(HudSpec.is_valid_position(spec.controls[i]["at"]))
+		assert_true(spec.controls[i]["control"] is WorkoutHudCtl, keys[i])
+		autofree(spec.controls[i]["control"])
+	assert_true(spec.shows_power, "the mine plate shows raw W and %FTP")
 	assert_true(spec.show_safety_banners)
+	assert_eq(spec.toast_area, Rect2i(6, 76, 300, 24))
+	assert_eq(spec.banner_area, Rect2i(280, 104, 400, 32))
+	assert_eq(spec.help.size(), 6)
+	for e: Dictionary in spec.help:
+		if e["text"] == "WORKOUT_HELP_BLOCKS":
+			# the one arrow outside every plate: it ends on the interval strip on the bank (y 418-460)
+			assert_eq(e["arrow_to"], Vector2(560, 440))
+			continue
+		var inside := false
+		for r in plates:
+			inside = inside or Rect2(r).has_point(e["arrow_to"])
+		assert_true(inside, "%s ends inside a plate" % e["text"])
+	assert_eq(spec.palette["corner_radius"], 0)
+	assert_true(spec.palette["font"] is Font, "the platform's toasts use the HUD's type")
 
 
 func test_nothing_to_choose() -> void:

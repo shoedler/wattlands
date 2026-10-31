@@ -1,6 +1,6 @@
 extends GutTest
 ## The ride view (BRIEF 3.7) builds headless and draws what the state says: parallax
-## layers, one pennant per rider at its distance from the local rider (slot color, shape,
+## layers, one rider and pennant per rider at its distance from the local rider (slot color, shape,
 ## pattern), the course profile in Rolling road and the interval blocks on the ground.
 
 const U := preload("res://tests/games/workout/workout_test_util.gd")
@@ -30,10 +30,10 @@ func test_make_view_returns_a_node2d_with_layers() -> void:
 	assert_true(view is Node2D, "a 2D view for the PixelViewport")
 	assert_true(view is WorkoutRideView)
 	add_child_autofree(view)
-	assert_eq(view.get_child_count(), 6, "sky, clouds, three parallax strips, track")
 	var rv := view as WorkoutRideView
-	assert_eq(rv.sky.texture.get_size(), Vector2(640, 360))
-	assert_eq(rv.far_hills.factor, 0.06)
+	assert_eq(rv.stage.get_child_count(), 19, "every layer of section 3, under one stage")
+	assert_eq(rv.sky.texture.get_size(), Vector2(64, 720))
+	assert_eq(rv.far_hills.factor, 0.03)
 	assert_false(rv.model.is_empty(), "the first refresh ran in _ready")
 
 
@@ -53,7 +53,9 @@ func test_builds_from_a_fixture_snapshot() -> void:
 	assert_almost_eq(float(view.marker(-1)["x"]), WorkoutRideView.RIDER_X + 110.0, 0.001)
 	var far := view.marker(-2)
 	assert_eq(int(far["edge"]), 1, "off screen to the right")
-	assert_almost_eq(float(far["x"]), 640.0 - WorkoutRideView.EDGE_MARGIN_RIGHT, 0.001)
+	assert_almost_eq(
+		float(far["x"]), float(WorkoutArt.W) - WorkoutRideView.EDGE_MARGIN_RIGHT, 0.001
+	)
 
 
 func test_pennants_carry_the_slot_look() -> void:
@@ -63,7 +65,7 @@ func test_pennants_carry_the_slot_look() -> void:
 	for s: Dictionary in me["shapes"]:
 		colors.append(s["color"])
 	assert_true(colors.has(Wl.slot_look(1)["color"]), "slot 1's color")
-	assert_true(colors.has(WorkoutArt.WHITE), "the local rider's caret")
+	assert_true(bool(me["local"]), "the rider layer puts its caret on this one")
 	# Slot 1 is dashed: two dark stripes on the flag.
 	var dark: Color = (Wl.slot_look(1)["color"] as Color).darkened(0.45)
 	assert_eq(colors.count(dark), 2)
@@ -84,14 +86,99 @@ func test_every_slot_look_is_distinct() -> void:
 			sig.append([s["color"], (s["points"] as PackedVector2Array).size()])
 		assert_false(seen.has(sig), "slot %d differs from the others" % i)
 		seen.append(sig)
+	var rows: Array = []
 	for shape: String in ["circle", "triangle", "square", "diamond"]:
-		assert_gt(WorkoutArt.shape_points(shape, Vector2.ZERO, 3.0).size(), 2)
+		assert_false(rows.has(WorkoutArt.badge_rows(shape)), "%s has its own outline" % shape)
+		rows.append(WorkoutArt.badge_rows(shape))
+
+
+func test_a_pennant_is_small_on_the_art_grid_and_shaded() -> void:
+	for i in 8:
+		var look := Wl.slot_look(i)
+		var tones := {}
+		var flag_right := 0.0
+		for s: Dictionary in WorkoutArt.pennant_shapes(look, i, {"in_band": true}):
+			var pts: PackedVector2Array = s["points"]
+			assert_eq(pts.size(), 4, "a rect")
+			assert_eq(pts[0].x, pts[3].x, "axis aligned")
+			assert_eq(pts[0].y, pts[1].y, "axis aligned")
+			for q in pts:
+				assert_eq(q, q.floor(), "whole art pixels, slot %d" % i)
+			assert_eq(pts[1].x - pts[0].x >= 1.0, true)
+			flag_right = maxf(flag_right, pts[1].x)
+			tones[s["color"]] = true
+		assert_true(flag_right <= 9.0, "the flag is at most 9 px long, slot %d" % i)
+		var color: Color = look["color"]
+		assert_true(tones.has(color), "its colour, slot %d" % i)
+		var other := 0
+		for c: Color in tones:
+			if c.s > 0.2 and absf(wrapf(c.h - color.h, -0.5, 0.5)) < 0.12 and c != color:
+				other += 1
+		assert_true(other >= 2, "a light and a shadow of its colour, slot %d" % i)
+
+
+func test_a_flag_at_rest_is_limp_cloth_down_the_pole() -> void:
+	for i in 8:
+		var look := Wl.slot_look(i)
+		for state: String in ["afk", "rescue"]:
+			var shapes := WorkoutArt.pennant_shapes(look, i, {state: true})
+			var flying := WorkoutArt.pennant_shapes(look, i)
+			var box := _cloth_box(shapes)
+			assert_gte(box.size.y, box.size.x * 3.0, "far longer than wide, slot %d" % i)
+			assert_gte(box.size.y, 15.0, "a cloth, not a hook, slot %d" % i)
+			assert_lte(box.size.x, 4.0, "it hangs close to the pole, slot %d" % i)
+			assert_lt(box.end.y, 0.0, "it stops short of the axle, slot %d" % i)
+			assert_gt(box.size.y, _cloth_box(flying).size.y, "longer than a flying flag")
+
+
+func test_a_limp_flag_keeps_the_slot_shape_and_holds_its_pattern_on_the_cloth() -> void:
+	for i in 8:
+		var look := Wl.slot_look(i)
+		var shapes := WorkoutArt.pennant_shapes(look, i, {"afk": true})
+		assert_eq(_cloth_box(shapes).end.x, 5.0, "the pattern stays on the cloth, slot %d" % i)
+		var rows := WorkoutArt.badge_rows(str(look.get("shape", "circle")))
+		var badge_w := 0
+		for s: Dictionary in shapes:
+			var pts: PackedVector2Array = s["points"]
+			if pts[0].y < -float(WorkoutArt.pole_height(i)) - 1.0:
+				badge_w = maxi(badge_w, int(pts[1].x - pts[0].x))
+		assert_eq(badge_w, rows.max() * 2 + 1, "the slot's badge is still there, slot %d" % i)
+	var hollow := WorkoutArt.pennant_shapes(Wl.slot_look(4), 4, {"afk": true})
+	for s: Dictionary in hollow:
+		assert_ne(s["color"], WorkoutArt.HOLLOW_FILL, "no pale ball on the pole of a limp flag")
+
+
+func test_a_flag_at_rest_does_not_flutter() -> void:
+	var view := _client_view()
+	var rescued := view.marker(-2)
+	assert_eq(int(rescued["flutter"]), 0, "still, at any speed")
+
+
+## The bounding box of the flag's cloth: every rect to the flag's side of the pole, under its badge.
+func _cloth_box(shapes: Array[Dictionary]) -> Rect2:
+	var box := Rect2()
+	var found := false
+	for s: Dictionary in shapes:
+		var pts: PackedVector2Array = s["points"]
+		if pts[0].x < 1.0:
+			continue
+		var r := Rect2(pts[0], pts[2] - pts[0])
+		box = r if not found else box.merge(r)
+		found = true
+	return box
+
+
+func test_a_pole_is_one_pixel_wide() -> void:
+	for i in 8:
+		var pole: PackedVector2Array = WorkoutArt.pennant_shapes(Wl.slot_look(i), i)[0]["points"]
+		assert_eq(pole[1].x - pole[0].x, 1.0, "slot %d" % i)
+		assert_eq(pole[2].y, 0.0, "from the foot up")
 
 
 func test_the_road_follows_the_course_in_rolling_road() -> void:
 	var view := _client_view()
 	var road: PackedFloat64Array = view.model["road"]
-	assert_eq(road.size(), 640 / WorkoutTrackLayer.COLUMN_W)
+	assert_eq(road.size(), WorkoutArt.W / WorkoutTrackLayer.COLUMN_W)
 	var lo := INF
 	var hi := -INF
 	for y in road:
@@ -134,8 +221,8 @@ func test_parallax_scrolls_with_the_local_rider() -> void:
 	assert_almost_eq(view.near_trees.world_x, d * WorkoutRideView.VISUAL_PX_PER_M, 0.01)
 	assert_eq(
 		view.near_trees.scroll(),
-		roundf(d * WorkoutRideView.VISUAL_PX_PER_M * 0.5),
-		"factor 0.5, whole art pixels"
+		roundf(d * WorkoutRideView.VISUAL_PX_PER_M * view.near_trees.factor),
+		"by its factor, whole art pixels"
 	)
 	assert_eq(view.sky.scroll(), 0.0, "the sky never moves")
 	assert_eq(float(view.sky.visible_tiles()[0]["x"]), 0.0)
@@ -144,7 +231,7 @@ func test_parallax_scrolls_with_the_local_rider() -> void:
 	var last: Dictionary = tiles[tiles.size() - 1]
 	assert_true(
 		float(last["x"]) + view.near_trees.tile_width() >= float(WorkoutArt.W),
-		"the strip covers the 640 px view"
+		"the strip covers the view"
 	)
 
 
@@ -155,18 +242,3 @@ func test_the_view_never_changes_the_state() -> void:
 		view.refresh()
 		view._process(0.016)
 	assert_eq(JSON.stringify(WorkoutSnapshot.encode(view.game.state, true)), before)
-
-
-func test_procedural_art_is_deterministic() -> void:
-	assert_eq(WorkoutArt.far_hills_image().get_data(), WorkoutArt.far_hills_image().get_data())
-	assert_eq(WorkoutArt.trees_image().get_data(), WorkoutArt.trees_image().get_data())
-	var hills := WorkoutArt.mid_hills_image()
-	# Seamless: the first and last columns have the same height.
-	var first := -1
-	var last := -1
-	for y in hills.get_height():
-		if first < 0 and hills.get_pixel(0, y).a > 0.5:
-			first = y
-		if last < 0 and hills.get_pixel(hills.get_width() - 1, y).a > 0.5:
-			last = y
-	assert_lt(absi(first - last), 3, "the strip tiles without a step")

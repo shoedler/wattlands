@@ -11,10 +11,19 @@ var disc_port: int = 0
 var hub: LoopbackHub = null
 
 
+## A UDP port the OS says is free. A PID-derived one can land in a Windows excluded port range.
+func _free_udp_port() -> int:
+	var probe := PacketPeerUDP.new()
+	probe.bind(0, "127.0.0.1")
+	var free_port := probe.get_local_port()
+	probe.close()
+	return free_port
+
+
 func before_each() -> void:
 	pollers = []
 	# A per-process discovery port, away from the default and from test_lan_transport's.
-	disc_port = 40000 + (OS.get_process_id() + 7919) % 20000
+	disc_port = _free_udp_port()
 	hub = LoopbackHub.new(3)
 
 

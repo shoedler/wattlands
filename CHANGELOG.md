@@ -2,6 +2,31 @@
 
 Releases, newest first. Modules and games write fragments in `docs/changelog.d/<module or game id>.md`; the lead merges them here at each release and empties them.
 
+## v0.9.0 (2026-10-31)
+
+The first v1 prerelease.
+
+### Workout 0.2.0
+
+- Workout is pixel art now, on a 960 x 540 base: real riders on bicycles instead of flags, up to 8 in a loose group, each with a slot jersey and whip pennant, and a caret over your own helmet.
+- Legs, cranks and chain turn 1:1 on each rider's own cadence and stop dead when the rider coasts, disconnects or the session pauses. Wheels and spokes turn by speed. Riders stand out of the saddle in sprints and on steep climbs.
+- One morning per ride, from blue hour to clear day: stars, lit windows, mist that burns off, parallax hills, poplars, farmhouses, wind pumps, cattle and seeded flocks. A roadside crowd and a gantry at scored sprints, never in the warm-up.
+- A new enamel road-sign HUD with the timeline, your numbers, the crew and the score, and a help overlay on F1. Rules, session plans and balance are unchanged.
+
+### Castellum Rotae 0.2.0 to 0.3.1
+
+- A pixel isometric Roman fortress, named machines, simulated projectiles that can miss, tar works and siege towers.
+- A Roman HUD built for a rider on a trainer, with the target the trainer really applied and one instruction line.
+- Faster rules steps at the enemy cap. The host publishes the 80-100 rpm cadence band; effort plans and balance stay the same.
+
+### Platform
+
+- The menus' sounds are redone in one family. Settings > Audio has separate levels for Machines, Ambience, Effects and Menus; safety prompts play on Master, so no slider can hide them.
+- A new audio kit and generator for the games' sound (their new sounds arrive in the next prereleases).
+- The HUD warns in every game when the trainer link drops.
+- Tooling: `tools/gate` runs the full gates in about 18 minutes instead of 48, with checks that safety thresholds, file ownership and test counts never slip.
+- Tests: LAN tests no longer fail when a process ID lands on a Windows excluded port; rules-step budgets allow GitHub's slower runners.
+
 ## v0.3.0 (2026-10-27)
 
 ### Turbo Reel
