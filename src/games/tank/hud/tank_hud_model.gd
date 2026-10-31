@@ -407,7 +407,7 @@ static func mission(state: TankState) -> Dictionary:
 	var end_s := float(cur.get("max_s", dur))
 	var obj_key := ""
 	var obj_args: Array = []
-	if state.seg.seg == TankIds.SEG_GUN_LINE:
+	if state.seg.seg == TankIds.SEG_GUN_LINE and state.gun_line.guns_total > 0:
 		var total := state.gun_line.guns_total
 		obj_key = "TANK_OBJ_HOLD"
 		obj_args = [clampi(total - state.gun_line.guns_left, 0, total), total]

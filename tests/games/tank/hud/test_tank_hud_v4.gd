@@ -194,6 +194,18 @@ func test_the_mission_plate_gives_the_difficulty_and_the_losses() -> void:
 	assert_eq(n["diff_key"], "TANK_HUD_DIFF_NORMAL", "a state's default")
 
 
+## During the tow the holding force is gone until the restart: no "0/0" on the plate.
+func test_the_mission_plate_has_no_holding_force_during_a_tow() -> void:
+	var s := TankFixturesV4.make("hard", 3)
+	s.seg.seg = TankIds.SEG_GUN_LINE
+	s.gun_line.guns_total = 3
+	s.gun_line.guns_left = 2
+	assert_eq(TankHudModel.mission(s)["obj_key"], "TANK_OBJ_HOLD")
+	s.gun_line.guns_total = 0
+	s.gun_line.guns_left = 0
+	assert_eq(TankHudModel.mission(s)["obj_key"], "")
+
+
 ## The cool-down is past the mission's last segment: a named plate and a real clock, not a blank 0:00.
 func test_the_mission_plate_names_the_cool_down_and_counts_it_down() -> void:
 	var s := TankFixturesV4.make("hard", 3)
