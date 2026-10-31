@@ -402,16 +402,20 @@ func test_cover_leaves_a_covered_humans_grade_and_band_alone() -> void:
 	g.on_afk(HUMAN, true)
 	tick = _play(g, clock, tick, 12.0)
 	assert_ne(g.state.rider(HUMAN).engine, DRIVE, "a bot took Drive")
+	var seg := g.state.seg.segment_index
+	# A stretch of road with a real grade, so a move's flat 0 cannot pass as the terrain's.
+	g.state.hull.distance_m = _graded_road_m(g.content, seg)
 	var seen := dirs.course_grades.size()
 	var bands := dirs.cadence_bands.size()
 	tick = _play(g, clock, tick, 6.0)
-	var seg := g.state.seg.segment_index
 	var want := TankDirector.terrain_grade_pct(g.content, seg, g.state.hull.distance_m, false)
+	assert_gte(absf(want), 1.0, "a graded stretch")
 	var sent := 0
 	for row: Array in dirs.course_grades.slice(seen):
 		if int(row[0]) == HUMAN:
 			sent += 1
-			assert_almost_eq(float(row[1]), want, 2.0, "the terrain's grade, never a move's flat")
+			assert_almost_eq(float(row[1]), want, 0.5, "the terrain's grade, never a move's flat")
+			assert_ne(float(row[1]), 0.0, "no flat grade for the covered human")
 	assert_gt(sent, 0, "the terrain still sends")
 	for row: Array in dirs.cadence_bands.slice(bands):
 		assert_ne(int(row[0]), HUMAN, "no band change for the covered human")
@@ -423,6 +427,51 @@ func test_cover_leaves_a_covered_humans_grade_and_band_alone() -> void:
 	TankAux.of(g.state).cover.erase(HUMAN)
 	assert_true(TankDirector._waits_for_seat(g.state, ri), "a real seat move does")
 	TankAux.of(g.state).cover[HUMAN] = row
+
+
+## The swap lands the covered human on the Loader with a shell in the breech, the one seat that would send
+## the Loader's band: nothing goes out until it is back.
+func test_cover_on_the_loader_sends_no_band() -> void:
+	var ctx := F.make_ctx(1, 3)
+	ctx.players[0].autopilot = false
+	var g: TankGame = autofree(F.make_game(ctx))
+	g.state.rider(HUMAN).fallback = false
+	var clock := F.clock_of(g)
+	var dirs := ctx.directives as F.Directives
+	var tick := _play(g, clock, 0, 320.0)
+	g.on_afk(HUMAN, true)
+	tick = _play(g, clock, tick, 12.0)
+	assert_true(TankAux.of(g.state).cover.has(HUMAN), "covered")
+	var ev: Array[Dictionary] = []
+	var loader := _bot(g.state, LOADER)
+	if loader != null:
+		TankSeats.land(g.state, loader, TankSeats.empty_seats(g.state)[0], ev)
+	TankSeats.land(g.state, g.state.rider(HUMAN), LOADER, ev)
+	(g.state.station(LOADER) as TankSteamState).loaded = true
+	var ri := TankRiderInput.new()
+	ri.peer = HUMAN
+	ri.phase_kind = Wl.WORK
+	var bands := dirs.cadence_bands.size()
+	g.director._loader_step(g.state, ri)
+	assert_eq(dirs.cadence_bands.size(), bands, "no band for the covered human on the Loader")
+	TankAux.of(g.state).cover.erase(HUMAN)
+	g.director._loader_step(g.state, ri)
+	assert_eq(dirs.cadence_bands.size(), bands + 1, "a real seat move does send it")
+
+
+## The first metre of mission segment `seg` from which the next 150 m all read 1% or more one way.
+func _graded_road_m(c: TankContent, seg: int) -> float:
+	for d in range(0, 3000, 10):
+		var lo := INF
+		var hi := -INF
+		for m in range(d, d + 150, 10):
+			var g := TankDirector.terrain_grade_pct(c, seg, float(m), false)
+			lo = minf(lo, g)
+			hi = maxf(hi, g)
+		if lo >= 1.0 or hi <= -1.0:
+			return float(d)
+	fail_test("no graded stretch in segment %d" % seg)
+	return 0.0
 
 
 ## The critic's probe: a bot's cross-mode move late in a segment must not lengthen the human's phase. The
@@ -463,6 +512,44 @@ func test_a_bots_seat_move_never_lengthens_a_humans_phase() -> void:
 	assert_eq(g.state.score.overruns, 0, "no overrun")
 	for b: Dictionary in clock.batches:
 		assert_false(bool(b["refused"]), "every end_phase of the batch accepted")
+
+
+## A bot never holds the segment's end, whatever min_s its own phase has (TankSegments.riders_may_end;
+## TankSeatPlan's no_hold keeps such a phase from being sent at all). Forced here: the Loader bot's phase
+## has a min_s 40 s past the segment's. The human's phase ends at the segment's min_s by end_phase, and the
+## bot's end_phase comes at its own min_s, never refused.
+func test_a_bots_own_min_s_never_lengthens_a_humans_phase() -> void:
+	var ctx := F.make_ctx(1, 3)
+	ctx.players[0].autopilot = false
+	var g: TankGame = autofree(F.make_game(ctx))
+	g.state.rider(HUMAN).fallback = false
+	var clock := F.clock_of(g)
+	var tick := _play(g, clock, 0, 301.0)
+	var seg_min := g.state.seg.min_s
+	var start := float(clock._at[HUMAN][1])
+	tick = _play(g, clock, tick, seg_min - 6.0)
+	var bot := _bot(g.state, LOADER)
+	var at: Array = clock._at[bot.peer]
+	var held := (clock.plans[bot.peer] as EffortPlan).phase(int(at[0]))
+	assert_true(held.open_ended, "an open phase")
+	held.min_s = tick * Wl.SIM_DT - float(at[1]) + 46.0
+	var bot_index := int(at[0])
+	var index := int(clock._at[HUMAN][0])
+	g.state.hull.distance_m = g.state.seg.length_m + 1.0
+	tick = _play(g, clock, tick, 10.0)
+	assert_gt(int(clock._at[HUMAN][0]), index, "the human's phase ended")
+	var ended := {}
+	for c: Dictionary in clock.changes:
+		if int(c["peer"]) == HUMAN and int(c["index"]) == index + 1:
+			ended = c
+	assert_almost_eq(float(ended["t"]) - start, seg_min, 1.0, "at the segment's min_s")
+	assert_eq(str(ended["ended_by"]), Wl.ENDED_END_PHASE, "not the platform's cut")
+	assert_eq(int(clock._at[bot.peer][0]), bot_index, "the bot's own min_s still runs")
+	tick = _play(g, clock, tick, 42.0)
+	assert_gt(int(clock._at[bot.peer][0]), bot_index, "its end_phase came at its own min_s")
+	assert_eq(g.state.score.overruns, 0, "no overrun")
+	for b: Dictionary in clock.batches:
+		assert_false(bool(b["refused"]), "no end_phase refused")
 
 
 func _bot_moves(dirs: F.Directives) -> int:

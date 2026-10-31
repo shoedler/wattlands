@@ -565,7 +565,8 @@ static func power_band_pct(c: TankContent, ph: PlanPhase) -> Array[float]:
 
 ## end_phase for every rider of the group's segment in one step, once the objective is done, min_s
 ## has passed (until then the tank holds: "Regroup"), every rider of the segment is past its own
-## phase's min_s (v3: a seat switch's split phase may hold the end; TankSegments.riders_may_end)
+## phase's min_s (v3: a human's seat switch's split phase may hold the end, a bot's never does; its
+## end_phase simply waits for its own min_s: TankSegments.riders_may_end)
 ## and the segment's `end_hold_s` (mission file, default 0; the boss uses it for the Behemoth's
 ## death beat) has run since the objective was done. The hold never runs the segment into max_s:
 ## it ends END_MARGIN_S before it, so a won mission is not scored as an overrun. A rider whose
@@ -611,7 +612,7 @@ func _maybe_end_phase(state: TankState, inputs: TankInputs) -> bool:
 		var out_of_time := ph.max_s > 0.0 and ph.elapsed_s >= ph.max_s - END_MARGIN_S - EPS
 		if not held and not out_of_time:
 			return false
-		if not TankSegments.riders_may_end(inputs):
+		if not TankSegments.riders_may_end(state, inputs):
 			return false
 		if not out_of_time and _solo_seat_wait(state, ph, float(_done_at[ph.index])):
 			return false
@@ -632,7 +633,10 @@ func _maybe_end_phase(state: TankState, inputs: TankInputs) -> bool:
 	var left: Array = []
 	for peer: int in _end_pending[ph.index]:
 		# A rider that already moved on is never asked to end its next phase.
-		if here.has(peer) and not ctx.directives.end_phase(peer):
+		if not here.has(peer):
+			continue
+		# A bot still inside its own min_s is not asked yet: the platform would refuse it.
+		if not _past_min(inputs.rider(peer)) or not ctx.directives.end_phase(peer):
 			left.append(peer)
 	if left.is_empty():
 		_ended[ph.index] = true
@@ -643,6 +647,11 @@ func _maybe_end_phase(state: TankState, inputs: TankInputs) -> bool:
 	_end_retries[ph.index] = tries
 	_end_retry_tick[ph.index] = inputs.tick + (1 if tries <= 1 else _ticks(END_RETRY_S))
 	return first
+
+
+## True when `ri`'s own phase may take an end_phase by its min_s.
+static func _past_min(ri: TankRiderInput) -> bool:
+	return ri.phase_elapsed_s >= ri.phase_min_s - EPS
 
 
 # --- Pattern 9: seat switches (v3) ---------------------------------------------------------------
