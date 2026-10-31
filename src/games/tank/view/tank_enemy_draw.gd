@@ -579,7 +579,7 @@ static func _fire(
 
 ## The fire's tongues for its height: one on the small kinds, up to three of unequal height on the large.
 static func tongues_of(height: float) -> int:
-	return 1 if height < 11.0 else (2 if height < 22.0 else 3)
+	return 1 if height < 9.0 else (2 if height < 22.0 else 3)
 
 
 ## A fire `height` px tall standing on `at`: its tongues, the shorter ones behind, and an ember or two above.
