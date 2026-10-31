@@ -1,38 +1,8 @@
-extends GutTest
+extends TestGameSessionSuite
 ## Siege through the real platform runtime: GameRegistry, PlanValidator and GameSimRunner on top
 ## of the trainer stack (drill SOLO with a bot, drill as HOST with a loopback client).
 
 const F := preload("res://tests/games/siege/siege_fakes.gd")
-
-var _dirs: Array[String] = []
-## Runners made by a test: cleanup() deletes each one's temp root (W3 QT-4).
-var _runners: Array[GameSimRunner] = []
-
-
-func before_each() -> void:
-	var d := Paths.make_temp_dir("siege_session")
-	_dirs.append(d)
-	Paths.set_override(d)
-
-
-func after_each() -> void:
-	for r in _runners:
-		if is_instance_valid(r):
-			r.cleanup()
-	_runners.clear()
-	Paths.set_override("")
-	for d in _dirs:
-		GameSimCli.remove_tree(d)
-	_dirs.clear()
-
-
-## The installed games (Siege among them).
-func _registry() -> WlGameRegistry:
-	var reg := WlGameRegistry.new()
-	reg.scan_on_ready = false
-	add_child_autofree(reg)
-	reg.scan()
-	return reg
 
 
 func test_the_manifest_validates_and_siege_is_listed() -> void:
@@ -64,23 +34,7 @@ func test_every_module_plan_passes_the_plan_validator_without_warnings() -> void
 
 
 func _run(flags: Array[String]) -> Dictionary:
-	var report := _dirs[0].path_join("report.json")
-	var args := PackedStringArray(
-		["--game=" + F.GAME_ID, "--report=" + report, "--sim-speed=1000"] + flags
-	)
-	var parsed := GameSimRunner.parse_args(args)
-	assert_false(parsed.has("error"), str(parsed.get("error", "")))
-	parsed["headless"] = true
-	parsed["registry"] = _registry()
-	var runner := GameSimRunner.new()
-	add_child_autofree(runner)
-	_runners.append(runner)
-	assert_eq(runner.setup(parsed), "")
-	var reason := runner.run_to_end()
-	var out := runner.build_report()
-	out["_end"] = reason
-	out["_path"] = runner.write_report()
-	return out
+	return run_session(F.GAME_ID, flags)
 
 
 func _events(r: Dictionary, type: String) -> Array:

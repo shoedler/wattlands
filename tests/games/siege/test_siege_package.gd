@@ -1,4 +1,4 @@
-extends GutTest
+extends TestGameSuite
 ## Siege as a package: game.json exactly per brief 2.2, the option entry, strings (prefix, every
 ## used key present, unlock names), the first run never picking Siege, and the static scans
 ## (brief 4: no wall clock or global RNG in rules/ and combat/ and what they call; no trainer
@@ -61,17 +61,6 @@ const TRAINER_NAMES: Array[String] = [
 const PURE_DIRS: Array[String] = ["rules", "combat", "autopilot", "contracts"]
 
 
-func _files(dir: String, exts: Array) -> Array[String]:
-	var out: Array[String] = []
-	var da := DirAccess.open(dir)
-	for f in da.get_files() if da != null else PackedStringArray():
-		if exts.has(f.get_extension()):
-			out.append(dir.path_join(f))
-	for sub in da.get_directories() if da != null else PackedStringArray():
-		out.append_array(_files(dir.path_join(sub), exts))
-	return out
-
-
 func _csv_keys() -> Dictionary:
 	var keys := {}
 	var f := FileAccess.open(F.CONTENT_DIR.path_join("strings.csv"), FileAccess.READ)
@@ -129,7 +118,7 @@ func test_every_string_key_has_the_prefix_and_every_used_key_exists() -> void:
 		assert_ne(str(keys[k]).strip_edges(), "", "%s has text" % k)
 	var used := {}
 	var re := RegEx.create_from_string("SIEGE_[A-Z0-9_]+")
-	var sources := _files(F.GAME_DIR, ["gd", "json"]) + _files(F.CONTENT_DIR, ["json"])
+	var sources := files(F.GAME_DIR, ["gd", "json"]) + files(F.CONTENT_DIR, ["json"])
 	for path in sources:
 		for mt in re.search_all(FileAccess.get_file_as_string(path)):
 			var k := mt.get_string()
@@ -191,7 +180,7 @@ func test_rules_and_combat_use_no_wall_clock_or_global_randomness() -> void:
 	var re := RegEx.create_from_string(clocks + "|" + globals)
 	var scanned := 0
 	for dir in PURE_DIRS:
-		for path in _files(F.GAME_DIR.path_join(dir), ["gd"]):
+		for path in files(F.GAME_DIR.path_join(dir), ["gd"]):
 			scanned += 1
 			var hit := re.search(_code_only(FileAccess.get_file_as_string(path)))
 			assert_null(hit, "%s: %s" % [path, hit.get_string() if hit != null else ""])
@@ -200,7 +189,7 @@ func test_rules_and_combat_use_no_wall_clock_or_global_randomness() -> void:
 
 func test_nothing_reaches_the_trainer_except_ctx_directives() -> void:
 	var scanned := 0
-	for path in _files(F.GAME_DIR, ["gd", "tscn", "tres"]):
+	for path in files(F.GAME_DIR, ["gd", "tscn", "tres"]):
 		scanned += 1
 		var text := FileAccess.get_file_as_string(path)
 		for name: String in TRAINER_NAMES:
@@ -214,7 +203,7 @@ func test_nothing_reaches_the_trainer_except_ctx_directives() -> void:
 func test_the_only_directives_siege_sends_are_a_request_and_the_cadence_band() -> void:
 	var re := RegEx.create_from_string("directives\\.(\\w+)\\(")
 	var calls := {}
-	for path in _files(F.GAME_DIR, ["gd"]):
+	for path in files(F.GAME_DIR, ["gd"]):
 		for mt in re.search_all(_code_only(FileAccess.get_file_as_string(path))):
 			calls[mt.get_string(1)] = path
 	var names: Array = calls.keys()
