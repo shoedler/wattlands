@@ -1,5 +1,5 @@
 class_name SiegeSnapHistory
-extends RefCounted
+extends SnapHistory
 ## Client: every enemy's path position in the last few snapshots, keyed by the host's game time
 ## (the snapshot's tick x Wl.SIM_DT), so the view can draw enemies between two snapshots (brief
 ## 2.6; BRIEF 5.1). Like WorkoutSnapHistory: a game has no NetSession handle, so the render clock
@@ -8,98 +8,54 @@ extends RefCounted
 ## SiegeGame.apply_snapshot pushes one entry per snapshot; the view calls advance(delta) every
 ## frame and reads pos_of() / prog_of(). Times come from the host's ticks, never from a clock.
 
-## Entries kept: 0.8 s at 10 Hz, like NetSession's snapshot buffer.
-const CAPACITY := 8
-## A snapshot more than this after the newest (a rejoin, a long stall) starts the history over.
-const MAX_GAP_S := 1.5
 ## The shortest delay: NetSession's documented 100 ms interpolation at 10 Hz.
 const DELAY_MIN_S := 0.1
-## render_t further than this from where it belongs jumps there.
-const RESYNC_S := 1.5
-## The longest delay. It stays under RESYNC_S, so a render_t held at the newest snapshot is never
-## resynced (sent back) when the delay grows.
-const DELAY_MAX_S := RESYNC_S - 0.1
-## A render_t that fell behind catches up with this time constant.
-const CATCHUP_TAU_S := 0.25
 
-## Oldest first: [{"t": host seconds, "e": {enemy id: PackedFloat32Array [prog_m, lat_m]}}].
-var entries: Array[Dictionary] = []
+## Rows, oldest first: {"t": host seconds, "e": {enemy id: PackedFloat32Array [prog_m, lat_m]}}.
+
 ## The path positions are computed on (SiegeSnapHistory.pos_of); may be null (prog_of still works).
 var path: SiegePath = null
 ## The host time the view draws (advance() moves it).
-var render_t: float = 0.0
-var _clock_set: bool = false
+var render_t: float:
+	get:
+		return _clock.render_t
+	set(value):
+		_clock.render_t = value
+
+var _clock: SnapRenderClock = SnapRenderClock.new()
 
 
 func _init(p_path: SiegePath = null) -> void:
 	path = p_path
+	_clock.min_delay_s = DELAY_MIN_S
+	_clock.never_back = true
 
 
 func clear() -> void:
-	entries.clear()
-	_clock_set = false
-	render_t = 0.0
-
-
-func is_empty() -> bool:
-	return entries.is_empty()
-
-
-## The newest entry's host time (0 when empty).
-func newest_t() -> float:
-	return float(entries.back()["t"]) if not entries.is_empty() else 0.0
-
-
-## The mean host time between neighbouring entries (s); 0 with fewer than two entries.
-func mean_spacing() -> float:
-	if entries.size() < 2:
-		return 0.0
-	return (newest_t() - float(entries.front()["t"])) / float(entries.size() - 1)
+	super()
+	_clock.reset()
 
 
 ## How far render_t runs behind the newest snapshot (s): the mean spacing, clamped to
-## DELAY_MIN_S..DELAY_MAX_S (DELAY_MIN_S before two snapshots are in).
+## DELAY_MIN_S..SnapRenderClock.MAX_DELAY_S (DELAY_MIN_S before two snapshots are in).
 func delay() -> float:
-	return clampf(mean_spacing(), DELAY_MIN_S, DELAY_MAX_S)
+	return _clock.delay(self)
 
 
-## Records the enemies of the snapshot just applied, at host time `t`. A time equal to the newest
-## replaces it; an earlier one (the host's clock went back: a new session) or one more than
-## MAX_GAP_S later starts the history over.
+## Records the enemies of the snapshot just applied, at host time `t`.
 func push(t: float, enemies: Array[SiegeEnemyState]) -> void:
 	var e := {}
 	for en in enemies:
 		e[en.id] = PackedFloat32Array([en.prog_m, en.lat_m])
-	if not entries.is_empty():
-		var newest := newest_t()
-		if t < newest or t - newest > MAX_GAP_S:
-			entries.clear()
-		elif is_equal_approx(t, newest):
-			entries.pop_back()
-	entries.append({"t": t, "e": e})
-	while entries.size() > CAPACITY:
-		entries.pop_front()
+	add(t, {"e": e})
 
 
-## Moves render_t by the frame time `delta`: it follows the frame clock, catches up softly when
-## behind newest - delay(), jumps when RESYNC_S off (the first snapshot, a rejoin, a stall), and
-## stops at the newest snapshot. A delay that grows leaves render_t ahead of its goal: it waits
-## at the newest snapshot, never back. Returns render_t.
+## Moves render_t by the frame time `delta` (SnapRenderClock): it follows the frame clock, catches up
+## softly when behind newest - delay(), jumps when RESYNC_S off (the first snapshot, a rejoin, a
+## stall), and stops at the newest snapshot. A delay that grows leaves render_t ahead of its goal: it
+## waits at the newest snapshot, never back. Returns render_t.
 func advance(delta: float) -> float:
-	if entries.is_empty():
-		return render_t
-	var newest := newest_t()
-	var goal := newest - delay()
-	if not _clock_set or absf(goal - render_t) > RESYNC_S:
-		render_t = goal
-		_clock_set = true
-		return render_t
-	var was := render_t
-	render_t += maxf(delta, 0.0)
-	var behind := goal - render_t
-	if behind > 0.0:
-		render_t += behind * (1.0 - exp(-maxf(delta, 0.0) / CATCHUP_TAU_S))
-	render_t = maxf(minf(render_t, newest), was)
+	_clock.advance(delta, self)
 	return render_t
 
 
