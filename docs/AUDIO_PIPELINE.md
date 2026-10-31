@@ -108,6 +108,8 @@ It writes to `build/audio_preview/`: `<game>.wav` and `.mp3`, `<game>_<machine>_
 
 `scorecard` computes the game developer (D) and audio creator (A) rows and exits non-zero on any failure with no waiver. `tools/audio/test/scorecard_gate.test.mjs` holds every bank on disk with a `preview` block to it, so these are permanent gates. D rows never take a waiver, and neither do A1, A9, A11 or A15. D8 (event coverage) is each game's GUT test; D10 is a bench.
 
+Levels add up tightly: Machines at -22 and Ambience at -32 sum to about -21.5 LUFS, under A1's -20 floor unless events are frequent. The fixture reaches -19.3 with Machines at -20.4, the top of their window, so start a bank there.
+
 How a row reads the audio, where the name alone doesn't say:
 
 - D1, D2: each event entry of the lead machine, rendered alone over 10 revolutions, against the pattern: a sharp rise of the fast envelope, 20 ms apart at least. A stroke with no attack of its own, ringing into the next, fails.
