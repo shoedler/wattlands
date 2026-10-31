@@ -287,6 +287,7 @@ static func _check_bed(
 	path: String, bed: Dictionary, all: Dictionary, errors: Array[String]
 ) -> void:
 	_check_layers(path + ".layers", _list_at(bed, "layers", path, errors), all, errors)
+	_check_numbers(path, bed, ["spot_min_gap_s"], errors)
 	var spots := _list_at(bed, "spots", path, errors)
 	for i in spots.size():
 		var at_path := "%s.spots[%d]" % [path, i]

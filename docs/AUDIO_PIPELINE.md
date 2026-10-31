@@ -117,7 +117,7 @@ How a row reads the audio, where the name alone doesn't say:
 - A3: spectral flux, stdev over mean plus 2 % of the frame magnitude, from the second revolution on, with a 2048 window. A steady drone reads near 0.2, and an engine with strokes above 1.
 - A5: the correlation of a 4 ms envelope between successive revolutions.
 - A12: the bed's 50 ms envelope, autocorrelated at each layer's own length. A second layer of a co-prime length and the spots are what bring it down.
-- A16: at least 3 different spot sounds in 60 s, and no 2 different spots within 2 s. A spot whose own gap can be under 2 s (cricket trains) is a texture and counts only toward the 3.
+- A16: at least 3 different spot sounds in 60 s, and no 2 different spots within 2 s. A spot whose own gap can be under 2 s (cricket trains) is a texture and counts only toward the 3. Spots run on independent timers, so one seed passing says little: a bed's optional `spot_min_gap_s` (2.2 is enough, a little over the row's 2 s) makes it hold on every seed, by holding a due detail back until that long after the last one's last burst. A texture neither waits nor holds others up.
 
 ## What no number here can say
 
