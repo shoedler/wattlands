@@ -148,7 +148,7 @@ Evade and Overpressure sprints send nothing: the rider sprints inside the phase'
 
 ## Free roam
 
-`TankContent.expand_roam` turns `{id, kind: "roam", label, minutes}` into a WARMUP drive-out and one open WORK phase. The valley (`roam/valley.json`, `TankRoamMap`, a seed from `ctx.rng` carried in the snapshot) is about 6 km: pine forest at both ends with a turning place, and the lake shore, the village, the quarry and the meadow once each in a seeded order, each with its own terrain.
+`TankContent.expand_roam` turns `{id, kind: "roam", label, minutes}` into a WARMUP drive-out and one open WORK phase. The valley (`content/tank/roam/valley.json`, `TankRoamMap`, a seed from `ctx.rng` carried in the snapshot) is about 6 km: pine forest at both ends with a turning place, and the lake shore, the village, the quarry and the meadow once each in a seeded order, each with its own terrain.
 
 The rules work in the travel frame: `TankRoamState.map_m` is the hull's place on the road and `TankHullState.dir` which way +x points. A turn (the driver's `turn` intent, 30 s cooldown, or the Autopilot 3 s after a road's end) is an 8 s stop; at its midpoint `TankRoam.flip` mirrors the obstacles and clears everything that moves with no credit, so nothing is ever behind the tank. Driving west the near stage draws mirrored and the far panel lands on the left.
 
@@ -156,7 +156,7 @@ Patrols come every 90-110 s of WORK time, drawn by weight: far kinds in the far 
 
 ## The look
 
-**Art.** Everything is baked by scripts in this repository; no sprite is generated and the game makes no fal call. The tank and its forest are `assets/tank/v3/` (`kit.json`, read by `TankRig`). The enemies, bushes and far ground are `assets/tank/v4/` (`enemies.json`, read by `TankEnemyKit`), baked by `tools_src/enemy_bake.sh` on the tank's own generator: same rivets, weathering and moonlight, a cold grey-green faction with cyan vision slits and no insignia.
+**Art.** Everything is baked by scripts in this repository; no sprite is generated and the game makes no fal call. The tank and its forest are `assets/tank/v3/` (`kit.json`, read by `TankRig`). The enemies, bushes and far ground are `assets/tank/v4/` (`enemies.json`, read by `TankEnemyKit`), baked by `assets/tank/v4/tools_src/enemy_bake.sh` on the tank's own generator: same rivets, weathering and moonlight, a cold grey-green faction with cyan vision slits and no insignia.
 
 **Split screen** (`TankFarMap`, on every canvas): near panel, an 8 px riveted seam with the range plate (`TankSeam`), far panel (`TankFarPanel`, a SubViewport that never runs the depth of field, with its own parallax, light and haze), and the shell screen (`TankPip`) in the far panel's top. 960 x 540: 622 + 8 + 330. The tank's scale and place are unchanged and it stays whole.
 
@@ -182,7 +182,7 @@ Every file is JSON, validated at load by `TankContentSchema`, which also holds e
 | Surge to evade | `tanks.json` `evade` |
 | Plans and patterns | `stations.json` `plans`, `drill_plans`, `roam_plans`, `bank`, `arc`, `boiler`, `terrain`, `haptics` (schema-bounded) |
 | Missions | `missions/<id>.json` `segments[]`: `encounters` (`at_m`), `enemies` (`hold_m`), `near` (`at_s`), `difficulty_default`, `score_stages`, `hull_hp`, `checkpoint_hp` |
-| Valley | `roam/valley.json` `patrols`, `strongpoints`, `turn`, `points`, `grades` |
+| Valley | `content/tank/roam/valley.json` `patrols`, `strongpoints`, `turn`, `points`, `grades` |
 | Score | `scoring.json` |
 | Strings | `strings.csv`, keys `TANK_*` (commit the generated `strings.en.translation`) |
 
@@ -222,7 +222,7 @@ bash assets/tank/v4/tools_src/enemy_bake.sh
 | S4 every content and crew | **Every directive, plan and trace rule of BRIEF 4.5 and 4.6.** Reads S14-S18 too. Append-only |
 | S5, S10 | Rescue and AFK: stagger, the plan continues, a client's intents, no tank lost inside a rescue or AFK span |
 | S6, S7 | Haptics off; the same seed twice is identical |
-| S8 (`sim/test_tank_s8.gd`) | Counts x 3: at most 16 enemies, snapshots under 4 KB |
+| S8 (`tests/games/tank/sim/test_tank_s8.gd`) | Counts x 3: at most 16 enemies, snapshots under 4 KB |
 | S9 | A scripted sprinter evades; a holding action entered after a sprint |
 | S11, S12 | Free roam: time up, laps, nothing behind, the grade; the zero crew |
 | S13 | Seat switching: every move's trainer follows within 30 s, nothing refused |
@@ -244,7 +244,7 @@ Gates: the Tank GUT suite, `check_scripts`, gdformat and gdlint, `tests/sdk/test
 | `content/` | `TankContent`, the validated loader |
 | `autopilot/` | `TankAutopilot`, `TankBots` |
 | `net/` | `TankSnapshot`, `TankCues`, `TankEventCast` |
-| `view/` | `TankView`, near stage and tank (`TankRig`, `TankBody`, `TankInterior`, `TankMech`), far panel, seam, shell screen, enemies, lights, effects, interpolation |
+| `view/` | `TankView`, on a ladder of five layer classes, each extending the one before and calling only down: `TankViewBase` (constants, per-frame vars, the rules-to-art mapping), `TankViewMotion`, `TankViewSeats`, `TankViewWorld`, `TankViewHud`. Near stage and tank (`TankRig`, `TankBody`, `TankInterior`, `TankMech` over one class per machine, `TankMechDiesel` to `TankMechRepair`), far panel, seam, shell screen, enemies, lights, effects, interpolation (`TankSnapHistory`, a `SnapHistory`, drawn at a `SnapRenderClock`) |
 | `hud/` | `TankHud` and its Controls |
 | `audio/` | `TankAudio` |
 
@@ -262,7 +262,7 @@ Gates: the Tank GUT suite, `check_scripts`, gdformat and gdlint, `tests/sdk/test
 
 Every sound is rendered from the recipes in this repository, `assets/tank/audio/audio.json`, by `tools/audio` (`docs/AUDIO_PIPELINE.md`). `TankAudio` only maps state to parameters and events to cues. `node tools/audio/preview.mjs --game=tank` writes `build/audio_preview/tank.mp3`.
 
-- **Each seat, 1:1 with its crank.** `TankView.audio_feed` hands the adapter each seat's `machine_phase`, the number the machine is drawn from, so sound and picture cannot drift. The fractions come from the art and `tests/games/tank/audio/test_tank_audio_bank.gd` pins them to `tank_mech.gd`. FTMS reports cadence about once a second and no crank angle: the strokes lock to the crank on screen exactly and to the rider's feet in rate only. A seat that stops, stops dead; a reserve room is silent because its crank stands still.
+- **Each seat, 1:1 with its crank.** `TankView.audio_feed` hands the adapter each seat's `machine_phase`, the number the machine is drawn from, so sound and picture cannot drift. The fractions come from the art and `tests/games/tank/audio/test_tank_audio_bank.gd` pins them to the machine files (`src/games/tank/view/tank_mech_diesel.gd` and its siblings, one per machine). FTMS reports cadence about once a second and no crank angle: the strokes lock to the crank on screen exactly and to the rider's feet in rate only. A seat that stops, stops dead; a reserve room is silent because its crank stands still.
 - **Diesel (Drive):** three unequal cylinders of 6, 5 and 4 takes against pitch tables of 7, so the takes only line up again after 60 revolutions. Exhaust and inlet valves, a body whose two loops cross over at 50-75 rpm, a rasp that breathes at the firing rate and opens with load, a turbo whistle by watts with a blow-off when you lift, and a crackle on lift-off or well over band.
 - **Dynamo (Gun):** a whine with a 27 Hz ripple locked to the armature whose lines swell each on their own rate, brush crackle and ticks that come forward while the jars stay empty, the jars' dump at 0.8 of a turn once they fill, the hoist's ratchet. **Steam (Loader):** two chuffs a revolution by pressure, valve, simmer, the pawl while the rack fills, the safety valve when over. **Arc (Lights):** a beating hum, the ladder's buzz and its zaps at 0 and 0.5, doubled over band. **Feed (Secondaries):** bolts, the bow guns while they fire, links, casings, the belt's rattle. **Repair:** the rivet hammer on each strike with its ring and sparks while the hull needs it, a compressor that eases down and a dry tap that follow your legs when it does not, the press when a patch is done.
 - **Track:** links and a squeak locked to the distance drawn (`travel`), three links and one squeak per 2.4 m, and a rumble by speed. Under a tow they follow the reversed tread, over the chain.
