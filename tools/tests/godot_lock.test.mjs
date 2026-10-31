@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { acquire, machineCap, readTickets, pidAlive, LOCK_TIMEOUT_MESSAGE } from '../lib/godot_lock.mjs';
+import { acquire, capFile, machineCap, setCapFile, readTickets, pidAlive, LOCK_TIMEOUT_MESSAGE } from '../lib/godot_lock.mjs';
 import { TOOLS, IS_WIN, sleep, runProc, rmQuiet } from './helpers.mjs';
 
 const LOCK_JS = path.join(TOOLS, 'lib', 'godot_lock.mjs');
@@ -24,6 +24,11 @@ after(() => {
 });
 
 const maxSeq = (dir) => readTickets(dir).tickets.reduce((m, t) => Math.max(m, t.seq), 0);
+
+function restoreEnv(key, value) {
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
+}
 
 async function until(pred, timeoutMs = 5000, what = 'condition') {
   const end = Date.now() + timeoutMs;
@@ -171,7 +176,10 @@ describe('godot lock: grants', () => {
   });
 
   test('machineCap honours WATTLANDS_GODOT_LOCK_CAP and otherwise follows the hardware', () => {
+    // A fresh lock dir: the machine's real one can hold a cap file (set-cap), which would answer instead.
     const saved = process.env.WATTLANDS_GODOT_LOCK_CAP;
+    const savedDir = process.env.WATTLANDS_GODOT_LOCK_DIR;
+    process.env.WATTLANDS_GODOT_LOCK_DIR = tmpLockDir();
     try {
       process.env.WATTLANDS_GODOT_LOCK_CAP = '3';
       assert.equal(machineCap(), 3);
@@ -182,9 +190,176 @@ describe('godot lock: grants', () => {
       assert.ok([2, 4].includes(machineCap()));
       assert.equal(machineCap(), expected);
     } finally {
-      if (saved === undefined) delete process.env.WATTLANDS_GODOT_LOCK_CAP;
-      else process.env.WATTLANDS_GODOT_LOCK_CAP = saved;
+      restoreEnv('WATTLANDS_GODOT_LOCK_CAP', saved);
+      restoreEnv('WATTLANDS_GODOT_LOCK_DIR', savedDir);
     }
+  });
+});
+
+describe('godot lock: cap file', () => {
+  /** Runs fn with no env cap set, restoring it after. */
+  async function withoutEnvCap(fn) {
+    const saved = process.env.WATTLANDS_GODOT_LOCK_CAP;
+    delete process.env.WATTLANDS_GODOT_LOCK_CAP;
+    try {
+      return await fn();
+    } finally {
+      restoreEnv('WATTLANDS_GODOT_LOCK_CAP', saved);
+    }
+  }
+
+  /** Runs fn collecting everything written to stderr. */
+  function captureStderr(fn) {
+    const lines = [];
+    const real = process.stderr.write;
+    process.stderr.write = (chunk) => {
+      lines.push(String(chunk));
+      return true;
+    };
+    try {
+      fn();
+    } finally {
+      process.stderr.write = real;
+    }
+    return lines;
+  }
+
+  /** The environment of a shell with no cap variable, on the lock dir `dir`. */
+  function shellEnv(dir) {
+    const env = { ...process.env, WATTLANDS_GODOT_LOCK_DIR: dir };
+    delete env.WATTLANDS_GODOT_LOCK_CAP;
+    return env;
+  }
+
+  test('the file is respected, with or without a line ending', () =>
+    withoutEnvCap(() => {
+      const dir = tmpLockDir();
+      assert.equal(capFile(dir), path.join(dir, 'cap'));
+      for (const [text, want] of [['16', 16], ['16\n', 16], ['  7\r\n', 7]]) {
+        fs.writeFileSync(capFile(dir), text);
+        assert.equal(machineCap(dir), want, JSON.stringify(text));
+      }
+    }));
+
+  test('the env variable beats the file, and a bad env value still throws', () =>
+    withoutEnvCap(() => {
+      const dir = tmpLockDir();
+      fs.writeFileSync(capFile(dir), '16\n');
+      process.env.WATTLANDS_GODOT_LOCK_CAP = '3';
+      assert.equal(machineCap(dir), 3);
+      process.env.WATTLANDS_GODOT_LOCK_CAP = 'lots';
+      assert.throws(() => machineCap(dir), /WATTLANDS_GODOT_LOCK_CAP must be a positive integer/);
+    }));
+
+  test('a garbage file is ignored with one stderr note per content', () =>
+    withoutEnvCap(() => {
+      const dir = tmpLockDir();
+      const none = machineCap(tmpLockDir());
+      for (const garbage of ['lots', '', '0', '-3', '2.5', '1e3', '4 8', '99999999999999999999']) {
+        fs.writeFileSync(capFile(dir), garbage);
+        const notes = captureStderr(() => {
+          for (let i = 0; i < 5; i++) assert.equal(machineCap(dir), none, JSON.stringify(garbage));
+        });
+        assert.equal(notes.length, 1, `one note for ${JSON.stringify(garbage)}: ${notes}`);
+        assert.match(notes[0], /ignoring cap file/);
+      }
+    }));
+
+  test('a directory in place of the file is ignored too', () =>
+    withoutEnvCap(() => {
+      const dir = tmpLockDir();
+      const none = machineCap(tmpLockDir());
+      fs.mkdirSync(capFile(dir));
+      const notes = captureStderr(() => assert.equal(machineCap(dir), none));
+      assert.equal(notes.length, 1);
+    }));
+
+  test('tickets ignore the file: it is no ticket and blocks no grant', () =>
+    withoutEnvCap(async () => {
+      const dir = tmpLockDir();
+      setCapFile(2, dir);
+      assert.deepEqual(readTickets(dir), { tickets: [], orphans: [] });
+      const h = await acquire({ dir, lockTimeoutS: 2 });
+      assert.deepEqual(readTickets(dir).tickets.map((t) => t.seq), [h.seq]);
+      h.release();
+      assert.equal(fs.readFileSync(capFile(dir), 'utf8'), '2\n', 'a run leaves the file alone');
+    }));
+
+  test('acquire reads the cap of its own dir, and a waiter sees a change at once', () =>
+    withoutEnvCap(async () => {
+      const dir = tmpLockDir();
+      setCapFile(1, dir);
+      const first = await acquire({ dir });
+      const second = await enqueue(dir, {});
+      await sleep(400);
+      assert.equal(second.at, null, 'cap 1 from the file holds the second request back');
+      setCapFile(2, dir);
+      await second.promise;
+      assert.ok(second.handle, 'granted after the file changed, without a new request');
+      second.handle.release();
+      first.release();
+    }));
+
+  test('an explicit cap beats the file', () =>
+    withoutEnvCap(async () => {
+      const dir = tmpLockDir();
+      setCapFile(1, dir);
+      const a = await acquire({ dir, cap: 2 });
+      const b = await acquire({ dir, cap: 2, lockTimeoutS: 2 });
+      b.release();
+      a.release();
+    }));
+
+  test('CLI: set-cap writes the file, cap and status read it, another process obeys it', async () => {
+    const dir = tmpLockDir();
+    const env = shellEnv(dir);
+    const set = await runProc(process.execPath, [LOCK_JS, 'set-cap', '1'], { env });
+    assert.equal(set.code, 0, set.stderr);
+    assert.match(set.stdout, /set to 1; cap 1/);
+    assert.equal(fs.readFileSync(capFile(dir), 'utf8'), '1\n');
+    assert.deepEqual(fs.readdirSync(dir), ['cap'], 'no temp file stays behind');
+    const cap = await runProc(process.execPath, [LOCK_JS, 'cap'], { env });
+    assert.equal(cap.stdout.trim(), '1');
+    const status = await runProc(process.execPath, [LOCK_JS, 'status', '--json'], { env });
+    assert.equal(JSON.parse(status.stdout).cap, 1);
+    const holder = await acquire({ dir, cap: 1 });
+    const args = [LOCK_JS, 'run', '--lock-timeout=1', '--', process.execPath, '-e', 'process.exit(0)'];
+    const blocked = await runProc(process.execPath, args, { env });
+    assert.equal(blocked.code, 75, 'a shell with no cap variable obeys the file');
+    assert.equal((await runProc(process.execPath, [LOCK_JS, 'set-cap', '2'], { env })).code, 0);
+    assert.equal((await runProc(process.execPath, args, { env })).code, 0, 'and sees the new value');
+    holder.release();
+  });
+
+  test('CLI: set-cap 0 deletes the file, and is fine with no file', async () => {
+    const dir = tmpLockDir();
+    const env = shellEnv(dir);
+    setCapFile(16, dir);
+    const del = await runProc(process.execPath, [LOCK_JS, 'set-cap', '0'], { env });
+    assert.equal(del.code, 0, del.stderr);
+    assert.match(del.stdout, /deleted/);
+    assert.equal(fs.existsSync(capFile(dir)), false);
+    await withoutEnvCap(() => assert.ok([2, 4].includes(machineCap(dir)), 'back to the computed default'));
+    const again = await runProc(process.execPath, [LOCK_JS, 'set-cap', '0'], { env });
+    assert.equal(again.code, 0, again.stderr);
+  });
+
+  test('CLI: set-cap says when the env variable overrides it', async () => {
+    const dir = tmpLockDir();
+    const r = await runProc(process.execPath, [LOCK_JS, 'set-cap', '16'], { env: cliEnv(dir, 2) });
+    assert.equal(r.code, 0, r.stderr);
+    assert.match(r.stdout, /set to 16; cap 2/);
+    assert.match(r.stderr, /overrides the cap file/);
+  });
+
+  test('CLI: set-cap refuses anything but one integer >= 0', async () => {
+    const dir = tmpLockDir();
+    const env = shellEnv(dir);
+    for (const bad of [[], ['-1'], ['1.5'], ['lots'], ['1', '2'], ['99999999999999999999']]) {
+      const r = await runProc(process.execPath, [LOCK_JS, 'set-cap', ...bad], { env });
+      assert.equal(r.code, 2, `set-cap ${bad.join(' ')}`);
+    }
+    assert.equal(fs.existsSync(capFile(dir)), false);
   });
 });
 

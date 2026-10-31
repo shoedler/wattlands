@@ -1,13 +1,16 @@
 // tools/tests/screenshot.test.mjs (qa): tools/screenshot, tools/screenshot.ps1 and their Node core
 // tools/qa/screenshot.mjs: argument parsing, the refusals (no mock trainer, lock drops, headless,
 // debugger), display detection (xvfb-run, skip), the Godot command through the wrappers, and both
-// shims end to end with --dry-run. No Godot process is started here.
+// shims end to end with --dry-run, and the display sub-lock. No Godot process is started here.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { ENTRY, SKIPPED_MESSAGE, buildCommand, detectDisplay, parseScreenshotArgs } from '../qa/screenshot.mjs';
+import { DISPLAY_CAP, ENTRY, SKIPPED_MESSAGE, buildCommand, detectDisplay, main, parseScreenshotArgs } from '../qa/screenshot.mjs';
+import { LOCK_TIMEOUT_MESSAGE, acquire, readTickets } from '../lib/godot_lock.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
@@ -118,6 +121,130 @@ test('under xvfb-run the command is wrapped with a screen of the capture size', 
   assert.deepEqual(args.slice(0, 4), ['-a', '-s', '-screen 0 1280x720x24', '/bin/bash']);
   assert.equal(env.LIBGL_ALWAYS_SOFTWARE, '1');
 });
+
+// The display sub-lock: main() with Godot replaced by `run`, on a temp lock dir.
+function sink() {
+  let text = '';
+  return { write: (chunk) => ((text += chunk), true), text: () => text };
+}
+
+async function withTempLock(fn) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wattlands-display-lock-'));
+  const saved = {};
+  const set = { WATTLANDS_GODOT_LOCK_DIR: root, WATTLANDS_SCREENSHOT_NO_DISPLAY: '', DISPLAY: process.env.DISPLAY || ':99' };
+  for (const [k, v] of Object.entries(set)) {
+    saved[k] = process.env[k];
+    process.env[k] = v;
+  }
+  try {
+    return await fn(path.join(root, 'display'), root);
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  }
+}
+
+const SCENE = ['--scene=res://a/b.tscn', '--shell=bash'];
+
+test('a run holds one display slot in <lock dir>/display while Godot runs, and gives it back', () =>
+  withTempLock(async (display, root) => {
+    let during = null;
+    const code = await main(SCENE, {
+      stdout: sink(),
+      stderr: sink(),
+      run: async () => {
+        during = { display: readTickets(display).tickets, godot: readTickets(root).tickets };
+        return 7;
+      },
+    });
+    assert.equal(code, 7, "Godot's exit code comes back");
+    assert.equal(during.display.length, 1);
+    assert.equal(during.display[0].held, true);
+    assert.equal(during.display[0].lease, 1);
+    assert.equal(during.display[0].label, 'screenshot');
+    assert.equal(during.godot.length, 0, 'the Godot slot is the wrapper\'s, not this one');
+    assert.equal(readTickets(display).tickets.length, 0, 'released after the run');
+  }));
+
+test('the slot comes back when the run throws', () =>
+  withTempLock(async (display) => {
+    await assert.rejects(main(SCENE, { stdout: sink(), stderr: sink(), run: async () => { throw new Error('boom'); } }), /boom/);
+    assert.equal(readTickets(display).tickets.length, 0);
+  }));
+
+test(`at most ${DISPLAY_CAP} windows: a full display waits, and times out with exit 75`, () =>
+  withTempLock(async (display) => {
+    const holders = [];
+    for (let i = 0; i < DISPLAY_CAP - 1; i++) holders.push(await acquire({ dir: display, cap: DISPLAY_CAP }));
+    let ran = 0;
+    const run = async () => {
+      ran += 1;
+      return 0;
+    };
+    assert.equal(await main(SCENE, { stdout: sink(), stderr: sink(), run }), 0, `window ${DISPLAY_CAP} still fits`);
+    assert.equal(ran, 1);
+    holders.push(await acquire({ dir: display, cap: DISPLAY_CAP }));
+    const stderr = sink();
+    const code = await main([...SCENE, '--lock-timeout=0.3'], { stdout: sink(), stderr, run });
+    assert.equal(code, 75);
+    assert.equal(stderr.text(), `${LOCK_TIMEOUT_MESSAGE}\n`);
+    assert.equal(ran, 1, 'Godot never started');
+    assert.equal(readTickets(display).tickets.length, DISPLAY_CAP, 'the waiter withdrew its ticket');
+    for (const h of holders) h.release();
+  }));
+
+test('a waiter starts as soon as a window closes', () =>
+  withTempLock(async (display) => {
+    const holders = [];
+    for (let i = 0; i < DISPLAY_CAP; i++) holders.push(await acquire({ dir: display, cap: DISPLAY_CAP }));
+    let ran = false;
+    const waiting = main(SCENE, { stdout: sink(), stderr: sink(), run: async () => ((ran = true), 0) });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    assert.equal(ran, false, 'waits while all windows are open');
+    holders.pop().release();
+    assert.equal(await waiting, 0);
+    assert.equal(ran, true);
+    for (const h of holders) h.release();
+  }));
+
+test('the display cap is its own: the machine cap and full Godot slots do not touch it', () =>
+  withTempLock(async (display, root) => {
+    const savedCap = process.env.WATTLANDS_GODOT_LOCK_CAP;
+    process.env.WATTLANDS_GODOT_LOCK_CAP = '1';
+    const godot = await acquire({ dir: root });
+    try {
+      assert.equal(await main(SCENE, { stdout: sink(), stderr: sink(), run: async () => 0 }), 0);
+      const h = [];
+      for (let i = 0; i < DISPLAY_CAP - 1; i++) h.push(await acquire({ dir: display, cap: DISPLAY_CAP, lockTimeoutS: 2 }));
+      assert.equal(await main([...SCENE, '--lock-timeout=5'], { stdout: sink(), stderr: sink(), run: async () => 0 }), 0, 'cap 1 does not apply here');
+      for (const x of h) x.release();
+    } finally {
+      godot.release();
+      if (savedCap === undefined) delete process.env.WATTLANDS_GODOT_LOCK_CAP;
+      else process.env.WATTLANDS_GODOT_LOCK_CAP = savedCap;
+    }
+    assert.deepEqual(fs.readdirSync(root).filter((n) => /^(t|h)-/.test(n)), [], 'no ticket leaks into the Godot lock');
+  }));
+
+test('--dry-run, a skip and a refusal take no slot, even on a full display', () =>
+  withTempLock(async (display) => {
+    const holders = [];
+    for (let i = 0; i < DISPLAY_CAP; i++) holders.push(await acquire({ dir: display, cap: DISPLAY_CAP }));
+    const run = async () => assert.fail('nothing may run');
+    const dry = sink();
+    assert.equal(await main([...SCENE, '--dry-run'], { stdout: dry, stderr: sink(), run }), 0);
+    assert.equal(JSON.parse(dry.text()).mode, 'scene');
+    assert.equal(await main(['--game=g'], { stdout: sink(), stderr: sink(), run }), 2);
+    process.env.WATTLANDS_SCREENSHOT_NO_DISPLAY = '1';
+    const skipped = sink();
+    assert.equal(await main(SCENE, { stdout: skipped, stderr: sink(), run }), 0);
+    assert.ok(skipped.text().includes(SKIPPED_MESSAGE));
+    assert.equal(readTickets(display).tickets.length, DISPLAY_CAP, 'nothing was queued');
+    for (const h of holders) h.release();
+  }));
 
 const BASH = findBash();
 
