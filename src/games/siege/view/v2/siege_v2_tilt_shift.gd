@@ -29,7 +29,3 @@ func _init(art_size: Vector2i = SiegeBakeBank.ART_SIZE, focus: Dictionary = {}) 
 			_mat.set_shader_parameter(k.to_snake_case(), float(focus[k]))
 	_mat.set_shader_parameter("blur_enabled", enabled)
 	material = _mat
-
-
-func shader_material() -> ShaderMaterial:
-	return _mat

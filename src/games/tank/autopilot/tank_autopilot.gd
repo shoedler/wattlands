@@ -31,8 +31,6 @@ extends RefCounted
 ## fallback; the module filters them
 ## through the same ownership and 5-a-second rules as a rider's own.
 
-## An enemy counts as in range while any of it is this far inside the screen's edges.
-const EDGE_MARGIN_PX := 4.0
 ## A target cycle toward a blocking obstacle at most once in this many ticks.
 const RETARGET_TICKS := 20
 ## A shot is asked for at most once in this many ticks (2 a second), so a request the rules decline

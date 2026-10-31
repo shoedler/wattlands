@@ -1,7 +1,6 @@
 class_name TankFiring
 extends RefCounted
-## The tank's firing in the view (docs/games/tank.md v3 "Firing"), ported from the r6b mock
-## (assets/tank/v3/tools_src/tank_r6.gd: recoil(), rock(), jolt(), shake(), blast(), bursts()):
+## The tank's firing in the view (docs/games/tank.md v3 "Firing"), ported from the r6b mock:
 ##   main gun  the blast from the baked sheets (TankRig.blast): on the muzzle the star flash with
 ##             the brake's jets and the fire ball with its fragments ("air"); latched where the shot
 ##             left the muzzle, at its bore angle, and scrolled with the world like TankFx's puffs
@@ -233,7 +232,7 @@ static func _bow_flash(age: float) -> float:
 	return clampf(1.0 - age / FLASH_BOW_S, 0.0, 1.0) if age < FLASH_BOW_S else 0.0
 
 
-## The bow guns' rounds (tank_r6 bursts(), heavier): the flash, the tracer, the case.
+## The bow guns' rounds (heavier than the mock's): the flash, the tracer, the case.
 func _rounds(ci: CanvasItem, v: TankView) -> void:
 	var wins: Array[Rect2] = [
 		v.rig.windows.get("boxwin", Rect2()), v.rig.windows.get("boxwin2", Rect2())

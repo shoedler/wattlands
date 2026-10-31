@@ -1,0 +1,2 @@
+- Added `HudArtControl`, `HudArtDraw`, `PixelFont` and `PixelPainter.line_pixels` to the platform. The HUDs of all four games now share them in place of their own copies, and they look the same.
+- Removed unused HUD drawing helpers from Diesel Domestiques and Workout, and an unused constant from Turbo Reel.

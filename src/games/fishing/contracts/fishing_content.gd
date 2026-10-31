@@ -74,13 +74,6 @@ func parse(sp: Variant, tr: Variant, mp: Variant, co: Variant) -> FishingContent
 	return self
 
 
-## The species def at FishingConst.SPECIES index `sp` (null when unknown).
-func species_at(sp: int) -> FishingSpeciesDef:
-	if sp < 0 or sp >= FishingConst.SPECIES.size():
-		return null
-	return species.get(FishingConst.SPECIES[sp])
-
-
 ## cosmetics.json items of one kind, in unlock order.
 func cosmetics_of(kind: String) -> Array:
 	return (cosmetics.get("items", []) as Array).filter(

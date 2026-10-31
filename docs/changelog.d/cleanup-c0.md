@@ -1,0 +1,2 @@
+- Removed `TankKit` and the v2 kit manifest, which nothing read since Diesel Domestiques v4. The card art is unchanged.
+- Added `tools/qa/verify_move.mjs`, `tools/qa/behaviour_hash.mjs`, `tools/qa/mech_hash.gd` and the scans in `tools/qa/scan/`, which prove that a refactor moved code without changing what it does.

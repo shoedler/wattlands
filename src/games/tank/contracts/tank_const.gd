@@ -14,7 +14,6 @@ const GROUND_Y := 296
 ## The hull's rear edge on screen.
 const REAR_SCREEN_X := 16
 const SCREEN_W := 640
-const SCREEN_H := 360
 ## World scroll: 0.4 x game speed at 20 art px per visual metre, so 8 art px per game metre
 ## (80% FTP on the flat ~ 8.2 m/s ~ 66 px/s).
 const WORLD_SCROLL := 0.4

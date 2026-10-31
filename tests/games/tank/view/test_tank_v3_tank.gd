@@ -351,8 +351,12 @@ func test_little_bases_stand_at_the_depot_and_in_free_roam() -> void:
 
 
 func test_no_people_outside_the_tank() -> void:
-	assert_false(DirAccess.dir_exists_absolute("res://assets/tank/v2/crew20"), "no crewmen sprites")
-	assert_false(TankKit.load_manifest().has("crew"))
+	assert_false(
+		DirAccess.dir_exists_absolute("res://assets/tank/v2"), "no v2 kit, no crewmen sprites"
+	)
+	assert_false(
+		FileAccess.file_exists("res://assets/tank/v2/kit.json"), "no v2 manifest to hold a crew"
+	)
 	assert_false(TankRig.load_manifest().has("crew"))
 	for cls: Dictionary in ProjectSettings.get_global_class_list():
 		assert_ne(str(cls["class"]), "TankCrew", "no crew actors")

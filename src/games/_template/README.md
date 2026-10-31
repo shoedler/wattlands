@@ -24,6 +24,19 @@ ends with `ctx.directives.end_phase` once the rider holds the target after `min_
 phases drift apart, so each rider's phase change shows a `ctx.hud.banner` on that rider's own peer only,
 and `phase_changed` reports the group's phase (the lowest index any rider is in).
 
+## What the platform already has
+
+Use these before writing your own: each replaced a copy in several games.
+
+| You need | Use |
+| --- | --- |
+| A client's rows of moving things between snapshots, and the clock to draw them at | `SnapHistory`, `SnapRenderClock` |
+| Plain-data state types with `to_dict` and `load_dict` | `WlRecord` |
+| A per-peer intent rate limit, and reading an intent's flags and whole numbers | `IntentRateLimiter`, `IntentValue` |
+| A HUD Control drawing in art px in one rect of the `HudSpec`, with its draw helpers and pixel fonts | `HudArtControl`, `HudArtDraw`, `PixelFont` |
+| A pixel line, sprites from text rows, gears, gradients | `PixelPainter` |
+| Your tests' recording sinks and suite helpers | `TestGameFakes`, `TestGameSuite`, `TestGameStaticSuite`, `TestGameSessionSuite` in `tests/lib/` |
+
 ## Files
 
 | File | What |

@@ -1,38 +1,9 @@
-extends GutTest
+extends TestGameSessionSuite
 ## The game through the real platform runtime: GameRegistry and GameSimRunner (sdk-runtime) on
 ## top of the trainer stack. Session-level checks only (the plan checks are lead-owned, in
 ## tests/games/tank/contracts/test_tank_plans.gd). G0 version; the module builder extends it.
 
 const F := preload("res://tests/games/tank/tank_fakes.gd")
-
-var _dirs: Array[String] = []
-## Runners made by a test: cleanup() deletes each one's temp root.
-var _runners: Array[GameSimRunner] = []
-
-
-func before_each() -> void:
-	var d := Paths.make_temp_dir("tank_session")
-	_dirs.append(d)
-	Paths.set_override(d)
-
-
-func after_each() -> void:
-	for r in _runners:
-		if is_instance_valid(r):
-			r.cleanup()
-	_runners.clear()
-	Paths.set_override("")
-	for d in _dirs:
-		GameSimCli.remove_tree(d)
-	_dirs.clear()
-
-
-func _registry() -> WlGameRegistry:
-	var reg := WlGameRegistry.new()
-	reg.scan_on_ready = false
-	add_child_autofree(reg)
-	reg.scan()
-	return reg
 
 
 func test_the_manifest_validates_and_tank_is_listed() -> void:
@@ -44,23 +15,7 @@ func test_the_manifest_validates_and_tank_is_listed() -> void:
 
 
 func _run(flags: Array[String]) -> Dictionary:
-	var report := _dirs[0].path_join("report.json")
-	var args := PackedStringArray(
-		["--game=" + F.GAME_ID, "--report=" + report, "--sim-speed=1000"] + flags
-	)
-	var parsed := GameSimRunner.parse_args(args)
-	assert_false(parsed.has("error"), str(parsed.get("error", "")))
-	parsed["headless"] = true
-	parsed["registry"] = _registry()
-	var runner := GameSimRunner.new()
-	add_child_autofree(runner)
-	_runners.append(runner)
-	assert_eq(runner.setup(parsed), "")
-	var reason := runner.run_to_end()
-	var out := runner.build_report()
-	out["_end"] = reason
-	out["_path"] = runner.write_report()
-	return out
+	return run_session(F.GAME_ID, flags)
 
 
 func test_a_solo_drill_completes_with_one_fit_and_nothing_refused() -> void:

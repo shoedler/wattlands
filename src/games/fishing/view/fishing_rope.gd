@@ -169,7 +169,7 @@ func pixels() -> Array[Vector2i]:
 	var a := _held[0].round()
 	var b := _held[_held.size() - 1].round()
 	if taut:
-		return FishingRig.bresenham(Vector2i(a.round()), Vector2i(b.round()))
+		return PixelPainter.line_pixels(Vector2i(a.round()), Vector2i(b.round()))
 	var q1 := along(_held, 1.0 / 3.0)
 	var q2 := along(_held, 2.0 / 3.0)
 	var c2 := (54.0 * q2 - 27.0 * q1 + 6.0 * a - 15.0 * b) / 18.0
@@ -200,7 +200,7 @@ static func _bridge(out: Array[Vector2i], q: Vector2i) -> void:
 	if absi(q.x - last.x) <= 1 and absi(q.y - last.y) <= 1:
 		out.append(q)
 		return
-	var run := FishingRig.bresenham(last, q)
+	var run := PixelPainter.line_pixels(last, q)
 	run.pop_front()
 	out.append_array(run)
 

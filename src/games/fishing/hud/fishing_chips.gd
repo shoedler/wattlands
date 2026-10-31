@@ -78,7 +78,7 @@ func refresh() -> void:
 
 
 func _draw() -> void:
-	var s := ap()
+	var s := u()
 	var u := float(FishingHudDraw.unit(k()))
 	var pad := 3.0 * u
 	var line_h := float(FishingHudDraw.LINE_ROWS) * u

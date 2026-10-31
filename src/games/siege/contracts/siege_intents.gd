@@ -36,7 +36,7 @@ static func normalize(raw: Variant) -> Dictionary:
 		via = SiegeIds.VIA_ACTION
 	if not SiegeIds.VIAS.has(via):
 		return {}
-	var auto := via == SiegeIds.VIA_AUTO or _truthy(d.get("auto", 0))
+	var auto := via == SiegeIds.VIA_AUTO or IntentValue.truthy(d.get("auto", 0))
 	if auto:
 		via = SiegeIds.VIA_AUTO
 	var out := {"k": k, "to": 0, "item": "", "station": 0, "pad": 0, "auto": auto, "via": via}
@@ -45,7 +45,7 @@ static func normalize(raw: Variant) -> Dictionary:
 			var to: Variant = d.get("to")
 			if to is String and SiegeIds.ROUTE_WORDS.has(to):
 				out["to"] = int(SiegeIds.ROUTE_WORDS[to])
-			elif _whole(to) and SiegeIds.is_station(int(to)):
+			elif IntentValue.whole(to) and SiegeIds.is_station(int(to)):
 				out["to"] = int(to)
 			else:
 				return {}
@@ -56,12 +56,12 @@ static func normalize(raw: Variant) -> Dictionary:
 			out["item"] = item
 			if SiegeIds.STATION_ITEMS.has(item):
 				var st: Variant = d.get("station")
-				if not _whole(st) or not SiegeIds.UPGRADABLE.has(int(st)):
+				if not IntentValue.whole(st) or not SiegeIds.UPGRADABLE.has(int(st)):
 					return {}
 				out["station"] = int(st)
 			if SiegeIds.PAD_ITEMS.has(item):
 				var pad: Variant = d.get("pad")
-				if not _whole(pad) or not SiegeIds.is_pad(int(pad)):
+				if not IntentValue.whole(pad) or not SiegeIds.is_pad(int(pad)):
 					return {}
 				out["pad"] = int(pad)
 		SiegeIds.INTENT_OVERDRIVE:
@@ -98,15 +98,3 @@ static func normalize_all(list: Array) -> Array[Dictionary]:
 		if not n.is_empty():
 			out.append(n)
 	return out
-
-
-static func _whole(v: Variant) -> bool:
-	return (v is int) or (v is float and is_finite(v) and float(v) == floorf(v))
-
-
-static func _truthy(v: Variant) -> bool:
-	if v is bool:
-		return v
-	if v is int or v is float:
-		return float(v) != 0.0
-	return false

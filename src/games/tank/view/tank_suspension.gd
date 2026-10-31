@@ -1,7 +1,6 @@
 class_name TankSuspension
 extends RefCounted
-## Per-wheel suspension on the ground (docs/games/tank.md v3 "Terrain relief"; the r6 mock's
-## method a, tank.gd pose() and gear.gd wheel_centres()): every road wheel rides its own arm and
+## Per-wheel suspension on the ground (docs/games/tank.md v3 "Terrain relief"): every road wheel rides its own arm and
 ## spring and follows the ground under it within its travel (up `up` px, down `droop` px); the hull
 ## (everything above the suspension) rotates as a whole by the least-squares fit of the ground under
 ## the wheels and rides up by half the wheels' mean compression. Pure functions; the view keeps the

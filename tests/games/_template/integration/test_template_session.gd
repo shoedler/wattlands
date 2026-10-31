@@ -1,38 +1,14 @@
-extends GutTest
+extends TestGameSessionSuite
 ## The game through the real platform runtime: GameRegistry, PlanValidator and GameSimRunner
 ## (sdk-runtime) on top of the trainer stack.
 
 const F := preload("res://tests/games/_template/template_fakes.gd")
 
-var _dirs: Array[String] = []
-## Runners made by a test: cleanup() deletes each one's temp root (W3 QT-4).
-var _runners: Array[GameSimRunner] = []
-
-
-func before_each() -> void:
-	var d := Paths.make_temp_dir("template_session")
-	_dirs.append(d)
-	Paths.set_override(d)
-
-
-func after_each() -> void:
-	for r in _runners:
-		if is_instance_valid(r):
-			r.cleanup()
-	_runners.clear()
-	Paths.set_override("")
-	for d in _dirs:
-		GameSimCli.remove_tree(d)
-	_dirs.clear()
-
 
 ## The installed games, plus the template itself (never listed, so the GameRegistry autoload
 ## does not know it; the conformance test loads it the same way).
 func _registry() -> WlGameRegistry:
-	var reg := WlGameRegistry.new()
-	reg.scan_on_ready = false
-	add_child_autofree(reg)
-	reg.scan()
+	var reg := super()
 	if not _is_scaffolded_game():
 		assert_eq(reg.add_game(F.manifest(), F.GAME_DIR, true), "")
 	return reg
@@ -69,23 +45,7 @@ func test_every_plan_passes_the_plan_validator_without_warnings() -> void:
 
 
 func _run(flags: Array[String]) -> Dictionary:
-	var report := _dirs[0].path_join("report.json")
-	var args := PackedStringArray(
-		["--game=" + F.GAME_ID, "--report=" + report, "--sim-speed=1000"] + flags
-	)
-	var parsed := GameSimRunner.parse_args(args)
-	assert_false(parsed.has("error"), str(parsed.get("error", "")))
-	parsed["headless"] = true
-	parsed["registry"] = _registry()
-	var runner := GameSimRunner.new()
-	add_child_autofree(runner)
-	_runners.append(runner)
-	assert_eq(runner.setup(parsed), "")
-	var reason := runner.run_to_end()
-	var out := runner.build_report()
-	out["_end"] = reason
-	out["_path"] = runner.write_report()
-	return out
+	return run_session(F.GAME_ID, flags)
 
 
 func test_a_solo_run_with_a_bot_completes_and_writes_one_fit() -> void:

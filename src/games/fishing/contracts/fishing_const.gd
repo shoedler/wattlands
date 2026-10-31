@@ -145,7 +145,6 @@ const ROAM_FORCED_BITE_S := 90.0  ## a bite is forced after 90 s at depth
 # --- Plan (workouts and the fights) ---------------------------------------------------------
 const RIDE_OUT_S := 300.0
 const RIDE_OUT_PCT := 50.0
-const RIDE_OUT_RAMP_TO := 65.0
 const REEL_PCT_DEFAULT := 60
 const REEL_PCT_MIN := 50
 const REEL_PCT_MAX := 70
@@ -161,12 +160,10 @@ const LAST_CALL_OVERRUN_S := 300.0  ## a workout fight must end <= 5 min after f
 const JUMP_SPACING_S := 115.0  ## jumps = min(rolled, floor(T_nom / 115 s))
 const SELF_CAP_PCT := 110.0  ## nothing above 110 %, ever
 const LONG_PHASE_CAP_PCT := 105.0  ## BRIEF 4.6.1: phases longer than 300 s (open-ended: max_s)
-const BASE_TOP_PCT := 100.0  ## base_60: nothing above 100 %
 
 # --- Pull scheduler -------------------------------------------------------------------------
 const PULL_CHANGE_MIN_S := 8.0
 const PULL_CHANGE_MAX_S := 16.0
-const RAMP_S := 3.0
 const RAMP_STEPS := 6
 const RAMP_STEP_S := 0.5  ## BRIEF 4.5: at most 2 writes a second
 const RAMP_MAX_W_PER_S := 25.0  ## under the governor's 30 W/s slew

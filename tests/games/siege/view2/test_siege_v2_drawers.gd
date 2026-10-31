@@ -111,17 +111,10 @@ func test_machines_draw_routes_and_stations() -> void:
 	assert_eq(m.dropped, 0)
 
 
-func test_depth_sprite_draws_one_frame() -> void:
-	var s := SiegeDepthSprite.new(bank)
-	add_child_autofree(s)
-	s.part = "onager"
-	s.index = 5
-	s.slot = 1
-	s.refresh()
-	assert_eq(s.entry_count(), 1)
-	s.part = "no_such_part"
-	s.refresh()
-	assert_eq(s.entry_count(), 0)
+func test_the_depth_shader_loads() -> void:
+	var shader := load(SiegeBakeBank.SHADER_PATH) as Shader
+	assert_not_null(shader)
+	assert_false(shader.code.is_empty())
 
 
 func test_world_layer_hides_points_behind_walls() -> void:

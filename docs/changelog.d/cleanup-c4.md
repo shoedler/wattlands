@@ -1,0 +1,2 @@
+- Added `SnapHistory` and `SnapRenderClock` to the SDK: the snapshot rows a view interpolates between and the clock it reads them at. Diesel Domestiques, Castellum Rotae, Turbo Reel and Workout now share them instead of four copies.
+- Fixed snapshot interpolation for sessions past about 5000 s, where a new tick could replace the newest entry instead of adding one. No session runs that long today.

@@ -33,7 +33,6 @@ const LINE_ROWS := 11
 ## The space's advance in glyph pixels (the grid cell is 6).
 const SPACE_ADVANCE := 3
 
-static var _font: Font = null
 static var _icons: Dictionary = {}
 
 
@@ -41,16 +40,7 @@ static var _icons: Dictionary = {}
 ## the baseline by the cap height (the Image Font importer hangs a glyph by half its cell, which
 ## draws the caps 3 rows under a Label's box and the descenders out of it).
 static func font() -> Font:
-	if _font == null:
-		_font = load(FONT_PATH) as Font
-		var ff := _font as FontFile
-		if ff != null:
-			for i in ff.get_cache_count():
-				for sz in ff.get_size_cache_list(i):
-					for g in ff.get_glyph_list(i, sz):
-						ff.set_glyph_offset(i, sz, g, Vector2(0, -CAP_ROWS))
-					ff.set_glyph_advance(i, sz.x, 32, Vector2(SPACE_ADVANCE, 0))
-	return _font
+	return PixelFont.hang(FONT_PATH, CAP_ROWS, SPACE_ADVANCE)
 
 
 ## HUD px per glyph (art) pixel at draw scale `s` (3 at 1080p).
@@ -153,11 +143,7 @@ static func frame(c: CanvasItem, r: Rect2, u: float, col: Color) -> void:
 
 ## A pixel pattern ("#" ink, rows top-down), each pixel `u` HUD px, top-left at `pos`.
 static func pixels(c: CanvasItem, rows: Array, pos: Vector2, u: float, col: Color) -> void:
-	for y in rows.size():
-		var row: String = rows[y]
-		for x in row.length():
-			if row[x] == "#":
-				c.draw_rect(Rect2(pos + Vector2(x, y) * u, Vector2(u, u)), col)
+	HudArtDraw.pixels(c, rows, pos, col, u)
 
 
 ## The trophy star.

@@ -227,7 +227,7 @@ func test_backwards_reprimes() -> void:
 	assert_eq(voice.plan(0.51, 90.0, 0.025, {}, true).size(), 1, "and it carries on from there")
 
 
-## The Tank diesel's picture (tank_mech.gd: since = fposmod(ph*720 - 200, 240)) fires when `since` wraps.
+## The Tank diesel's picture (tank_mech_diesel.gd: since = fposmod(ph*720 - 200, 240)) fires when `since` wraps.
 func test_visual_alignment() -> void:
 	const DT := 1.0 / 60.0
 	const RPM := 90.0

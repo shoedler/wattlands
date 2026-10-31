@@ -45,7 +45,6 @@ const FISH: Array[String] = [
 ## tired (fins folded, the tail sagging, no eye highlight). Every frame has the mouth on the
 ## sprite's anchor.
 const FISH_POSES: Array[String] = ["swim1", "swim2", "swim3", "pull15", "pull30", "tired"]
-const SWIM_FRAMES := 3
 const PULL_RUNS: Array[int] = [4, 2]
 ## A fish this long (the oarfish ribbon) pulls at half the slope, so it keeps its body depth,
 ## swims with a wave WAVE_PX long running down its body and sags half as much when tired.

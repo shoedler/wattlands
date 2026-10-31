@@ -152,3 +152,26 @@ static func bands(w: int, h: int, colors: PackedColorArray, band_h: int = 2) -> 
 		for x in img.get_width():
 			img.set_pixel(x, y, col)
 	return img
+
+
+## The pixels of a line from `a` to `b` (Bresenham, both ends included).
+static func line_pixels(a: Vector2i, b: Vector2i) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var dx := absi(b.x - a.x)
+	var dy := -absi(b.y - a.y)
+	var sx := 1 if a.x < b.x else -1
+	var sy := 1 if a.y < b.y else -1
+	var err := dx + dy
+	var p := a
+	for _i in dx - dy + 1:
+		out.append(p)
+		if p == b:
+			break
+		var e2 := 2 * err
+		if e2 >= dy:
+			err += dy
+			p.x += sx
+		if e2 <= dx:
+			err += dx
+			p.y += sy
+	return out

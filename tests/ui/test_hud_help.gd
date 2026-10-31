@@ -165,7 +165,7 @@ func test_pixel_arrows_on_the_art_grid() -> void:
 	assert_almost_eq(fposmod(p.position.y, 3.0), 0.0, 1e-3)
 	var px := h.arrow_pixels(0)
 	assert_has(px, Vector2i(420, 300), "the arrow ends on arrow_to")
-	var line := HudHelp.line_pixels(px[0], Vector2i(420, 300))
+	var line := PixelPainter.line_pixels(px[0], Vector2i(420, 300))
 	for i in range(1, line.size()):
 		var d := line[i] - line[i - 1]
 		assert_true(absi(d.x) <= 1 and absi(d.y) <= 1, "one art pixel at a time")
@@ -174,15 +174,16 @@ func test_pixel_arrows_on_the_art_grid() -> void:
 
 func test_line_pixels() -> void:
 	assert_eq(
-		HudHelp.line_pixels(Vector2i(0, 0), Vector2i(3, 1)),
+		PixelPainter.line_pixels(Vector2i(0, 0), Vector2i(3, 1)),
 		[Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 1), Vector2i(3, 1)] as Array[Vector2i]
 	)
 	assert_eq(
-		HudHelp.line_pixels(Vector2i(2, 2), Vector2i(2, 0)),
+		PixelPainter.line_pixels(Vector2i(2, 2), Vector2i(2, 0)),
 		[Vector2i(2, 2), Vector2i(2, 1), Vector2i(2, 0)] as Array[Vector2i]
 	)
 	assert_eq(
-		HudHelp.line_pixels(Vector2i(5, 5), Vector2i(5, 5)), [Vector2i(5, 5)] as Array[Vector2i]
+		PixelPainter.line_pixels(Vector2i(5, 5), Vector2i(5, 5)),
+		[Vector2i(5, 5)] as Array[Vector2i]
 	)
 
 

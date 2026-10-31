@@ -1,13 +1,8 @@
 extends RefCounted
-## Pixel helpers for the v3 tank mock generator: drawing on the pixel grid, deterministic noise,
-## ordered dither, nearest and RotSprite-style rotation, the v2 stencil font. Image API only.
+## Pixel helpers for the tank generators: drawing on the pixel grid, deterministic noise,
+## ordered dither, RotSprite-style rotation. Image API only.
 
 const BAYER4: Array[int] = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]
-const FONT_TALL := "res://assets/tank/v2/hud/tank_stencil_5x9.png"
-const FONT_TEXT := "res://assets/tank/v2/hud/tank_stencil_5x7.png"
-
-static var _font_tall: Image
-static var _font_text: Image
 
 
 static func blank(w: int, h: int, bg := Color(0, 0, 0, 0)) -> Image:
@@ -78,13 +73,6 @@ static func linef(i: Image, a: Vector2, b: Vector2, c: Color) -> void:
 	line(i, Vector2i(floori(a.x), floori(a.y)), Vector2i(floori(b.x), floori(b.y)), c)
 
 
-static func disc(i: Image, c: Vector2, r: float, col: Color) -> void:
-	for y in range(floori(c.y - r), ceili(c.y + r) + 1):
-		for x in range(floori(c.x - r), ceili(c.x + r) + 1):
-			if Vector2(x + 0.5, y + 0.5).distance_to(c) <= r:
-				put(i, x, y, col)
-
-
 ## Deterministic hash in [0, 1).
 static func h2(x: int, y: int, s: int = 0) -> float:
 	var n := (x * 374761393 + y * 668265263 + s * 1442695041) & 0xFFFFFFFF
@@ -139,43 +127,6 @@ static func poly_bounds(poly: PackedVector2Array) -> Rect2i:
 		mn = mn.min(p)
 		mx = mx.max(p)
 	return Rect2i(floori(mn.x), floori(mn.y), ceili(mx.x) - floori(mn.x) + 1, ceili(mx.y) - floori(mn.y) + 1)
-
-
-## Copy `src` onto `dst` at `at`, opaque pixels only (alpha > 0.5).
-static func blit(dst: Image, src: Image, at: Vector2i) -> void:
-	for y in src.get_height():
-		for x in src.get_width():
-			var c := src.get_pixel(x, y)
-			if c.a > 0.5:
-				put(dst, at.x + x, at.y + y, c)
-
-
-static func scaled(src: Image, k: int) -> Image:
-	var o := src.duplicate() as Image
-	o.resize(src.get_width() * k, src.get_height() * k, Image.INTERPOLATE_NEAREST)
-	return o
-
-
-## Nearest rotation of `src` about `piv_src` by `ang` (radians, y down: positive turns clockwise),
-## drawn onto `dst` with the pivot at `piv_dst` (floats: exactly what a GPU with nearest sampling does).
-static func rotate_nearest(src: Image, ang: float, piv_src: Vector2, dst: Image, piv_dst: Vector2) -> void:
-	var ca := cos(ang)
-	var sa := sin(ang)
-	var bb := _rot_bounds(src, ang, piv_src, piv_dst)
-	var sw := src.get_width()
-	var sh := src.get_height()
-	for y in range(bb.position.y, bb.end.y):
-		for x in range(bb.position.x, bb.end.x):
-			var d := Vector2(x + 0.5, y + 0.5) - piv_dst
-			var qx := ca * d.x + sa * d.y + piv_src.x
-			var qy := -sa * d.x + ca * d.y + piv_src.y
-			var ix := floori(qx)
-			var iy := floori(qy)
-			if ix < 0 or iy < 0 or ix >= sw or iy >= sh:
-				continue
-			var c := src.get_pixel(ix, iy)
-			if c.a > 0.5:
-				put(dst, x, y, c)
 
 
 static func _rot_bounds(src: Image, ang: float, piv_src: Vector2, piv_dst: Vector2) -> Rect2i:
@@ -288,44 +239,6 @@ static func rotate_rotsprite(prep: Dictionary, ang: float, piv_src: Vector2, dst
 			var v := _s8(d4, w4, h4, floori(qx * 8.0), floori(qy * 8.0))
 			if ((v >> 24) & 0xFF) > 127:
 				put(dst, x, y, Color8(v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, 255))
-
-
-# --- Text (the v2 stencil faces) --------------------------------------------------------------
-
-
-static func _glyph_index(ch: String) -> int:
-	var u := ch.unicode_at(0)
-	if u >= 32 and u <= 126:
-		return u - 32
-	var extra := [0x2013, 0xB7, 0x2026, 0xB0]
-	var k := extra.find(u)
-	return 95 + k if k >= 0 else 0
-
-
-## Draws `text` with the tall (9 px cap) or the text (7 px cap) face; returns the advance.
-static func text(i: Image, x: int, y: int, s: String, c: Color, tall := true, shadow := true) -> int:
-	if _font_tall == null:
-		_font_tall = Image.load_from_file(ProjectSettings.globalize_path(FONT_TALL))
-		_font_text = Image.load_from_file(ProjectSettings.globalize_path(FONT_TEXT))
-	var f := _font_tall if tall else _font_text
-	var cell := Vector2i(6, 11) if tall else Vector2i(6, 9)
-	var cx := x
-	for k in s.length():
-		var gi := _glyph_index(s[k])
-		var gx := (gi % 16) * cell.x
-		var gy := (gi / 16) * cell.y
-		for yy in cell.y:
-			for xx in 5:
-				if f.get_pixel(gx + xx, gy + yy).a > 0.5:
-					if shadow:
-						put(i, cx + xx + 1, y + yy + 1, Color(0, 0, 0, 1))
-					put(i, cx + xx, y + yy, c)
-		cx += 6
-	return cx - x
-
-
-static func text_w(s: String) -> int:
-	return s.length() * 6
 
 
 # --- Oriented profiles (barrels, shells, rods), drawn per pixel at any angle ------------------

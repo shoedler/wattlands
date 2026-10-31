@@ -12,7 +12,6 @@ extends FishingHudControl
 ## The rect in art px (FishingHud places it); rows: icons 0-9, the strip below.
 const ART := Rect2i(4, 2, 412, 30)
 const ICON_ROWS := 10
-const CARET_ROWS := 3
 ## The void block at the roam map's right end (art px).
 const EDGE_W := 5.0
 ## The strip's height (art px) under the icons, and the icons' least spacing (centre to centre).
@@ -113,7 +112,7 @@ func refresh() -> void:
 func _draw() -> void:
 	if floor_m.is_empty():
 		return
-	var s := ap()
+	var s := u()
 	var w := float(art_rect.size.x)
 	var top := float(ICON_ROWS + 1)
 	var h := STRIP_ROWS

@@ -89,6 +89,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pick, result } from '../../../../tools/lib/sim_report.mjs';
 
 export const CREWS = [1, 2, 3, 4];
 export const DEFAULT_SEEDS = [1, 2, 3];
@@ -305,19 +306,7 @@ export const planLaps = (report, peer = hostPeer(report)) => planOf(report, peer
 
 // --- result helpers ------------------------------------------------------------------------------------
 
-function result(id, title, problems, extra = '') {
-  const ok = problems.length === 0;
-  return { id, status: ok ? 'PASS' : 'FAIL', summary: `${title}${extra ? `: ${extra}` : ''}`, details: problems };
-}
 const skip = (id, title, why) => ({ id, status: 'SKIP', summary: `${title}: ${why}`, details: [] });
-
-/** [[name, report]] for `names`; `missing` lists the names not present. */
-function pick(reports, names) {
-  const found = [];
-  const missing = [];
-  for (const n of names) (reports[n] ? found : missing).push(n);
-  return { found: found.map((n) => [n, reports[n]]), missing };
-}
 
 /** Sanity of one report against what its name promises: content, players, seed, role. */
 export function argsProblems(name, r, want) {

@@ -23,8 +23,8 @@ extends TankHudCtl
 ##  - A bot's card says BOT; a human may pick that seat (the picker counts it as free).
 ##  - Every tag on a card (ERG / SIM, the rate, the rack pips, the lock) sits on a solid plate with a
 ##    1 px rim, so the live machine behind never runs into its text.
-## `phase` is the crank's revolutions, the integral of the rider's cadence (rpm / 60 per second, on
-## the wall clock so a client's 10 Hz snapshots still turn it smoothly); `power` is
+## `phase` is the crank's revolutions, a CrankClock per card (on the wall clock so a client's 10 Hz
+## snapshots still turn it smoothly); `power` is
 ## TankHudModel.power_ratio. The local rider's watts and cadence come from their telemetry.
 ##
 ## The cards dock left next to my numbers and run right up to the clear bottom-right corner on the
@@ -65,7 +65,7 @@ var me: Dictionary = {}
 var _img: Dictionary = {}
 var _tex: Dictionary = {}
 var _rest: Dictionary = {}
-var _phase: Dictionary = {}
+var _clocks: Dictionary = {}
 var _wall: float = 0.0
 
 
@@ -73,7 +73,9 @@ func tick(delta: float) -> void:
 	_wall += delta
 	for c: Dictionary in cards:
 		var key := str(c["engine"])
-		_phase[key] = float(_phase.get(key, 0.0)) + float(c["cad"]) / 60.0 * delta
+		if not _clocks.has(key):
+			_clocks[key] = CrankClock.new()
+		(_clocks[key] as CrankClock).advance(float(c["cad"]), delta)
 
 
 func refresh() -> void:
@@ -83,7 +85,7 @@ func refresh() -> void:
 	var s := st()
 	cards = TankHudModel.seat_cards(s, local_peer(), local)
 	for c: Dictionary in cards:
-		c["phase"] = float(_phase.get(str(c["engine"]), 0.0))
+		c["phase"] = phase_of(str(c["engine"]))
 		if bool(c["empty"]):
 			c["name"] = ""
 			_paint_rest(str(c["engine"]))
@@ -138,7 +140,8 @@ func mode_text(mode_to: String, wait_s: float) -> String:
 
 ## The crank revolutions of `engine`'s card so far.
 func phase_of(engine: String) -> float:
-	return float(_phase.get(engine, 0.0))
+	var clock: CrankClock = _clocks.get(engine)
+	return clock.revs if clock != null else 0.0
 
 
 ## The machine window's texture of `engine` (the live one while manned, the cold one at rest while

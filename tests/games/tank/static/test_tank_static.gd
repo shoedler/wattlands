@@ -1,4 +1,4 @@
-extends GutTest
+extends TestGameStaticSuite
 ## Brief 4 static tests for Diesel Domestiques, lexer-based (comments are cut out and string
 ## contents reduced to quotes first, so a doc comment that mentions "Time." or a toast key never
 ## trips them). They extend the lead's test_tank_package.gd scans instead of repeating them:
@@ -12,26 +12,6 @@ extends GutTest
 ##   - the scanner itself is proven on bad snippets, so a green run cannot be a dead regex.
 
 const GAME_DIR := "res://src/games/tank"
-const TRAINER_NAMES: Array[String] = [
-	"TrainerController",
-	"SafetyGovernor",
-	"FtmsClient",
-	"write_control",
-	"set_target_power",
-	"set_simulation",
-	"set_resistance",
-	"write_characteristic",
-	"request_stop",
-	"TrainerService",
-	"LocalRider",
-	"GameHost",
-	"MockTrainer",
-	"TrainerDevice",
-	"FtmsTrainer",
-	"DirectiveRouter",
-	"HudRouter",
-	"governor_profile",
-]
 ## Folders the brief names for the determinism rule, and the rest of what runs on the host.
 const BRIEF_DIRS: Array[String] = ["rules", "effort", "combat"]
 const HOST_DIRS: Array[String] = [
@@ -51,145 +31,30 @@ const DIFFICULTY := (
 )
 ## The folders whose choices become plans, directives or seat moves. effort/ holds TankSeatPlan too.
 const NO_DIFFICULTY_DIRS: Array[String] = ["effort", "autopilot"]
-const CLOCKS := (
-	"\\bTime\\b|\\bOS\\s*\\.\\s*(get_ticks|get_unix_time|get_system_time|delay_)"
-	+ "|\\bEngine\\s*\\.\\s*get_(frames|process_frames|physics_frames)"
-)
-const GLOBAL_RNG := (
-	"(?<![\\w.])(randi|randf|randi_range|randf_range|randfn|randomize|rand_from_seed|seed)\\s*\\("
-	+ "|RandomNumberGenerator\\s*\\.\\s*new\\s*\\(|\\.\\s*(shuffle|pick_random)\\s*\\("
-)
 const WORLD := (
 	"\\bget_tree\\s*\\(|\\bget_node\\s*\\(|\\bget_node_or_null\\s*\\(|\\bEngine\\s*\\.|\\bInput\\s*\\."
 	+ "|\\bDisplayServer\\b|\\bFileAccess\\b|\\bDirAccess\\b|\\bOS\\s*\\.|\\bResourceLoader\\b"
 	+ "|\\bTankView\\b|\\bTankHud\\b|\\bTankGame\\b|\\bTankAudio\\b"
 )
 
-
-## {"code": the text with comments removed and every string reduced to its quotes,
-## "strings": the contents of every string literal}.
-static func lex(text: String) -> Dictionary:
-	var code := PackedStringArray()
-	var strings: Array[String] = []
-	var n := text.length()
-	var i := 0
-	while i < n:
-		var c := text[i]
-		if c == "#":
-			while i < n and text[i] != "\n":
-				i += 1
-			continue
-		if c == '"' or c == "'":
-			var triple := text.substr(i, 3) == c.repeat(3)
-			var close := c.repeat(3) if triple else c
-			var raw := i > 0 and text[i - 1] == "r"
-			i += 3 if triple else 1
-			var start := i
-			while i < n:
-				if text[i] == "\\" and not raw:
-					i += 2
-					continue
-				if text.substr(i, close.length()) == close:
-					break
-				if text[i] == "\n" and not triple:
-					break
-				i += 1
-			strings.append(text.substr(start, i - start))
-			code.append('""')
-			i += close.length()
-			continue
-		code.append(c)
-		i += 1
-	return {"code": "".join(code), "strings": strings}
-
-
-static func files(dir: String, exts: Array) -> Array[String]:
-	var out: Array[String] = []
-	var da := DirAccess.open(dir)
-	if da == null:
-		return out
-	for f in da.get_files():
-		if exts.has(f.get_extension()):
-			out.append(dir.path_join(f))
-	for sub in da.get_directories():
-		out.append_array(files(dir.path_join(sub), exts))
-	return out
-
-
-static func read(path: String) -> String:
-	return FileAccess.get_file_as_string(path)
-
-
-## The first name of `names` that `code` holds as a whole identifier, or "".
-static func first_name(code: String, names: Array[String]) -> String:
-	for name in names:
-		var re := RegEx.create_from_string("(?<![A-Za-z0-9_])" + name + "(?![A-Za-z0-9_])")
-		if re.search(code) != null:
-			return name
-	return ""
-
-
-## What `pattern` finds in `code` ("" when nothing).
-static func hit(code: String, pattern: String) -> String:
-	var m := RegEx.create_from_string(pattern).search(code)
-	return m.get_string() if m != null else ""
-
-
 # --- the scanner itself ------------------------------------------------------------------------------
 
 
 func test_lexer_drops_comments_and_string_contents_but_keeps_code() -> void:
-	var src := 'var a := 1 # Time.get_ticks_msec()\nvar s := "set_target_power #x"\nrandi()\n'
-	var lexed := lex(src)
-	var code: String = lexed["code"]
-	assert_false(code.contains("Time"), "comment cut")
-	assert_false(code.contains("set_target_power"), "string content cut")
-	assert_true(code.contains("randi()"), "code kept")
-	assert_eq(lexed["strings"], ["set_target_power #x"])
-	var triple := lex('var d := """Time.now\n# still text"""\nvar e := 2')
-	assert_false((triple["code"] as String).contains("Time"))
-	assert_true((triple["code"] as String).contains("var e := 2"))
-	var esc := lex('var q := "a \\" Time. b"\nrandf()')
-	assert_false((esc["code"] as String).contains("Time"), "an escaped quote does not end it")
-	assert_true((esc["code"] as String).contains("randf()"))
+	check_lexer()
 
 
 func test_the_determinism_scan_catches_every_forbidden_form() -> void:
-	var bad := [
-		"var t := Time.get_ticks_msec()",
-		"var t := OS.get_ticks_usec()",
-		"var t := OS.get_unix_time()",
-		"var r := RandomNumberGenerator.new()",
-		"var r := randi() % 6",
-		"var r := randf_range(0.0, 1.0)",
-		"randomize()",
-		"arr.shuffle()",
-		"var x = arr.pick_random()",
-		"var f := Engine.get_frames_drawn()",
-	]
-	for line: String in bad:
-		var code: String = lex(line)["code"]
-		assert_ne(hit(code, CLOCKS) + hit(code, GLOBAL_RNG), "", line)
-	var fine := [
-		"var r := state.rng.randf()",
-		"var r := ctx.rng.randi_range(1, 3)",
-		"var v := rng.randf_range(a, b)",
-		"var t := state.t",
-		"# Time.get_ticks_msec() in a comment",
-		'var k := "Time.now"',
-		"var d := runtime_randi_like(3)",
-		"var s := state.seed_value",
-	]
-	for line: String in fine:
-		var code: String = lex(line)["code"]
-		assert_eq(hit(code, CLOCKS) + hit(code, GLOBAL_RNG), "", line)
+	check_determinism_scan()
 
 
 func test_the_trainer_scan_catches_names_in_code_and_as_exact_strings() -> void:
-	var lexed := lex('governor.set_target_power(100)\ncall("write_control", 1)\n# FtmsClient\n"x"')
+	var lexed := TestGdLex.lex(
+		'governor.set_target_power(100)\ncall("write_control", 1)\n# FtmsClient\n"x"'
+	)
 	assert_eq(first_name(lexed["code"], TRAINER_NAMES), "set_target_power")
 	assert_true((lexed["strings"] as Array).has("write_control"))
-	var clean := lex('# TrainerController is not allowed here\nvar s := "SafetyGovernor"')
+	var clean := TestGdLex.lex('# TrainerController is not allowed here\nvar s := "SafetyGovernor"')
 	assert_eq(first_name(clean["code"], TRAINER_NAMES), "")
 	assert_eq(first_name("var set_target_power_w := 1", TRAINER_NAMES), "", "whole identifiers")
 	for n: String in [
@@ -213,7 +78,7 @@ func test_the_world_scan_catches_tree_input_and_view_references() -> void:
 
 func test_the_directives_scan_finds_member_calls() -> void:
 	var re := RegEx.create_from_string("directives\\s*\\.\\s*(\\w+)")
-	var src := lex(
+	var src := TestGdLex.lex(
 		"ctx.directives.request(p, d)\nctx.directives . end_phase(p)\n# directives.replan()\n"
 	)
 	var seen: Array[String] = []
@@ -229,7 +94,7 @@ func test_tank_never_names_the_trainer_stack_in_code_or_strings() -> void:
 	var scanned := 0
 	for path in files(GAME_DIR, ["gd"]):
 		scanned += 1
-		var lexed := lex(read(path))
+		var lexed := TestGdLex.lex(read(path))
 		var found := first_name(lexed["code"], TRAINER_NAMES)
 		assert_eq(found, "", "%s names %s" % [path, found])
 		for s: String in lexed["strings"]:
@@ -255,7 +120,7 @@ func test_only_the_effort_director_uses_ctx_directives_and_only_the_four_calls()
 	var any := RegEx.create_from_string("(?<![A-Za-z0-9_])directives(?![A-Za-z0-9_])")
 	var seen := {}
 	for path in files(GAME_DIR, ["gd"]):
-		var code: String = lex(read(path))["code"]
+		var code: String = TestGdLex.lex(read(path))["code"]
 		var in_effort := path.begins_with(GAME_DIR + "/effort/")
 		if not in_effort:
 			assert_null(any.search(code), "%s uses `directives` outside effort/" % path)
@@ -275,7 +140,7 @@ func test_effort_rules_and_combat_use_no_wall_clock_and_no_global_randomness() -
 	for dir in BRIEF_DIRS:
 		for path in files(GAME_DIR.path_join(dir), ["gd"]):
 			scanned += 1
-			var code: String = lex(read(path))["code"]
+			var code: String = TestGdLex.lex(read(path))["code"]
 			assert_eq(hit(code, CLOCKS), "", "%s reads a clock" % path)
 			assert_eq(hit(code, GLOBAL_RNG), "", "%s uses global randomness" % path)
 	assert_gte(scanned, 2, "effort/ and rules/ (and combat/) are scanned")
@@ -286,11 +151,11 @@ func test_every_host_side_folder_is_deterministic_too() -> void:
 	for dir in HOST_DIRS:
 		for path in files(GAME_DIR.path_join(dir), ["gd"]):
 			scanned += 1
-			var code: String = lex(read(path))["code"]
+			var code: String = TestGdLex.lex(read(path))["code"]
 			assert_eq(hit(code, CLOCKS), "", "%s reads a clock" % path)
 			assert_eq(hit(code, GLOBAL_RNG), "", "%s uses global randomness" % path)
 	assert_gte(scanned, 25, "contracts, rules, effort, combat, net, autopilot and content")
-	var module := lex(read(GAME_DIR.path_join("tank_game.gd")))["code"] as String
+	var module := TestGdLex.lex(read(GAME_DIR.path_join("tank_game.gd")))["code"] as String
 	assert_eq(hit(module, GLOBAL_RNG), "", "the module uses no global randomness")
 	assert_eq(hit(module, CLOCKS), "", "the module reads no clock")
 
@@ -301,7 +166,7 @@ func test_every_random_draw_in_the_rules_goes_through_an_rng_object() -> void:
 	)
 	for dir in ["rules", "combat", "effort", "autopilot"]:
 		for path in files(GAME_DIR.path_join(dir), ["gd"]):
-			for m in draw.search_all(lex(read(path))["code"]):
+			for m in draw.search_all(TestGdLex.lex(read(path))["code"]):
 				var recv := m.get_string(1)
 				assert_true(recv.ends_with("rng"), "%s: %s.%s" % [path, recv, m.get_string(2)])
 	assert_true(true)
@@ -310,7 +175,7 @@ func test_every_random_draw_in_the_rules_goes_through_an_rng_object() -> void:
 func test_rules_and_combat_touch_no_scene_tree_input_engine_files_or_presentation() -> void:
 	for dir in PURE_DIRS:
 		for path in files(GAME_DIR.path_join(dir), ["gd"]):
-			var found := hit(lex(read(path))["code"], WORLD)
+			var found := hit(TestGdLex.lex(read(path))["code"], WORLD)
 			assert_eq(found, "", "%s: %s" % [path, found])
 
 
@@ -320,7 +185,7 @@ func test_rules_and_combat_scripts_are_plain_data_classes() -> void:
 	for dir in ["rules", "combat"]:
 		for path in files(GAME_DIR.path_join(dir), ["gd"]):
 			scanned += 1
-			var m := ext.search(lex(read(path))["code"])
+			var m := ext.search(TestGdLex.lex(read(path))["code"])
 			assert_not_null(m, "%s has no extends line" % path)
 			if m != null:
 				assert_true(
@@ -334,7 +199,7 @@ func test_class_names_are_unique_and_carry_the_tank_prefix() -> void:
 	var re := RegEx.create_from_string("(?m)^class_name\\s+(\\w+)")
 	var seen := {}
 	for path in files(GAME_DIR, ["gd"]):
-		var m := re.search(lex(read(path))["code"])
+		var m := re.search(TestGdLex.lex(read(path))["code"])
 		if m == null:
 			continue
 		var name := m.get_string(1)
