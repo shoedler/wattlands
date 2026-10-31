@@ -271,7 +271,7 @@
          "db_by": [{"param": "power", "points": [[0, -8], [1.3, 0]]}], "pitch_table": [0, -0.012, 0.008, -0.005]},
         {"at": [0.31, 0.81], "sound": "bb_creak", "db": -2, "lead_only": true, "priority": 4,
          "when": {"param": "power", "min": 1.05},
-         "db_by": [{"param": "power", "points": [[1.05, -8], [1.5, 0]]}]}
+         "db_by": [{"param": "power", "points": [[1.05, -8], [1.5, 0]]}], "pitch_table": [0, -0.015, 0.01, 0.02, -0.01]}
       ],
       "loops": [
         {"sound": "chain_hum", "db": -7, "min_rpm": 8, "slew_s": 0.25,
@@ -285,7 +285,7 @@
     "peer_bike": {
       "bus": "Machines", "priority": 3,
       "events": [
-        {"at": [0.0], "sound": "peer_tick", "db": 0, "priority": 3,
+        {"at": [0.0], "sound": "peer_tick", "db": -0.5, "priority": 3,
          "db_by": [{"param": "power", "points": [[0, -7], [1.3, 0]]}], "pitch_table": [0, 0.02, -0.015, 0.01, -0.025]}
       ]
     },
@@ -302,18 +302,18 @@
       "events": [
         {"at": [0.0], "sound": "breath", "db": -5, "lead_only": true, "priority": 3,
          "when": {"param": "power", "min": 1.0},
-         "db_by": [{"param": "power", "points": [[1.0, -8], [1.45, 0]]}]}
+         "db_by": [{"param": "power", "points": [[1.0, -8], [1.45, 0]]}], "pitch_table": [0, -0.02, 0.012, 0.025, -0.015]}
       ]
     },
     "crowd": {
       "bus": "Sfx", "priority": 4,
       "events": [
-        {"at": [0.0], "sound": "crowd_clap", "db": -6, "lead_only": true, "priority": 4,
+        {"at": [0.0], "sound": "crowd_clap", "db": -4, "lead_only": true, "priority": 4,
          "when": {"param": "crowd", "min": 0.2},
-         "db_by": [{"param": "crowd", "points": [[0.2, -14], [1, 0]]}]},
+         "db_by": [{"param": "crowd", "points": [[0.2, -14], [1, 0]]}], "pitch_table": [0, 0.02, -0.015, 0.012, -0.022]},
         {"at": [0.5], "sound": "cowbell", "db": -15, "lead_only": true, "priority": 4,
          "when": {"param": "crowd", "min": 0.55},
-         "db_by": [{"param": "crowd", "points": [[0.55, -8], [1, 0]]}]}
+         "db_by": [{"param": "crowd", "points": [[0.55, -8], [1, 0]]}], "pitch_table": [0, 0.008, -0.006, 0.004, -0.01]}
       ]
     }
   },
@@ -335,29 +335,31 @@
        "db_by": [{"param": "speed", "points": [[2, -40], [6, -16], [10, -6], [15, 0]]}, {"param": "gust", "points": [[0, -8], [1, 2]]}]}
     ]},
     "crowd_loop": {"bus": "Sfx", "layers": [
-      {"sound": "crowd_loop", "db": -6,
+      {"sound": "crowd_loop", "db": -8,
        "when": {"param": "crowd", "min": 0.02},
        "db_by": [{"param": "crowd", "points": [[0.02, -36], [0.4, -12], [1, 0]]}]}
     ]}
   },
   "beds": {
     "dawn_road": {
+      "spot_min_gap_s": 2.2,
       "layers": [
         {"sound": "wind_grass_lo", "db": -12.5,
          "db_by": [{"param": "gust", "points": [[0, -5], [1, 0]]}, {"param": "speed", "points": [[0, -4], [12, 0]]}]},
         {"sound": "wind_grass_hi", "db": -15,
          "db_by": [{"param": "gust", "points": [[0, -10], [1, 0]]}, {"param": "speed", "points": [[0, -8], [12, 0]]}]},
         {"sound": "birds_dawn", "db": -25,
-         "db_by": [{"param": "day", "points": [[0, 0], [0.3, -1], [0.45, -6], [0.62, -60]]}]},
-        {"sound": "birds_day", "db": -22,
-         "db_by": [{"param": "day", "points": [[0.15, -60], [0.3, -14], [0.45, -4], [0.55, 0], [1, 0]]}]}
+         "db_by": [{"param": "day", "points": [[0, 0], [0.3, -0.5], [0.45, -3], [0.62, -60]]}]},
+        {"sound": "birds_day", "db": -25,
+         "db_by": [{"param": "day", "points": [[0.15, -60], [0.3, -12], [0.45, -1.5], [0.55, 0], [1, 0]]}]}
       ],
       "spots": [
-        {"sound": "chirrup", "gap_s": [1.6, 12], "db": [-34, -27], "pitch": [0.88, 1.14], "burst": [1, 3], "burst_gap_s": 0.27},
-        {"sound": "wood_call", "gap_s": [1.9, 30], "db": [-31, -25], "pitch": [0.92, 1.1], "burst": [1, 2], "burst_gap_s": 0.5},
-        {"sound": "lark", "gap_s": [13, 29], "db": [-29, -24], "pitch": [0.95, 1.05], "when": {"param": "day", "min": 0.04, "max": 0.85}},
+        {"sound": "chirrup", "gap_s": [1.2, 8], "db": [-34, -27], "pitch": [0.88, 1.14], "burst": [1, 3], "burst_gap_s": 0.27, "when": {"param": "day", "max": 0.4}},
+        {"sound": "chirrup", "gap_s": [5, 24], "db": [-36, -29], "pitch": [0.88, 1.14], "burst": [1, 2], "burst_gap_s": 0.27, "when": {"param": "day", "min": 0.4}},
+        {"sound": "wood_call", "gap_s": [1.9, 32], "db": [-31, -25], "pitch": [0.92, 1.1], "burst": [1, 2], "burst_gap_s": 0.5, "when": {"param": "day", "min": 0.08}},
+        {"sound": "lark", "gap_s": [13, 29], "db": [-29, -24], "pitch": [0.95, 1.05], "when": {"param": "day", "min": 0.04, "max": 0.6}},
         {"sound": "rooster", "gap_s": [30, 120], "db": [-29, -25], "pitch": [0.96, 1.03], "when": {"param": "day", "max": 0.12}},
-        {"sound": "dog_far", "gap_s": [24, 70], "db": [-13, -9], "pitch": [0.94, 1.06], "burst": [1, 2], "burst_gap_s": 0.7},
+        {"sound": "dog_far", "gap_s": [24, 70], "db": [-11, -7], "pitch": [0.94, 1.06], "burst": [1, 2], "burst_gap_s": 0.7, "db_by": [{"param": "speed", "points": [[5, -4], [8.5, 0], [13, 3]]}]},
         {"sound": "tractor_far", "gap_s": [19, 41], "db": [-24, -19], "pitch": [0.94, 1.06], "when": {"param": "tractor", "min": 0.5}},
         {"sound": "church_bell_far", "gap_s": [90, 200], "db": [-18, -14], "pitch": 1.0}
       ]

@@ -92,6 +92,21 @@ test('fatigue: nothing locked above 2 kHz within 16 dB of the main stroke, by en
   }
 });
 
+test('fatigue, read as the whole group: seven ticks a revolution, once the riders have scattered, against your two presses', () => {
+  const press = bikeEvent('pedal_press');
+  const peer = doc.machines.peer_bike.events[0];
+  for (const power of [0.5, 0.65, 1.0]) {
+    const at = { power };
+    const levelOf = (e) => (e.db ?? 0) + (e.db_by ?? []).reduce((a, c) => a + curveEval(c, at), 0);
+    const n = 7;
+    const trim = doc.mix.other_db + doc.mix.other_doubling_db * Math.log2(n / 2);
+    const perRev = 10 * Math.log10(n * peer.at.length);
+    const group = energy(peer.sound, 2000, 1e6) + levelOf(peer) + trim + perRev;
+    const main = energy('pedal_press', 0, 1e6) + levelOf(press) + 10 * Math.log10(press.at.length);
+    assert.ok(group <= main - 16, `seven at ${power}: ${(group - main).toFixed(1)} dB`);
+  }
+});
+
 function foldedRange(x, t0, t1, revs0, rpm, bins = 24) {
   const sum = new Float64Array(bins);
   const n = new Float64Array(bins);
@@ -263,6 +278,40 @@ test('eight riders sound unlike one, and your own rhythm holds through them', ()
 
 // --- what the critic could hear and the scorecard could not ----------------------------
 
+// The rhythm in the whole mix, `s` long and read from `from`: the riders of a real ride start in one clump and scatter within a minute or two.
+function rhythmAmong(scales, s, from) {
+  const power = 0.65;
+  const speed = 8.5;
+  const scene = {
+    segments: [{ rpm: 90, s, params: { power, speed, day: 0.3, coast: 0, crowd: 0 } }],
+    bed: 'dawn_road',
+    bed_params: { gust: 0.5, tractor: 0 },
+    seed: 3,
+    loops: [{ id: 'tyre_hum', t0: 0, t1: s, params: { speed, road: 0.5 } }, { id: 'wind_rush', t0: 0, t1: s, params: { speed, gust: 0.5 } }],
+  };
+  const rest = mixdown(bank, simulate(bank, { ...scene, machines: [{ id: 'lead', machine: 'bike', lead: true }] }), { tail: 0 }).sum[0];
+  const silent = { id: 'lead', machine: 'bike', lead: true, strokes: false, loops: false };
+  const others = scales.map((rpm_scale, i) => ({ id: `r${i}`, machine: 'peer_bike', lead: false, rpm_scale, params: { power } }));
+  // Every rider in the scene is one bot, with the bank's other_db and the doubling for its count.
+  const group = mixdown(bank, simulate(bank, { ...scene, machines: [silent, ...others] }), { tail: 0 }).stems.Machines[0];
+  const both = rest.map((v, i) => v + group[i]);
+  return [[300, 1500], [1500, 4000]].map(([lo, hi]) => ({ lo, hi, alone: revPeak(rest, 90, lo, hi, from), among: revPeak(both, 90, lo, hi, from) }));
+}
+
+test('your own rhythm holds in a small party too: 1, 2 and 3 others cost at most 2 dB', () => {
+  for (const scales of [[0.993], [0.993, 1.004], [0.993, 1.004, 0.998]]) {
+    for (const r of rhythmAmong(scales, 60, 3)) {
+      assert.ok(r.among >= r.alone - 2, `${scales.length} others, ${r.lo}-${r.hi} Hz: ${r.alone.toFixed(1)} dB alone, ${r.among.toFixed(1)} among them`);
+    }
+  }
+});
+
+test('your own rhythm holds once seven riders have scattered: at most 1 dB after 90 s', () => {
+  for (const r of rhythmAmong(BOTS, 180, 90)) {
+    assert.ok(r.among >= r.alone - 1, `${r.lo}-${r.hi} Hz: ${r.alone.toFixed(1)} dB alone, ${r.among.toFixed(1)} among them`);
+  }
+});
+
 test('no three-beat loop: the strokes come round only after 70 revolutions', () => {
   const tick = bikeEvent('chain_tick');
   const press = bikeEvent('pedal_press');
@@ -334,6 +383,58 @@ test('no 2:3 against the tick: the press has no three-stroke accent', () => {
   const lag = Math.round((1.5 * 60 * MIX_RATE) / 90);
   const wave = pearson(x.subarray(MIX_RATE, x.length - lag), x.subarray(MIX_RATE + lag, x.length));
   assert.ok(wave < 0.9, `waveform at 1.5 revolutions: ${wave.toFixed(2)}, was 0.97`);
+});
+
+test('no stroke comes round on three: every event with three variants has a pitch table to break them', () => {
+  const scene = (machine, params, rpm) => ({ segments: [{ rpm, s: 40, params }], machines: [{ id: 'lead', machine, lead: true, loops: false }] });
+  const cases = [
+    ['bb_creak', scene('bike', { power: 1.3 }, 110)],
+    ['breath', scene('breath', { power: 1.3 }, 55)],
+    ['crowd_clap', scene('crowd', { crowd: 1 }, 110)],
+    ['cowbell', scene('crowd', { crowd: 1 }, 110)],
+  ];
+  for (const [sound, sc] of cases) {
+    assert.ok(bank.variants(sound) % 3 === 0, `${sound} has ${bank.variants(sound)} variants`);
+    const strokes = simulate(bank, sc).voices.filter((v) => v.sound === sound);
+    assert.ok(strokes.length > 18, `${sound}: ${strokes.length} strokes`);
+    const same = (a, b) => a.variant === b.variant && Math.abs(a.pitch - b.pitch) < 1e-9;
+    const atThree = strokes.slice(3).filter((v, i) => same(v, strokes[i])).length;
+    assert.equal(atThree, 0, `${sound}: ${atThree} strokes repeat the one three before`);
+  }
+});
+
+function ridePlan(segments = 50, each = 30) {
+  return Array.from({ length: segments }, (_, i) => ({ rpm: 90, s: each, params: { power: 0.65, speed: 8.5, day: (i + 0.5) / segments, coast: 0, crowd: 0, gust: 0.5, tractor: 0 } }));
+}
+
+test('the ride has an arc you can hear: a dawn chorus that thins as the day comes up, and never a silence', () => {
+  const birds = new Set(['chirrup', 'wood_call', 'lark', 'rooster']);
+  const total = 1500;
+  for (const seed of [3, 7, 11]) {
+    const sim = simulate(bank, { segments: ridePlan(), machines: [{ id: 'lead', machine: 'bike', lead: true, strokes: false, loops: false }], bed: 'dawn_road', bed_params: {}, seed, loops: [] });
+    const spots = sim.events.filter((e) => e.kind === 'spot').sort((a, b) => a.t - b.t);
+    const fifths = [0, 0, 0, 0, 0];
+    for (const e of spots) if (birds.has(e.sound)) fifths[Math.min(4, Math.floor((e.t / total) * 5))]++;
+    assert.ok(Math.min(fifths[0], fifths[1]) >= 2 * Math.max(fifths[3], fifths[4]), `seed ${seed}: birds by fifth of the ride ${fifths}`);
+    const gaps = spots.slice(1).map((e, i) => e.t - spots[i].t);
+    assert.ok(Math.max(...gaps) <= 30, `seed ${seed}: ${Math.max(...gaps).toFixed(1)} s with no spot`);
+  }
+});
+
+test('no two details step on each other, on any seed: the bed spaces them', () => {
+  const spots = doc.beds.dawn_road.spots;
+  const min = doc.beds.dawn_road.spot_min_gap_s;
+  assert.ok(min >= 2, `${min}`);
+  const texture = new Set(spots.filter((x) => [x.gap_s].flat()[0] < min).map((x) => x.sound));
+  for (let seed = 1; seed <= 12; seed++) {
+    const sim = simulate(bank, { segments: ridePlan(10, 30), machines: [], bed: 'dawn_road', bed_params: {}, seed });
+    const details = sim.events.filter((e) => e.kind === 'spot' && !texture.has(e.sound)).sort((a, b) => a.t - b.t);
+    assert.ok(details.length > 5, `seed ${seed}`);
+    for (let i = 1; i < details.length; i++) {
+      if (details[i].sound === details[i - 1].sound) continue;
+      assert.ok(details[i].t - details[i - 1].t >= 2, `seed ${seed}: ${details[i - 1].sound} and ${details[i].sound} at ${details[i].t.toFixed(1)}`);
+    }
+  }
 });
 
 test('the birds have no hole between dawn and day', () => {
@@ -633,6 +734,48 @@ test('the far stratum reads at endurance: a dog and a bell now and then', () => 
   // On this measure, the median play's best band, the levels that were masked read -10.9 and +3.6.
   assert.ok(dog >= -6, `dog ${dog.toFixed(1)} dB`);
   assert.ok(bell >= 5, `bell ${bell.toFixed(1)} dB`);
+});
+
+test('the far dog reads alike at every speed: near on a slow road would be as wrong as lost on a fast one', () => {
+  const near = JSON.parse(JSON.stringify(doc));
+  for (const x of near.beds.dawn_road.spots) {
+    if (x.sound === 'dog_far') x.gap_s = [6, 9];
+  }
+  const b = new BankAudio(near, DIR);
+  const read = (speed, rpm, power) => {
+    const sim = simulate(b, {
+      segments: [{ rpm, s: 90, params: { power, speed, day: 0.3, coast: 0, crowd: 0, gust: 0.5, tractor: 0 } }],
+      machines: [{ id: 'lead', machine: 'bike', lead: true }],
+      bed: 'dawn_road',
+      bed_params: {},
+      seed: 3,
+      loops: [{ id: 'tyre_hum', t0: 0, t1: 90, params: { speed, road: 0.5 } }, { id: 'wind_rush', t0: 0, t1: 90, params: { speed, gust: 0.5 } }],
+    });
+    return bestSnr(b, sim, mixdown(b, sim, { tail: 0 }), 'dog_far');
+  };
+  const all = [read(5.5, 60, 0.5), read(8.5, 90, 0.65), read(13, 110, 1.05)];
+  assert.ok(Math.max(...all) - Math.min(...all) <= 4, `${all.map((v) => v.toFixed(1))} dB at 5.5, 8.5, 13 m/s`);
+  assert.ok(Math.min(...all) >= -4, `${all.map((v) => v.toFixed(1))} dB`);
+});
+
+test('in the sprint the crowd leaves you your rhythm: the claps are on your crank, and the mids still pump', () => {
+  const scenario = previewScenario(doc);
+  const mix = mixdown(bank, simulate(bank, { ...scenario, shared }), { shared, tail: 0 });
+  const whole = mix.sum[0];
+  const times = doc.preview.segments;
+  let t = 0;
+  let sprintAt = -1;
+  for (const seg of times) {
+    if (seg.params.crowd === 1) sprintAt = t;
+    t += seg.s;
+  }
+  assert.ok(sprintAt > 0, 'the preview has a sprint');
+  const from = sprintAt + 4;
+  const x = whole.subarray(Math.round(from * MIX_RATE), Math.round((from + 13.5) * MIX_RATE));
+  const mids = revPeak(x, 110, 300, 1500, 0);
+  const highs = revPeak(x, 110, 1500, 4000, 0);
+  assert.ok(mids >= 8, `300-1500 Hz: ${mids.toFixed(1)} dB, was 7.7`);
+  assert.ok(highs >= 8, `1.5-4 kHz: ${highs.toFixed(1)} dB`);
 });
 
 test('the far bell shares no note with the cues, so it is never taken for a phase change', () => {
