@@ -77,8 +77,8 @@ func test_the_placements_match_the_mock() -> void:
 	var shop := _rect_of(spec, SiegeShopPanel)
 	assert_eq(shop.position.x, 8)
 	assert_eq(shop.end.y - 2, 532)
-	# below the session plate's bottom: on the narrowest flex canvas they'd meet it at the crew's level
-	assert_eq(spec.banner_area, Rect2i(370, 86, 380, 27))
+	# narrower than the mock: on the narrowest flex canvas it fits between the session and the column
+	assert_eq(spec.banner_area, Rect2i(464, 69, 286, 27))
 
 
 func test_banners_and_toasts_sit_clear_of_the_plates() -> void:

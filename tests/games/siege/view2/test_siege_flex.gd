@@ -154,11 +154,22 @@ func test_the_bake_covers_every_window_with_one_copy() -> void:
 		var art := _art(window)
 		var off := SiegeViewMath.view_offset(art)
 		var cells := SiegeV2WorldLayer.tiles(art, off, bank.world_origin, bank.world_size)
-		assert_eq(cells, [{"cell": Vector2i.ZERO}], "window %s, canvas %s" % [window, art])
+		assert_eq(
+			cells,
+			[
+				{
+					"at": Vector2i.ZERO,
+					"src": Rect2i(Vector2i.ZERO, bank.world_size),
+					"flip": Vector2i.ZERO
+				}
+			],
+			"window %s, canvas %s" % [window, art]
+		)
 
 
-func test_past_the_bake_mirrored_copies_fill_the_canvas() -> void:
+func test_past_the_bake_its_margins_fill_the_canvas_and_the_fort_stays_single() -> void:
 	var bank := SiegeBakeBank.shared()
+	var frame := Rect2i(bank.world_origin, SiegeBakeBank.ART_SIZE)
 	for window: Vector2i in [
 		Vector2i(3440, 900), Vector2i(1703, 1500), Vector2i(6000, 959), Vector2i(1000, 3000)
 	]:
@@ -166,15 +177,37 @@ func test_past_the_bake_mirrored_copies_fill_the_canvas() -> void:
 		var off := SiegeViewMath.view_offset(art)
 		var cells := SiegeV2WorldLayer.tiles(art, off, bank.world_origin, bank.world_size)
 		assert_gt(cells.size(), 1, "window %s, canvas %s" % [window, art])
-		var image := Rect2i(off - bank.world_origin, bank.world_size)
-		for corner: Vector2i in [
-			Vector2i.ZERO, art - Vector2i.ONE, Vector2i(art.x - 1, 0), Vector2i(0, art.y - 1)
-		]:
-			var c := Vector2i(
-				floori(float(corner.x - image.position.x) / image.size.x),
-				floori(float(corner.y - image.position.y) / image.size.y)
-			)
-			assert_true(cells.has({"cell": c}), "%s needs cell %s" % [corner, c])
+		assert_eq(cells[0]["src"], Rect2i(Vector2i.ZERO, bank.world_size), "the image first")
+		for i in range(1, cells.size()):
+			var src: Rect2i = cells[i]["src"]
+			assert_false(src.intersects(frame), "a copy holds no design frame: %s" % src)
+		# every canvas pixel on the sampled grid falls in a tile
+		var from := bank.world_origin - off
+		for y in range(0, art.y, 37):
+			for x in range(0, art.x, 41):
+				var p := from + Vector2i(x, y)
+				var hit := false
+				for c: Dictionary in cells:
+					if Rect2i(c["at"], (c["src"] as Rect2i).size).has_point(p):
+						hit = true
+						break
+				if not hit:
+					fail_test("%s on %s has no tile" % [p, art])
+					return
+
+
+func test_a_margin_copy_continues_from_the_edge_mirrored() -> void:
+	var size := Vector2i(1920, 1084)
+	var origin := Vector2i(480, 272)
+	var art := Vector2i(3440, 900)
+	var cells := SiegeV2WorldLayer.tiles(art, SiegeViewMath.view_offset(art), origin, size)
+	var sawn := {}
+	for c: Dictionary in cells:
+		sawn[[c["at"], c["flip"]]] = c["src"]
+	# the first copy past each end mirrors that end's margin, the next one mirrors it back
+	assert_eq(sawn[[Vector2i(1920, 0), Vector2i(1, 0)]], Rect2i(1440, 0, 480, 1084))
+	assert_eq(sawn[[Vector2i(-480, 0), Vector2i(1, 0)]], Rect2i(0, 0, 480, 1084))
+	assert_eq(sawn[[Vector2i(-960, 0), Vector2i(0, 0)]], Rect2i(0, 0, 480, 1084))
 
 
 func test_the_bank_reads_the_world_by_the_frames_pixels_and_beyond() -> void:

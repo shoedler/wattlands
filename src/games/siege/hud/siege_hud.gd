@@ -19,9 +19,10 @@ extends RefCounted
 ## game banner and the help take the palette.
 
 const BASE := Vector2i(960, 540)
-## The platform's banners, under the session plate and the crew, left of the right column.
-const BANNER_RECT := Rect2i(370, 86, 380, 27)
-const TOAST_RECT := Rect2i(370, 116, 380, 40)
+## The platform's banners, under the crew: as wide as stays clear of the session plate and the right
+## column on the narrowest flex canvas. A panel shrinks to its text and a long one wraps.
+const BANNER_RECT := Rect2i(464, 69, 286, 27)
+const TOAST_RECT := Rect2i(464, 100, 286, 40)
 ## The palette for the platform's toasts, game banner and help, from the mock.
 const PALETTE := {
 	"panel": SiegeHudDraw.WAX,

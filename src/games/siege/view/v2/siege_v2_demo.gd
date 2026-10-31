@@ -7,7 +7,8 @@ extends Control
 ## a capture after n frames is always the same picture.
 ##   tools/screenshot --scene=res://src/games/siege/view/v2/siege_v2_demo.tscn --frames=<n>
 ## User args: --siege-demo-t=<s> (start time), --siege-demo-sharp (tilt-shift off),
-## --siege-demo-stress (150 attackers and a shot every 0.15 s; prints the cost of an update),
+## --siege-demo-stress (150 attackers and a shot every 0.15 s; prints the cost of an update, the
+## canvas and the art viewport's measured render time),
 ## --siege-demo-flex (the game's pixel_flex canvas), --siege-demo-mock-pose (the machines posed as in the approved mock, no attackers or shots, to
 ## compare a capture with build/siege_mock_r2/frame_sharp_2x.png).
 
@@ -83,6 +84,10 @@ func _ready() -> void:
 	pixel_viewport.set_game_view(view)
 	_fit_canvas()
 	pixel_viewport.art_size_changed.connect(_on_art_size)
+	if _stress:
+		RenderingServer.viewport_set_measure_render_time(
+			pixel_viewport.subviewport().get_viewport_rid(), true
+		)
 	_make_column()
 	_fired = floori((time_s - 8.0) / _shot_every)
 	update_at(time_s)
@@ -120,13 +125,20 @@ func _process(_delta: float) -> void:
 	if _stress and _frames % 60 == 0:
 		print(
 			(
-				"siege_v2_demo: %d enemies, %d projectiles, update %.2f ms, %d fps, %d draw calls"
+				"siege_v2_demo: %s, %d enemies, %d projectiles, update %.2f ms, %d fps, %d draw calls, art viewport cpu %.2f ms gpu %.2f ms"
 				% [
+					pixel_viewport.art_size(),
 					crowd.drawn,
 					shots.in_flight(),
 					_usec / 60000.0,
 					Engine.get_frames_per_second(),
 					Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+					RenderingServer.viewport_get_measured_render_time_cpu(
+						pixel_viewport.subviewport().get_viewport_rid()
+					),
+					RenderingServer.viewport_get_measured_render_time_gpu(
+						pixel_viewport.subviewport().get_viewport_rid()
+					),
 				]
 			)
 		)
