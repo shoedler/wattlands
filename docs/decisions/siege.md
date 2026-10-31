@@ -428,12 +428,12 @@ Short ADRs for the siege game: date, decision, alternatives, reason. Game sessio
 ## 2026-10-31 The world grows by baking, and the design frame doesn't change
 
 - Decision: the world image is 1920 x 1084 from the game's own rasterizer. The frame is rendered alone as before and pasted in, and the parts bake against it, so the frame and every atlas stay byte-identical. The road's tail is art only, so the rules' map doesn't change. Rendering all of it in one pass isn't identical: rock above the old frame's top would cast new shadows into it.
-- Alternatives: a flat fill or stretched pixels (the brief's owner refused them); a bigger bake still (the memory and disk for windows nobody has).
+- Alternatives: a flat fill or stretched pixels (the task ruled them out); a bigger bake still (the memory and disk for windows nobody has).
 - Reason: 1920 x 1084 covers every usual window; a canvas past it is a window with an odd shape, and mirrored margins beat black.
 
 ## 2026-10-31 The HUD on the flex canvas
 
 - Decision: the column's rect ends on the base's middle row (262 tall, not 276); the cockpit starts at x 479 (not 456); the banners and toasts are 286 wide at x 464 (not 380 at 411); `SiegeHudWorld` is the last control with z_index -1 (plates first, so a help point on a plate follows that plate) and wraps the help overlay's `art_map` to add the view's offset for points on the world.
-- Alternatives: banners under the session plate at full width (they then sit on the wheels for the whole warm-up, seen in a frame); a platform hook for a game's own help mapping (see the report: `art_map` is the public var that fits today).
+- Alternatives: banners under the session plate at full width (they then sit on the wheels for the whole warm-up, seen in a frame); a platform hook for a game's own help mapping (`art_map` is the public var that fits today).
 - Reason: `anchor_rect` moves a rect across the base's middle by half the change, which would drop the column down a tall canvas and clip it on a short one; the narrowest canvas must fit every plate; `view_offset` differs from the rect anchoring on narrow canvases.
 - Known cost: at a 1280 x 720 window the warm-up banner wraps to two lines.
