@@ -37,10 +37,13 @@ func _kinds(list: Array) -> Array:
 	return list.map(func(i: Dictionary) -> String: return str(i["k"]))
 
 
-func _rear_enemy(g: TankGame) -> void:
-	g.state.enemies.append(
-		TankFixtures._enemy(90, TankIds.ENEMY_MEDIUM, g.state.camera_x() + 10.0, 30.0, -1)
-	)
+## A wreck on the road with the gun laid on it, loaded: the Autopilot's gunner shoots.
+func _armed(g: TankGame) -> void:
+	g.state.hull.target_id = _wreck(g).id
+	g.state.hull.loaded = TankIds.SHELL_LIGHT
+	g.state.hull.breech_s = 0.0
+	g.state.hull.elev_deg = 4.0
+	g.state.hull.elev_target_deg = 4.0
 
 
 func _wreck(g: TankGame) -> TankObstacleState:
@@ -101,7 +104,7 @@ func test_the_crew_keys() -> void:
 	# 0.3.1: the arrows open the seat picker on the Gun too; swap (R / LB) cycles targets.
 	assert_eq(act.call(dyn, &"left"), [], "the picker")
 	assert_eq(act.call(dyn, &"swap"), [{"k": "target", "d": 1, "via": "action"}])
-	assert_eq(act.call(dyn, &"ability_2"), [{"k": "traverse", "via": "action"}])
+	assert_eq(act.call(dyn, &"ability_2"), [], "v4: nothing behind us, so no traverse")
 	assert_eq(act.call(dyn, &"confirm"), [{"k": "fire", "via": "action"}])
 	assert_eq(act.call(dyn, &"ability_1"), [], "the dynamo has no sprint intent")
 	assert_eq(act.call(by_engine["diesel"], &"ability_1"), [], "v2: no Ram")
@@ -165,9 +168,9 @@ func test_junk_intents_are_dropped_before_they_count() -> void:
 	]
 	for i in 8:
 		junk.append({"k": "teleport"})
-	junk.append({"k": "traverse"})
+	junk.append({"k": "fire"})
 	var got := g._collect_intents(_frame(g, TICK, {2: junk}))
-	assert_eq(_kinds(got[2]), ["traverse"], "the junk did not eat the budget")
+	assert_eq(_kinds(got[2]), ["fire"], "the junk did not eat the budget")
 
 
 func test_five_a_second_per_peer_and_the_window_rolls() -> void:
@@ -196,7 +199,7 @@ func test_five_a_second_per_peer_and_the_window_rolls() -> void:
 
 func test_only_peers_of_the_session_are_read() -> void:
 	var g := _game(1)
-	var f := _frame(g, TICK, {1: [{"k": "traverse"}]})
+	var f := _frame(g, TICK, {1: [{"k": "seat", "to": "next"}]})
 	var stranger := Telemetry.new()
 	stranger.peer_id = 77
 	stranger.intents = [{"k": "fire"}]
@@ -208,11 +211,13 @@ func test_only_peers_of_the_session_are_read() -> void:
 func test_what_passes_reaches_the_rules_input_in_order() -> void:
 	var g := _game(2)
 	var f := _frame(
-		g, TICK, {2: [{"k": "aim", "d": 1}, {"k": "fire"}, {"k": "traverse", "via": "button"}]}
+		g,
+		TICK,
+		{2: [{"k": "aim", "d": 1}, {"k": "fire"}, {"k": "target", "d": 1, "via": "button"}]}
 	)
 	var inp := TankInputs.from_frame(f, g.ctx.players, g.plans, g._collect_intents(f), {}, {})
 	var got: Array = inp.rider(2).intents.map(func(n: Dictionary) -> String: return str(n["k"]))
-	assert_eq(got, ["aim", "fire", "traverse"])
+	assert_eq(got, ["aim", "fire", "target"])
 	assert_eq(inp.rider(2).intents[2]["via"], "button")
 	assert_eq(inp.rider(2).intents[0]["d"], 1, "normalized ints")
 
@@ -220,12 +225,12 @@ func test_what_passes_reaches_the_rules_input_in_order() -> void:
 # --- The Autopilot fallback ------------------------------------------------------------------------
 
 
-func test_a_human_with_only_junk_or_unowned_intents_keeps_the_rear_traverses() -> void:
+func test_a_human_with_only_junk_or_unowned_intents_keeps_the_autopilot() -> void:
 	var g := _game(2, true)
-	_rear_enemy(g)
+	_armed(g)
 	var ram_by_surge := {"k": "ram", "via": "surge"}
 	var got := g._collect_intents(_frame(g, TICK, {2: [ram_by_surge]}))
-	assert_eq(_kinds(got[2]), ["traverse"], "v2's junk ram is dropped; the Autopilot traverses")
+	assert_eq(_kinds(got[2]), ["fire"], "v2's junk ram is dropped; the Autopilot shoots")
 	assert_true(got[2][0]["auto"], "tagged auto")
 	assert_true(g.state.rider(2).fallback, "a dropped intent does not end the fallback")
 	var over_and_ram := [{"k": "over", "via": "surge"}, {"k": "ram", "via": "action"}]
@@ -248,9 +253,9 @@ func test_a_human_with_only_a_junk_intent_keeps_the_obstacle_shots() -> void:
 
 
 func test_a_deliberate_intent_ends_the_fallback_for_good() -> void:
-	for kind in ["seat", "aim", "target", "traverse", "fire", "latch"]:
+	for kind in ["seat", "aim", "target", "fire", "latch"]:
 		var g := _game(3, true)
-		_rear_enemy(g)
+		_armed(g)
 		var peer := 0
 		for r in g.state.riders:
 			if peer == 0 and TankIntents.owned(kind, r.engine):
@@ -278,33 +283,31 @@ func test_an_intent_the_rider_may_not_send_is_no_action() -> void:
 
 func test_a_human_off_the_fallback_plays_alone_until_the_station_goes_to_reserve() -> void:
 	var g := _game(2, true)
-	_rear_enemy(g)
+	_armed(g)
 	g.state.rider(2).fallback = false
 	assert_false(g._collect_intents(_frame(g, TICK, {})).has(2))
 	g.on_afk(2, true)
 	var got := g._collect_intents(_frame(g, TICK + 1, {}))
-	assert_eq(_kinds(got[2]), ["traverse"], "a reserve station runs on the Autopilot")
+	assert_eq(_kinds(got[2]), ["fire"], "a reserve station runs on the Autopilot")
 	g.on_afk(2, false)
 	assert_false(g._collect_intents(_frame(g, TICK + 2, {})).has(2))
 
 
 func test_autopilot_riders_and_bots_get_the_autopilot_from_the_platform_call() -> void:
 	var g := _game(2)
-	_rear_enemy(g)
-	assert_eq(_kinds(g.autopilot_intents(2)), ["traverse"], "an Autopilot human on the fallback")
+	_armed(g)
+	assert_eq(_kinds(g.autopilot_intents(2)), ["fire"], "an Autopilot human on the fallback")
 	var plain := g._collect_intents(_frame(g, TICK, {}))
 	assert_false(plain.has(2), "the module does not add it a second time")
 	g.state.rider(2).is_bot = true
 	g.state.rider(2).fallback = false
-	assert_eq(_kinds(g.autopilot_intents(2)), ["traverse"], "a bot always plays it")
+	assert_eq(_kinds(g.autopilot_intents(2)), ["fire"], "a bot always plays it")
 	assert_eq(g.autopilot_intents(42), [], "an unknown peer")
 
 
 func test_the_platform_merged_autopilot_never_counts_as_a_deliberate_intent() -> void:
 	var g := _game(2)
-	var merged := [
-		{"k": "traverse", "auto": 1}, {"k": "fire", "auto": 1}, {"k": "target", "d": 1, "auto": 1}
-	]
+	var merged := [{"k": "fire", "auto": 1}, {"k": "target", "d": 1, "auto": 1}]
 	g._collect_intents(_frame(g, TICK, {2: merged}))
 	assert_true(g.state.rider(2).fallback)
 
