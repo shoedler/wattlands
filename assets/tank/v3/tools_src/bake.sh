@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Rebuilds the production v3 tank kit in assets/tank/v3/ (tank_base.png, the gear and gun sprites,
-# the track shoe, the blast sheets, kit.json) from the r6 generator. ImageMagick + Godot.
+# the track shoe, the blast sheets, kit.json) from the generator. ImageMagick + Godot.
 #   bash assets/tank/v3/tools_src/bake.sh          (the planes: bash assets/tank/v3/tools_src/env_regen.sh)
 # Then import: tools/godot.sh --headless --path . --import
 set -eu

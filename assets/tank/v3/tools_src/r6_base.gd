@@ -6,10 +6,10 @@ extends SceneTree
 ##   clean: q.png (magick: +dither -remap onto the curated palette) -> binary alpha, noise pixels
 ##          snapped to their neighbours, rivet highlights paired with a shadow, a hard outline, the
 ##          lamp spill round the rooms -> base.png
-## Run through assets/tank/v3/tools_src/r4_base.sh.
+## Run through assets/tank/v3/tools_src/r6_base.sh.
 
 const Px = preload("res://assets/tank/v3/tools_src/px.gd")
-const Tank6 = preload("res://assets/tank/v3/tools_src/tank_r6.gd")
+const TankGen = preload("res://assets/tank/v3/tools_src/tank_gen.gd")
 const Hull = preload("res://assets/tank/v3/tools_src/hull.gd")
 const Dress = preload("res://assets/tank/v3/tools_src/dress.gd")
 
@@ -39,7 +39,7 @@ func _in_rooms(L: Dictionary, x: int, y: int) -> bool:
 
 
 func prep() -> void:
-	var L := Tank6.layout()
+	var L := TankGen.layout()
 	var img := _load("s90.png")
 	var w := img.get_width()
 	var h := img.get_height()
@@ -164,7 +164,7 @@ func prep() -> void:
 
 
 func clean() -> void:
-	var L := Tank6.layout()
+	var L := TankGen.layout()
 	var img := _load("q.png")
 	var pa := _load("prep.png")
 	var w := img.get_width()
