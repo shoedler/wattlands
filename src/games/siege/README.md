@@ -359,11 +359,12 @@ P2 notes:
 
 Everything is rendered from `assets/siege/audio/audio.json` by `tools/audio` (`docs/AUDIO_PIPELINE.md`): no samples, no downloads. `SiegeAudio` only maps state to parameters and events to cues.
 
-- **The wheel, 1:1 with cadence.** `SiegeView.cranks[slot]` integrates the rider's cadence; the walkers' frames and the strokes read the same `revs`, so they cannot drift. Each revolution: pawl and footfall at 0 and .5, the creak at .25, the axle's knock at .75. The strokes stop dead at 0 rpm. The wheel's own turning stays by watts: the wheel is load, the walkers are legs. FTMS reports cadence about once a second, so the strokes lock to the walkers on screen exactly and to the rider's feet in rate only.
+- **The wheel, 1:1 with cadence.** `SiegeView.cranks[slot]` integrates the rider's cadence; the walkers' frames and the strokes read the same `revs`, so they cannot drift. Each revolution: pawl and footfall at 0 and .5, the creak at .25, the axle's knock at .75. A groan runs under them, and from about 180 W your own wheel starts to strain, brighter the harder you ride. The strokes stop dead at 0 rpm. The wheel's own turning stays by watts: the wheel is load, the walkers are legs. FTMS reports cadence about once a second, so the strokes lock to the walkers on screen exactly and to the rider's feet in rate only.
 - **Others' wheels** play pawl, creak and groan 10 dB under, without footfalls or the knock.
 - **Detail locked to the art:** the mine's picks and the pump's strokes follow their own drawn phase.
-- **Shots:** the ballista's twang and whoosh, the Scorpion's snap, the onager's release, its stone's flight and landing, a volley's three whistling arrows and their patter when the flight is over.
-- **The siege:** horns on a wave, a push and a rush, hooves, the ram, a walking tower's creak and its docking, gate hits, the Breach (ducks everything but the prompts), tar bubbling, pouring and hissing, the junction's clatter by team watts.
-- **The hill:** gusting wind in two layers of co-prime length, the far crowd by enemy count, crows and banners, a far anvil, and a lark in the warm-up only.
+- **Shots:** the ballista's twang and whoosh, the Scorpion's snap, the onager's release, its stone's flight and landing, a volley's three whistling arrows and their patter when the flight is over. The arrow organ whistles at most once in 3.5 s: its other racks are the release and the patter.
+- **The siege:** far horns on a wave, a push and a rush, each ducking the wheel while it blows, hooves, the ram, a walking tower's creak and its docking, gate hits (at most one a ram stroke, the same for a host and a client), the Breach (ducks everything but the prompts), tar bubbling, pouring and hissing, the junction's clatter by team watts.
+- **The hill:** gusting wind in two layers of co-prime length, the far crowd and war drums by enemy count, crows and banners; a far anvil and a lark in the warm-up and the breaks.
+- **A pause** stops the battle's sound with the picture; a safety prompt reads at least 6 LU over the horns and the volleys (the numbers and what stays under: `docs/decisions/audio-siege.md`).
 
 `node tools/audio/preview.mjs --game=siege` writes `build/audio_preview/siege.mp3`.

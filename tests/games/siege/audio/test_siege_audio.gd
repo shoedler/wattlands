@@ -301,6 +301,46 @@ func test_a_stone_lands_when_its_flight_is_over() -> void:
 	assert_true(v.audio.played.has("stone_impact"))
 
 
+func test_a_rack_within_the_gap_is_a_release_and_a_patter_with_no_whistle() -> void:
+	var v := _solo(0.0)
+	var ev := _shot(SiegeIds.SHOT_ARROW, 1)
+	v.audio.on_cue(SiegeIds.EV_SHOT, ev)
+	_run(v, 0.2)
+	assert_eq(_count(v, "arrow_whistle"), 3)
+	_run(v, 1.3)
+	v.audio.on_cue(SiegeIds.EV_SHOT, _shot(SiegeIds.SHOT_ARROW, 2))
+	_run(v, 0.2)
+	assert_eq(_count(v, "arrow_whistle"), 3, "1.5 s later: no whistle")
+	assert_eq(_count(v, "arrow_release"), 2)
+	_run(v, SiegeAudio.flight_s(ev) + 0.1)
+	assert_eq(_count(v, "arrow_patter"), 2, "the second rack still lands")
+	_run(v, SiegeAudio.WHISTLE_EVERY_S)
+	v.audio.on_cue(SiegeIds.EV_SHOT, _shot(SiegeIds.SHOT_ARROW, 3))
+	_run(v, 0.2)
+	assert_eq(_count(v, "arrow_whistle"), 6, "the gap over: three more")
+
+
+func test_an_organ_at_full_rate_whistles_one_volley_in_three() -> void:
+	var v := _solo(0.0)
+	for k in 12:
+		v.audio.on_cue(SiegeIds.EV_SHOT, _shot(SiegeIds.SHOT_ARROW, k + 1))
+		_run(v, 1.5)
+	assert_eq(_count(v, "arrow_release"), 12)
+	assert_eq(_count(v, "arrow_whistle"), 12, "4 whistling volleys of 12, 3 whistles each")
+
+
+func test_shots_of_a_single_file_sound_carry_a_pitch_from_their_spread_seed() -> void:
+	var bank := AudioBank.load_bank(SiegeAudio.BANK_PATH)
+	for cue_name: String in ["shot_bolt", "shot_stone", "shot_arrow", "shot_arrow_rack"]:
+		var vars: Array[String] = []
+		for hit: Dictionary in bank.cues[cue_name]["hits"]:
+			vars.append(str(hit.get("pitch_var", "")))
+		assert_true(vars.has("p"), cue_name)
+	var v := _solo(0.0)
+	v.audio.on_cue(SiegeIds.EV_SHOT, _shot(SiegeIds.SHOT_BOLT))
+	assert_true(v.audio.played.has("ballista_twang"))
+
+
 func test_a_volley_whistles_three_times_then_patters() -> void:
 	var v := _solo(0.0)
 	var ev := _shot(SiegeIds.SHOT_ARROW)
@@ -389,11 +429,72 @@ func test_a_gate_hit_grows_with_the_damage() -> void:
 	v.update(FRAME)
 	v.state.gate_hp -= 1.0
 	v.update(FRAME)
+	_run(v, SiegeAudio.GATE_HIT_EVERY_S)
 	v.state.gate_hp -= 9.0
 	v.update(FRAME)
 	var hits := _db_of(v, "gate_hit")
 	assert_eq(hits.size(), 2)
 	assert_gt(hits[1], hits[0])
+
+
+## A gate losing `hp_per_s` for `seconds` at 20 ticks a second, as the rules (fractions) or a
+## client's snapshot (ceili, whole HP) show it. Returns how many hits it made.
+func _gate_hits(hp_per_s: float, seconds: float, whole: bool) -> int:
+	var v := _solo(0.0)
+	var hp: float = v.state.gate_hp
+	v.update(0.05)
+	for _i in roundi(seconds / 0.05):
+		hp -= hp_per_s * 0.05
+		v.state.gate_hp = ceilf(hp) if whole else hp
+		v.update(0.05)
+	return _count(v, "gate_hit")
+
+
+func test_one_ram_is_heard_on_the_gate_at_fractional_damage() -> void:
+	# 3.9 HP/s is 0.195 HP a tick: each tick alone is under the smallest drop that sounds.
+	assert_almost_eq(_gate_hits(3.9, 6.0, false), 5, 1, "about one hit per ram stroke")
+
+
+func test_many_rams_do_not_fire_a_hit_each_tick() -> void:
+	assert_almost_eq(_gate_hits(11.7, 6.0, false), 5, 1, "three rams, the same rate")
+
+
+func test_a_client_and_a_host_hear_the_gate_alike() -> void:
+	for hp_per_s: float in [3.9, 7.8, 11.7]:
+		assert_almost_eq(
+			_gate_hits(hp_per_s, 6.0, true), _gate_hits(hp_per_s, 6.0, false), 1, "%f" % hp_per_s
+		)
+
+
+func test_a_hit_says_what_the_gate_lost_since_the_last_one() -> void:
+	var v := _solo(0.0)
+	v.update(FRAME)
+	v.state.gate_hp -= 1.0
+	v.update(FRAME)
+	v.state.gate_hp -= 3.0
+	v.update(FRAME)
+	assert_eq(_count(v, "gate_hit"), 1, "the second drop waits its turn")
+	_run(v, SiegeAudio.GATE_HIT_EVERY_S + 0.05)
+	var hits := _db_of(v, "gate_hit")
+	assert_eq(hits.size(), 2, "and is heard then, not lost")
+	assert_gt(hits[1], hits[0])
+
+
+func test_a_repaired_gate_does_not_sound_like_a_hit() -> void:
+	var v := _solo(0.0)
+	v.update(FRAME)
+	v.state.gate_hp -= 20.0
+	v.update(FRAME)
+	assert_eq(_count(v, "gate_hit"), 1)
+	v.state.gate_hp += 15.0
+	_run(v, SiegeAudio.GATE_HIT_EVERY_S + 0.1)
+	assert_eq(_count(v, "gate_hit"), 1, "a repair is no hit")
+	var loud := _db_of(v, "gate_hit")[0]
+	v.state.gate_hp -= 1.0
+	v.update(FRAME)
+	var hits := _db_of(v, "gate_hit")
+	assert_eq(hits.size(), 2, "the next blow counts from the repaired gate")
+	assert_lt(hits[1], loud)
 
 
 func test_hooves_keep_their_timer_and_grow_with_the_horses() -> void:
@@ -407,6 +508,45 @@ func test_hooves_keep_their_timer_and_grow_with_the_horses() -> void:
 		SiegeKit.enemy(st, SiegeIds.ENEMY_CHARIOT, 110.0 + k)
 	_run(v, 0.5, 0.05)
 	assert_gt(_db_of(v, "hooves").max(), one)
+
+
+func _bus() -> Node:
+	return get_node("/root/EventBus")
+
+
+func test_a_pause_stops_the_ram_and_the_hooves_over_a_frozen_picture() -> void:
+	var st := SiegeKit.state("short", 1, 0)
+	var ram := SiegeKit.enemy(st, SiegeIds.ENEMY_RAM, 100.0)
+	ram.st = SiegeIds.EN_BATTER
+	SiegeKit.enemy(st, SiegeIds.ENEMY_CHARIOT, 110.0)
+	var v := _view(st)
+	_run(v, 2.0, 0.05)
+	assert_gt(_count(v, "ram_thud"), 0)
+	assert_gt(_count(v, "hooves"), 0)
+	_bus().paused_changed.emit(true, "test")
+	var rams := _count(v, "ram_thud")
+	var hooves := _count(v, "hooves")
+	_run(v, 5.0, 0.05)
+	assert_eq(_count(v, "ram_thud"), rams, "no ram under a pause")
+	assert_eq(_count(v, "hooves"), hooves, "no hooves under a pause")
+	_bus().paused_changed.emit(false, "resume")
+	_run(v, 2.0, 0.05)
+	assert_gt(_count(v, "ram_thud"), rams, "the ram goes on after the pause")
+	assert_gt(_count(v, "hooves"), hooves, "and so do the hooves")
+
+
+func test_each_ram_stroke_differs_a_little() -> void:
+	var st := SiegeKit.state("short", 1, 0)
+	var ram := SiegeKit.enemy(st, SiegeIds.ENEMY_RAM, 100.0)
+	ram.st = SiegeIds.EN_BATTER
+	var v := _view(st)
+	_run(v, 8.0, 0.05)
+	var at: Array[float] = []
+	for i in v.audio.kit.played.size():
+		if v.audio.kit.played[i] == "ram_thud":
+			at.append(v.audio.kit.played_t[i])
+	assert_gt(at.size(), 4)
+	assert_ne(snappedf(at[1] - at[0], 0.05), snappedf(at[2] - at[1], 0.05), "no metronome")
 
 
 func test_a_ram_knocks_every_so_often() -> void:
@@ -462,9 +602,24 @@ func test_tar_hisses_when_the_curtain_or_the_coat_changes_stage() -> void:
 	assert_eq(_count(v, "tar_hiss"), 2)
 
 
+func test_the_junction_stops_dead_with_the_last_wheel_though_the_mean_still_reads_watts() -> void:
+	var st := SiegeKit.state("short", 1, 0)
+	st.team_w = 300.0
+	st.rider_at(0).cadence_rpm = 90.0
+	var v := _view(st)
+	_run(v, 0.5)
+	var loop: LayeredLoop = v.audio.kit.entry_loop("junction_clatter")
+	assert_false(loop.all_off())
+	st.rider_at(0).cadence_rpm = 0.0
+	_run(v, 0.2)
+	assert_gt(st.team_w, 5.0, "the rules' 1 s mean hasn't fallen yet")
+	assert_true(loop.all_off(), "shut well inside D4's 400 ms")
+
+
 func test_the_junction_and_the_pour_run_only_in_a_wave() -> void:
 	var st := SiegeKit.state("short", 1, 0)
 	st.team_w = 800.0
+	st.rider_at(0).cadence_rpm = 90.0
 	st.station(SiegeIds.STATION_TAR).m = 1.0
 	st.tar.cauldron_l = 100.0
 	var v := _view(st)
@@ -482,6 +637,7 @@ func test_the_junction_and_the_pour_run_only_in_a_wave() -> void:
 func test_the_junction_rises_with_the_team() -> void:
 	var st := SiegeKit.state("short", 1, 0)
 	st.team_w = 200.0
+	st.rider_at(0).cadence_rpm = 90.0
 	var v := _view(st)
 	_run(v, 1.0)
 	var low: float = v.audio.kit.entry_loop("junction_clatter").pitch[0]
@@ -502,6 +658,28 @@ func test_the_hill_wind_plays_and_the_lark_only_sings_in_the_warm_up() -> void:
 	var b := _view(warm)
 	_run(b, 90.0, 0.1)
 	assert_gt(_count(b, "lark"), 0)
+
+
+func test_the_lark_and_the_anvil_keep_to_the_calm_between_waves() -> void:
+	var wave := _view(SiegeKit.state("short", 1, 0))
+	_run(wave, 120.0, 0.1)
+	assert_eq(_count(wave, "far_anvil"), 0, "no repairs under attack")
+	assert_eq(_count(wave, "lark"), 0)
+	var calm := _view(SiegeKit.state("short", 1, 0, 1, SiegeIds.ROLE_BREAK))
+	_run(calm, 120.0, 0.1)
+	assert_gt(_count(calm, "far_anvil"), 0)
+	assert_gt(_count(calm, "lark"), 0)
+
+
+func test_the_war_drums_beat_only_while_enemies_are_on_the_field() -> void:
+	var empty := _view(SiegeKit.state("short", 1, 0))
+	_run(empty, 90.0, 0.1)
+	assert_eq(_count(empty, "war_drum"), 0)
+	var st := SiegeKit.state("short", 1, 0)
+	SiegeKit.enemy(st, SiegeIds.ENEMY_SPEAR, 100.0)
+	var v := _view(st)
+	_run(v, 90.0, 0.1)
+	assert_gt(_count(v, "war_drum"), 0)
 
 
 func test_a_client_view_hears_the_rider_the_snapshot_carries() -> void:

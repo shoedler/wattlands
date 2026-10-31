@@ -24,10 +24,13 @@ const CUE_HOOVES := "hooves"
 const CUE_RAM := "ram_thud"
 const CUE_GOLD := "gold"
 const CUE_TAR_HISS := "tar_hiss"
+const CUE_ARROW_RACK := "shot_arrow_rack"
 ## Events with no sound of their own. Every other event type maps to a cue (cue_for).
 const SILENT_EVENTS: Array[String] = []
 const HOOF_EVERY_S := 0.4
-const RAM_EVERY_S := 1.2
+## A ram's stroke: about 1.2 s, never quite a metronome, and never quite the same blow.
+const RAM_GAPS_S: Array[float] = [1.15, 1.25]
+const RAM_PITCH: Array[float] = [1.0, 0.96, 1.03, 0.94]
 const COIN_EVERY_S := 0.3
 ## A ram's battering is one leak per whole HP: the alarm answers the first, not each.
 const LEAK_ALARM_EVERY_S := 3.0
@@ -36,11 +39,20 @@ const MAX_SHOT_SOUNDS_PER_TICK := 3
 const FLIGHT_MIN_S := 0.1
 const FLIGHT_MAX_S := 6.0
 const FLIGHT_DRAG := 0.0016
-## Gate hits and hooves grow with the damage and the horses, up to these.
-const GATE_DMG_MAX_DB := 12.0
+## Gate hits answer what the gate lost since the last one, at most once a ram stroke, so the sound
+## doesn't depend on the tick the damage came in: a host's fractions and a client's whole HP read
+## the same. They and the hooves grow with the damage and the horses, up to these.
+const GATE_HIT_EVERY_S := 1.2
+const GATE_HIT_MIN_DROP := 0.5
+const GATE_DMG_MAX_DB := 6.0
 const HOOVES_MAX_DB := 10.0
 ## The three arrows of a volley's whistle: their pitches spread by the shot's own spread seed.
 const WHISTLE_SPREAD := 0.03
+## The organ fires every 1.5 s at m = 1. Only a volley this long after the last whistling one
+## whistles: the others are the rack's release and their patter. A whistle every 1.5 s for 5 min grates.
+const WHISTLE_EVERY_S := 3.5
+## Every shot's own small pitch, from its spread seed: the release and flight of a single-file sound.
+const SHOT_PITCH_STEP := 0.015
 ## The hill wind's gusts: two slow sines. View-only, never in the rules.
 const GUST_RATES := Vector2(0.13, 0.31)
 
@@ -54,9 +66,13 @@ var silent: bool:
 	get:
 		return kit.silent
 
-var _gate_hp: float = -1.0
+var _gate_mark: float = -1.0
+var _gate_t: float = 0.0
+var _paused: bool = false
 var _hoof_t: float = 0.0
 var _ram_t: float = 0.0
+var _ram_n: int = 0
+var _whistle_t: float = 0.0
 var _coin_t: float = 0.0
 var _leak_t: float = 0.0
 var _gold_was: float = -1.0
@@ -78,6 +94,15 @@ func _ready() -> void:
 	kit.setup(BANK_PATH, rng_seed)
 	kit.set_bed(BED)
 	_gust_t = float(rng_seed % 1000)
+	var bus := get_node_or_null("/root/EventBus")
+	if bus != null:
+		bus.connect("paused_changed", _on_paused_changed)
+
+
+## SceneTree.paused is not used, so the view keeps calling update under a pause. The kit holds the
+## strokes and the loops; the timers here are the adapter's own to stop.
+func _on_paused_changed(paused: bool, _reason: String) -> void:
+	_paused = paused
 
 
 ## The cue of an event, "" when this one stays silent (a rush's end, a refused purchase). The
@@ -122,12 +147,13 @@ func update(state: SiegeState, dt: float, p_local_peer: int, view: SiegeView) ->
 	var me := state.rider(local_peer)
 	_local_slot = me.slot if me != null else -1
 	_leak_t = maxf(_leak_t - dt, 0.0)
+	_whistle_t = maxf(_whistle_t - dt, 0.0)
 	_kill_sounds = 0
 	_wheels(state, view)
 	_works(state, view)
 	_loops(state)
 	_bed(state, dt)
-	_gate(state)
+	_gate(state, dt)
 	_tar_stages(state)
 	_enemies(state, dt)
 	_coins(state, dt)
@@ -166,7 +192,8 @@ func _works(state: SiegeState, view: SiegeView) -> void:
 
 func _loops(state: SiegeState) -> void:
 	var in_wave := state.in_wave()
-	if in_wave and state.team_w > 5.0:
+	# team_w is a 1 s mean: it outlives the last stroke of a rider who stopped dead.
+	if in_wave and state.team_w > 5.0 and _a_wheel_turns(state):
 		kit.set_loop(LOOP_JUNCTION, {"team_w": state.team_w})
 	var tar_m := state.station(SiegeIds.STATION_TAR).m
 	if state.tar.cauldron_l > 0.5:
@@ -175,6 +202,13 @@ func _loops(state: SiegeState) -> void:
 			kit.set_loop(LOOP_POUR, {})
 	if _tower_walking(state):
 		kit.set_loop(LOOP_TOWER, {})
+
+
+static func _a_wheel_turns(state: SiegeState) -> bool:
+	for r in state.riders:
+		if r.cadence_rpm > CrankClock.STOP_RPM:
+			return true
+	return false
 
 
 static func _tower_walking(state: SiegeState) -> bool:
@@ -188,8 +222,9 @@ func _bed(state: SiegeState, dt: float) -> void:
 	_gust_t += dt
 	var gust := 0.5 + 0.3 * sin(_gust_t * GUST_RATES.x) + 0.2 * sin(_gust_t * GUST_RATES.y)
 	var enemies := float(state.enemies.size())
-	var warmup := 1.0 if state.role == SiegeIds.ROLE_WARMUP_WAVE else 0.0
-	kit.bed_params({"gust": gust, "enemies": enemies, "warmup": warmup})
+	# A warm-up wave is the calm hill too: the lark and the anvil belong to all but a real wave.
+	var in_wave := 1.0 if state.role == SiegeIds.ROLE_WAVE else 0.0
+	kit.bed_params({"gust": gust, "enemies": enemies, "in_wave": in_wave})
 
 
 ## The module's cues. A shot carries its flight to its landing; events of one rider are that
@@ -223,14 +258,18 @@ func _shot(cue_name: String, data: Dictionary) -> void:
 	_shot_sounds += 1
 	if _shot_sounds > MAX_SHOT_SOUNDS_PER_TICK:
 		return
-	var vars := {}
+	var sd := int(data.get("sd", 0))
+	var vars := {"p": 1.0 + SHOT_PITCH_STEP * float(posmod(sd, 7) - 3)}
 	var shot := int(data.get("kind", 0))
 	if shot == SiegeIds.SHOT_STONE or shot == SiegeIds.SHOT_ARROW:
 		vars["flight_s"] = flight_s(data)
 	if shot == SiegeIds.SHOT_ARROW:
-		var sd := int(data.get("sd", 0))
 		for k in 3:
 			vars["p%d" % k] = 1.0 + WHISTLE_SPREAD * float(posmod(sd >> (k * 3), 7) - 3)
+		if _whistle_t > 0.0:
+			cue_name = CUE_ARROW_RACK
+		else:
+			_whistle_t = WHISTLE_EVERY_S
 	kit.cue(cue_name, vars)
 
 
@@ -242,10 +281,16 @@ static func flight_s(data: Dictionary) -> float:
 	return clampf(t, FLIGHT_MIN_S, FLIGHT_MAX_S)
 
 
-func _gate(state: SiegeState) -> void:
-	if _gate_hp >= 0.0 and state.gate_hp < _gate_hp - 0.5:
-		kit.cue(CUE_GATE_HIT, {"dmg_db": minf(_gate_hp - state.gate_hp, GATE_DMG_MAX_DB)})
-	_gate_hp = state.gate_hp
+## The mark lowers only when a hit fires and rises with a repair, so damage in any size of step adds up.
+func _gate(state: SiegeState, dt: float) -> void:
+	_gate_t = maxf(_gate_t - dt, 0.0)
+	if state.gate_hp > _gate_mark:
+		_gate_mark = state.gate_hp
+	var drop := _gate_mark - state.gate_hp
+	if drop > GATE_HIT_MIN_DROP and _gate_t <= 0.0:
+		_gate_t = GATE_HIT_EVERY_S
+		_gate_mark = state.gate_hp
+		kit.cue(CUE_GATE_HIT, {"dmg_db": minf(drop, GATE_DMG_MAX_DB)})
 
 
 ## The curtain or the coat changed its drawn stage: hot tar on wet timber.
@@ -259,6 +304,8 @@ func _tar_stages(state: SiegeState) -> void:
 
 
 func _enemies(state: SiegeState, dt: float) -> void:
+	if _paused:
+		return
 	_hoof_t -= dt
 	_ram_t -= dt
 	var horses := 0
@@ -272,8 +319,9 @@ func _enemies(state: SiegeState, dt: float) -> void:
 		_hoof_t = HOOF_EVERY_S
 		kit.cue(CUE_HOOVES, {"count_db": minf(float(horses), HOOVES_MAX_DB)})
 	if batter and _ram_t <= 0.0:
-		_ram_t = RAM_EVERY_S
-		kit.cue(CUE_RAM)
+		_ram_t = RAM_GAPS_S[_ram_n % RAM_GAPS_S.size()]
+		kit.cue(CUE_RAM, {"p": RAM_PITCH[_ram_n % RAM_PITCH.size()]})
+		_ram_n += 1
 
 
 func _coins(state: SiegeState, dt: float) -> void:

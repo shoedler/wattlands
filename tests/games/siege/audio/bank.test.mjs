@@ -9,7 +9,9 @@ import { fileURLToPath } from 'node:url';
 import { loadBank, validateBank } from '../../../../tools/audio/lib/bank.mjs';
 import { biquad, rbj } from '../../../../tools/audio/lib/dsp.mjs';
 import { renderSound } from '../../../../tools/audio/lib/recipe.mjs';
-import { BankAudio } from '../../../../tools/audio/lib/offline_mix.mjs';
+import { momentaryMaxLufs } from '../../../../tools/audio/lib/lufs.mjs';
+import { BankAudio, MIX_RATE, mixdown, simulate } from '../../../../tools/audio/lib/offline_mix.mjs';
+import { previewScenario } from '../../../../tools/audio/lib/score.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 const BANK = path.join(REPO, 'assets', 'siege', 'audio', 'audio.json');
@@ -128,6 +130,57 @@ test('each stroke rings out inside what the dead stop allows', () => {
       for (const v of [{}, ...(s.per_variant ?? [])]) {
         assert.ok((v.dur ?? s.dur) <= 0.45, `${ev.sound} ${v.dur ?? s.dur} s`);
       }
+    }
+  }
+});
+
+test('a volley whistles, a rack of the organ does not', () => {
+  const sounds = (cue) => doc.cues[cue].hits.map((h) => h.sound);
+  assert.ok(sounds('shot_arrow').includes('arrow_whistle'));
+  assert.deepEqual(sounds('shot_arrow_rack'), ['arrow_release', 'arrow_patter']);
+});
+
+test('D5 sees the worst: a whistling volley sits in the prompt window, and the preview shows the organ at its rate', () => {
+  const events = doc.preview.events;
+  const volley = events.filter((e) => e.cue === 'shot_arrow' || e.cue === 'shot_arrow_rack').map((e) => e.t).sort((a, b) => a - b);
+  assert.ok(events.some((e) => e.cue === 'shot_arrow' && e.t >= 30 && e.t < 30.6), 'a volley in 30.0..30.6 s');
+  const run = volley.filter((t) => t >= 25.5 && t <= 34.5);
+  assert.equal(run.length, 7);
+  run.slice(1).forEach((t, i) => assert.equal(t - run[i], 1.5));
+});
+
+test('the preview ends the junction at the stop, as the adapter does', () => {
+  const stop = doc.preview.segments.filter((s) => s.rpm > 0).reduce((a, s) => a + s.s, 0);
+  assert.equal(doc.preview.loops.find((l) => l.id === 'junction_clatter').t1, stop);
+});
+
+test('a safety prompt clears +6 LU over each horn, a volley and a docking tower at 110 rpm', () => {
+  const dir = path.dirname(BANK);
+  const bank = new BankAudio(doc, dir);
+  const sharedPath = path.join(REPO, 'assets', '_shared', 'audio', 'audio.json');
+  const shared = new BankAudio(loadBank(sharedPath), path.dirname(sharedPath));
+  const base = previewScenario(doc, {});
+  const quiet = (base.cues ?? []).filter((c) => c.t < 44);
+  const at = 50;
+  const vars = { flight_s: 0.3, p: 1, p0: 1, p1: 0.97, p2: 1.03 };
+  for (const cue of ['rush', 'push', 'wave_start', 'overdrive_on', 'shot_arrow', 'dock']) {
+    for (const after of [0.05, 0.2, 0.4]) {
+      const t = at + after;
+      const sim = simulate(bank, { ...base, cues: [...quiet, { t: at, cue, vars }], duration: t + 0.8, prompts: [{ t, name: 'warning' }], shared });
+      const pm = mixdown(bank, sim, { shared, tail: 0 });
+      const from = Math.round(t * MIX_RATE);
+      const to = Math.round((t + 0.6) * MIX_RATE);
+      const slice = (st) => [st[0].subarray(from, to), st[1].subarray(from, to)];
+      const others = [new Float64Array(to - from), new Float64Array(to - from)];
+      for (const bus of ['Machines', 'Ambience', 'Sfx', 'UI']) {
+        const b = slice(pm.stems[bus]);
+        for (let i = 0; i < to - from; i++) {
+          others[0][i] += b[0][i];
+          others[1][i] += b[1][i];
+        }
+      }
+      const lu = momentaryMaxLufs(slice(pm.stems.Master), MIX_RATE) - momentaryMaxLufs(others, MIX_RATE);
+      assert.ok(lu >= 6, `${cue}, prompt ${after} s in: +${lu.toFixed(2)} LU`);
     }
   }
 });

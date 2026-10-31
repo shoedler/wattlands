@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "game": "siege",
-  "mix": {"other_db": -10.0, "other_doubling_db": -3.0, "other_min_gap_s": 0.06,
+  "mix": {"other_db": -9.5, "other_doubling_db": -3.0, "other_min_gap_s": 0.06,
           "machine_voices": 16, "sfx_voices": 16, "spot_voices": 6, "max_loop_players": 24},
   "sounds": {
     "pawl_click": {
@@ -17,7 +17,23 @@
     },
     "wheel_creak": {
       "dur": 0.32, "rate": 22050, "ch": 1, "seed": 3102, "variants": 5, "locked": true, "room": "wood",
-      "per_variant": [{"pitch": 1.0}, {"pitch": 0.9}, {"pitch": 1.1}, {"pitch": 0.84}, {"pitch": 1.16}],
+      "per_variant": [
+        {"pitch": 1.0, "norm": {"peak": -6}},
+        {"pitch": 0.97, "norm": {"peak": -8.5}, "dur": 0.2, "layers": [
+          {"src": "noise", "color": "white", "gain": 0.75, "env": {"a": 0.0003, "d": 0.005}, "fx": [{"bp": {"f": 1250, "q": 1.0}}]},
+          {"src": "chirp", "wave": "tri", "points": [[0, 700], [0.12, 520]], "dur": 0.16, "vibrato": {"hz": 41, "cents": 60},
+           "env": {"a": 0.003, "h": 0.02, "d": 0.13}, "gain": 0.42, "fx": [{"drive": 1.6}, {"lp": {"f": 1900, "q": 0.7}}]},
+          {"src": "chirp", "points": [[0, 210], [0.14, 165]], "dur": 0.16, "env": {"a": 0.004, "d": 0.14}, "gain": 0.2}
+        ]},
+        {"pitch": 1.03, "norm": {"peak": -7.5}},
+        {"pitch": 0.955, "norm": {"peak": -10.5}, "layers": [
+          {"src": "noise", "color": "white", "gain": 0.75, "env": {"a": 0.0003, "d": 0.005}, "fx": [{"bp": {"f": 1100, "q": 1.0}}]},
+          {"src": "chirp", "wave": "tri", "points": [[0, 500], [0.05, 610], [0.1, 540], [0.18, 650], [0.32, 470]], "vibrato": {"hz": 29, "cents": 85},
+           "env": {"a": 0.004, "h": 0.1, "d": 0.2}, "gain": 0.42, "fx": [{"drive": 1.8}, {"lp": {"f": 1700, "q": 0.7}}]},
+          {"src": "chirp", "points": [[0, 160], [0.14, 225], [0.32, 150]], "env": {"a": 0.005, "h": 0.05, "d": 0.2}, "gain": 0.22}
+        ]},
+        {"pitch": 1.045, "norm": {"peak": -8}}
+      ],
       "layers": [
         {"src": "noise", "color": "white", "gain": 0.75, "env": {"a": 0.0003, "d": 0.005}, "fx": [{"bp": {"f": 1250, "q": 1.0}}]},
         {"src": "chirp", "wave": "tri", "points": [[0, 540], [0.08, 760], [0.19, 690], [0.32, 520]], "vibrato": {"hz": 34, "cents": 70},
@@ -40,21 +56,30 @@
     },
     "axle_knock": {
       "dur": 0.18, "rate": 22050, "ch": 1, "seed": 3104, "variants": 2, "locked": true, "room": "wood",
-      "per_variant": [{"pitch": 1.0}, {"pitch": 0.93}],
+      "per_variant": [{"pitch": 1.0, "norm": {"peak": -6}}, {"pitch": 0.93, "norm": {"peak": -9}}],
       "layers": [
         {"src": "modal", "f": [124, 198, 311, 545], "t60": [0.16, 0.12, 0.08, 0.04], "g": [1.0, 0.85, 0.6, 0.3], "gain": 1.0},
         {"src": "noise", "color": "white", "gain": 0.34, "env": {"a": 0.0004, "d": 0.006}, "fx": [{"lp": {"f": 1500}}]}
       ]
     },
     "timber_groan": {
-      "dur": 1.9, "rate": 22050, "ch": 1, "seed": 3105, "loop": true, "xfade_s": 0.3, "compress": "pcm", "room": "wood",
+      "dur": 3.7, "rate": 22050, "ch": 1, "seed": 3105, "loop": true, "xfade_s": 0.3, "compress": "pcm", "room": "wood",
       "layers": [
-        {"src": "chirp", "wave": "saw", "points": [[0, 73], [0.45, 80], [0.95, 69], [1.5, 77], [2.2, 73]], "vibrato": {"hz": 7.3, "cents": 25}, "gain": 0.24, "fx": [{"hp": {"f": 60}}, {"lp": {"f": 480, "q": 0.9}}]},
-        {"src": "chirp", "wave": "tri", "points": [[0, 214], [0.55, 262], [1.05, 202], [1.6, 248], [2.2, 214]], "vibrato": {"hz": 19, "cents": 40}, "gain": 0.26,
+        {"src": "chirp", "wave": "saw", "points": [[0, 73], [0.7, 81], [1.3, 70], [2.1, 75], [2.6, 68], [3.3, 79], [4.0, 73]], "vibrato": {"hz": 7.3, "cents": 25}, "gain": 0.14, "fx": [{"hp": {"f": 60}}, {"lp": {"f": 480, "q": 0.9}}]},
+        {"src": "chirp", "wave": "tri", "points": [[0, 214], [0.4, 262], [1.25, 202], [1.7, 251], [2.45, 196], [3.05, 240], [3.6, 205], [4.0, 214]], "vibrato": {"hz": 19, "cents": 40}, "gain": 0.26,
          "fx": [{"drive": 1.8}, {"bp": {"f": 700, "q": 1.4}}]},
         {"src": "noise", "color": "pink", "gain": 0.3, "fx": [{"bp": {"f": 880, "q": 0.7}}]},
-        {"src": "noise", "color": "white", "gain": 0.07, "fx": [{"hp": {"f": 2500}}]},
+        {"src": "noise", "color": "white", "gain": 0.024, "fx": [{"hp": {"f": 2500}}]},
         {"src": "grains", "rate_hz": 7, "f": [320, 980], "dur_s": [0.015, 0.04], "g": [0.3, 1.0], "gain": 0.3}
+      ]
+    },
+    "timber_strain": {
+      "dur": 1.3, "rate": 22050, "ch": 1, "seed": 3147, "loop": true, "xfade_s": 0.2, "compress": "pcm", "room": "wood",
+      "layers": [
+        {"src": "noise", "color": "white", "gain": 0.45, "fx": [{"bp": {"f": [[0, 2100], [0.5, 2900], [0.9, 2300], [1.5, 2100]], "q": 1.3}}]},
+        {"src": "noise", "color": "white", "gain": 0.3, "fx": [{"hp": {"f": 3200}}]},
+        {"src": "grains", "rate_hz": 16, "f": [1300, 3400], "dur_s": [0.008, 0.028], "g": [0.3, 1.0], "gain": 0.5},
+        {"src": "chirp", "wave": "tri", "points": [[0, 840], [0.45, 1120], [0.8, 900], [1.2, 1060], [1.5, 840]], "vibrato": {"hz": 23, "cents": 45}, "gain": 0.12, "fx": [{"drive": 2.0}]}
       ]
     },
     "junction_clatter": {
@@ -195,24 +220,23 @@
       "dur": 2.4, "rate": 22050, "ch": 1, "seed": 3121, "room": "open",
       "layers": [
         {"src": "chirp", "wave": "saw", "points": [[0, 185], [0.16, 196], [1.9, 196], [2.2, 186]], "vibrato": {"hz": 4.6, "cents": 9},
-         "env": {"points": [[0, 0], [0.14, 0.9], [1.6, 1.0], [2.3, 0]]}, "gain": 0.7, "fx": [{"lp": {"f": [[0, 500], [0.25, 1500], [1.7, 1250], [2.4, 420]], "q": 1.1}}, {"drive": 1.5}]},
-        {"src": "chirp", "wave": "saw", "points": [[0, 92], [0.2, 98], [2.2, 97]], "env": {"points": [[0, 0], [0.2, 0.8], [1.7, 0.8], [2.3, 0]]}, "gain": 0.4, "fx": [{"lp": {"f": 420}}]},
+         "env": {"points": [[0, 0], [0.14, 0.9], [0.6, 1.0], [1.3, 0.5], [2.3, 0]]}, "gain": 0.7, "fx": [{"lp": {"f": [[0, 500], [0.25, 1500], [1.7, 1250], [2.4, 420]], "q": 1.1}}, {"drive": 1.5}, {"hp": {"f": 330}}, {"peak": {"f": 1050, "q": 0.9, "db": 5}}]},
         {"src": "noise", "color": "pink", "gain": 0.06, "env": {"points": [[0, 0], [0.1, 1.0], [2.2, 0.5], [2.4, 0]]}, "fx": [{"bp": {"f": 1200, "q": 1.2}}]}
       ]
     },
     "horn_push": {
       "dur": 1.5, "rate": 22050, "ch": 1, "seed": 3122, "room": "open",
       "layers": [
-        {"src": "chirp", "wave": "saw", "points": [[0, 140], [0.08, 146.83], [0.45, 146.83]], "dur": 0.5, "env": {"points": [[0, 0], [0.07, 1.0], [0.38, 0.85], [0.5, 0]]}, "gain": 0.7, "fx": [{"lp": {"f": 1000, "q": 1.0}}, {"drive": 1.5}]},
-        {"src": "chirp", "wave": "saw", "points": [[0, 186], [0.1, 196], [0.9, 195]], "at": 0.5, "dur": 1.0, "env": {"points": [[0, 0], [0.08, 1.0], [0.72, 0.9], [1.0, 0]]}, "gain": 0.8, "fx": [{"lp": {"f": 1350, "q": 1.0}}, {"drive": 1.5}]}
+        {"src": "chirp", "wave": "saw", "points": [[0, 140], [0.08, 146.83], [0.45, 146.83]], "dur": 0.5, "env": {"points": [[0, 0], [0.07, 1.0], [0.38, 0.85], [0.5, 0]]}, "gain": 0.7, "fx": [{"lp": {"f": 1300, "q": 1.0}}, {"drive": 1.5}, {"hp": {"f": 330}}, {"peak": {"f": 1050, "q": 0.9, "db": 5}}]},
+        {"src": "chirp", "wave": "saw", "points": [[0, 186], [0.1, 196], [0.9, 195]], "at": 0.5, "dur": 1.0, "env": {"points": [[0, 0], [0.08, 1.0], [0.34, 0.6], [1.0, 0]]}, "gain": 0.8, "fx": [{"lp": {"f": 1500, "q": 1.0}}, {"drive": 1.5}, {"hp": {"f": 330}}, {"peak": {"f": 1050, "q": 0.9, "db": 5}}]}
       ]
     },
     "horn_rush": {
       "dur": 1.5, "rate": 22050, "ch": 1, "seed": 3123, "room": "open",
       "layers": [
-        {"src": "chirp", "wave": "saw", "points": [[0, 208], [0.05, 220], [0.25, 220]], "dur": 0.28, "env": {"points": [[0, 0], [0.04, 1.0], [0.2, 0.85], [0.28, 0]]}, "gain": 0.75, "fx": [{"lp": {"f": 1800, "q": 1.0}}, {"drive": 1.7}]},
-        {"src": "chirp", "wave": "saw", "points": [[0, 208], [0.05, 220], [0.25, 220]], "at": 0.34, "dur": 0.28, "env": {"points": [[0, 0], [0.04, 1.0], [0.2, 0.85], [0.28, 0]]}, "gain": 0.75, "fx": [{"lp": {"f": 1800, "q": 1.0}}, {"drive": 1.7}]},
-        {"src": "chirp", "wave": "saw", "points": [[0, 248], [0.06, 261.63], [0.74, 261]], "at": 0.68, "dur": 0.82, "env": {"points": [[0, 0], [0.05, 1.0], [0.6, 0.9], [0.82, 0]]}, "gain": 0.8, "fx": [{"lp": {"f": 2000, "q": 1.0}}, {"drive": 1.7}]}
+        {"src": "chirp", "wave": "saw", "points": [[0, 186], [0.05, 196], [0.25, 196]], "dur": 0.28, "env": {"points": [[0, 0], [0.04, 1.0], [0.2, 0.85], [0.28, 0]]}, "gain": 0.75, "fx": [{"lp": {"f": 1800, "q": 1.0}}, {"drive": 1.7}, {"hp": {"f": 330}}, {"peak": {"f": 1050, "q": 0.9, "db": 5}}]},
+        {"src": "chirp", "wave": "saw", "points": [[0, 186], [0.05, 196], [0.25, 196]], "at": 0.34, "dur": 0.28, "env": {"points": [[0, 0], [0.04, 1.0], [0.2, 0.85], [0.28, 0]]}, "gain": 0.75, "fx": [{"lp": {"f": 1800, "q": 1.0}}, {"drive": 1.7}, {"hp": {"f": 330}}, {"peak": {"f": 1050, "q": 0.9, "db": 5}}]},
+        {"src": "chirp", "wave": "saw", "points": [[0, 248], [0.06, 261.63], [0.74, 261]], "at": 0.68, "dur": 0.82, "env": {"points": [[0, 0], [0.05, 1.0], [0.26, 0.55], [0.82, 0]]}, "gain": 0.8, "fx": [{"lp": {"f": 2000, "q": 1.0}}, {"drive": 1.7}, {"hp": {"f": 330}}, {"peak": {"f": 1050, "q": 0.9, "db": 5}}]}
       ]
     },
     "wave_end_bell": {
@@ -316,8 +340,8 @@
       ]
     },
     "coin_clink": {
-      "dur": 0.32, "rate": 22050, "ch": 1, "seed": 3135, "variants": 2,
-      "per_variant": [{"pitch": 1.0}, {"pitch": 1.06}],
+      "dur": 0.32, "rate": 22050, "ch": 1, "seed": 3135, "variants": 4,
+      "per_variant": [{"pitch": 1.0}, {"pitch": 1.06}, {"pitch": 0.97}, {"pitch": 1.12}],
       "layers": [
         {"src": "modal", "f": [2093, 3136, 4186], "t60": [0.2, 0.14, 0.09], "g": [1.0, 0.45, 0.2], "gain": 0.6},
         {"src": "modal", "f": [2349, 3520], "t60": [0.16, 0.1], "g": [1.0, 0.4], "gain": 0.45, "at": 0.07}
@@ -335,8 +359,8 @@
       "dur": 1.2, "rate": 22050, "ch": 1, "seed": 3137, "room": "wood",
       "layers": [
         {"src": "grains", "rate_hz": 30, "f": [240, 620], "sweep": 1.2, "dur_s": [0.01, 0.025], "g": [0.3, 0.9], "gain": 0.45, "dur": 0.5, "env": {"points": [[0, 0.2], [0.5, 1.0]]}},
-        {"src": "chirp", "wave": "saw", "points": [[0, 256], [0.06, 261.63], [0.36, 261.63]], "at": 0.32, "dur": 0.38, "env": {"points": [[0, 0], [0.04, 1.0], [0.3, 0.85], [0.38, 0]]}, "gain": 0.6, "fx": [{"lp": {"f": 1800}}, {"drive": 1.5}]},
-        {"src": "chirp", "wave": "saw", "points": [[0, 384], [0.06, 392], [0.46, 392]], "at": 0.68, "dur": 0.5, "env": {"points": [[0, 0], [0.04, 1.0], [0.38, 0.85], [0.5, 0]]}, "gain": 0.6, "fx": [{"lp": {"f": 2200}}, {"drive": 1.5}]}
+        {"src": "chirp", "wave": "saw", "points": [[0, 256], [0.06, 261.63], [0.36, 261.63]], "at": 0.32, "dur": 0.38, "env": {"points": [[0, 0], [0.04, 1.0], [0.3, 0.85], [0.38, 0]]}, "gain": 0.6, "fx": [{"lp": {"f": 1800}}, {"drive": 1.5}, {"hp": {"f": 330}}, {"peak": {"f": 1050, "q": 0.9, "db": 5}}]},
+        {"src": "chirp", "wave": "saw", "points": [[0, 384], [0.06, 392], [0.46, 392]], "at": 0.68, "dur": 0.5, "env": {"points": [[0, 0], [0.04, 1.0], [0.2, 0.6], [0.5, 0]]}, "gain": 0.6, "fx": [{"lp": {"f": 2200}}, {"drive": 1.5}, {"hp": {"f": 330}}, {"peak": {"f": 1050, "q": 0.9, "db": 5}}]}
       ]
     },
     "overdrive_off": {
@@ -357,29 +381,41 @@
       "dur": 11.0, "rate": 11025, "ch": 2, "seed": 3140, "loop": true, "xfade_s": 1.5,
       "layers": [
         {"src": "noise", "color": "pink", "gain": 1.0,
-         "fx": [{"hp": {"f": 50}}, {"lp": {"f": [[0, 420], [2.1, 980], [4.4, 340], [6.8, 1200], [8.6, 480], [11, 860], [12.5, 420]], "q": 0.7}}, {"trem": {"hz": 0.27, "depth": 0.45}}]}
+         "fx": [{"hp": {"f": 50}}, {"lp": {"f": [[0, 420], [2.1, 980], [4.4, 340], [6.8, 1200], [8.6, 480], [11, 860], [12.5, 420]], "q": 0.7}},
+                {"gain_env": {"points": [[0, 0.7], [1.7, 1], [3.1, 0.45], [4.0, 0.8], [6.6, 0.4], [7.7, 1], [9.6, 0.55], [11.2, 0.9], [12.5, 0.7]]}}]}
       ]
     },
     "wind_hill_hi": {
       "dur": 8.0, "rate": 22050, "ch": 2, "seed": 3141, "loop": true, "xfade_s": 1.2,
       "layers": [
-        {"src": "noise", "color": "white", "gain": 0.3,
-         "fx": [{"bp": {"f": [[0, 1250], [1.9, 3100], [3.5, 980], [5.1, 2500], [6.8, 1500], [9.2, 1250]], "q": 0.8}}, {"trem": {"hz": 0.34, "depth": 0.7}}]},
-        {"src": "noise", "color": "white", "gain": 1.0, "fx": [{"hp": {"f": 3800}}, {"trem": {"hz": 0.46, "depth": 0.6}}]},
-        {"src": "chirp", "points": [[0, 1040], [2.4, 1320], [4.4, 930], [6.5, 1180], [9.2, 1040]], "vibrato": {"hz": 0.9, "cents": 24}, "gain": 0.012, "fx": [{"trem": {"hz": 0.31, "depth": 0.95}}]}
+        {"src": "noise", "color": "white", "gain": 0.5,
+         "fx": [{"bp": {"f": [[0, 1250], [1.9, 3100], [3.5, 980], [5.1, 2500], [6.8, 1500], [9.2, 1250]], "q": 0.8}},
+                {"gain_env": {"points": [[0, 0.66], [1.2, 0.81], [2, 0.99], [2.8, 0.62], [3.9, 0.87], [6, 0.75], [6.9, 0.54], [7.5, 0.88], [8, 0.66], [9.2, 0.81]]}}]},
+        {"src": "noise", "color": "white", "gain": 1.0, "fx": [{"hp": {"f": 3800}}, {"gain_env": {"points": [[0, 0.64], [0.4, 0.81], [1, 0.95], [1.6, 0.54], [3.1, 0.54], [3.7, 0.9], [4.2, 0.42], [4.6, 0.48], [5.3, 0.91], [6.2, 0.82], [6.7, 0.98], [7.4, 0.68], [8, 0.64], [8.4, 0.81], [9, 0.95], [9.2, 0.82]]}}]},
+        {"src": "chirp", "points": [[0, 1040], [2.4, 1320], [4.4, 930], [6.5, 1180], [9.2, 1040]], "vibrato": {"hz": 0.9, "cents": 24}, "gain": 0.03, "fx": [{"gain_env": {"points": [[0, 0.1], [1.4, 0.8], [2.2, 0.1], [4.9, 0.05], [5.7, 1], [6.9, 0.2], [9.2, 0.1]]}}]}
       ]
     },
     "crowd_far": {
       "dur": 7.0, "rate": 11025, "ch": 2, "seed": 3142, "loop": true, "xfade_s": 1.0,
       "layers": [
-        {"src": "noise", "color": "pink", "gain": 0.5, "fx": [{"bp": {"f": [[0, 420], [3, 620], [5.4, 360], [8, 420]], "q": 0.9}}, {"trem": {"hz": 0.37, "depth": 0.4}}]},
-        {"src": "grains", "kind": "sine", "rate_hz": 16, "f": [170, 560], "sweep": 0.85, "dur_s": [0.12, 0.34], "g": [0.08, 0.34], "gain": 0.6},
+        {"src": "noise", "color": "pink", "gain": 0.5, "fx": [{"bp": {"f": [[0, 880], [3, 1200], [5.4, 800], [8, 880]], "q": 0.9}}, {"trem": {"hz": 0.37, "depth": 0.4}}]},
+        {"src": "grains", "kind": "sine", "rate_hz": 16, "f": [600, 1500], "sweep": 0.85, "dur_s": [0.12, 0.34], "g": [0.08, 0.34], "gain": 0.6},
         {"src": "grains", "kind": "noise", "rate_hz": 7, "f": [300, 1200], "dur_s": [0.01, 0.03], "g": [0.1, 0.5], "gain": 0.2, "fx": [{"lp": {"f": 1800}}]}
       ]
     },
     "crow": {
       "dur": 0.6, "rate": 22050, "ch": 2, "seed": 3143, "variants": 3, "compress": "qoa", "room": "open",
-      "per_variant": [{"pan": -0.65, "pitch": 1.0}, {"pan": 0.4, "pitch": 0.93}, {"pan": 0.78, "pitch": 1.07}],
+      "per_variant": [
+        {"pan": -0.65, "pitch": 1.0, "layers": [
+          {"src": "chirp", "wave": "saw", "points": [[0, 640], [0.08, 800], [0.32, 610]], "vibrato": {"hz": 44, "cents": 115}, "dur": 0.36, "env": {"a": 0.012, "h": 0.15, "d": 0.19}, "gain": 0.8, "fx": [{"bp": {"f": 1420, "q": 1.3}}, {"drive": 2.0}]}
+        ]},
+        {"pan": 0.4, "pitch": 0.93},
+        {"pan": 0.78, "pitch": 1.07, "layers": [
+          {"src": "chirp", "wave": "saw", "points": [[0, 620], [0.04, 780], [0.14, 650]], "vibrato": {"hz": 46, "cents": 110}, "dur": 0.16, "env": {"a": 0.01, "h": 0.06, "d": 0.09}, "gain": 0.8, "fx": [{"bp": {"f": 1450, "q": 1.3}}, {"drive": 2.0}]},
+          {"src": "chirp", "wave": "saw", "points": [[0, 600], [0.04, 760], [0.14, 620]], "vibrato": {"hz": 42, "cents": 120}, "at": 0.2, "dur": 0.16, "env": {"a": 0.01, "h": 0.06, "d": 0.09}, "gain": 0.72, "fx": [{"bp": {"f": 1380, "q": 1.3}}, {"drive": 2.0}]},
+          {"src": "chirp", "wave": "saw", "points": [[0, 590], [0.04, 730], [0.18, 570]], "vibrato": {"hz": 39, "cents": 120}, "at": 0.4, "dur": 0.19, "env": {"a": 0.01, "h": 0.06, "d": 0.12}, "gain": 0.66, "fx": [{"bp": {"f": 1340, "q": 1.3}}, {"drive": 2.0}]}
+        ]}
+      ],
       "layers": [
         {"src": "chirp", "wave": "saw", "points": [[0, 620], [0.06, 790], [0.2, 650]], "vibrato": {"hz": 46, "cents": 110}, "dur": 0.24, "env": {"a": 0.012, "h": 0.1, "d": 0.12}, "gain": 0.8, "fx": [{"bp": {"f": 1450, "q": 1.3}}, {"drive": 2.0}]},
         {"src": "chirp", "wave": "saw", "points": [[0, 600], [0.06, 760], [0.2, 610]], "vibrato": {"hz": 42, "cents": 120}, "at": 0.31, "dur": 0.24, "env": {"a": 0.012, "h": 0.09, "d": 0.13}, "gain": 0.72, "fx": [{"bp": {"f": 1380, "q": 1.3}}, {"drive": 2.0}]}
@@ -395,10 +431,17 @@
       ]
     },
     "lark": {
-      "dur": 1.5, "rate": 22050, "ch": 2, "seed": 3145, "compress": "qoa", "width": 0, "pan": 0.45,
+      "dur": 1.1, "rate": 22050, "ch": 2, "seed": 3145, "compress": "qoa", "width": 0, "pan": 0.45,
       "layers": [
-        {"src": "chirp", "points": [[0, 3050], [0.12, 3650], [0.22, 3300], [0.36, 4050], [0.5, 3400], [0.66, 4300], [0.8, 3650], [0.98, 4500], [1.14, 3800], [1.3, 4250], [1.5, 3500]],
-         "vibrato": {"hz": 21, "cents": 90}, "gain": 0.9, "env": {"points": [[0, 0], [0.05, 0.9], [1.0, 1.0], [1.4, 0.2], [1.5, 0]]}, "fx": [{"trem": {"hz": 9.5, "depth": 0.6}}]}
+        {"src": "chirp", "points": [[0, 3050], [0.09, 3650], [0.16, 3300], [0.26, 4050], [0.37, 3400], [0.48, 4300], [0.59, 3650], [0.72, 4500], [0.84, 3800], [0.95, 4250], [1.1, 3500]],
+         "vibrato": {"hz": 21, "cents": 90}, "gain": 0.9, "env": {"points": [[0, 0], [0.04, 0.9], [0.73, 1.0], [1.03, 0.2], [1.1, 0]]}, "fx": [{"trem": {"hz": 9.5, "depth": 0.6}}]}
+      ]
+    },
+    "war_drum": {
+      "dur": 0.5, "rate": 22050, "ch": 2, "seed": 3148, "compress": "qoa", "width": 0, "room": "open", "pan": 0.3,
+      "layers": [
+        {"src": "modal", "f": [150, 320, 640], "t60": [0.42, 0.22, 0.09], "g": [1.0, 0.55, 0.2], "gain": 1.0, "fx": [{"drive": 1.6}]},
+        {"src": "noise", "color": "brown", "gain": 0.6, "env": {"a": 0.001, "d": 0.08}, "fx": [{"lp": {"f": 520}}]}
       ]
     },
     "far_anvil": {
@@ -413,19 +456,22 @@
     "treadwheel": {
       "bus": "Machines", "priority": 5,
       "events": [
-        {"at": [0.0, 0.5], "sound": "pawl_click", "db": -5.5,
-         "db_by": [{"param": "p_eff", "points": [[0, -6], [120, -2], [300, 0], [500, 1.5]]}], "pitch_table": [0.0, -0.012, 0.009, 0.016, -0.007]},
-        {"at": [0.25], "sound": "wheel_creak", "db": -6.5,
-         "db_by": [{"param": "p_eff", "points": [[0, -9], [120, -4], [300, 0], [500, 2]]}], "pitch_table": [0.0, 0.03, -0.022, 0.012, -0.04, 0.02, 0.045]},
-        {"at": [0.0, 0.5], "sound": "tread_step", "db": -7.5, "lead_only": true, "when": {"param": "walkers", "min": 1},
+        {"at": [0.0, 0.5], "sound": "pawl_click", "db": -4.5,
+         "db_by": [{"param": "p_eff", "points": [[0, -6], [120, -2], [300, 0], [500, 1.5]]}, {"param": "rpm", "points": [[40, 3.3], [60, 2], [90, 0], [110, 0], [140, -1]]}], "pitch_table": [0.0, -0.012, 0.009, 0.016, -0.007]},
+        {"at": [0.25], "sound": "wheel_creak", "db": -4.4,
+         "db_by": [{"param": "p_eff", "points": [[0, -9], [120, -4], [300, 0], [500, 2]]}, {"param": "rpm", "points": [[40, 3.3], [60, 2], [90, 0], [110, 0], [140, -1]]}], "pitch_table": [0.0, 0.03, -0.022, 0.012, -0.04, 0.02, 0.045]},
+        {"at": [0.0, 0.5], "sound": "tread_step", "db": -9.0, "lead_only": true, "when": {"param": "walkers", "min": 1},
          "db_by": [{"param": "walkers", "points": [[1, -2], [2, 0], [3, 1]]}], "pitch_table": [0.0, -0.02, 0.012]},
-        {"at": [0.75], "sound": "axle_knock", "db": -10.0, "lead_only": true,
+        {"at": [0.75], "sound": "axle_knock", "db": -9.0, "lead_only": true,
          "db_by": [{"param": "p_eff", "points": [[0, -6], [300, 0], [500, 2]]}], "pitch_table": [0.0, -0.015, 0.012]}
       ],
       "loops": [
-        {"sound": "timber_groan", "db": -5.5, "min_rpm": 8, "other": true, "slew_s": 0.25,
+        {"sound": "timber_groan", "db": -7.0, "min_rpm": 8, "other": true, "slew_s": 0.25,
          "pitch_by": [{"param": "rpm", "points": [[20, 0.6], [90, 1.0], [140, 1.45]]}],
-         "db_by": [{"param": "p_eff", "points": [[0, -14], [100, -6], [300, 0], [500, 1.5]]}]}
+         "db_by": [{"param": "p_eff", "points": [[0, -14], [100, -6], [300, 0], [500, 1.5]]}, {"param": "rpm", "points": [[40, 5], [60, 3.8], [90, 0], [110, 0], [140, -1]]}]},
+        {"sound": "timber_strain", "db": -9.0, "min_rpm": 8, "slew_s": 0.25,
+         "pitch_by": [{"param": "rpm", "points": [[20, 0.75], [90, 1.0], [140, 1.25]]}],
+         "db_by": [{"param": "p_eff", "points": [[180, -60], [260, -14], [400, -3], [500, 0]]}]}
       ]
     },
     "mine": {
@@ -443,7 +489,7 @@
   },
   "loops": {
     "junction_clatter": {"bus": "Machines", "layers": [
-      {"sound": "junction_clatter", "db": -19.0, "pitch_by": [{"param": "team_w", "points": [[0, 0.7], [1500, 1.8]]}], "db_by": [{"param": "team_w", "points": [[0, -8], [600, -2], [1500, 0]]}]}
+      {"sound": "junction_clatter", "db": -17.0, "pitch_by": [{"param": "team_w", "points": [[0, 0.7], [1500, 1.8]]}], "db_by": [{"param": "team_w", "points": [[0, -8], [600, -2], [1500, 0]]}]}
     ]},
     "tar_bubble": {"bus": "Sfx", "layers": [
       {"sound": "tar_bubble", "db": -24.0, "db_by": [{"param": "m", "points": [[0, -6], [1, 0], [2, 2]]}]}
@@ -458,56 +504,61 @@
   "beds": {
     "hill_wind": {
       "layers": [
-        {"sound": "wind_hill_lo", "db": -17.0, "db_by": [{"param": "gust", "points": [[0, -4], [1, 2]]}]},
-        {"sound": "wind_hill_hi", "db": -9.0, "db_by": [{"param": "gust", "points": [[0, -8], [0.5, -2], [1, 2]]}]},
-        {"sound": "crowd_far", "db": -20.0, "db_by": [{"param": "enemies", "points": [[0, -50], [1, -12], [20, -4], [80, 2]]}]}
+        {"sound": "wind_hill_lo", "db": -16.0, "db_by": [{"param": "gust", "points": [[0, -4], [1, 2]]}]},
+        {"sound": "wind_hill_hi", "db": -7.5, "db_by": [{"param": "gust", "points": [[0, -8], [0.5, -2], [1, 2]]}]},
+        {"sound": "crowd_far", "db": -14.0, "db_by": [{"param": "enemies", "points": [[0, -50], [1, -12], [20, -4], [80, 2]]}]}
       ],
       "spots": [
         {"sound": "crow", "gap_s": [8, 25], "db": [-26, -20], "pitch": [0.96, 1.04]},
         {"sound": "banner_flap", "gap_s": [10, 25], "db": [-27, -21], "pitch": [0.92, 1.08]},
-        {"sound": "lark", "gap_s": [12, 30], "db": [-30, -25], "pitch": [0.97, 1.03], "when": {"param": "warmup", "min": 0.5}},
-        {"sound": "far_anvil", "gap_s": [18, 40], "db": [-34, -28], "pitch": [0.98, 1.02], "burst": [2, 3], "burst_gap_s": 0.46}
+        {"sound": "lark", "gap_s": [12, 30], "db": [-30, -25], "pitch": [0.97, 1.03], "when": {"param": "in_wave", "max": 0.5}},
+        {"sound": "far_anvil", "gap_s": [9, 22], "db": [-34, -28], "pitch": [0.98, 1.02], "burst": [2, 3], "burst_gap_s": 0.46, "when": {"param": "in_wave", "max": 0.5}},
+        {"sound": "war_drum", "gap_s": [7, 16], "db": [-30, -24], "pitch": [0.98, 1.02], "burst": [3, 3], "burst_gap_s": 0.48, "when": {"param": "enemies", "min": 1}}
       ]
     }
   },
   "cues": {
     "shot_bolt": {"hits": [
-      {"sound": "ballista_twang", "db": -6.0, "priority": 8},
-      {"sound": "bolt_whoosh", "db": -17.0, "delay_s": 0.04}
+      {"sound": "ballista_twang", "db": -12.0, "priority": 8},
+      {"sound": "bolt_whoosh", "db": -16.0, "delay_s": 0.04, "pitch_var": "p"}
     ]},
     "shot_scorpion": {"hits": [
-      {"sound": "scorpion_snap", "db": -13.0}
+      {"sound": "scorpion_snap", "db": -15.0}
     ]},
     "shot_stone": {"hits": [
-      {"sound": "onager_release", "db": -5.0, "priority": 8},
-      {"sound": "stone_whoosh", "db": -17.0, "delay_s": 0.05},
+      {"sound": "onager_release", "db": -7.0, "priority": 8, "pitch_var": "p"},
+      {"sound": "stone_whoosh", "db": -17.0, "delay_s": 0.05, "pitch_var": "p"},
       {"sound": "stone_impact", "db": -8.0, "delay_var": "flight_s"}
     ], "duck": [{"bus": "Machines", "db": -3.0, "attack_s": 0.01, "release_s": 0.35}]},
     "shot_arrow": {"hits": [
-      {"sound": "arrow_release", "db": -12.0},
-      {"sound": "arrow_whistle", "db": -16.0, "pitch_var": "p0"},
-      {"sound": "arrow_whistle", "db": -17.0, "delay_s": 0.07, "pitch_var": "p1"},
-      {"sound": "arrow_whistle", "db": -18.0, "delay_s": 0.15, "pitch_var": "p2"},
-      {"sound": "arrow_patter", "db": -17.0, "delay_var": "flight_s"}
+      {"sound": "arrow_release", "db": -19.0, "pitch_var": "p"},
+      {"sound": "arrow_whistle", "db": -27.0, "pitch_var": "p0"},
+      {"sound": "arrow_whistle", "db": -28.0, "delay_s": 0.07, "pitch_var": "p1"},
+      {"sound": "arrow_whistle", "db": -29.0, "delay_s": 0.15, "pitch_var": "p2"},
+      {"sound": "arrow_patter", "db": -18.5, "delay_var": "flight_s"}
+    ], "duck": [{"bus": "Ambience", "db": -3.0, "attack_s": 0.05, "release_s": 0.9}]},
+    "shot_arrow_rack": {"hits": [
+      {"sound": "arrow_release", "db": -19.0, "pitch_var": "p"},
+      {"sound": "arrow_patter", "db": -18.5, "delay_var": "flight_s"}
     ]},
-    "wave_start": {"hits": [{"sound": "horn_wave", "db": -7.0, "priority": 8}]},
-    "push": {"hits": [{"sound": "horn_push", "db": -8.0, "priority": 8}]},
-    "rush": {"hits": [{"sound": "horn_rush", "db": -6.0, "priority": 8}]},
-    "wave_end": {"hits": [{"sound": "wave_end_bell", "db": -9.0}]},
-    "breach": {"hits": [{"sound": "gate_crash", "db": -2.0, "priority": 8}],
+    "wave_start": {"hits": [{"sound": "horn_wave", "db": -16.5, "priority": 8}], "duck": [{"bus": "Machines", "db": -8.0, "attack_s": 0.03, "release_s": 2.4}, {"bus": "Ambience", "db": -4.0, "attack_s": 0.03, "release_s": 2.4}]},
+    "push": {"hits": [{"sound": "horn_push", "db": -16.0, "priority": 8}], "duck": [{"bus": "Machines", "db": -8.0, "attack_s": 0.03, "release_s": 1.7}, {"bus": "Ambience", "db": -4.0, "attack_s": 0.03, "release_s": 1.7}]},
+    "rush": {"hits": [{"sound": "horn_rush", "db": -16.5, "priority": 8}], "duck": [{"bus": "Machines", "db": -8.0, "attack_s": 0.03, "release_s": 1.7}, {"bus": "Ambience", "db": -4.0, "attack_s": 0.03, "release_s": 1.7}]},
+    "wave_end": {"hits": [{"sound": "wave_end_bell", "db": -10.0}]},
+    "breach": {"hits": [{"sound": "gate_crash", "db": -8.0, "priority": 8}],
       "duck": [{"bus": "Machines", "db": -6.0, "attack_s": 0.01, "release_s": 1.2}, {"bus": "Ambience", "db": -6.0, "attack_s": 0.01, "release_s": 1.2}, {"bus": "Sfx", "db": -6.0, "attack_s": 0.02, "release_s": 1.2}]},
-    "gate_hit": {"hits": [{"sound": "gate_hit", "db": -14.0, "db_var": "dmg_db"}]},
-    "gate_restored": {"hits": [{"sound": "gate_restored", "db": -9.0}]},
-    "hooves": {"hits": [{"sound": "hooves", "db": -21.0, "db_var": "count_db"}]},
-    "ram_thud": {"hits": [{"sound": "ram_thud", "db": -8.0}]},
+    "gate_hit": {"hits": [{"sound": "gate_hit", "db": -17.0, "db_var": "dmg_db"}]},
+    "gate_restored": {"hits": [{"sound": "gate_restored", "db": -12.0}]},
+    "hooves": {"hits": [{"sound": "hooves", "db": -23.0, "db_var": "count_db"}]},
+    "ram_thud": {"hits": [{"sound": "ram_thud", "db": -12.0, "pitch_var": "p"}]},
     "dock": {"hits": [{"sound": "tower_dock", "db": -7.0}]},
-    "reach": {"hits": [{"sound": "reach_alarm", "db": -10.0, "priority": 8}]},
-    "leak": {"hits": [{"sound": "reach_alarm", "db": -15.0}]},
-    "kill": {"hits": [{"sound": "kill_thud", "db": -15.0}]},
+    "reach": {"hits": [{"sound": "reach_alarm", "db": -15.0, "priority": 8}]},
+    "leak": {"hits": [{"sound": "reach_alarm", "db": -16.0}]},
+    "kill": {"hits": [{"sound": "kill_thud", "db": -17.0}]},
     "route": {"hits": [{"sound": "lever_route", "db": -9.0}], "other_db": -14.0},
-    "gold": {"hits": [{"sound": "coin_clink", "db": -18.0}]},
+    "gold": {"hits": [{"sound": "coin_clink", "db": -22.0}]},
     "buy": {"hits": [{"sound": "hammer_buy", "db": -9.0}], "other_db": -10.0},
-    "overdrive_on": {"hits": [{"sound": "overdrive_on", "db": -8.0, "priority": 8}], "other_db": -10.0},
+    "overdrive_on": {"hits": [{"sound": "overdrive_on", "db": -16.0, "priority": 8}], "other_db": -10.0, "duck": [{"bus": "Machines", "db": -8.0, "attack_s": 0.03, "release_s": 1.4}, {"bus": "Ambience", "db": -4.0, "attack_s": 0.03, "release_s": 1.4}]},
     "overdrive_off": {"hits": [{"sound": "overdrive_off", "db": -10.0}], "other_db": -10.0},
     "overdrive_no": {"hits": [{"sound": "overdrive_no", "db": -10.0}], "other_db": -10.0},
     "tar_hiss": {"hits": [{"sound": "tar_hiss", "db": -14.0}]}
@@ -519,12 +570,13 @@
       {"machine": "mine", "lead": true, "rpm_by": {"param": "m", "points": [[0, 0], [1, 54]]}},
       {"machine": "pump", "lead": true, "rpm_by": {"param": "tar_m", "points": [[0, 0], [1, 30]]}}
     ],
-    "bed": "hill_wind", "bed_params": {"gust": 0.5, "enemies": 25, "warmup": 1}, "seed": 8,
+    "bed": "hill_wind", "bed_params": {"gust": 0.5, "enemies": 25, "in_wave": 1}, "seed": 184,
     "segments": [
-      {"rpm": 60, "s": 20, "params": {"p_eff": 150, "walkers": 2, "gust": 0.35, "m": 0.9, "tar_m": 0.8}},
-      {"rpm": 90, "s": 20, "params": {"p_eff": 240, "walkers": 2, "gust": 0.65, "m": 0.9, "tar_m": 0.8}},
+      {"rpm": 60, "s": 20, "params": {"p_eff": 220, "walkers": 2, "gust": 0.35, "m": 0.9, "tar_m": 0.8}},
+      {"rpm": 90, "s": 20, "params": {"p_eff": 260, "walkers": 2, "gust": 0.65, "m": 0.9, "tar_m": 0.8}},
       {"rpm": 110, "s": 20, "params": {"p_eff": 340, "walkers": 3, "gust": 0.5, "m": 0.9, "tar_m": 0.8}},
-      {"rpm": 0, "s": 3, "params": {"p_eff": 0, "walkers": 1, "gust": 0.3, "m": 0, "tar_m": 0}}
+      {"rpm": 0, "s": 3, "params": {"p_eff": 0, "walkers": 1, "gust": 0.1, "m": 0, "tar_m": 0}},
+      {"rpm": 0, "s": 9, "params": {"p_eff": 0, "walkers": 0, "gust": 0.05, "m": 0, "tar_m": 0, "in_wave": 0, "enemies": 0}}
     ],
     "events": [
       {"t": 1.0, "cue": "wave_start"},
@@ -540,15 +592,21 @@
       {"t": 17.0, "cue": "shot_bolt"},
       {"t": 19.0, "cue": "gold"},
       {"t": 21.0, "cue": "push"},
-      {"t": 24.0, "cue": "shot_arrow", "vars": {"flight_s": 1.1, "p0": 1.04, "p1": 0.97, "p2": 0.9}},
+      {"t": 25.5, "cue": "shot_arrow", "vars": {"flight_s": 1.1, "p0": 1.04, "p1": 0.97, "p2": 0.9}},
       {"t": 26.0, "cue": "route"},
+      {"t": 27.0, "cue": "shot_arrow_rack", "vars": {"flight_s": 1.1, "p": 1.03}},
+      {"t": 28.5, "cue": "shot_arrow_rack", "vars": {"flight_s": 1.2, "p": 0.97}},
+      {"t": 30.0, "cue": "shot_arrow", "vars": {"flight_s": 1.15, "p": 1.0, "p0": 0.97, "p1": 1.05, "p2": 0.94}},
       {"t": 30.4, "cue": "ram_thud"},
+      {"t": 31.5, "cue": "shot_arrow_rack", "vars": {"flight_s": 1.1, "p": 1.015}},
+      {"t": 33.0, "cue": "shot_arrow_rack", "vars": {"flight_s": 1.25, "p": 0.985}},
+      {"t": 34.5, "cue": "shot_arrow", "vars": {"flight_s": 1.1, "p": 1.03, "p0": 1.02, "p1": 0.95, "p2": 1.06}},
       {"t": 31.0, "cue": "reach"},
       {"t": 32.0, "cue": "ram_thud"},
       {"t": 33.2, "cue": "ram_thud"},
-      {"t": 33.6, "cue": "gate_hit", "vars": {"dmg_db": 6}},
+      {"t": 33.3, "cue": "gate_hit", "vars": {"dmg_db": 4.7}},
       {"t": 34.4, "cue": "ram_thud"},
-      {"t": 34.8, "cue": "gate_hit", "vars": {"dmg_db": 8}},
+      {"t": 34.5, "cue": "gate_hit", "vars": {"dmg_db": 4.7}},
       {"t": 26.8, "cue": "shot_stone", "vars": {"flight_s": 1.8}},
       {"t": 36.0, "cue": "tar_hiss"},
       {"t": 37.5, "cue": "kill"},
@@ -563,11 +621,12 @@
       {"t": 57.5, "cue": "wave_end"}
     ],
     "loops": [
-      {"id": "junction_clatter", "t0": 1, "t1": 58, "params": {"team_w": 800}},
+      {"id": "junction_clatter", "t0": 1, "t1": 60, "params": {"team_w": 800}},
       {"id": "tar_bubble", "t0": 0, "t1": 60, "params": {"m": 0.8}},
       {"id": "tar_pour", "t0": 32, "t1": 40, "params": {}},
       {"id": "tower_creak", "t0": 42, "t1": 48.5, "params": {}}
     ],
-    "checks": {"a14": {"cue": "shot_bolt"}}
+    "checks": {"a6": {"param": "p_eff", "from": 150, "to": 340}, "a14": {"cue": "shot_bolt"}},
+    "waive": {"A2": "Sfx peaks at -22.5 LUFS momentary against the -17..-11 window, by choice: with the prompts ducking Sfx only -4 dB, an Sfx moment at -17 reads about +1 LU under a warning, and D5 outranks it. Machines, other, Ambience, UI and the prompts are all inside A2. See docs/decisions/audio-siege.md."}
   }
 }
