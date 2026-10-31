@@ -1,0 +1,50 @@
+{
+  "import_proof_loop": {
+    "sound": "import_proof_loop",
+    "variant": 0,
+    "rate": 22050,
+    "ch": 1,
+    "frames": 11026,
+    "loop_frames": 11025,
+    "preroll": 0,
+    "bytes": 22096,
+    "sha256": "87a1827d8c50430148397a8334e943cac5a4c97c6b7187967b574afc12e6700d",
+    "peak_db": -15.27,
+    "lufs": -20,
+    "loop": true,
+    "locked": false,
+    "compress": "pcm"
+  },
+  "import_proof_qoa": {
+    "sound": "import_proof_qoa",
+    "variant": 0,
+    "rate": 22050,
+    "ch": 2,
+    "frames": 22051,
+    "loop_frames": 22050,
+    "preroll": 0,
+    "bytes": 88248,
+    "sha256": "b12952ec1dbb13a5493bf64b3e60be57bdef0cec5511e0924aaf9c1ee19df14f",
+    "peak_db": -10.74,
+    "lufs": -20,
+    "loop": true,
+    "locked": false,
+    "compress": "qoa"
+  },
+  "import_proof_locked": {
+    "sound": "import_proof_locked",
+    "variant": 0,
+    "rate": 22050,
+    "ch": 1,
+    "frames": 3969,
+    "loop_frames": 0,
+    "preroll": 1764,
+    "bytes": 7982,
+    "sha256": "befad9a720ef6b916ae3190cc2aea7140e59fbb176aa9b891317013a9250a96f",
+    "peak_db": -6,
+    "lufs": -28.08,
+    "loop": false,
+    "locked": true,
+    "compress": "pcm"
+  }
+}
