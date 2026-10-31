@@ -159,63 +159,95 @@ export const cloudsLoPlane = (seed) =>
     }
   });
 
+/** A piecewise linear wander in -amp..amp over y, a kink every `step` rows: rock edges, not curves. */
+function zigzag(y, key, amp, step, seed) {
+  const n = Math.floor(y / step);
+  const t = y / step - n;
+  const a = hash2(n, key, seed) - 0.5;
+  const b = hash2(n + 1, key, seed) - 0.5;
+  return 2 * amp * (a + (b - a) * t);
+}
+
+/** The crest's major peaks: only those standing well above the land either side, and well apart. */
+function majorPeaks(w, topOf, minProminence, minGap) {
+  const found = [];
+  for (let x = 0; x < w; x++) {
+    const a = topOf(x);
+    if (!(a <= topOf(x - 1) && a < topOf(x + 1))) continue;
+    const reach = (dir) => {
+      let deep = a;
+      for (let d = 1; d < 260; d++) {
+        const u = topOf(x + dir * d);
+        if (u < a) break;
+        deep = Math.max(deep, u);
+      }
+      return deep - a;
+    };
+    const prominence = Math.min(reach(-1), reach(1));
+    if (prominence >= minProminence) found.push({ x, prominence });
+  }
+  found.sort((p, q) => q.prominence - p.prominence || p.x - q.x);
+  const kept = [];
+  for (const p of found) {
+    if (kept.every((q) => Math.min(Math.abs(p.x - q.x), w - Math.abs(p.x - q.x)) >= minGap)) kept.push(p);
+  }
+  return kept.map((p) => p.x).sort((p, q) => p - q);
+}
+
 /**
- * The far range as rock lit from the right: ribs run down from every crest and fan out away from their peak.
- * East of a rib the face looks at the sun and is lit; west of it, it is in shade. Between two ribs a gully
- * marks where one face meets the next, so light and shade change at a hard edge and follow the mountain's
- * shape, with no streaks and no dither.
+ * The far range as a few big masses lit from the right. Each major peak sends one spine down the mountain,
+ * and spurs branch off the spine and fan out. East of a ridgeline the rock looks at the sun; west of it, it
+ * is in shade, darkest against the spine. Light and shade change at one angular edge per face: large planes,
+ * tied to the crests, in the two middle tones, so the farthest land stays quiet.
  */
 function ridgeFaces(c, topOf, seed) {
   const rnd = mulberry32(seed ^ 0x37);
   const w = c.w;
-  // The crest's peaks: where the height turns over.
-  const peaks = [];
-  for (let x = 0; x < w; x++) {
-    const a = topOf(x);
-    if (a <= topOf(x - 1) && a < topOf(x + 1)) peaks.push(x);
-  }
-  const nearestPeak = (x) => {
-    let best = peaks[0] ?? 0;
-    let bestD = Infinity;
-    for (const p of peaks) {
-      const d = Math.abs(((x - p + w * 1.5) % w) - w / 2);
-      if (d < bestD) {
-        bestD = d;
-        best = p;
+  const ribs = [];
+  const rib = (x0, y0, spread, major, parent = null) => {
+    const key = ribs.length + 1;
+    const r = { x0, y0, spread, major, parent, dead: false };
+    r.at = (y) => x0 + spread * (y - y0) + zigzag(y, key, 3 + rnd.fixed, 11, seed) - zigzag(y0, key, 3 + rnd.fixed, 11, seed);
+    ribs.push(r);
+    return r;
+  };
+  rnd.fixed = 2.5;
+  const peaks = majorPeaks(w, topOf, 9, 76);
+  peaks.forEach((p, i) => {
+    const top = topOf(p);
+    const spine = rib(p, top, (rnd() - 0.5) * 0.36, true);
+    for (const side of [-1, 1]) {
+      // One spur each way off the spine, and sometimes a second, lower down.
+      const y1 = top + 9 + rnd() * 16;
+      rib(spine.at(y1), y1, side * (0.75 + rnd() * 0.65), false, spine);
+      if (rnd() < 0.45) {
+        const y2 = y1 + 12 + rnd() * 14;
+        rib(spine.at(y2), y2, side * (0.55 + rnd() * 0.5), false, spine);
       }
     }
-    return ((x - best + w * 1.5) % w) - w / 2;
-  };
-  const ribs = [];
-  const rib = (x0, y0, spread, lit) => {
-    const phase = rnd() * Math.PI * 2;
-    const wob = 1.2 + rnd() * 2.2;
-    const bend = 0.05 + rnd() * 0.09;
-    ribs.push({ x0, y0, spread, lit, at: (y) => x0 + spread * (y - y0) + wob * Math.sin((y - y0) * bend + phase) });
-  };
-  for (const p of peaks) rib(p, topOf(p), (rnd() - 0.5) * 0.5, 3);
-  // Shoulder ribs along the whole crest, and spurs that start lower down and split the wider faces.
-  let x = 0;
-  while (x < w) {
-    const side = nearestPeak(x) < 0 ? -1 : 1;
-    rib(x, topOf(x) + 1, side * (0.55 + rnd() * 0.6), rnd() < 0.45 ? 3 : 2);
-    if (rnd() < 0.5) rib(x + rnd() * 12, topOf(x) + 10 + rnd() * 18, side * (0.7 + rnd() * 0.5), 2);
-    x += 24 + Math.floor(rnd() * 40);
-  }
+    // A long saddle between two peaks gets one shoulder of its own.
+    const next = peaks[(i + 1) % peaks.length];
+    const gap = (next - p + w) % w || w;
+    if (gap > 170) {
+      const sx = (p + gap * (0.42 + rnd() * 0.16)) % w;
+      rib(sx, topOf(Math.round(sx)) + 1, 0.5 + rnd() * 0.5, false);
+    }
+  });
   for (let y = 0; y < c.h; y++) {
     const live = [];
     for (const r of ribs) {
-      if (y >= r.y0 && !r.dead) live.push({ x: ((r.at(y) % w) + w) % w, lit: r.lit, key: r.x0, rib: r });
+      if (y >= r.y0 && !r.dead) live.push({ x: ((r.at(y) % w) + w) % w, rib: r });
     }
     live.sort((a, b) => a.x - b.x);
-    // Two ribs that run together end there, the younger one for good: ribs never cross.
+    // Two ridgelines that run together end there, the lesser one for good: they never cross.
     const row = [];
     for (const r of live) {
       const prev = row[row.length - 1];
-      if (prev && r.x - prev.x <= 4) {
-        const younger = r.rib.y0 > prev.rib.y0 ? r : prev;
-        younger.rib.dead = true;
-        if (younger === prev) row[row.length - 1] = r;
+      const fresh = y - r.rib.y0 < 9 || (prev && y - prev.rib.y0 < 9);
+      if (prev && !fresh && r.x - prev.x <= 5) {
+        const lesser = r.rib.major && !prev.rib.major ? prev : prev.rib.major && !r.rib.major ? r : r.rib.y0 > prev.rib.y0 ? r : prev;
+        lesser.rib.dead = true;
+        if (lesser === prev) row[row.length - 1] = r;
       } else {
         row.push(r);
       }
@@ -225,14 +257,14 @@ function ridgeFaces(c, topOf, seed) {
       const a = row[i];
       const b = row[(i + 1) % row.length];
       const span = ((b.x - a.x + w) % w) || w;
-      const gully = 0.42 + 0.3 * hash2(Math.round(a.key), 11, seed);
+      const edge = span * (0.46 + 0.22 * hash2(Math.round(a.rib.x0), 11, seed)) + zigzag(y, Math.round(a.rib.x0) + 7, 5, 9, seed);
+      const deep = b.rib.major ? clamp(2 + (y - b.rib.y0) * 0.14 + zigzag(y, Math.round(b.rib.x0) + 3, 2, 7, seed), 0, span * 0.3) : 0;
       for (let k = 0; k < Math.ceil(span); k++) {
         const px = Math.round(a.x) + k;
         const wx = ((px % w) + w) % w;
         if (y < topOf(wx)) continue;
-        const t = k / span;
-        // Bright on the rib itself, the lit face behind it, then the shaded face up to the next rib.
-        const index = a.lit === 3 && k < 2 ? 3 : t < gully ? 2 : t < gully + (1 - gully) * 0.7 ? 1 : 0;
+        // The spine's own crest line, the lit plane behind it, the plane in shade, the deep edge against the next spine.
+        const index = a.rib.major && k < 1 ? 3 : k < edge ? 2 : span - k <= deep ? 0 : 1;
         c.px(wx, y, ix(P.RIDGE + index));
       }
     }
@@ -311,30 +343,35 @@ function fieldPixel(type, x, y, depth, tone, c, seed) {
 }
 
 /**
- * One strand of mist: a long flat run, broken toward its ends by whole gaps of a few pixels. Hanging mist
- * goes on empty pixels only; `over` lets ground mist lie on land.
+ * A bank of mist lying on a base line: `baseOf(x)` is its floor. Mist settles level, so its top stays nearly
+ * flat, swelling and thinning in slow waves, and falls away fast at both ends, where it breaks into separate
+ * shreds. Top and floor both wander, so it has no straight edge. The tone a step lighter is the band along its
+ * top, where the light catches it. `over`: it lies on land (ground mist) rather than only on empty pixels
+ * (hanging mist, which burns off through LUT alpha without leaving holes).
  */
-function wisp(c, cx, y, len, index, seed, over = false) {
+function mistBank(c, cx, len, thick, baseOf, index, seed, over = false) {
   const x0 = Math.round(cx - len / 2);
+  const rnd = mulberry32(seed);
+  const [p0, p1, p2] = [rnd() * 6.28, rnd() * 6.28, rnd() * 6.28];
+  const [f0, f1, f2] = [0.05 + rnd() * 0.05, 0.13 + rnd() * 0.1, 0.09 + rnd() * 0.07];
   for (let k = 0; k <= len; k++) {
     const t = k / len;
+    const taper = Math.sin(Math.PI * t) ** 0.45;
+    // Shreds toward the ends: whole gaps, longer the further out.
+    if (hash2((x0 + k) >> 3, 5, seed) > taper * taper * taper * 2.4) continue;
+    const swell = 0.74 + 0.16 * Math.sin(k * f0 + p0) + 0.1 * Math.sin(k * f1 + p1);
+    const h = thick * taper * swell;
+    if (h < 0.8) continue;
     const px = x0 + k;
-    if (hash2(px >> 2, y, seed) > Math.sin(Math.PI * t) ** 0.55 * 1.12) continue;
-    if (!over && c.get(((px % c.w) + c.w) % c.w, y)[3] !== 0) continue;
-    c.px(px, y, ix(index));
-  }
-}
-
-/** Layers of strands at the given rows, thin and sparse; the odd core strand one shade lighter. */
-function mistLayer(c, seed, rows, count, minLen, maxLen) {
-  const rnd = mulberry32(seed);
-  for (let i = 0; i < count; i++) {
-    const y = rows[Math.floor(rnd() * rows.length)];
-    const len = minLen + rnd() * (maxLen - minLen);
-    const cx = rnd() * c.w;
-    wisp(c, cx, y, len, P.MIST, seed + i);
-    if (rnd() < 0.5) wisp(c, cx + rnd() * 16 - 8, y + 1, len * (0.45 + rnd() * 0.4), P.MIST, seed + i + 91);
-    if (rnd() < 0.3) wisp(c, cx + rnd() * 10 - 5, y, len * 0.35, P.MIST + 1, seed + i + 47);
+    const wx = ((px % c.w) + c.w) % c.w;
+    const floor = Math.round(baseOf(wx) + 1.1 * Math.sin(k * f2 + p2));
+    const top = Math.round(floor - h);
+    for (let y = top; y <= floor; y++) {
+      if (y < 0 || y >= c.h) continue;
+      if (!over && c.get(wx, y)[3] !== 0) continue;
+      const core = h >= 4 && y >= top + 1 && y <= top + 1 + Math.round(h * 0.22 + Math.sin(k * f1 + p2));
+      c.px(wx, y, ix(index + (core ? 1 : 0)));
+    }
   }
 }
 
@@ -405,9 +442,19 @@ export function midHillsPlane(seed) {
     c.px(x + 2, y + 2, ix(P.WINDOW));
     c.px(x + 5, y + 2, ix(P.WINDOW));
   }
-  // Valley fog: flat wisps at set heights, on empty pixels only, so it lies between the hills and burns off
-  // without leaving holes. No dither: it hangs in long strands.
-  mistLayer(c, seed ^ 0x47, [64, 72, 78, 84, 90, 96], 34, 40, 170);
+  // Valley fog pools in the dips of the crest, on empty pixels only, so the hills shape it and it burns off
+  // without leaving holes.
+  const rndFog = mulberry32(seed ^ 0x47);
+  let fog = 0;
+  for (let x = 0; x < c.w; x++) {
+    const here = topOf(x);
+    if (!(here >= topOf((x - 1 + c.w) % c.w) && here > topOf((x + 1) % c.w))) continue;
+    if (here < 44) continue;
+    const len = 90 + rndFog() * 190;
+    const thick = 7 + rndFog() * 12;
+    mistBank(c, x, len, thick, () => here + 3, P.MIST, seed + 300 + fog++ * 11);
+    if (rndFog() < 0.6) mistBank(c, x + rndFog() * 80 - 40, len * 0.5, thick * 0.45, () => here - thick * 0.9, P.MIST, seed + 300 + fog++ * 11);
+  }
   return c;
 }
 
@@ -652,60 +699,75 @@ export function nearTreesPlane(seed) {
     barn(c, fx + 50, fb, seed + n);
     poplar(c, fx + 90, groundAt(fx + 90) + 3, 58, seed + ++n * 29);
   }
-  // Ground mist in the field: opaque strands that turn back into grass by day. Hanging mist on the empty
-  // pixels between the trees burns off through LUT alpha. Long flat runs both, no dither.
-  mistLayer(c, seed ^ 0x57, [92, 97, 101, 104, 107, 109, 111], 46, 36, 150);
-  const rndGround = mulberry32(seed ^ 0x58);
-  for (let i = 0; i < 34; i++) {
-    const gx = rndGround() * c.w;
-    const gy = groundAt(Math.round(gx)) + 1 + Math.floor(rndGround() * 4);
-    wisp(c, gx, gy, 24 + rndGround() * 90, P.MIST_GROUND + (i % 3 === 0 ? 1 : 0), seed + i * 7, true);
+  // Mist pools at the foot of the trees. Behind the trunks it hangs on empty pixels and burns off through LUT
+  // alpha. Over the tree bases and the field it lies on land, opaque, and by day those same pixels are grass.
+  const rndMist = mulberry32(seed ^ 0x57);
+  const land = (x) => groundAt(((Math.round(x) % c.w) + c.w) % c.w);
+  for (let i = 0; i < 30; i++) {
+    const gx = rndMist() * c.w;
+    mistBank(c, gx, 50 + rndMist() * 150, 7 + rndMist() * 9, (x) => land(x) - 1, P.MIST, seed + 500 + i * 7);
+  }
+  for (let i = 0; i < 26; i++) {
+    const gx = rndMist() * c.w;
+    const lift = 2 + rndMist() * 3;
+    mistBank(c, gx, 30 + rndMist() * 110, 3 + rndMist() * 4, (x) => land(x) + lift, P.MIST_GROUND, seed + 700 + i * 7, true);
+  }
+  // Lower down, a few thin banks along the hedge in the field.
+  for (let i = 0; i < 8; i++) {
+    const gx = rndMist() * c.w;
+    mistBank(c, gx, 40 + rndMist() * 80, 2.5 + rndMist() * 2.5, (x) => 131 + 3 * f(x), P.MIST_GROUND, seed + 900 + i * 7, true);
   }
   return c;
 }
 
-/** 480 x 130: one pole every 240 px with cross arms, insulators and a stay; three wires with a catenary. */
+/** Rows the three wires leave a pole at, and how far each sags: the gaps stay open all along the span. */
+export const WIRES = [
+  { y: 8, sag: 8 },
+  { y: 13, sag: 8.5 },
+  { y: 19, sag: 9 },
+];
+const wireY = (wire, x) => {
+  const t = ((x + 180) % 240) / 240; // 0 at a pole, 1 at the next
+  return Math.round(wire.y + wire.sag * (1 - (2 * t - 1) ** 2));
+};
+
+/** 480 x 130: one pole every 240 px with a cross arm and three insulators; three separate 1 px wires with a catenary. */
 export function polesPlane() {
   const c = new Canvas(480, 130, { wrapX: true });
+  for (let x = 0; x < 480; x++) {
+    for (const wire of WIRES) c.px(x, wireY(wire, x), ix(P.WIRE));
+  }
   for (const [x, transformer] of [
     [60, false],
     [300, true],
   ]) {
-    c.rect(x, 10, 3, 120, ix(P.WOOD + 1));
-    c.rect(x + 2, 10, 1, 120, ix(P.WOOD + 3));
-    c.rect(x, 10, 1, 120, ix(P.WOOD));
+    c.rect(x, 7, 3, 123, ix(P.WOOD + 1));
+    c.rect(x + 2, 7, 1, 123, ix(P.WOOD + 3));
+    c.rect(x, 7, 1, 123, ix(P.WOOD));
     for (let y = 30; y < 130; y += 17) c.px(x + 1, y, ix(P.WOOD));
-    // Cross arm, its braces, three insulators on it.
+    // A pin on the pole's head, a cross arm with its braces, a bracket under it: one insulator per wire.
+    c.rect(x + 1, 6, 1, 3, ix(P.INSULATOR));
     c.rect(x - 9, 15, 21, 2, ix(P.WOOD + 2));
     c.rect(x - 9, 16, 21, 1, ix(P.WOOD));
     c.line(x - 6, 17, x, 25, ix(P.WOOD));
     c.line(x + 8, 17, x + 2, 25, ix(P.WOOD));
-    for (const dx of [-8, 1, 10]) {
-      c.rect(x + dx, 13, 1, 2, ix(P.INSULATOR));
-      c.px(x + dx, 12, ix(P.INSULATOR));
-    }
+    c.rect(x + 9, 13, 1, 2, ix(P.INSULATOR));
+    c.rect(x - 4, 19, 4, 1, ix(P.WOOD));
+    c.rect(x - 5, 19, 1, 2, ix(P.INSULATOR));
     if (transformer) {
       c.rect(x - 7, 36, 7, 12, ix(P.WOOD + 1));
       c.rect(x - 7, 36, 2, 12, ix(P.WOOD));
       c.rect(x - 1, 36, 1, 12, ix(P.WOOD + 3));
       c.rect(x - 8, 35, 9, 1, ix(P.WOOD + 2));
-      c.line(x - 4, 35, x - 7, 17, ix(P.WIRE));
+      c.line(x - 4, 35, x - 5, 21, ix(P.WIRE));
     }
   }
-  for (let x = 0; x < 480; x++) {
-    const t = ((x + 180) % 240) / 240; // 0 at a pole, 1 at the next
-    const sag = 9 * (1 - (2 * t - 1) ** 2);
-    c.px(x, 12 + sag, ix(P.WIRE));
-    c.px(x, 13 + sag * 0.92, ix(P.WIRE));
-    c.px(x, 15 + sag * 0.84 + 1, ix(P.WIRE));
-  }
-  // Two starlings on the wire.
+  // Two starlings on the top wire, darker than it.
   for (const bx of [150, 158]) {
-    const t = ((bx + 180) % 240) / 240;
-    const y = Math.round(12 + 9 * (1 - (2 * t - 1) ** 2));
-    c.rect(bx, y - 3, 3, 2, ix(P.WIRE));
-    c.px(bx - 1, y - 3, ix(P.WIRE));
-    c.px(bx + 3, y - 4, ix(P.WIRE));
+    const y = wireY(WIRES[0], bx);
+    c.rect(bx, y - 3, 3, 3, ix(P.WOOD));
+    c.px(bx - 1, y - 3, ix(P.WOOD));
+    c.px(bx + 3, y - 4, ix(P.WOOD));
   }
   return c;
 }
@@ -854,17 +916,34 @@ export function vergeNearPlane(seed, f) {
   return c;
 }
 
-/** 960 x 34: grass clumps, seed heads and stones in the near foreground, wind frame f of 2. */
+/** A worn patch of earth on the bottom rows: an uneven outline, lumps along its top, grass over both ends. */
+function earthPatch(c, cx, w, hMax, seed) {
+  const x0 = Math.round(cx - w / 2);
+  for (let k = 0; k < w; k++) {
+    const u = (k + 0.5) / w;
+    const lumps = 0.4 + 0.45 * hash2(k >> 2, 3, seed) + 0.15 * hash2(k, 4, seed);
+    const h = Math.round(hMax * Math.sin(Math.PI * u) ** 0.6 * lumps);
+    for (let j = 0; j < h; j++) {
+      const top = j === h - 1;
+      const stone = hash2(x0 + k, j, seed + 1) < 0.1;
+      c.px(x0 + k, c.h - 1 - j, ix(P.EARTH + (stone ? 4 : top ? 3 : hash2(x0 + k >> 1, j, seed + 2) < 0.35 ? 0 : 1)));
+    }
+  }
+}
+
+/** A small stone: a couple of px wide, lit on the sun's side, a dark foot. */
+function pebble(c, x, y, w) {
+  for (let k = 0; k < w; k++) {
+    c.px(x + k, y, ix(P.EARTH + (k === w - 1 ? 5 : 4)));
+    c.px(x + k, y + 1, ix(P.EARTH + (k === w - 1 ? 3 : 1)));
+  }
+}
+
+/** 960 x 34: earth patches, grass clumps and tufts, seed heads and small stones in the near foreground, wind frame f of 2. */
 export function foregroundPlane(seed, f) {
   const c = new Canvas(960, 34, { wrapX: true });
   const rnd = mulberry32(seed ^ 0xaa);
-  for (let i = 0; i < 46; i++) {
-    const cx = Math.floor(rnd() * c.w);
-    const w = 12 + Math.floor(rnd() * 34);
-    const tall = 6 + Math.floor(rnd() * 12);
-    const stone = rnd() < 0.24;
-    // The seam stays on bare bank, so tiles meet without a cut clump.
-    if (cx < w / 2 + 6 || cx > c.w - w / 2 - 6) continue;
+  const clump = (cx, w, tall) => {
     const stems = Math.round(w * 0.9);
     for (let k = 0; k < stems; k++) {
       const u = (k + rnd()) / stems;
@@ -878,16 +957,36 @@ export function foregroundPlane(seed, f) {
         c.px(x + Math.round(lean * t), c.h - 1 - j, ix(P.GRASS + clamp(Math.round(t * 2.4 + tone * 1.4 - 0.2), 0, 4)));
       }
     }
-    if (stone) {
-      const sw = 5 + Math.floor(rnd() * 6);
-      const sx = cx + Math.floor(rnd() * 8) - 4;
-      for (let j = 0; j < 4; j++) {
-        for (let k = j; k < sw - j; k++) {
-          const lit = k > sw * 0.55 && j > 1;
-          c.px(sx + k, c.h - 1 - j, ix(P.EARTH + (lit ? 4 : j > 1 ? 2 : 1)));
-        }
-      }
-    }
+  };
+  // The seam stays on bare bank, so tiles meet without a cut clump.
+  const clear = (cx, w) => cx > w / 2 + 6 && cx < c.w - w / 2 - 6;
+  for (let i = 0; i < 46; i++) {
+    const cx = Math.floor(rnd() * c.w);
+    const w = 12 + Math.floor(rnd() * 26);
+    const tall = 6 + Math.floor(rnd() * 11);
+    if (clear(cx, w)) clump(cx, w, tall);
+  }
+  // Worn earth among the clumps, each patch its own shape, with grass growing over its edges.
+  for (let i = 0; i < 9; i++) {
+    const cx = Math.floor(rnd() * c.w);
+    const w = 18 + Math.floor(rnd() * 34);
+    const hMax = 4 + Math.floor(rnd() * 3);
+    const edgeTall = 3 + Math.floor(rnd() * 3);
+    if (!clear(cx, w + 12)) continue;
+    earthPatch(c, cx, w, hMax, seed + i * 31);
+    clump(cx - w / 2, 8, edgeTall);
+    clump(cx + w / 2, 10, edgeTall + 1);
+    clump(cx + w * 0.1, 5, edgeTall - 1);
+  }
+  // Small tufts everywhere, and stones among them.
+  for (let i = 0; i < 60; i++) {
+    const cx = Math.floor(rnd() * c.w);
+    const w = 3 + Math.floor(rnd() * 5);
+    if (clear(cx, w)) clump(cx, w, 2 + Math.floor(rnd() * 3));
+  }
+  for (let i = 0; i < 26; i++) {
+    const x = Math.floor(rnd() * (c.w - 24)) + 12;
+    pebble(c, x, c.h - 2 - Math.floor(rnd() * 3), 2 + Math.floor(rnd() * 3));
   }
   return c;
 }

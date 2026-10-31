@@ -21,14 +21,24 @@ function tile(out, plane, top, scroll = 0) {
   }
 }
 
+// Mown bands that widen toward the viewer and blades on them, the way the view paints its bank.
+const BANDS = [0, 1, 6, 11, 18, 27, 38, 52, 70, 92, 118];
+const BAND_TONE = [1, 0.3, 0, 0.3, 0.55, 0.3, 0.55, 0.3, 0.55, 0.3, 0];
+
 function bankFill(out, contact, tod) {
   const c = tod.bank.map((u) => Math.round(u * 255));
   const hi = tod.bank_hi.map((u) => Math.round(u * 255));
+  const tone = (u) => c.map((v, i) => Math.round(v + (hi[i] - v) * u));
   for (let x = 0; x < W; x++) {
     const top = Math.round(contact(x)) + 32;
-    for (let y = top; y < H; y++) out.px(x, y, y === top ? hi : c);
-    // The view's 2 px earth speckle by a seeded hash per 16 px.
-    if (x % 16 === 3) out.rect(x + ((x * 7) % 11), top + 6 + ((x * 13) % 90), 2, 1, hi);
+    const wave = 1.5 * Math.sin(x * 0.013) + Math.sin(x * 0.041);
+    let band = 0;
+    for (let y = top; y < H; y++) {
+      const d = y - top;
+      while (band + 1 < BANDS.length && d >= BANDS[band + 1] + (band > 2 ? Math.round((wave * band) / 6) : 0)) band++;
+      const blade = band > 2 && (Math.imul(x * 31 + d * 17, 2654435761) >>> 28) === 0;
+      out.px(x, y, tone(Math.min(BAND_TONE[band] + (blade ? 0.35 : 0), 1)));
+    }
   }
 }
 
@@ -109,7 +119,7 @@ function nearProps(out, parts, kit, tod, scroll) {
 }
 
 /** A backdrop plus riders at LUT row `row`. `contact(x)` is the middle lane's contact y. */
-export function scene(parts, kit, row, { contact = () => 384, scroll = 0, riders = [], blocks = [], crowd = false, blockBottom = 460 }) {
+export function scene(parts, kit, row, { contact = () => 384, scroll = 0, riders = [], blocks = [], crowd = null }) {
   const out = new Canvas(W, H);
   const tod = kit.tod[row];
   const planeOf = (name) => recolour(parts.planes[name], parts.lut, row);
@@ -131,11 +141,11 @@ export function scene(parts, kit, row, { contact = () => 384, scroll = 0, riders
   roadRows(out, vergeFar, contact, (c) => c - kit.road.verge_far.above, scroll);
   roadRows(out, road, contact, (c) => c - kit.road.contact_row, scroll);
   if (crowd) {
-    // Spaced as the view spaces them: one per 18 px bucket, up to 4 px either way, a kind by hash.
+    // One per bucket, up to 4 px either way, a kind by hash, between crowd.from and crowd.to.
     const [cw, ch] = kit.props.crowd.cell;
-    for (let i = 0; i < 56; i++) {
+    for (let i = 0; crowd.from + i * crowd.step < crowd.to; i++) {
       const h = Math.floor(((Math.sin((i + 3) * 91.17) + 1) * 43758.5) % 1000);
-      const x = i * 18 + (h % 9) - 4;
+      const x = crowd.from + i * crowd.step + (h % 9) - 4;
       const kind = (h >> 3) % kit.props.crowd.count;
       const row = h % 3 === 0 ? 1 : 0;
       stamp(out, parts.props.crowd, kind * cw, row * ch, cw, ch, x, Math.round(contact(x + cw / 2)) - kit.props.crowd.foot_above_contact - ch, tod.rider_tint);
@@ -147,16 +157,25 @@ export function scene(parts, kit, row, { contact = () => 384, scroll = 0, riders
   bankFill(out, contact, tod);
   // The foreground follows the road here (the view's flat case gives its fixed y 396: contact 384 + 12).
   roadRows(out, planeOf('foreground_0'), contact, (c) => c + 12, Math.round(scroll * 1.35));
+  // Blocks laid on the bank as the view lays them (WorkoutTrackLayer): muted toward the ground, the mown bands
+  // showing through, a lit edge, a cast shadow, a seam every minute.
+  const ground = tod.bank.map((u) => Math.round(u * 255));
   for (const b of blocks) {
-    const color = hex(b.color);
-    const lit = color.map((u) => Math.min(u + 40, 255));
-    const dark = color.map((u) => Math.round(u * 0.72));
-    const bottom = blockBottom;
+    const color = hex(b.color).map((u, i) => Math.round(u + (ground[i] - u) * 0.42));
+    const lit = color.map((u) => Math.round(u + (255 - u) * 0.28));
+    const seam = color.map((u) => Math.round(u * 0.7));
+    const hatch = color.map((u) => Math.round(u + (255 - u) * 0.14));
     for (let x = b.x0; x < b.x1; x++) {
-      for (let y = bottom - b.h; y < bottom; y++) {
-        const top = y === bottom - b.h;
-        const hatch = b.hatched && (x + y) % 4 === 0;
-        out.px(x, y, top ? lit : hatch || x === b.x0 ? dark : color);
+      const bottom = Math.round(contact(x)) + b.floor;
+      const top = bottom - b.h;
+      for (let y = top; y < bottom + 2; y++) {
+        if (y >= bottom) {
+          out.blendPx(x, y, [5, 13, 10, 107]);
+          continue;
+        }
+        const edge = x === b.x0 || (x - b.x0) % 45 === 44;
+        const col = y === top ? lit : edge ? seam : b.hatched && (x - b.x0) % 3 === 0 ? hatch : color;
+        out.blendPx(x, y, [col[0], col[1], col[2], y === top ? 255 : 199]);
       }
     }
   }
@@ -170,32 +189,39 @@ const FORMATION = [
   [-102, 0],
 ];
 
+// The card's 480 x 270 window of the world, and where its riders stand in it, left to right from the leader:
+// [x in the window, lane, slot, pose, crank frame].
+export const PICKER = {
+  x0: 250,
+  y0: 120,
+  riders: [
+    [374, 0, 0, 'stand', 3],
+    [268, 9, 1, 'seat', 9],
+    [186, -9, 2, 'seat', 15],
+    [104, 3, 3, 'seat', 21],
+  ],
+};
+
 /** The picker card: golden hour, a road rising to the right, four riders, a crowd, blocks. No text. */
 export function pickerCard(parts, kit) {
-  // A 480 x 270 window of the world at 2x: on a small card the riders are the picture, as Tank's hull is.
-  const x0 = 250;
-  const y0 = 176;
-  const contact = (x) => 414 - 42 * ((x - x0) / 480) - 3 * Math.sin(((x - x0) / 480) * Math.PI * 2);
-  const frames = [3, 9, 15, 21];
-  const riders = FORMATION.map(([dx, lane], i) => ({
-    x: 540 + dx,
-    lane,
-    slot: i,
-    pose: i === 0 ? 'stand' : 'seat',
-    frame: frames[i],
-    wheel: (i * 5) % 16,
-  }));
+  // At 2x, the picture is the group strung out up the road under the sun, whole in the sky over them: the one
+  // out of the saddle leads, in clear air ahead of the other three, riding toward the first spectators.
+  const { x0, y0 } = PICKER;
+  const contact = (x) => 334 - 40 * ((x - x0) / 480) - 3 * Math.sin(((x - x0) / 480) * Math.PI * 2);
+  const riders = PICKER.riders.map(([x, lane, slot, pose, frame]) => ({ x: x0 + x, lane, slot, pose, frame, wheel: (slot * 5) % 16 }));
+  const floor = 54;
   const blocks = [
-    [250, 330, 12, '#4fa36a'],
-    [330, 420, 22, '#e88a3a'],
-    [420, 470, 8, '#8fa3b8'],
-    [470, 560, 26, '#d4553f'],
-    [560, 600, 8, '#8fa3b8'],
-    [600, 628, 32, '#b45fc4', true],
-    [628, 700, 22, '#e88a3a'],
-    [700, 740, 8, '#6f8296'],
-  ].map(([x, x1, h, color, hatched]) => ({ x0: x + 1, x1, h, color, hatched }));
-  const full = scene(parts, kit, Math.floor(0.4 * 31), { contact, riders, blocks, crowd: true, scroll: 340, blockBottom: 444 });
+    [250, 330, 7, '#4fa36a'],
+    [330, 420, 13, '#e88a3a'],
+    [420, 470, 5, '#8fa3b8'],
+    [470, 560, 15, '#d4553f'],
+    [560, 600, 5, '#8fa3b8'],
+    [600, 628, 18, '#b45fc4', true],
+    [628, 700, 13, '#e88a3a'],
+    [700, 740, 5, '#6f8296'],
+  ].map(([x, x1, h, color, hatched]) => ({ x0: x + 1, x1, h, color, hatched, floor }));
+  const crowd = { from: x0 + 408, to: x0 + 490, step: 20 };
+  const full = scene(parts, kit, Math.floor(0.4 * 31), { contact, riders, blocks, crowd, scroll: 340 });
   const win = new Canvas(480, 270);
   for (let y = 0; y < 270; y++) for (let x = 0; x < 480; x++) win.px(x, y, full.get(x + x0, y + y0));
   return win.scaled(2);

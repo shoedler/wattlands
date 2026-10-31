@@ -14,7 +14,8 @@ export const WHEEL_R = 13;
 export const TYRE_ROW = 79;
 export const BB = [38, 69];
 export const CRANK = 7;
-export const CHAINRING_R = 6;
+// The ring's teeth end at this radius, so the crank arm and its pedal always stand 3 px clear of it.
+export const CHAINRING_R = 4;
 export const COG_R = 2;
 export const SADDLE = [29, 44];
 export const BARS = [54, 43];

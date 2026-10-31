@@ -135,42 +135,47 @@ export function cattle() {
   return c;
 }
 
-/** 36 x 22, 4 frames: a small tractor with a driver and a turning rear wheel. */
+export const TRACTOR_CELL = [18, 10];
+
+/**
+ * 18 x 10, 4 frames: a far tractor at the scale of the mid plane's farms, facing its way of travel. It sits
+ * on the field: a shadow under the wheels, and a strip of turned earth behind it that the lugs throw up.
+ */
 export function tractor() {
-  const c = new Canvas(36 * 4, 22);
-  const paint = [hex('#6c2c20'), hex('#a43e28'), hex('#d0603c')];
+  const [w, h] = TRACTOR_CELL;
+  const c = new Canvas(w * 4, h);
+  const paint = [hex('#74382c'), hex('#a4553c'), hex('#c47a58')];
+  const tyre = hex('#2a2c2e');
+  const lug = hex('#55585a');
+  const earth = [hex('#5a4634'), hex('#7a6248')];
   for (let f = 0; f < 4; f++) {
-    const x = f * 36;
-    // Bonnet, grille, exhaust stack.
-    c.rect(x + 15, 8, 15, 7, paint[1]);
-    c.rect(x + 15, 8, 15, 1, paint[2]);
-    c.rect(x + 15, 13, 15, 2, paint[0]);
-    for (let i = 0; i < 4; i++) c.px(x + 18 + i * 3, 11, paint[0]);
-    c.rect(x + 29, 8, 2, 7, OUTLINE);
-    c.rect(x + 24, 3, 1, 5, OUTLINE);
-    c.px(x + 24, 2, hex('#70747c'));
-    // The cab: a roof, a glass, a driver in it.
-    c.rect(x + 6, 1, 11, 1, hex('#30343c'));
-    c.rect(x + 7, 2, 1, 7, OUTLINE);
-    c.rect(x + 15, 2, 1, 7, OUTLINE);
-    c.rect(x + 8, 2, 7, 6, hex('#7c98a4'));
-    c.rect(x + 8, 2, 3, 2, hex('#b0c4cc'));
-    c.rect(x + 10, 4, 3, 4, hex('#34506c'));
-    c.rect(x + 10, 2, 3, 2, hex('#e0b48c'));
-    c.rect(x + 7, 9, 9, 3, paint[0]);
-    // Rear wheel with turning lugs; front wheel.
-    c.disk(x + 9, 14, 7, OUTLINE);
-    c.disk(x + 9, 14, 3, hex('#b08838'));
-    c.px(x + 9, 14, OUTLINE);
-    for (let l = 0; l < 8; l++) {
-      const a = (f * Math.PI) / 16 + (l * Math.PI) / 4;
-      c.px(x + 9 + 7.5 * Math.cos(a), 14 + 7.5 * Math.sin(a), hex('#4a4c54'));
-      c.px(x + 9 + 5 * Math.cos(a), 14 + 5 * Math.sin(a), hex('#34363c'));
+    const x = f * w;
+    const o = x + 4;
+    // Ground contact: the earth it has turned, then its shadow on the row under the wheels.
+    for (let i = 0; i < 6; i++) {
+      c.px(x + i, 8, earth[(i + f) % 3 === 0 ? 1 : 0]);
+      if ((i + f) % 2 === 0 || i > 2) c.px(x + i, 9, earth[0]);
     }
-    c.disk(x + 28, 18, 3, OUTLINE);
-    c.disk(x + 28, 18, 1, hex('#b08838'));
-    const a = (f * Math.PI) / 2;
-    c.px(x + 28 + 2.5 * Math.cos(a), 18 + 2.5 * Math.sin(a), hex('#4a4c54'));
+    for (let i = 1; i < 13; i++) c.px(o + i, 9, [34, 40, 30, 150]);
+    // Cab, a pale glass with the driver in it, then the bonnet and its stack.
+    c.rect(o + 1, 0, 5, 1, hex('#3c4044'));
+    c.rect(o + 1, 1, 1, 3, tyre);
+    c.rect(o + 5, 1, 1, 3, tyre);
+    c.rect(o + 2, 1, 3, 2, hex('#a0b4bc'));
+    c.px(o + 3, 2, hex('#4c5c6c'));
+    c.rect(o + 5, 3, 7, 3, paint[1]);
+    c.rect(o + 5, 3, 7, 1, paint[2]);
+    c.rect(o + 5, 5, 7, 1, paint[0]);
+    c.px(o + 12, 4, paint[0]);
+    c.rect(o + 9, 1, 1, 2, tyre);
+    c.rect(o + 1, 4, 5, 2, paint[0]);
+    // The big rear wheel with one lug going round; the small front one.
+    c.disk(o + 3, 6, 3, tyre);
+    c.px(o + 3, 6, hex('#b49a54'));
+    const a = (f * Math.PI) / 2 + 0.6;
+    c.px(o + 3 + 2.6 * Math.cos(a), 6 + 2.6 * Math.sin(a), lug);
+    c.rect(o + 10, 6, 3, 3, tyre);
+    c.px(o + 11, 7, hex('#b49a54'));
   }
   return c;
 }
@@ -248,7 +253,12 @@ const SKINS = ['#e4b08a', '#c48c62', '#8c5c3c', '#eec6a2'].map(hex);
 const HAIRS = { brown: hex('#46322a'), black: hex('#1e1c20'), sand: hex('#8e7048'), grey: hex('#b4b2ac'), red: hex('#7a4228') };
 const CREASE_DARK = [44, 32, 58];
 const SUNNY = [255, 238, 196];
-const CROWD_AIR = [168, 172, 160];
+// The air between the crowd and the riders: pale and cool. The crowd's every colour goes this far into it,
+// so nobody on the verge comes near a rider's value range or a rider's dark edge.
+const CROWD_AIR = [172, 184, 190];
+const CROWD_AIR_MIX = 0.4;
+const CROWD_EDGE = hex('#5e6672');
+const inAir = (c) => mix(c, CROWD_AIR, CROWD_AIR_MIX);
 
 /** Three shades: the shadow leans violet, the light warm. Quieter than the riders' kit, as befits a crowd. */
 const clothRamp = (s) => {
@@ -262,26 +272,26 @@ const skinRamp = (c) => [mix(c, [120, 50, 62], 0.45), c, mix(c, SUNNY, 0.3)];
 // x: feet in the cell. lift: stands that far behind the next one. f: looks left (-1, toward the riders
 // coming), ahead (0), right (1). arms: [near, far] by row, hands down then hands up.
 const GROUPS = [
-  [{ a: true, x: 10, lift: 0, h: 44, f: -1, skin: 0, top: 'tee', shirt: '#a85a44', legs: '#3c4250', hair: 'cap', tint: '#3c5a7c', hairCol: 'brown', far: ['hang', 'clap'] }],
+  [{ a: true, x: 10, lift: 0, h: 44, f: -1, skin: 0, top: 'tee', shirt: '#a85a44', legs: '#b0a07c', hair: 'cap', tint: '#3c5a7c', hairCol: 'brown', far: ['hang', 'clap'], stance: 1 }],
   [
-    { x: 3, lift: 2, h: 40, f: 0, skin: 3, top: 'tee', shirt: '#b49a58', legs: '#54483c', hair: 'long', hairCol: 'red', near: ['hang', 'hang'], far: ['hang', 'hang'] },
-    { a: true, x: 11, lift: 0, h: 45, f: -1, skin: 1, top: 'jacket', shirt: '#3e6a8c', inner: '#c8c4b4', legs: '#2c2e3a', hair: 'short', hairCol: 'black', far: ['hip', 'up'] },
+    { x: 3, lift: 2, h: 40, f: 0, skin: 3, top: 'tee', shirt: '#b49a58', legs: '#c8c0a8', hair: 'long', hairCol: 'red', near: ['hang', 'hang'], far: ['hang', 'hang'], top2: 'skirt' },
+    { a: true, x: 11, lift: 0, h: 45, f: -1, skin: 1, top: 'jacket', shirt: '#3e6a8c', inner: '#c8c4b4', legs: '#5c7490', hair: 'short', hairCol: 'black', far: ['hip', 'up'], stance: 4 },
   ],
   [
-    { a: true, x: 8, lift: 1, h: 43, f: -1, skin: 2, top: 'stripe', shirt: '#4a7c6a', inner: '#d8d4c4', legs: '#3a3a44', hair: 'short', hairCol: 'black', far: ['hang', 'up'] },
+    { a: true, x: 8, lift: 1, h: 43, f: -1, skin: 2, top: 'stripe', shirt: '#4a7c6a', inner: '#d8d4c4', legs: '#7c5c4c', hair: 'short', hairCol: 'black', far: ['hang', 'up'], stance: 2 },
     { x: 20, lift: 0, h: 26, f: -1, skin: 2, top: 'tee', shirt: '#c07840', legs: '#3c5a7c', hair: 'short', hairCol: 'black', near: ['hang', 'up'], far: ['hang', 'up'], shorts: true },
   ],
-  [{ a: true, x: 7, lift: 3, h: 39, f: 0, skin: 3, top: 'jacket', shirt: '#7c7468', inner: '#a8a498', legs: '#4c4a4c', hair: 'bald', hairCol: 'grey', far: ['hang', 'hang'] }],
+  [{ a: true, x: 7, lift: 3, h: 39, f: 0, skin: 3, top: 'jacket', shirt: '#7c7468', inner: '#a8a498', legs: '#8c8878', hair: 'bald', hairCol: 'grey', far: ['hang', 'hang'], stance: 1 }],
   [
-    { x: 2, lift: 3, h: 42, f: 1, skin: 0, top: 'tee', shirt: '#6c5a84', legs: '#3a3c48', hair: 'short', hairCol: 'sand', near: ['cross', 'clap'], far: ['cross', 'clap'] },
-    { a: true, x: 10, lift: 1, h: 46, f: -1, skin: 0, top: 'tee', shirt: '#9c4a48', legs: '#2e3442', hair: 'short', hairCol: 'brown', far: ['hip', 'up'], shorts: true },
+    { x: 2, lift: 3, h: 42, f: 1, skin: 0, top: 'tee', shirt: '#6c5a84', legs: '#6c7050', hair: 'short', hairCol: 'sand', near: ['cross', 'clap'], far: ['cross', 'clap'], stance: 3 },
+    { a: true, x: 10, lift: 1, h: 46, f: -1, skin: 0, top: 'tee', shirt: '#9c4a48', legs: '#4e5c74', hair: 'short', hairCol: 'brown', far: ['hip', 'up'], shorts: true, stance: 5 },
   ],
   [{ a: true, x: 12, lift: 2, h: 38, f: -1, skin: 3, top: 'dress', shirt: '#b4705c', legs: '#b4705c', hair: 'sunhat', tint: '#d0c49c', hairCol: 'sand', far: ['hip', 'clap'] }],
   [
-    { a: true, x: 6, lift: 2, h: 46, f: -1, skin: 1, top: 'tee', shirt: '#4c7490', legs: '#3c3a38', hair: 'short', hairCol: 'grey', far: ['hang', 'up'] },
-    { x: 16, lift: 0, h: 34, f: -1, skin: 0, top: 'jacket', shirt: '#8c8c50', inner: '#d4d0bc', legs: '#46423a', hair: 'long', hairCol: 'black', near: ['hip', 'clap'], far: ['hip', 'clap'] },
+    { a: true, x: 6, lift: 2, h: 46, f: -1, skin: 1, top: 'tee', shirt: '#4c7490', legs: '#b8a888', hair: 'short', hairCol: 'grey', far: ['hang', 'up'], stance: 2 },
+    { x: 16, lift: 0, h: 34, f: -1, skin: 0, top: 'jacket', shirt: '#8c8c50', inner: '#d4d0bc', legs: '#70604c', hair: 'long', hairCol: 'black', near: ['hip', 'clap'], far: ['hip', 'clap'], stance: 1 },
   ],
-  [{ a: true, x: 9, lift: 4, h: 42, f: 0, skin: 0, top: 'stripe', shirt: '#5c6c9c', inner: '#c8ccd4', legs: '#34343c', hair: 'beanie', tint: '#a8503c', hairCol: 'brown', far: ['hang', 'clap'], shorts: true }],
+  [{ a: true, x: 9, lift: 4, h: 42, f: 0, skin: 0, top: 'stripe', shirt: '#5c6c9c', inner: '#c8ccd4', legs: '#60708c', hair: 'beanie', tint: '#a8503c', hairCol: 'brown', far: ['hang', 'clap'], shorts: true, stance: 4 }],
 ];
 
 /** Paints a capsule from a to b, shaded from the right: the crowd's sun is the world's. */
@@ -375,14 +385,16 @@ function person(c, spec, row) {
   arm(farShoulder, farHand, farElbow, shirt.map((u) => mix(u, CREASE_DARK, 0.25)), spec.top === 'jacket' ? 1 : 0.55);
 
   // Legs, the far one a shade back; a wide stance on some.
-  const stance = h * 0.045 + (x % 3 === 0 ? 1 : 0);
+  // Stances differ, feet together to feet well apart, so a row of legs never turns into a fence.
+  const stance = spec.stance ?? h * 0.045 + (x % 3 === 0 ? 1 : 0);
   const legEnd = spec.shorts ? 0.45 : 1;
+  const bareLeg = spec.shorts || spec.top === 'dress' || spec.top2 === 'skirt';
   const leg = (dx, footDx, ramp) => {
     const hip = [cx + dx, hipY];
     const knee = [cx + (dx + footDx) * 0.55, kneeY];
     const ankle = [cx + footDx, foot - 2];
     limb(put, hip, knee, h * 0.05, h * 0.036, (s) => shadeOf(ramp, s));
-    limb(put, knee, ankle, h * 0.036, h * 0.026, (s, t) => (t < (legEnd - 0.45) / 0.55 ? shadeOf(ramp, s) : shadeOf(spec.shorts || spec.top === 'dress' ? skin : ramp, s)));
+    limb(put, knee, ankle, h * 0.036, h * 0.026, (s, t) => (t < (legEnd - 0.45) / 0.55 ? shadeOf(ramp, s) : shadeOf(bareLeg ? skin : ramp, s)));
     const dir = f || -1;
     for (let i = -1; i <= 2; i++) put(cx + footDx + dir * i, foot, shoe[1]);
     for (let i = -1; i <= 1; i++) put(cx + footDx + dir * i, foot - 1, shoe[i === 0 ? 2 : 1]);
@@ -392,11 +404,12 @@ function person(c, spec, row) {
   leg(side * h * 0.05, side * stance, legs);
 
   // The torso: shoulders, a waist, hips; a body that turns, lit on its right side. A dress runs to the knee.
-  const bottom = spec.top === 'dress' ? kneeY + 1 : hipY + 1;
+  const skirted = spec.top === 'dress' || spec.top2 === 'skirt';
+  const bottom = skirted ? kneeY + 1 : hipY + 1;
   for (let y = Math.round(shoulderY); y <= bottom; y++) {
     const u = (y - shoulderY) / (waistY - shoulderY);
     const v = (y - waistY) / Math.max(bottom - waistY, 1);
-    let hw = u <= 1 ? shoulderW + 1 - u * h * 0.04 : shoulderW + 1 - h * 0.04 + v * (spec.top === 'dress' ? 3 : 1);
+    let hw = u <= 1 ? shoulderW + 1 - u * h * 0.04 : shoulderW + 1 - h * 0.04 + v * (skirted ? 3 : 1);
     if (y === Math.round(shoulderY)) hw -= 1.5;
     const mid = cx + turn * (1 - Math.min(u, 1));
     for (let px = Math.round(mid - hw); px <= Math.round(mid + hw); px++) {
@@ -408,6 +421,7 @@ function person(c, spec, row) {
       // Two short folds that pull toward the waist.
       if ((px + y * 1) % 9 === (x % 9) && n > -0.5 && n < 0.5 && rel > 4 && spec.top !== 'stripe') col = shirt[0];
       if (y > hipY - 2 && spec.top !== 'dress') col = n > 0.5 ? legs[2] : legs[1];
+      if (spec.top2 === 'skirt' && y > hipY + 3 && (px + y) % 5 === 0) col = legs[0];
       put(px, y, col);
     }
   }
@@ -489,7 +503,7 @@ function person(c, spec, row) {
       if ((px + 1 < c.w && mask.has(y * c.w + px + 1)) || (y > 0 && mask.has((y - 1) * c.w + px))) out.push([px, y]);
     }
   }
-  for (const [px, y] of out) c.px(px, y, OUTLINE);
+  for (const [px, y] of out) c.px(px, y, CROWD_EDGE);
 }
 
 /** 26 x 56, 8 small groups across; row 0 hands down, row 1 hands up. */
@@ -502,13 +516,13 @@ export function crowd() {
       // A soft patch of trodden shade under the feet.
       for (const spec of group) {
         const fy = h - 1 - spec.lift;
-        for (let i = -6; i <= 6; i++) if (i % 2 === 0 || Math.abs(i) < 3) cell.px(spec.x + i, fy, [20, 24, 26, 90]);
+        for (let i = -6; i <= 6; i++) if (i % 2 === 0 || Math.abs(i) < 3) cell.px(spec.x + i, fy, [70, 84, 80, 80]);
       }
       for (const spec of group) person(cell, spec, row);
-      // One step back in the air: the crowd stays behind the riders in value, too.
+      // A whole step back in the air: only the riders keep full contrast.
       for (let i = 0; i < cell.data.length; i += 4) {
         if (cell.data[i + 3] !== 255) continue;
-        const u = mix([cell.data[i], cell.data[i + 1], cell.data[i + 2]], CROWD_AIR, 0.14);
+        const u = inAir([cell.data[i], cell.data[i + 1], cell.data[i + 2]]);
         cell.data[i] = u[0];
         cell.data[i + 1] = u[1];
         cell.data[i + 2] = u[2];
@@ -522,18 +536,19 @@ export function crowd() {
 /** 12 x 16, 4 frames: a generic striped hand flag, waving. */
 export function flag() {
   const c = new Canvas(48, 16);
-  const stripes = [hex('#ecece4'), hex('#3870b0')];
-  const shade = [hex('#bcbcb8'), hex('#285488')];
+  // In the same air as the crowd that waves it, and small: no rider's pennant is ever mistaken for one.
+  const stripes = ['#ecece4', '#8094a8'].map((u) => inAir(hex(u)));
+  const shade = ['#bcbcb8', '#667a90'].map((u) => inAir(hex(u)));
   for (let f = 0; f < 4; f++) {
     const x = f * 12;
-    c.rect(x + FLAG_GRIP[0], 1, 1, FLAG_GRIP[1], OUTLINE);
-    for (let i = 0; i < 9; i++) {
+    c.rect(x + FLAG_GRIP[0], 3, 1, FLAG_GRIP[1] - 2, CROWD_EDGE);
+    for (let i = 0; i < 7; i++) {
       const u = ((i + f * 2) * Math.PI) / 4;
       const wave = Math.round(Math.sin(u));
       const dark = Math.cos(u) < -0.3;
-      for (let j = 0; j < 7; j++) {
-        const band = j < 2 || j > 4 ? 0 : 1;
-        c.px(x + 2 + i, 2 + j + wave, (dark ? shade : stripes)[band]);
+      for (let j = 0; j < 5; j++) {
+        const band = j < 2 || j > 2 ? 0 : 1;
+        c.px(x + 2 + i, 4 + j + wave, (dark ? shade : stripes)[band]);
       }
     }
   }

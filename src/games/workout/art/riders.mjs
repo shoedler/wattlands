@@ -23,10 +23,12 @@ const WHITE = hex('#f6f6f0');
 const SADDLE = hex('#1d1e24');
 const SADDLE_LIT = hex('#5e626e');
 const SADDLE_TAIL = hex('#aeb2bc');
-/** The pedal's own colour, the brightest steel on the bike: tests find the pedal by it. */
-export const PEDAL = [255, 255, 250];
-/** The chain's light links: far above any asphalt in the LUT, so they show on the road. */
-export const CHAIN_LIGHT = [232, 236, 244];
+/** The pedal's own colour, the top of the crank's amber: tests find the pedal by it. */
+export const PEDAL = [255, 214, 128];
+/** The chain's light links: a tone or two over the asphalt, so the chain moves and never shouts. */
+export const CHAIN_LIGHT = [124, 128, 140];
+/** Every 16 px one link a little warmer, for the eye to follow. */
+export const CHAIN_LINK = [164, 152, 122];
 export const WHEEL_FRAMES = 16;
 export const WHEEL_CELL = 27;
 export const FX_SIZE = [54, 21];
@@ -46,7 +48,8 @@ const FAR_SHADE = [64, 34, 78];
 const farOf = (ramp) => [mix(ramp[0], FAR_SHADE, 0.42), mix(ramp[1], FAR_SHADE, 0.3), mix(ramp[2], FAR_SHADE, 0.2)];
 
 const SHORTS = [hex('#0d0e13'), hex('#1a1b20'), hex('#44464f')];
-const SOCK = rampOf(WHITE, 0.3, 0);
+// Socks stay off-white: the crank is what the eye follows down there.
+const SOCK = rampOf(hex('#cfd0d0'), 0.34, 0.1);
 const SHOE = [hex('#14151b'), hex('#2c2e38'), hex('#7c8090')];
 const GLOVE = [hex('#101116'), hex('#22242b'), hex('#3a3c44')];
 const TUBES = {
@@ -54,12 +57,12 @@ const TUBES = {
   steel: [hex('#566070'), hex('#8a95a0'), hex('#d0d8e0')],
 };
 const METAL = [hex('#34373f'), hex('#5a5e68'), hex('#a4a8b2')];
-const RING = [hex('#3e424c'), hex('#868d9a'), hex('#b8bec9')];
-const CRANK_STEEL = [hex('#7a8494'), hex('#dfe4ec'), PEDAL];
+const RING = [hex('#464a54'), hex('#737985'), hex('#979ca8')];
+// One amber arm, the only warm metal on the bike: no shoe, sock, ring or tube shares it.
+export const CRANK_INK = { edge: hex('#4a2c20'), body: hex('#d98a2a'), lit: hex('#f6b450') };
 const RIM = hex('#0b0c10');
 const CREASE = hex('#231a2c');
-const CHAIN_DARK = hex('#14151a');
-const CHAIN_LINK = hex('#ffcf6a');
+const CHAIN_DARK = hex('#2a2b33');
 const TAPE = [hex('#101116'), hex('#22242a'), hex('#4a4c56')];
 
 const pick = (ramp, s) => (s > 0.34 ? ramp[2] : s < -0.34 ? ramp[0] : ramp[1]);
@@ -202,25 +205,31 @@ function drawLeg(c, l, look, far, mask) {
   }
 }
 
-/** The crank arm and pedal. The near one is the brightest steel on the bike, on a dark rim. */
+/**
+ * The crank arm and pedal. The near arm is one clean stroke two pixels wide: amber body, lit side up or
+ * to the right, a thin dark edge on the other side, so it stands off the ring. The far one stays dim.
+ */
 function drawCrank(c, pedal, far) {
   const x = Math.round(pedal[0]);
   const y = Math.round(pedal[1]);
+  const [bx, by] = R.BB;
   if (far) {
     const steel = farOf(METAL);
-    capsule(c, R.BB, pedal, 1.2, 1.0, flat(steel));
-    c.rect(x - 2, y, 4, 1, mix(PEDAL, COOL, 0.42));
-    c.rect(x - 1, y + 1, 2, 1, steel[0]);
+    c.line(bx, by, x, y, steel[0]);
+    c.rect(x - 2, y, 4, 1, steel[1]);
     return;
   }
-  capsule(c, R.BB, pedal, 1.9, 1.7, () => RIM);
-  capsule(c, R.BB, pedal, 1.2, 1.0, (s) => (s > 0.1 ? CRANK_STEEL[2] : s < -0.45 ? CRANK_STEEL[0] : CRANK_STEEL[1]));
-  c.rect(x - 3, y, 7, 2, RIM);
+  const steep = Math.abs(y - by) > Math.abs(x - bx);
+  const [ox, oy] = steep ? [1, 0] : [0, -1];
+  c.line(bx - ox, by - oy, x - ox, y - oy, CRANK_INK.edge);
+  c.line(bx, by, x, y, CRANK_INK.body);
+  c.line(bx + ox, by + oy, x + ox, y + oy, CRANK_INK.lit);
+  c.rect(x - 2, y + 1, 5, 1, CRANK_INK.edge);
   c.rect(x - 2, y, 5, 1, PEDAL);
-  c.px(R.BB[0], R.BB[1], RIM);
+  c.px(bx, by, CRANK_INK.edge);
 }
 
-/** One run of chain, a dark rim under the links: 2 dark, 2 light, and a brass link every 16 px to follow. */
+/** One run of chain, one pixel high: 2 dark, 2 light, and a warmer link every 16 px to follow. */
 function chainRun(c, from, to, sign, frame) {
   const off = R.chainOffset(frame);
   const travel = R.chainTravel(frame);
@@ -231,34 +240,32 @@ function chainRun(c, from, to, sign, frame) {
     const y = Math.round(from[1] + (to[1] - from[1]) * t);
     const u = x - sign * off;
     const v = x - sign * travel;
-    c.px(x, y + 1, RIM);
     const brass = ((v % m2) + m2) % m2 < 2;
     c.px(x, y, brass ? CHAIN_LINK : ((u % m) + m) % m < 2 ? CHAIN_DARK : CHAIN_LIGHT);
   }
 }
 
-/** The chainring on its dark rim: teeth that turn, a bright band, four cutouts between the spider arms. */
+/**
+ * The chainring, a mid grey disc well inside the crank's reach: teeth that turn, a lit upper right, and
+ * three cutouts one tone darker, never black, so it stays a ring and does not turn into a face.
+ */
 function drawChainring(c, theta) {
   const [bx, by] = R.BB;
   const r = R.CHAINRING_R;
-  c.disk(bx, by, r + 1, RIM);
-  for (let j = -r - 1; j <= r + 1; j++) {
-    for (let i = -r - 1; i <= r + 1; i++) {
+  for (let j = -r; j <= r; j++) {
+    for (let i = -r; i <= r; i++) {
       const d = Math.hypot(i, j);
       if (d >= r + 0.5) continue;
       const a = ((Math.atan2(j, i) - theta) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
       const lit = (i * LIGHT[0] + j * LIGHT[1]) / Math.max(d, 1);
       if (d >= r - 0.5) {
-        // Teeth: one in two is cut back to the rim's dark.
-        c.px(bx + i, by + j, Math.floor((a / (Math.PI * 2)) * 16) % 2 === 0 ? RING[2] : RING[0]);
-      } else if (d >= r - 2) {
+        // Teeth: one in two is cut back a tone.
+        c.px(bx + i, by + j, Math.floor((a / (Math.PI * 2)) * 12) % 2 === 0 ? RING[1] : RING[0]);
+      } else if (d >= r - 1.5) {
         c.px(bx + i, by + j, lit > 0.25 ? RING[2] : RING[1]);
-      } else if (d >= 1.5) {
-        // A spider arm or the window between two of them, turning with the crank.
-        const arm = (a + Math.PI / 4) % (Math.PI / 2) < 0.62;
-        c.px(bx + i, by + j, arm ? RING[1] : RIM);
       } else {
-        c.px(bx + i, by + j, RING[2]);
+        const window = (a % ((Math.PI * 2) / 3)) < 1.0;
+        c.px(bx + i, by + j, window ? RING[0] : RING[1]);
       }
     }
   }
@@ -269,14 +276,15 @@ function drawDrivetrain(c, frame) {
   const [hx, hy] = R.REAR_HUB;
   const [bx, by] = R.BB;
   const theta = R.crankTheta(frame);
-  const jockey0 = [hx + 2, hy + 5];
-  const jockey1 = [hx + 4, hy + 9];
+  // A short cage: the bottom run stays well above the tyre's contact and the road's paint.
+  const jockey0 = [hx + 2, hy + 4];
+  const jockey1 = [hx + 3, hy + 7];
   // Top run moves toward the chainring, bottom run away from it.
   chainRun(c, [hx, hy - R.COG_R - 1], [bx, by - R.CHAINRING_R - 1], 1, frame);
   chainRun(c, [jockey1[0], jockey1[1] + 1], [bx, by + R.CHAINRING_R + 1], -1, frame);
   drawChainring(c, theta);
-  // Rear cog on its rim: one dark tooth turns COG_TURNS times per crank revolution.
-  c.disk(hx, hy, R.COG_R + 1, RIM);
+  // Rear cog: one dark tooth turns COG_TURNS times per crank revolution.
+  c.disk(hx, hy, R.COG_R + 1, CHAIN_DARK);
   c.ring(hx, hy, R.COG_R, RING[2], 1);
   c.px(hx, hy, RING[1]);
   const cog = theta * R.COG_TURNS;
@@ -597,10 +605,10 @@ const BREATH_FRAMES = [
   ['......x.', '....x...', '.....x.x', '......x.', '....x...', '........'],
 ];
 const DUST_FRAMES = [
-  ['..........', '..........', '....x.....', '...xXx....', '..xXXXx...', '....xx....'],
-  ['..........', '...xx.....', '..xXXx.x..', '.xXXXXxx..', '.xXXXXXx..', '..xx.xx...'],
-  ['...x......', '..xx..x...', '.xX.xx.x..', 'x.xXx..xx.', '.x..xx.x.x', '..x...x...'],
-  ['.....x....', '.x........', '....x...x.', 'x.........', '...x..x...', '.........x'],
+  ['..........', '..........', '..........', '....xx....', '...xXXx...', '....xx....'],
+  ['..........', '...xxx....', '..xXXXx...', '..xXXXXx..', '..xXXXx...', '...xxx....'],
+  ['...xx.....', '..xX.xx...', '.xX..Xxx..', '.x....Xx..', '.xx..xx...', '...xx.....'],
+  ['..x...x...', '..........', 'x.......x.', '.....x....', '.x........', '......x...'],
 ];
 const BUBBLES = {
   // Orange plate, a white chevron that lifts: the rider is being eased back up.
@@ -613,10 +621,10 @@ const BUBBLES = {
     ['.#######.', '#wwwwwww#', '#w#####w#', '#wwww##w#', '#www##ww#', '#ww##www#', '#w#####w#', '.#######.', '....#....'],
     ['.#######.', '#w#####w#', '#wwww##w#', '#www##ww#', '#ww##www#', '#w#####w#', '#wwwwwww#', '.#######.', '....#....'],
   ],
-  // Grey plate, a link cut in two, the cut flashing red: no connection.
+  // Grey plate, two chain links with air between them, the gap flashing red: no connection.
   link: [
-    ['.#######.', '#gggrggg#', '#g##r##g#', '#g#grg#g#', '#g#grg#g#', '#g##r##g#', '#gggrggg#', '.#######.', '....#....'],
-    ['.#######.', '#ggggggg#', '#g##g##g#', '#g#ggg#g#', '#g#ggg#g#', '#g##g##g#', '#ggggggg#', '.#######.', '....#....'],
+    ['.-------.', '-gggrggg-', '-###r###-', '-#g#r#g#-', '-#g#r#g#-', '-###r###-', '-gggrggg-', '.-------.', '....-....'],
+    ['.-------.', '-ggggggg-', '-###g###-', '-#g#g#g#-', '-#g#g#g#-', '-###g###-', '-ggggggg-', '.-------.', '....-....'],
   ],
 };
 
@@ -632,13 +640,15 @@ function picture(sheet, ox, oy, rows, colours) {
 export function fxSheet() {
   const sheet = new Canvas(FX_SIZE[0], FX_SIZE[1]);
   const breathColours = { X: [238, 242, 250, 170], x: [214, 220, 234, 95] };
-  const dustColours = { X: [172, 152, 122, 190], x: [146, 128, 106, 120] };
+  // Pale and airy: a puff that hangs over the road, never a chip of grit on it.
+  const dustColours = { X: [232, 224, 206, 165], x: [220, 212, 196, 90] };
   for (let f = 0; f < 4; f++) {
     picture(sheet, f * 8, 0, BREATH_FRAMES[f], breathColours);
     picture(sheet, f * 10, 6, DUST_FRAMES[f], dustColours);
   }
   const colours = {
     '#': hex('#14161c'),
+    '-': hex('#62666f'),
     o: hex('#e0642e'),
     W: hex('#fff8ec'),
     w: hex('#f2f4fa'),

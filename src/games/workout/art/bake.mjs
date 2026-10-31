@@ -167,7 +167,7 @@ function buildKit(parts) {
     props: {
       windpump: prop('windpump', { plane: 'near_trees', tower: [0, 0, 30, 70], rotor: [30, 0, 26, 26, 8], hub: [15, 8], base_y: 345 }),
       cattle: prop('cattle', { plane: 'mid_hills', cell: [12, 9], frames: 2, colors: 3, base_y: 333 }),
-      tractor: prop('tractor', { cell: [36, 22], frames: 4, base_y: 310 }),
+      tractor: prop('tractor', { cell: Props.TRACTOR_CELL, frames: 4, base_y: 310 }),
       smoke: prop('smoke', { plane: 'near_trees', cell: [10, 16], frames: 6, origin: Props.SMOKE_ORIGIN, chimneys: parts.planes.near_trees.chimneys }),
       flock: prop('flock', { cell: [5, 3], frames: 2 }),
       balloon: prop('balloon', { cell: [18, 26], frames: 1, tod_min_row: 16 }),
