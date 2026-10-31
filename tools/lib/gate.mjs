@@ -13,12 +13,13 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { acquire, killTree, LEASE_TOKEN_ENV, LOCK_TIMEOUT_MESSAGE, machineCap, pidAlive } from './godot_lock.mjs';
 import { evaluateGut, junitCounts, readGreenCount, readPendingAllowlist } from './gut_gate.mjs';
-import { ensureBuildDir, ensureNpm, GDTOOLKIT_VERSION, greenFloor, GREEN_FLOOR_FILE, registeredGames, run, wrapperCommand } from './run_tests.mjs';
+import { ensureBuildDir, ensureNpm, GDTOOLKIT_VERSION, greenFloor, GREEN_FLOOR_FILE, NODE_SUITES, registeredGames, run, TEST_FILE_RE, wrapperCommand } from './run_tests.mjs';
 import {
   aggregateGut,
   checkAddedText,
   checkClassNames,
   checkerEvidence,
+  checkNodeTestCounts,
   checkPaths,
   checkPinContent,
   checkPinCoverage,
@@ -29,10 +30,12 @@ import {
   fastNarrowing,
   inferWs,
   isGutFile,
+  junitCountProblems,
   junitCoverage,
   laneVerdict,
   listGutFiles,
   manifestPins,
+  matrixRule,
   parseAddedLines,
   parsePlan,
   parseTestRemovals,
@@ -41,6 +44,8 @@ import {
   globToRegExp,
   quietRetryPlan,
   readWeights,
+  revertedSha,
+  sourceTestCounts,
   touchedGames,
   weightsByGroup,
 } from './gate_core.mjs';
@@ -50,6 +55,7 @@ const REPO = path.dirname(path.dirname(LIB));
 const MANIFEST_FILE = 'tools/lib/gate_manifest.json';
 const WEIGHTS_FILE = 'tools/lib/gate_weights.json';
 const PINS_FILE = 'tools/lib/safety_pins.json';
+const GUT_CONFIG = '.gutconfig.json';
 const LANE_CEILING_S = 2 * 60 * 60;
 const SHARD_TIMEOUT_S = 1800;
 const SIM_OUTER_TIMEOUT_S = 3600;
@@ -298,6 +304,28 @@ function gdSourcesAt(cwd, rev) {
   return srcs;
 }
 
+/** The suite `node --test` runs a file in, or null: NODE_SUITES, then tests/games/<id>. */
+function nodeSuiteOf(file) {
+  const suite = NODE_SUITES.find((s) => file.startsWith(`${s}/`));
+  if (suite) return suite;
+  return /^tests\/games\/[^/]+(?=\/)/.exec(file)?.[0] ?? null;
+}
+
+/** The test files of the Node suites at a rev, as run_tests finds them: {path: source}. */
+function nodeSourcesAt(cwd, rev) {
+  const roots = [...NODE_SUITES, 'tests/games'];
+  const isTestFile = (f) => {
+    const parts = f.split('/');
+    if (parts.some((p) => p.startsWith('.') || p === 'node_modules')) return false;
+    return TEST_FILE_RE.test(parts.at(-1)) || (parts.slice(0, -1).includes('test') && /\.[cm]?js$/.test(f));
+  };
+  const files = zList(git(cwd, ['ls-tree', '-r', '--name-only', '-z', rev, '--', ...roots])).filter((f) => nodeSuiteOf(f) !== null && isTestFile(f));
+  const blobs = catBlobs(cwd, files.map((f) => `${rev}:${f}`));
+  const srcs = {};
+  for (const f of files) srcs[f] = blobs.get(`${rev}:${f}`)?.toString('utf8') ?? '';
+  return srcs;
+}
+
 function parseNameStatus(text) {
   const parts = zList(text);
   const changes = [];
@@ -399,7 +427,8 @@ function floorAt(project, rev) {
 
 /** The highest floor any commit in HEAD's history held, or null. The count never goes down, in steps or at once. */
 function highestFloor(project) {
-  const shas = git(project, ['log', '--format=%H', '--', GREEN_FLOOR_FILE]).split('\n').map((l) => l.trim()).filter(Boolean);
+  // --full-history: plain `git log -- <file>` drops the side of a merge that holds the evidence (`-s ours`).
+  const shas = git(project, ['log', '--full-history', '--format=%H', '--', GREEN_FLOOR_FILE]).split('\n').map((l) => l.trim()).filter(Boolean);
   const blobs = catBlobs(project, shas.map((sha) => `${sha}:${GREEN_FLOOR_FILE}`));
   let top = null;
   for (const b of blobs.values()) {
@@ -450,7 +479,7 @@ function pinProblems(o, manifest, uncommitted, notes) {
   const pinsText = readAt(project, 'HEAD', PINS_FILE);
   if (pinsText === null) {
     // Deleted is a failure, whatever --allow says. Not pinned yet is the one window the note is for.
-    const ever = git(project, ['log', '-1', '--format=%H', '--', PINS_FILE]).trim();
+    const ever = git(project, ['log', '-1', '--full-history', '--format=%H', '--', PINS_FILE]).trim();
     if (ever) return [`safety pin: ${PINS_FILE} was deleted (it was in ${ever.slice(0, 9)})`];
     if (manifestPins(manifest)) notes.push(`no ${PINS_FILE} at HEAD: not pinned yet, pin rules inactive until the lead runs tools/gate pin-safety`);
     return [];
@@ -499,6 +528,25 @@ function pinCoverage(project, pins, manifest) {
   return checkPinCoverage({ pins, manifest, tracked, read: (f) => blobs.get(`${at}:${f}`)?.toString('utf8') ?? null });
 }
 
+/** A diff as plain added and removed lines, per file: what stays the same when other commits moved the lines. */
+function plainDiff(project, from, to) {
+  const text = git(project, ['diff', '-U0', '--no-color', '--no-ext-diff', '--no-textconv', '--no-renames', '--src-prefix=a/', '--dst-prefix=b/', from, to]);
+  return text.split('\n').filter((l) => !l.startsWith('@@') && !l.startsWith('index ')).join('\n');
+}
+
+/**
+ * Is this commit `git revert -m 1` of a merge in HEAD's history? The subject proves nothing. Its message
+ * must name the merge and its diff must be the reverse of what that merge brought to its first parent.
+ */
+function isMergeRevert(project, commit) {
+  if (!commit.subject.startsWith('Revert "Merge ')) return false;
+  const named = revertedSha(commit.message);
+  const merge = named ? revOf({ project }, named) : null;
+  if (!merge || gitRaw(project, ['merge-base', '--is-ancestor', merge, 'HEAD']).status !== 0) return false;
+  if (gitLine(project, ['rev-list', '--parents', '-n', '1', merge]).split(' ').length < 3) return false;
+  return plainDiff(project, `${commit.sha}^`, commit.sha) === plainDiff(project, merge, `${merge}^1`);
+}
+
 /** Every rule of SPEC_GATES 6. Returns {problems, notes, ws, base, branch}. */
 export function runCheck(o, { base = o.base } = {}) {
   const project = o.project;
@@ -523,10 +571,13 @@ export function runCheck(o, { base = o.base } = {}) {
 
   // 6.4: test counts at the merge base and at HEAD.
   const trailers = commits.flatMap((c) => parseTestRemovals(c.message));
-  const revertOnly = commits.length > 0 && commits.every((c) => c.subject.startsWith('Revert "Merge '));
+  const revertOnly = commits.length > 0 && commits.every((c) => isMergeRevert(project, c));
   const counts = checkTestCounts({ baseFiles: gdSourcesAt(project, mb), headFiles: gdSourcesAt(project, 'HEAD'), trailers, revertOnly });
   problems.push(...counts.problems);
   notes.push(...counts.notes);
+  const nodeCounts = checkNodeTestCounts({ baseFiles: nodeSourcesAt(project, mb), headFiles: nodeSourcesAt(project, 'HEAD'), suiteOf: nodeSuiteOf, trailers, revertOnly });
+  problems.push(...nodeCounts.problems);
+  notes.push(...nodeCounts.notes);
 
   // 6.4, 6.5: added text.
   const added = mergeAdded(diffAdded(project, [`${mb}..HEAD`]), diffAdded(project, ['HEAD']));
@@ -547,6 +598,11 @@ export function runCheck(o, { base = o.base } = {}) {
   if (topFloor !== null && (headFloor === null || headFloor < topFloor)) problems.push(`floor: ${GREEN_FLOOR_FILE} fell ${topFloor} -> ${headFloor}`);
 
   const now = currentFiles(project);
+  // GUT loads res://.gutconfig.json unless told not to. Every gate passes -gconfig=, and none may exist: it could
+  // narrow a run or stop errors failing a test. fs too, for an ignored one. Not excused by --allow.
+  const gutConfigs = [...now].filter((f) => f.split('/').at(-1) === GUT_CONFIG);
+  if (fs.existsSync(path.join(project, GUT_CONFIG)) && !gutConfigs.includes(GUT_CONFIG)) gutConfigs.push(GUT_CONFIG);
+  for (const f of gutConfigs) problems.push(`gut config: ${f} exists; GUT's options come from the gates' command lines only`);
   const allChanges = [...committed, ...uncommitted];
   const addedPaths = [...new Set(allChanges.filter((c) => c.status === 'A' || c.status === 'R' || c.status === 'C').map((c) => c.path))];
   const deletedPaths = [...new Set(allChanges.flatMap((c) => (c.status === 'D' ? [c.path] : c.status === 'R' ? [c.oldPath] : [])))];
@@ -783,6 +839,7 @@ async function gutLane(g, name, files, subdir, { extraEnv = {}, pendingAllowlist
     '.',
     '-s',
     'addons/gut/gut_cmdln.gd',
+    '-gconfig=', // never res://.gutconfig.json: it could narrow the run or stop errors failing a test
     `-gtest=${files.map((f) => `res://${f}`).join(',')}`,
     '-gexit',
     `-gjunit_xml_file=${g.dirRel}/${subdir}/junit.xml`,
@@ -898,7 +955,7 @@ async function cmdFast(o) {
   // Without --lanes the verdict always runs: no shard at all means no test ran, never a pass.
   if (!someLanes || gutResults.length > 0) {
     const everyShard = gutFiles.length === files.length;
-    const v = aggregateGut(gutResults, { floor: everyShard ? floor : null, expectedFiles: gutFiles });
+    const v = aggregateGut(gutResults, { floor: everyShard ? floor : null, expectedFiles: gutFiles, sourceCounts: sourceTestCounts(o.project, gutFiles) });
     gutTotal = v.total;
     g.row('gut:total', v.pass ? 'PASS' : 'FAIL', 0, `${v.total} tests, floor ${everyShard ? (floor ?? 'none') : 'partial'}`, v.reasons.join('\n'));
   }
@@ -941,7 +998,7 @@ async function cmdFast(o) {
  * the range: from the commit itself, a commit that lowered the floor and deleted tests would compare clean.
  */
 export function strictBase(o) {
-  const floorCommit = gitLine(o.project, ['log', '-1', '--format=%H', '--', GREEN_FLOOR_FILE]);
+  const floorCommit = gitLine(o.project, ['log', '-1', '--full-history', '--format=%H', '--', GREEN_FLOOR_FILE]);
   if (!floorCommit) return 'HEAD';
   return revOf(o, `${floorCommit}^`) ?? floorCommit;
 }
@@ -991,8 +1048,9 @@ async function cmdStrict(o) {
   const junitXml = fs.existsSync(junit) ? fs.readFileSync(junit, 'utf8') : '';
   const counts = junitXml ? junitCounts(junitXml) : null;
   // The monolith must have run every file the shards would: a file GUT dropped is no failing test.
-  const uncovered = junitCoverage(junitXml, listGutFiles(o.project));
-  g.row('gut:files', uncovered.length ? 'FAIL' : 'PASS', 0, uncovered.length ? `${uncovered.length} files GUT did not run` : 'every test file is in the JUnit', uncovered.slice(0, 40).join('\n'));
+  const gutFiles = listGutFiles(o.project);
+  const uncovered = [...junitCoverage(junitXml, gutFiles), ...junitCountProblems([junitXml], sourceTestCounts(o.project, gutFiles))];
+  g.row('gut:files', uncovered.length ? 'FAIL' : 'PASS', 0, uncovered.length ? `${uncovered.length} files GUT did not run in full` : 'every test of every file is in the JUnit', uncovered.slice(0, 40).join('\n'));
   const stamp = g.finish({
     ...start,
     ...endState(o, start),
@@ -1017,7 +1075,12 @@ function reportStem(args, i) {
 async function cmdMatrix(o) {
   const id = o.game;
   const script = `tests/games/${id}/sim/run_sims.sh`;
+  const rule = matrixRule(loadManifest(o.project), id);
   if (!fs.existsSync(path.join(o.project, script))) {
+    if (rule) {
+      out(`gate matrix: FAIL: the manifest requires a matrix of ${id}, and ${script} is missing`);
+      return 1;
+    }
     out(`gate matrix: no matrix for ${id} (no ${script})`);
     return 0;
   }
@@ -1054,8 +1117,11 @@ async function cmdMatrix(o) {
   const lines = parsePlan(fs.readFileSync(planFile, 'utf8'));
   // tools/run_game_sim refuses a plan variable with no file, so a value left in a shell can't skip real runs.
   fs.renameSync(planFile, path.join(g.dir, 'plan_used.txt'));
-  const planOk = planned.code === 0 && lines.length > 0;
-  g.row('plan', planOk ? 'PASS' : 'FAIL', Date.now() - t0, `${g.dirRel}/plan.log`, `exit ${planned.code}, ${lines.length} runs\n${planned.text.split(/\r?\n/).slice(-40).join('\n')}`);
+  const partial = o.scenarios.length > 0;
+  const tooFew = !partial && rule !== null && lines.length < rule.minRuns;
+  const planOk = planned.code === 0 && lines.length > 0 && !tooFew;
+  const planNote = `exit ${planned.code}, ${lines.length} runs${tooFew ? `, below the manifest's ${rule.minRuns} (matrix_min_runs): the script narrowed its matrix` : ''}`;
+  g.row('plan', planOk ? 'PASS' : 'FAIL', Date.now() - t0, `${g.dirRel}/plan.log`, `${planNote}\n${planned.text.split(/\r?\n/).slice(-40).join('\n')}`);
 
   // Phase 2: a pool; a failed run does not stop the others.
   const failed = [];
@@ -1097,19 +1163,18 @@ async function cmdMatrix(o) {
   fs.writeFileSync(planCheck, '');
   const checked = await scriptRun('check', planEnv(planCheck));
   fs.rmSync(planCheck, { force: true });
-  const partial = o.scenarios.length > 0;
   // Exit 0 is no evidence: the checker's own rows must be in its output.
-  const evidence = checkerEvidence({ code: checked.code, text: checked.text, partial, required: loadManifest(o.project).matrix_required_rows?.[id] ?? [] });
+  const evidence = checkerEvidence({ code: checked.code, text: checked.text, partial, required: rule?.rows ?? [] });
   g.row('check_sims', evidence.pass ? 'PASS' : 'FAIL', Date.now() - t2, `${g.dirRel}/check.log`, [...evidence.reasons, ...checked.text.split(/\r?\n/).slice(-40)].join('\n'));
 
-  const stamp = g.finish({ ...start, ...endState(o, start), game: id, partial, runs: lines.length, failed_runs: failed, checker_rows: evidence.rows });
+  const stamp = g.finish({ ...start, ...endState(o, start), game: id, partial, runs: lines.length, failed_runs: failed, checker_rows: evidence.rows, checker_passed: evidence.passed });
   writeStamp(o, name, stamp);
   return g.exitCode();
 }
 
 // ---------------------------------------------------------------- stamp-ok
 
-function stampRefusal(stamp, matrix, tree) {
+function stampRefusal(stamp, matrix, tree, rule = null) {
   if (!stamp) return 'no stamp';
   if (stamp.pass !== true) return 'it did not pass';
   if (stamp.partial !== false) return `it is partial${stamp.partial_reasons?.length ? ` (${stamp.partial_reasons.join('; ')})` : ''}`;
@@ -1118,6 +1183,9 @@ function stampRefusal(stamp, matrix, tree) {
   if (matrix) {
     if (!(stamp.runs > 0)) return 'it ran no sims';
     if (!(stamp.checker_rows > 0)) return 'it holds no evidence that the checker ran';
+    if (rule && stamp.runs < rule.minRuns) return `it ran ${stamp.runs} sims, below the manifest's ${rule.minRuns}`;
+    const lost = (rule?.rows ?? []).filter((id) => !(stamp.checker_passed ?? []).includes(id));
+    if (lost.length > 0) return `its checker did not pass ${lost.join(', ')}`;
     return null;
   }
   if (!Number.isInteger(stamp.gut_total) || stamp.gut_total <= 0) return `it counted ${stamp.gut_total ?? 'no'} GUT tests`;
@@ -1134,7 +1202,7 @@ function cmdStampOk(o) {
     out(`gate stamp-ok: ${name} in ${worktree}: refused: this checkout is dirty (${dirtyHere.length} paths), so its tree is not HEAD's`);
     return 1;
   }
-  const why = stampRefusal(stamp, o.matrix !== null, treeOf(o.project));
+  const why = stampRefusal(stamp, o.matrix !== null, treeOf(o.project), o.matrix ? matrixRule(loadManifest(o.project), o.matrix) : null);
   if (why) {
     out(`gate stamp-ok: ${name} in ${worktree}: refused: ${why}`);
     return 1;

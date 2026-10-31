@@ -9,6 +9,13 @@ import { spawnSync } from 'node:child_process';
 import { evaluateGut } from '../lib/gut_gate.mjs';
 import {
   aggregateGut,
+  checkNodeTestCounts,
+  checkPinContent,
+  countNodeTests,
+  junitCountProblems,
+  junitTestsByFile,
+  matrixRule,
+  revertedSha,
   checkAddedText,
   checkAppendOnly,
   checkClassNames,
@@ -246,6 +253,60 @@ describe('touchedGames', () => {
   });
 });
 
+describe('JUnit counts against the source', () => {
+  const xml = '<testsuites><testsuite name="tests/a/test_a.gd" tests="2" time="1">\n<testcase name="x"></testcase></testsuite>\n'
+    + '<testsuite name="tests/a/test_i.gd" tests="1"></testsuite><testsuite name="tests/a/test_i.gd.TestInner" tests="2"></testsuite>'
+    + '<testsuite name="tests/a/test_n.gd"><testcase name="a"></testcase><testcase name="b"></testcase></testsuite></testsuites>';
+
+  test('junitTestsByFile: the attribute, else the testcases; inner classes count for their file', () => {
+    assert.deepEqual([...junitTestsByFile(xml)], [['tests/a/test_a.gd', 2], ['tests/a/test_i.gd', 3], ['tests/a/test_n.gd', 2]]);
+  });
+
+  test('below the source is a problem; equal, above and absent are not', () => {
+    assert.deepEqual(junitCountProblems([xml], { 'tests/a/test_a.gd': 2, 'tests/a/test_i.gd': 2, 'tests/a/gone.gd': 9 }), []);
+    assert.match(junitCountProblems([xml], { 'tests/a/test_a.gd': 3 })[0], /test_a\.gd: the JUnit holds 2 tests, the source 3/);
+  });
+
+  test('a file split over shards adds up', () => {
+    const one = '<testsuite name="a.gd" tests="1"></testsuite>';
+    assert.deepEqual(junitCountProblems([one, one], { 'a.gd': 2 }), []);
+  });
+
+  test('countNodeTests counts test( and it(, not test.skip( or a word in a string', () => {
+    assert.equal(countNodeTests("test('a', f);\n  it('b', f);\ntest.skip('c', f);\nconst latest = 'test(';\n"), 2);
+  });
+
+  test('revertedSha reads the line git revert writes', () => {
+    assert.equal(revertedSha('Revert "Merge x"\n\nThis reverts commit abc1234, reversing changes made to def.\n'), 'abc1234');
+    assert.equal(revertedSha('Revert "Merge x"\n'), null);
+  });
+
+  test('matrixRule: null for a game the manifest does not name; floors for one it does', () => {
+    const m = { matrix_required_rows: { a: ['S1'] }, matrix_min_runs: { a: 3, b: 2 } };
+    assert.equal(matrixRule(m, 'c'), null);
+    assert.deepEqual(matrixRule(m, 'a'), { rows: ['S1'], minRuns: 3 });
+    assert.deepEqual(matrixRule(m, 'b'), { rows: [], minRuns: 2 });
+  });
+});
+
+describe('checkNodeTestCounts', () => {
+  const suiteOf = (f) => f.split('/')[0];
+  const t = (n) => "test('x', f);\n".repeat(n);
+
+  test('a total held or risen passes; a fall needs the trailer or a merge revert', () => {
+    assert.deepEqual(checkNodeTestCounts({ baseFiles: { 'a/x': t(1) }, headFiles: { 'a/x': t(2) }, suiteOf }).problems, []);
+    assert.match(checkNodeTestCounts({ baseFiles: { 'a/x': t(2) }, headFiles: { 'a/x': t(1) }, suiteOf }).problems[0], /Node total fell 2 -> 1/);
+    assert.deepEqual(checkNodeTestCounts({ baseFiles: { 'a/x': t(2) }, headFiles: { 'a/x': t(1) }, suiteOf, trailers: [{ area: 'node', reason: 'r' }] }).problems, []);
+    assert.deepEqual(checkNodeTestCounts({ baseFiles: { 'a/x': t(2) }, headFiles: {}, suiteOf, revertOnly: true }).problems, []);
+  });
+
+  test('an emptied suite fails though the total holds; its own trailer excuses it', () => {
+    const args = { baseFiles: { 'a/x': t(1), 'b/x': t(1) }, headFiles: { 'a/x': t(2) }, suiteOf };
+    assert.match(checkNodeTestCounts(args).problems[0], /Node suite b held 1 tests and holds none/);
+    assert.deepEqual(checkNodeTestCounts({ ...args, trailers: [{ area: 'b', reason: 'r' }] }).problems, []);
+  });
+});
+
 describe('aggregateGut', () => {
   const junit = (files, tests = 2) => `<testsuites name="GutTests" failures="0" tests="${tests}">${files.map((f) => `<testsuite name="${f}" tests="1" time="0.1"></testsuite>`).join('')}</testsuites>`;
   const shard = (name, files, { tests = 2, log = '= Run Summary\n', exitCode = 0, junitXml } = {}) => {
@@ -289,6 +350,15 @@ describe('aggregateGut', () => {
     const v = aggregateGut([shard('gut:1', ['a.gd'])], { expectedFiles: ['a.gd', 'gone.gd'] });
     assert.equal(v.pass, false);
     assert.match(v.reasons.join(), /gone\.gd/);
+  });
+
+  test('a file whose JUnit count is below its source fails', () => {
+    const xml = '<testsuites failures="0" tests="1"><testsuite name="a.gd" tests="1"></testsuite></testsuites>';
+    const shard = { ...evaluateGut({ exitCode: 0, log: '= Run Summary\n', junitXml: xml, previousGreen: null, minCount: 1, narrow: true }), name: 'gut:1', junitXml: xml };
+    assert.equal(aggregateGut([shard], { expectedFiles: ['a.gd'], sourceCounts: { 'a.gd': 1 } }).pass, true);
+    const v = aggregateGut([shard], { expectedFiles: ['a.gd'], sourceCounts: { 'a.gd': 2 } });
+    assert.equal(v.pass, false);
+    assert.match(v.reasons.join(), /a\.gd: the JUnit holds 1 tests, the source 2/);
   });
 
   test('a file in two JUnits fails, since it would pad the total', () => {
@@ -384,6 +454,13 @@ describe('the quiet rerun is for budgets only', () => {
   test('a non-zero exit with no failed testcase is a crash', () => {
     assert.equal(plan(['GUT exit code 139']).allowed, false);
   });
+
+  test('an exit code other than 1 is a crash, even with a failed budget test', () => {
+    for (const code of [3221225477, 139, 124, 2]) {
+      assert.equal(plan([`GUT exit code ${code}`, 'JUnit reports 1 failed test'], 'test_direct').allowed, false, String(code));
+    }
+    assert.equal(plan(['GUT exit code 1', 'JUnit reports 1 failed test'], 'test_direct').allowed, true);
+  });
 });
 
 describe('checkerEvidence', () => {
@@ -405,8 +482,8 @@ describe('checkerEvidence', () => {
   test('a FAIL row, a non-zero exit and a missing or skipped safety row fail', () => {
     assert.match(ev('PASS S1 a\nFAIL S4 b\n').reasons.join(), /FAIL rows: S4/);
     assert.match(checkerEvidence({ code: 1, text: 'PASS S1 a\n' }).reasons.join(), /exited 1/);
-    assert.match(ev('PASS S1 a\n', { required: ['S4'] }).reasons.join(), /safety row S4 is missing/);
-    assert.match(ev('PASS S1 a\nSKIP S4 b\n', { required: ['S4'] }).reasons.join(), /safety row S4 is SKIP/);
+    assert.match(ev('PASS S1 a\n', { required: ['S4'] }).reasons.join(), /required row S4 is missing/);
+    assert.match(ev('PASS S1 a\nSKIP S4 b\n', { required: ['S4'] }).reasons.join(), /required row S4 is SKIP/);
   });
 
   test('a SKIP row fails a full matrix, and only a full one', () => {
@@ -863,6 +940,45 @@ describe('the real checkers under the real manifest', () => {
     assert.ok(text.includes(a), a);
     return text.replace(a, () => b);
   };
+
+  test('the helpers, enforcers and pass-rule tools the pinned tests rest on are pinned', () => {
+    for (const f of [
+      'tests/scenarios/lib/scenario_lib.gd',
+      'tests/scenarios/lib/scenario_test.gd',
+      'tests/core/helpers/core_test_util.gd',
+      'tests/core/helpers/fakes.gd',
+      'tests/trainer/unlocked_ftms_client.gd',
+      'tests/trainer/fake_kickr_transport.gd',
+      'tests/sdk/helpers/session_kit.gd',
+      'tests/app/app_test_base.gd',
+      'addons/wattlands/core/app_state.gd',
+      'addons/wattlands/core/ftp_test.gd',
+      'addons/wattlands/ui/input_router.gd',
+      'addons/wattlands/sdk/sdk_conformance.gd',
+      'addons/wattlands/sdk/report_collector.gd',
+      'tools/e2e/run.mjs',
+      'tools/e2e/lib/game.mjs',
+      'tools/fit_check/check.mjs',
+    ]) {
+      assert.ok(pins.files[f], `${f} is not pinned`);
+    }
+  });
+
+  test("files others write in this run are line-pinned, never whole, and their pinned lines can't go", () => {
+    const lineEdit = (file, a, b = '') => checkPinContent({ pins: { lines: pins.lines }, read: withEdit(file, swapOne(a, b)) });
+    for (const f of ['addons/wattlands/core/settings.gd', 'addons/wattlands/sdk/game_host.gd', 'src/app/session_launcher.gd', 'addons/wattlands/sdk/game_sim_runner.gd', 'tests/games/tank/sim/run_sims.sh', 'tests/games/siege/sim/run_sims.sh', 'tests/games/fishing/sim/run_sims.sh']) {
+      assert.equal(pins.files[f], undefined, `${f} has other writers`);
+      assert.ok(pins.lines.some((e) => e.file === f), `${f} has no line pin`);
+    }
+    assert.match(lineEdit('addons/wattlands/core/settings.gd', 'var c := clampf(f, float(lim[0]), float(lim[1]))', 'var c := f')[0], /line pin: .*settings\.gd/);
+    assert.match(lineEdit('addons/wattlands/sdk/game_host.gd', 'bus.panic_requested.connect(_on_panic)', 'pass')[0], /line pin: .*game_host\.gd/);
+    assert.match(lineEdit('addons/wattlands/sdk/game_sim_runner.gd', '"skip_warmup": false', '"skip_warmup": true')[0], /line pin/);
+    assert.match(lineEdit('tests/games/tank/sim/run_sims.sh', 'TANK_SEEDS:-1 2 3', 'TANK_SEEDS:-1')[0], /line pin/);
+    assert.match(lineEdit('tests/games/siege/sim/run_sims.sh', 'exit "$status"', 'exit 0')[0], /line pin/);
+    assert.match(lineEdit('tests/games/fishing/sim/run_sims.sh', 'node tests/games/fishing/sim/check_sims.mjs "${args[@]}"', 'true')[0], /line pin/);
+    // An added line beside the pinned ones is what they are for.
+    assert.deepEqual(lineEdit('addons/wattlands/core/settings.gd', 'var gmin :=', 'var added := 1\n\tvar gmin :='), []);
+  });
 
   test('the tree as it stands passes, and every BRIEF 4.6 and BRIEF 7 path is pinned', () => {
     assert.deepEqual(checkPins({ pins, read: readReal }), []);

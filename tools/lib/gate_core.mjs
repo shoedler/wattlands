@@ -203,12 +203,50 @@ function junitSuiteNames(xml) {
   return out;
 }
 
+/** Tests per file in a JUnit file: Map file -> the suite's `tests` attribute, else its testcases. Inner-class suites ("x.gd.Inner") count for x.gd. */
+export function junitTestsByFile(xml) {
+  const out = new Map();
+  for (const m of String(xml ?? '').matchAll(/<testsuite\b([^>]*)>([\s\S]*?)<\/testsuite>/g)) {
+    const name = /\bname="([^"]*)"/.exec(m[1]);
+    if (!name) continue;
+    const file = name[1].replace(/(\.gd)\..*$/, '$1');
+    const attr = /\btests="(\d+)"/.exec(m[1]);
+    const n = attr ? Number(attr[1]) : (m[2].match(/<testcase\b/g) ?? []).length;
+    out.set(file, (out.get(file) ?? 0) + n);
+  }
+  return out;
+}
+
+/**
+ * Files whose JUnit count is below their source count. GUT collects inner classes only with the `Test`
+ * prefix and a config can narrow a run by test name, so a failing test can vanish while the file stays in
+ * the JUnit. `sourceCounts`: {file: countTests(source)}. A file in no JUnit is junitCoverage's business.
+ * problems[].
+ */
+export function junitCountProblems(junitXmls, sourceCounts) {
+  const seen = new Map();
+  for (const xml of junitXmls) {
+    for (const [file, n] of junitTestsByFile(xml)) seen.set(file, (seen.get(file) ?? 0) + n);
+  }
+  const problems = [];
+  for (const [file, want] of Object.entries(sourceCounts ?? {})) {
+    const got = seen.get(file);
+    if (got !== undefined && got < want) problems.push(`${file}: the JUnit holds ${got} tests, the source ${want}: GUT did not run ${want - got} (an inner class without the Test prefix? a narrowed run?)`);
+  }
+  return problems;
+}
+
+/** {file: test functions in its source} for files under projectDir. A file that can't be read throws. */
+export function sourceTestCounts(projectDir, files) {
+  return Object.fromEntries(files.map((f) => [f, countTests(fs.readFileSync(path.join(projectDir, f), 'utf8'))]));
+}
+
 /**
  * The verdict over all shards. `results`: one { name, junitXml, ...evaluateGut output } per process.
- * Fails on any failed shard, a file of `expectedFiles` in no JUnit, a file in two JUnits, and a
- * total below `floor` (null: no floor). Returns { pass, total, reasons }.
+ * Fails on any failed shard, a file of `expectedFiles` in no JUnit, a file in two JUnits, a file whose
+ * JUnit count is below `sourceCounts`, and a total below `floor` (null: no floor). Returns { pass, total, reasons }.
  */
-export function aggregateGut(results, { floor = null, expectedFiles = [] } = {}) {
+export function aggregateGut(results, { floor = null, expectedFiles = [], sourceCounts = {} } = {}) {
   const reasons = [];
   if (results.length === 0) reasons.push('no GUT process ran');
   let total = 0;
@@ -224,6 +262,7 @@ export function aggregateGut(results, { floor = null, expectedFiles = [] } = {})
   for (const f of expectedFiles) {
     if (!seenIn.has(f)) reasons.push(`${f} is in no JUnit file`);
   }
+  reasons.push(...junitCountProblems(results.map((r) => r.junitXml), sourceCounts));
   if (Number.isInteger(floor) && floor > 0 && total < floor) reasons.push(`the shards ran ${total} tests, fewer than the floor ${floor}`);
   return { pass: reasons.length === 0, total, reasons };
 }
@@ -280,7 +319,8 @@ export function isBudgetTest(src, testName) {
   return false;
 }
 
-const RETRYABLE_REASON = /^(?:GUT exit code \d+|JUnit reports \d+ failed tests?)$/;
+// GUT exits 1 on failed tests. Any other code is a crash or a kill, which a rerun must not wash out.
+const RETRYABLE_REASON = /^(?:GUT exit code 1|JUnit reports \d+ failed tests?)$/;
 
 /**
  * May the quiet lane rerun after this first verdict? A budget is a claim about an unloaded machine, so a
@@ -340,9 +380,21 @@ export function checkerEvidence({ code, text, partial = false, required = [] }) 
   if (named('FAIL').length > 0) reasons.push(`FAIL rows: ${named('FAIL').join(', ')}`);
   if (!partial && named('SKIP').length > 0) reasons.push(`SKIP rows in a full matrix: ${named('SKIP').join(', ')}`);
   if (!partial) {
-    for (const id of required) if (rows.get(id) !== 'PASS') reasons.push(`the safety row ${id} is ${rows.get(id) ?? 'missing'}`);
+    for (const id of required) if (rows.get(id) !== 'PASS') reasons.push(`the required row ${id} is ${rows.get(id) ?? 'missing'}`);
   }
-  return { pass: reasons.length === 0, rows: rows.size, reasons };
+  return { pass: reasons.length === 0, rows: rows.size, passed: named('PASS'), reasons };
+}
+
+/**
+ * What the manifest asks of a game's full matrix, or null when it asks nothing: `rows` its checker must
+ * pass, `minRuns` the runs its plan must hold. Both are floors: a matrix may grow, and a game's script
+ * can't narrow itself (a hard-coded --only, fewer seeds or crews), since nothing else compares it.
+ */
+export function matrixRule(manifest, id) {
+  const rows = manifest.matrix_required_rows?.[id];
+  const minRuns = manifest.matrix_min_runs?.[id];
+  if (rows === undefined && minRuns === undefined) return null;
+  return { rows: rows ?? [], minRuns: minRuns ?? 1 };
 }
 
 /**
@@ -365,6 +417,11 @@ export function fastNarrowing({ lanes = null, baseSha, mainSha, base = 'main', w
 
 export function countTests(src) {
   return (String(src).match(/^\s*func test_/gm) || []).length;
+}
+
+/** Top-level and nested `test(` and `it(` calls of a Node test file. `test.skip(` does not count, so skipping reads as a fall. */
+export function countNodeTests(src) {
+  return (String(src).match(/^[ \t]*(?:test|it)\(/gm) || []).length;
 }
 
 export function countAsserts(src) {
@@ -939,6 +996,50 @@ export function checkTestCounts({ baseFiles, headFiles, trailers = [], revertOnl
       else if (!revertOnly) problems.push(`tests: ${a} fell ${c.baseTests} -> ${c.headTests} with no "Test-Removal: ${a} <reason>" trailer`);
     }
     if (c.baseAsserts > 0 && c.headAsserts < c.baseAsserts * 0.9) notes.push(`tests: ${a} asserts fell over 10 %: ${c.baseAsserts} -> ${c.headAsserts}`);
+  }
+  return { problems, notes };
+}
+
+/** The sha of a `git revert` message's "This reverts commit <sha>", or null. */
+export function revertedSha(message) {
+  return /^This reverts commit ([0-9a-f]{7,64})\b/m.exec(String(message))?.[1] ?? null;
+}
+
+/**
+ * The Node side of the test-total rule, over the files `node --test` runs at the merge base and at HEAD.
+ * `baseFiles`, `headFiles`: {path: source}. `suiteOf(file)` names a file's suite. The total may fall only in
+ * a merge revert or with a `Test-Removal: node <reason>` trailer, and a suite that held tests and holds none
+ * needs `Test-Removal: <suite> <reason>`, since run_tests reads an empty suite as SKIP. Any other suite that
+ * shrinks is a note: tests move between suites. Returns { problems, notes }.
+ */
+export function checkNodeTestCounts({ baseFiles, headFiles, suiteOf, trailers = [], revertOnly = false }) {
+  const problems = [];
+  const notes = [];
+  const tally = (files) => {
+    const bySuite = new Map();
+    let total = 0;
+    for (const [file, src] of Object.entries(files)) {
+      const n = countNodeTests(src);
+      total += n;
+      const suite = suiteOf(file);
+      bySuite.set(suite, (bySuite.get(suite) ?? 0) + n);
+    }
+    return { total, bySuite };
+  };
+  const base = tally(baseFiles);
+  const head = tally(headFiles);
+  if (head.total < base.total) {
+    const excuse = trailers.find((t) => t.area === 'node');
+    if (revertOnly) notes.push(`tests: the Node total fell ${base.total} -> ${head.total} in a merge revert`);
+    else if (excuse) notes.push(`tests: the Node total fell ${base.total} -> ${head.total}, Test-Removal: ${excuse.reason}`);
+    else problems.push(`tests: the Node total fell ${base.total} -> ${head.total} with no "Test-Removal: node <reason>" trailer`);
+  }
+  for (const [suite, was] of [...base.bySuite].sort()) {
+    const now = head.bySuite.get(suite) ?? 0;
+    if (now >= was) continue;
+    const excuse = trailers.find((t) => t.area === suite);
+    if (now === 0 && !excuse && !revertOnly) problems.push(`tests: the Node suite ${suite} held ${was} tests and holds none, with no "Test-Removal: ${suite} <reason>" trailer`);
+    else notes.push(`tests: the Node suite ${suite} fell ${was} -> ${now}`);
   }
   return { problems, notes };
 }

@@ -22,7 +22,7 @@ const REPO = path.dirname(TOOLS);
 
 const STEP_NAMES = ['import', 'gut', 'scaffold', 'static', 'sim', 'fit', 'node', 'e2e'];
 const LINT_DIRS = ['addons/wattlands', 'src', 'tests', 'tools'];
-const NODE_SUITES = ['tools/tests', 'server/relay', 'server/mock_strava', 'tools/art', 'tools/audio', 'tools/fit_check', 'tools/e2e'];
+export const NODE_SUITES = ['tools/tests', 'server/relay', 'server/mock_strava', 'tools/art', 'tools/audio', 'tools/fit_check', 'tools/e2e'];
 // Suites with a package-lock.json get `npm ci` first when their node_modules is missing; a failed
 // install is reported and the suite runs anyway (the relay and fit_check have zero-dependency
 // fallbacks, BRIEF 5.3, 3.8).
@@ -243,6 +243,7 @@ async function stepGut(o) {
     '.',
     '-s',
     'addons/gut/gut_cmdln.gd',
+    '-gconfig=', // never res://.gutconfig.json: it could narrow the run or stop errors failing a test
     `-gdir=${o.gdir ?? 'res://tests'}`,
     '-ginclude_subdirs',
     '-gexit',
@@ -322,7 +323,7 @@ async function stepScaffold(o) {
   const log = path.join(o.project, 'build', 'scaffold_gut.log');
   const r = await godot(
     o,
-    ['--headless', '--path', copy, '-s', 'addons/gut/gut_cmdln.gd', '-gtest=res://tests/sdk/test_conformance.gd',
+    ['--headless', '--path', copy, '-s', 'addons/gut/gut_cmdln.gd', '-gconfig=', '-gtest=res://tests/sdk/test_conformance.gd',
       '-gexit', '-gdisable_colors', `-gjunit_xml_file=${junit}`],
     { log, timeoutS: SCAFFOLD_TIMEOUT_S },
   );
@@ -593,7 +594,7 @@ async function stepFit(o) {
   return { status: 'PASS', note };
 }
 
-const TEST_FILE_RE = /(^test\.[cm]?js$)|(^test-.+\.[cm]?js$)|([.\-_]test\.[cm]?js$)/;
+export const TEST_FILE_RE = /(^test\.[cm]?js$)|(^test-.+\.[cm]?js$)|([.\-_]test\.[cm]?js$)/;
 
 /**
  * The full GUT run's floor: the larger of this checkout's last green count (build/, gitignored)

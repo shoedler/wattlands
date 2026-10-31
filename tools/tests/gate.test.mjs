@@ -12,7 +12,7 @@ import { BASH, GIT, TOOLS, REPO, IS_WIN, godotBin, makeScratchProject, powershel
 import { checkAddedText } from '../lib/gate_core.mjs';
 import { parseArgs } from '../lib/run_tests.mjs';
 import { changedSince, parseCli, runCheck, strictBase } from '../lib/gate.mjs';
-import { touchedGames } from '../lib/gate_core.mjs';
+import { parsePlan, touchedGames } from '../lib/gate_core.mjs';
 
 const GATE = path.join(TOOLS, 'lib', 'gate.mjs');
 const REAL_MANIFEST = JSON.parse(fs.readFileSync(path.join(TOOLS, 'lib', 'gate_manifest.json'), 'utf8'));
@@ -306,6 +306,15 @@ describe('6.2 and 6.3 pins, through git', { concurrency: 4 }, () => {
     await assertCheck(branch, ['--allow=tools/lib/safety_pins.json'], 1, /safety_pins\.json was deleted/);
   });
 
+  test('a merge that drops the pins fails: `-s ours` hides the side that held them from plain git log', async () => {
+    const dir = pinnedRepo();
+    sh(dir, 'branch', 'queue/x');
+    await pin(dir);
+    sh(dir, 'checkout', '-q', 'queue/x');
+    sh(dir, 'merge', '-q', '-s', 'ours', '--no-edit', 'main');
+    await assertCheck(dir, [], 1, /safety_pins\.json was deleted/);
+  });
+
   test('a branch behind the pinning commit still gets the note, since it never had them', async () => {
     const dir = pinnedRepo();
     sh(dir, 'branch', 'game/tank-old');
@@ -404,13 +413,104 @@ describe('6.4 test counts, through git', { concurrency: 4 }, () => {
     assert.match(r.stdout, /tests\/games\/siege\/test_c\.gd lost tests: 2 -> 1/);
   });
 
-  test('the revert of a merge is excused; a revert mixed with other work is not', async () => {
-    const dir = repo({ 'tests/a/test_a.gd': tests(2), 'tests/a/test_a.gd.uid': 'u\n' });
-    onBranch(dir, 'queue', { 'tests/a/test_a.gd': tests(1) }, 'Revert "Merge game/x: y"');
-    await assertCheck(dir, [], 0, /in a merge revert/);
-    write(dir, { 'src/a.txt': 'a\n' });
-    commit(dir, 'other work');
-    await assertCheck(dir, [], 1, /the total fell/);
+  describe('the merge-revert exemption', () => {
+    // main holds a real merge that brought tests/a/test_b.gd.
+    function landed() {
+      const dir = repo({ 'tests/a/test_a.gd': tests(2), 'tests/a/test_a.gd.uid': 'u\n', 'tests/c/test_c.gd': tests(1), 'tests/c/test_c.gd.uid': 'u\n' });
+      onBranch(dir, 'topic', { 'tests/a/test_b.gd': tests(2), 'tests/a/test_b.gd.uid': 'u\n' });
+      sh(dir, 'checkout', '-q', 'main');
+      sh(dir, 'merge', '-q', '--no-ff', 'topic', '-m', 'Merge topic: y');
+      return { dir, merge: sh(dir, 'rev-parse', 'HEAD') };
+    }
+
+    test('a real revert of a merge is excused; a revert mixed with other work is not', async () => {
+      const { dir } = landed();
+      sh(dir, 'checkout', '-q', '-b', 'queue');
+      sh(dir, 'revert', '-m', '1', '--no-edit', 'HEAD');
+      await assertCheck(dir, [], 0, /in a merge revert/);
+      write(dir, { 'src/a.txt': 'a\n' });
+      commit(dir, 'other work');
+      await assertCheck(dir, [], 1, /the total fell/);
+    });
+
+    test('the same revert still answers to a later commit having moved other lines', async () => {
+      const { dir } = landed();
+      write(dir, { 'tests/a/test_a.gd': `# moved\n${tests(2)}` });
+      commit(dir, 'tests: a comment');
+      sh(dir, 'checkout', '-q', '-b', 'queue');
+      sh(dir, 'revert', '-m', '1', '--no-edit', sh(dir, 'rev-parse', 'HEAD^'));
+      await assertCheck(dir, [], 0, /in a merge revert/);
+    });
+
+    test('the subject proves nothing: no sha, no merge, or another diff all fail', async () => {
+      const remove = { 'tests/c/test_c.gd': null, 'tests/c/test_c.gd.uid': null };
+      const plain = landed();
+      onBranch(plain.dir, 'fix/x', remove, 'Revert "Merge nothing"');
+      await assertCheck(plain.dir, [], 1, /the total fell/);
+      const notMerge = landed();
+      onBranch(notMerge.dir, 'fix/x', remove, `Revert "Merge nothing"\n\nThis reverts commit ${sh(notMerge.dir, 'rev-parse', 'HEAD^1')}.`);
+      await assertCheck(notMerge.dir, [], 1, /the total fell/);
+      const other = landed();
+      onBranch(other.dir, 'fix/x', remove, `Revert "Merge topic: y"\n\nThis reverts commit ${other.merge}, reversing changes.`);
+      await assertCheck(other.dir, [], 1, /the total fell/);
+      const unknown = landed();
+      onBranch(unknown.dir, 'fix/x', remove, `Revert "Merge x"\n\nThis reverts commit ${'a'.repeat(40)}.`);
+      await assertCheck(unknown.dir, [], 1, /the total fell/);
+    });
+  });
+
+  describe('Node test counts', () => {
+    const FILE = 'tools/tests/a.test.mjs';
+    const nodeTests = (n) => Array.from({ length: n }, (_, i) => `test('t${i}', () => {});\n`).join('');
+
+    test('the total falling fails; a trailer excuses it; test.skip reads as a fall', async () => {
+      const dir = repo({ [FILE]: nodeTests(2) });
+      onBranch(dir, 'fix/x', { [FILE]: nodeTests(1) });
+      await assertCheck(dir, [], 1, /the Node total fell 2 -> 1 with no "Test-Removal: node/);
+      const skip = repo({ [FILE]: nodeTests(2) });
+      onBranch(skip, 'fix/x', { [FILE]: `${nodeTests(1)}test.skip('t1', () => {});\n` });
+      await assertCheck(skip, [], 1, /the Node total fell 2 -> 1/);
+      const ok = repo({ [FILE]: nodeTests(2) });
+      sh(ok, 'checkout', '-q', '-b', 'fix/x');
+      write(ok, { [FILE]: nodeTests(1) });
+      sh(ok, 'add', '-A');
+      sh(ok, 'commit', '-q', '-m', 'work', '-m', 'Test-Removal: node the tool went');
+      await assertCheck(ok, [], 0, /Node total fell 2 -> 1, Test-Removal: the tool went/);
+    });
+
+    test("a game's Node tests count; a file outside the suites does not", async () => {
+      const game = repo({ 'tests/games/tank/sim/a.test.mjs': nodeTests(1) });
+      onBranch(game, 'fix/x', { 'tests/games/tank/sim/a.test.mjs': null });
+      await assertCheck(game, [], 1, /the Node total fell 1 -> 0/);
+      const outside = repo({ 'src/a.test.mjs': nodeTests(1) });
+      onBranch(outside, 'fix/x', { 'src/a.test.mjs': null });
+      await assertCheck(outside, [], 0);
+    });
+
+    test('a suite emptied fails though the total holds; moving tests between suites is a note', async () => {
+      const dir = repo({ [FILE]: nodeTests(1), 'tools/art/b.test.mjs': nodeTests(1) });
+      onBranch(dir, 'fix/x', { [FILE]: nodeTests(2), 'tools/art/b.test.mjs': null });
+      await assertCheck(dir, [], 1, /the Node suite tools\/art held 1 tests and holds none/);
+      const moved = repo({ [FILE]: nodeTests(1), 'tools/art/b.test.mjs': nodeTests(2) });
+      onBranch(moved, 'fix/x', { [FILE]: nodeTests(2), 'tools/art/b.test.mjs': nodeTests(1) });
+      await assertCheck(moved, [], 0, /the Node suite tools\/art fell 2 -> 1/);
+    });
+  });
+
+  test('a .gutconfig.json fails, tracked, untracked or ignored, and --allow does not excuse it', async () => {
+    const tracked = repo();
+    onBranch(tracked, 'fix/x', { '.gutconfig.json': '{}' });
+    await assertCheck(tracked, [], 1, /gut config: \.gutconfig\.json exists/);
+    await assertCheck(tracked, ['--allow=**'], 1, /gut config/);
+    const untracked = repo();
+    write(untracked, { '.gutconfig.json': '{}' });
+    await assertCheck(untracked, [], 1, /gut config/);
+    const ignored = repo({ '.gitignore': 'build/\n.gutconfig.json\n' });
+    write(ignored, { '.gutconfig.json': '{}' });
+    await assertCheck(ignored, [], 1, /gut config/);
+    const nested = repo();
+    onBranch(nested, 'fix/x', { 'tests/a/.gutconfig.json': '{}' });
+    await assertCheck(nested, [], 1, /gut config: tests\/a\/\.gutconfig\.json exists/);
   });
 
   test('an empty assert added in a test fails; in tools/tests it does not', async () => {
@@ -497,6 +597,17 @@ describe('6.5 other invariants, through git', { concurrency: 4 }, () => {
     write(dir, { 'tests/green_count_floor.txt': '60\n' });
     commit(dir, 'chore: up a little');
     await assertCheck(dir, [], 1, /fell 100 -> 60/);
+  });
+
+  test('a floor raised on the side a merge dropped still counts: `-s ours` hides it from plain git log', async () => {
+    const dir = repo({ 'tests/green_count_floor.txt': '100\n' }, NO_PINS_MANIFEST);
+    sh(dir, 'branch', 'queue/x');
+    write(dir, { 'tests/green_count_floor.txt': '200\n' });
+    const raised = commit(dir, 'chore: the floor rises');
+    sh(dir, 'checkout', '-q', 'queue/x');
+    sh(dir, 'merge', '-q', '-s', 'ours', '--no-edit', 'main');
+    await assertCheck(dir, [], 1, /fell 200 -> 100/);
+    assert.equal(strictBase(parseCli(['check', `--project=${dir}`])), sh(dir, 'rev-parse', `${raised}^`), "strict's range holds the raise and the merge");
   });
 
   test('strict: the commit that touched the floor is inside its check range', () => {
@@ -646,7 +757,7 @@ describe('stamp-ok', { concurrency: 4 }, () => {
   }
 
   test('a clean pass on this tree stands, for fast and for a matrix', async () => {
-    const dir = stamped();
+    const dir = stamped({ runs: REAL_MANIFEST.matrix_min_runs.tank, checker_passed: REAL_MANIFEST.matrix_required_rows.tank });
     assert.equal((await gate(dir, ['stamp-ok', dir])).code, 0);
     assert.equal((await gate(dir, ['stamp-ok', dir, '--matrix=tank'])).code, 0);
   });
@@ -788,6 +899,8 @@ func _initialize() -> void:
 			junit = arg.trim_prefix("-gjunit_xml_file=")
 		if arg.begins_with("-gtest="):
 			files = arg.trim_prefix("-gtest=").split(",")
+	if not OS.get_cmdline_args().has("-gconfig="):
+		print("SCRIPT ERROR: planted: GUT would read res://.gutconfig.json")
 	var suites: String = ""
 	var bad: String = str(cfg.get("forbidden_in", ""))
 	var once: String = str(cfg.get("fail_once_in", ""))
@@ -847,6 +960,14 @@ describe('fast --lanes=gut on a scratch project', { skip: skipNoGodot }, () => {
   }
   const fast = (dir, ...args) => gate(dir, ['fast', '--lanes=gut', '--shards=2', '--games=all', ...args], { env: lockEnv, timeoutMs: 400_000 });
   const stampOf = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'build', 'gate', 'fast.json'), 'utf8'));
+
+  test('a test GUT did not collect fails gut:total though every shard passed', async () => {
+    const dir = scratch({}, { 'tests/b/test_c.gd': `${TEST_SRC}\nclass Helper:\n\tfunc test_hidden():\n\t\tassert_eq(a, b)\n` });
+    const r = await fast(dir);
+    assert.equal(r.code, 1, r.stdout + r.stderr);
+    assert.match(r.stdout, /FAIL gut:total/);
+    assert.match(r.stdout, /tests\/b\/test_c\.gd: the JUnit holds 1 tests, the source 2/);
+  });
 
   test('every file runs once, each shard in its own user dir, and the stamp says partial', async () => {
     const dir = scratch();
@@ -1085,7 +1206,56 @@ describe('matrix', { skip: !BASH && 'bash not found' }, () => {
     assert.equal((await gate(dir, ['stamp-ok', dir, '--matrix=mygame'])).code, 1);
   });
 
-  test('a SKIP row fails a full matrix; a safety row must be PASS', async () => {
+  test('no run_sims.sh fails for a game the manifest requires, and writes no stamp', async () => {
+    const dir = repo({ 'project.godot': '' });
+    const r = await gate(dir, ['matrix', '--game=tank']);
+    assert.equal(r.code, 1, r.stdout + r.stderr);
+    assert.match(r.stdout, /requires a matrix of tank/);
+    assert.ok(!fs.existsSync(path.join(dir, 'build', 'gate', 'matrix_tank.json')));
+  });
+
+  test("a plan below the manifest's minimum fails; a subset does not answer to it; stamp-ok compares too", async () => {
+    const manifest = { ...REAL_MANIFEST, matrix_required_rows: { mygame: ['S1'] }, matrix_min_runs: { mygame: 2 } };
+    const few = matrixRepo(simsScript('run a'), manifest);
+    const r = await matrix(few);
+    assert.equal(r.code, 1, r.stdout + r.stderr);
+    assert.match(r.stdout, /FAIL plan/);
+    assert.match(r.stdout, /below the manifest's 2/);
+    assert.equal((await gate(few, ['stamp-ok', few, '--matrix=mygame'])).code, 1);
+    const subset = matrixRepo(simsScript('run a'), manifest);
+    assert.equal((await matrix(subset, '--scenarios=s1')).code, 0);
+    const dir = matrixRepo(simsScript('run a\nrun b'), manifest);
+    const v = await matrix(dir);
+    assert.equal(v.code, 0, v.stdout + v.stderr);
+    assert.deepEqual(stampOf(dir).checker_passed, ['S1']);
+    assert.equal((await gate(dir, ['stamp-ok', dir, '--matrix=mygame'])).code, 0);
+    const file = path.join(dir, 'build', 'gate', 'matrix_mygame.json');
+    const good = stampOf(dir);
+    fs.writeFileSync(file, JSON.stringify({ ...good, runs: 1 }));
+    assert.match((await gate(dir, ['stamp-ok', dir, '--matrix=mygame'])).stdout, /below the manifest's 2/);
+    fs.writeFileSync(file, JSON.stringify({ ...good, checker_passed: [] }));
+    assert.match((await gate(dir, ['stamp-ok', dir, '--matrix=mygame'])).stdout, /its checker did not pass S1/);
+  });
+
+  test('the real scripts plan at least the runs the manifest asks, and the real checkers hold its rows', () => {
+    for (const [id, minRuns] of Object.entries(REAL_MANIFEST.matrix_min_runs)) {
+      const upper = id.toUpperCase();
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'wgate-plan-'));
+      temps.push(scratch);
+      const plan = path.join(scratch, 'plan.txt').replaceAll('\\', '/');
+      fs.writeFileSync(plan, '');
+      const env = { ...process.env, WATTLANDS_SIM_PLAN: plan, [`${upper}_SKIP_CHECK`]: '1', [`${upper}_SIMS_OUT`]: path.join(scratch, 'out').replaceAll('\\', '/') };
+      const r = spawnSync(BASH, [`tests/games/${id}/sim/run_sims.sh`], { cwd: REPO, env, encoding: 'utf8', windowsHide: true, timeout: 120_000 });
+      assert.equal(r.status, 0, `${id}: ${r.stdout}${r.stderr}`);
+      assert.ok(parsePlan(fs.readFileSync(plan, 'utf8')).length >= minRuns, `${id} plans fewer than ${minRuns} runs`);
+      const checker = fs.readFileSync(path.join(REPO, `tests/games/${id}/sim/check_sims.mjs`), 'utf8');
+      for (const row of REAL_MANIFEST.matrix_required_rows[id]) {
+        assert.match(checker, new RegExp(`\\b${row}: check|\\['${row}', check|'${row}'`), `${id} has no row ${row}`);
+      }
+    }
+  });
+
+  test('a SKIP row fails a full matrix; a required row must be PASS', async () => {
     const skip = matrixRepo(simsScript('run a', { checker: "printf 'PASS S1 a\\nSKIP S4 no reports\\n'" }));
     const r = await matrix(skip);
     assert.equal(r.code, 1, r.stdout + r.stderr);
@@ -1093,7 +1263,7 @@ describe('matrix', { skip: !BASH && 'bash not found' }, () => {
     const safety = matrixRepo(simsScript('run a'), { ...REAL_MANIFEST, matrix_required_rows: { mygame: ['S4'] } });
     const v = await matrix(safety);
     assert.equal(v.code, 1, v.stdout + v.stderr);
-    assert.match(v.stdout, /the safety row S4 is missing/);
+    assert.match(v.stdout, /the required row S4 is missing/);
   });
 
   test('nothing in the shell skips the checker or narrows the runs', async () => {

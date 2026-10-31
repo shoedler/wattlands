@@ -43,6 +43,17 @@
     "tests/core/integration/{test_safe_unlink,test_trainer_stack}.gd",
     "tests/app/test_session_safety.gd",
     "tests/pending_allowlist.txt",
+    "tests/scenarios/lib/{scenario_lib,scenario_test}.gd",
+    "tests/core/helpers/{core_test_util,fakes}.gd",
+    "tests/trainer/{unlocked_ftms_client,fake_kickr_transport}.gd",
+    "tests/sdk/helpers/session_kit.gd",
+    "tests/app/app_test_base.gd",
+    "addons/wattlands/core/{app_state,ftp_test}.gd",
+    "addons/wattlands/ui/input_router.gd",
+    "addons/wattlands/sdk/{sdk_conformance,report_collector}.gd",
+    "tools/e2e/run.mjs",
+    "tools/e2e/lib/game.mjs",
+    "tools/fit_check/check.mjs",
     "tools/e2e/lib/checks.mjs",
     "tools/lib/gut_gate.mjs",
     "tools/lib/run_tests.mjs",
@@ -70,11 +81,57 @@
       "\t\"haptic_intensity_pct\": [0.0, 100.0],",
       "\t\"grade_min_pct\": [-10.0, 0.0],",
       "\t\"grade_max_pct\": [0.0, 16.0],",
+      "\tclamp_profile(profile)",
+      "\tfor k: String in PROFILE_RANGES.keys():",
+      "\t\t\tc = clampf(f, float(lim[0]), float(lim[1]))",
+      "\t\t\tp.set(k, c)",
+      "\t\tif PROFILE_RANGES.has(k):",
+      "\t\t\tvar c := clampf(f, float(lim[0]), float(lim[1]))",
+      "\t\t\tv = c",
       "\tvar gmin := float(out.get(\"grade_min_pct\", template[\"grade_min_pct\"]))",
       "\tvar gmax := float(out.get(\"grade_max_pct\", template[\"grade_max_pct\"]))",
       "\tif gmin > gmax:",
       "\t\tout.erase(\"grade_min_pct\")",
       "\t\tout.erase(\"grade_max_pct\")"
+    ],
+    "addons/wattlands/sdk/game_host.gd": [
+      "\tif not bus.panic_requested.is_connected(_on_panic):",
+      "\t\tbus.panic_requested.connect(_on_panic)",
+      "\t\t\t&\"panic\":",
+      "\t\t\t\tif rider != null:",
+      "\t\t\t\t\trider.panic()",
+      "\t\t\t&\"panic\":",
+      "\t\t\t\tif rider != null:",
+      "\t\t\t\t\trider.panic()",
+      "func _on_panic() -> void:",
+      "\t\trider.panic()"
+    ],
+    "src/app/session_launcher.gd": [
+      "\t\t\t\t\"skip_warmup\": profile.skip_warmup,",
+      "\t\t\t\t\"skip_warmup\": false,"
+    ],
+    "addons/wattlands/sdk/game_sim_runner.gd": [
+      "\t\t\"skip_warmup\": false,"
+    ],
+    "tests/games/tank/sim/run_sims.sh": [
+      "set -euo pipefail",
+      "seeds=\"${TANK_SEEDS:-1 2 3}\"",
+      "  args=(\"$out\" \"--seeds=${seeds// /,}\")",
+      "  if [ \"${TANK_FIT:-1}\" != \"0\" ]; then args+=(--fit); fi",
+      "  node tests/games/tank/sim/check_sims.mjs \"${args[@]}\""
+    ],
+    "tests/games/siege/sim/run_sims.sh": [
+      "set -euo pipefail",
+      "seeds=\"${SIEGE_SEEDS:-1 2 3}\"",
+      "      node tools/fit_check/check.mjs \"${files[@]}\" \"--expect-laps=$laps\" || status=1",
+      "    node tests/games/siege/sim/check_sims.mjs \"$out\" \"--seeds=${seeds// /,}\" || status=1",
+      "exit \"$status\""
+    ],
+    "tests/games/fishing/sim/run_sims.sh": [
+      "set -euo pipefail",
+      "seeds=\"${FISHING_SEEDS:-1 2 3 4 5}\"",
+      "args=(\"$out\" \"--seeds=${seeds// /,}\")",
+      "node tests/games/fishing/sim/check_sims.mjs \"${args[@]}\""
     ]
   },
   "append_only_pins": {
@@ -96,5 +153,10 @@
     }
   },
   "append_only_moves": { "result": "tools/lib/sim_report.mjs", "pick": "tools/lib/sim_report.mjs" },
-  "matrix_required_rows": { "tank": ["S4", "S5"], "siege": ["S5", "S6"], "fishing": ["ALL"] }
+  "matrix_required_rows": {
+    "tank": ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S9", "S10", "S11", "S12", "S13", "FIT"],
+    "siege": ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S9", "S10"],
+    "fishing": ["ALL", "R1", "R2", "R3", "R4", "R5", "R6", "W1", "W2", "W3", "D", "FIT"]
+  },
+  "matrix_min_runs": { "tank": 37, "siege": 37, "fishing": 15 }
 }
