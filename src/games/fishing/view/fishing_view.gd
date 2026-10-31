@@ -216,9 +216,7 @@ func advance(delta: float) -> void:
 	for layer in _layers:
 		layer.queue_redraw()
 	if audio != null:
-		var local := st.rider(_local_slot)
-		var bv: FishingBoatView = boats.get(_local_slot)
-		audio.update(delta, local, bv.winch_mps if bv != null else 0.0)
+		audio.update(delta, boats, st, _local_slot)
 
 
 ## The local rider's slot (-1 when the local peer rides no boat).
@@ -317,6 +315,7 @@ func _build() -> void:
 	effects = FishingEffects.new()
 	add_child(effects)
 	audio = FishingAudio.new()
+	audio.rng_seed = SeededRng.derive(game.ctx.seed, "fishing:audio")
 	add_child(audio)
 
 

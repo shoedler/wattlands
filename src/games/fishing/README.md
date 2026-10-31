@@ -73,3 +73,18 @@ node tools/e2e/run.mjs --games=fishing
 | ALL | every run | no plan warnings, every directive accepted, requests inside their phase's range, course grades 0-3 % only in roam SIM phases, only allowed clamps, phases > 300 s <= 105 %, snapshots <= 2 KB |
 
 `--quick` (CI) runs W3, D and FIT.
+
+## Audio
+
+All sound is rendered by `tools/audio` from `assets/fishing/audio/audio.json` (`docs/AUDIO_PIPELINE.md`); `audio/fishing_audio.gd` only maps the game to the bank's parameters and cues. Each boat is one `drivetrain` machine driven with `FishingBoatView.crank_clock`, the number its crank is drawn from, so strokes and the crank cannot drift. The sound locks to the on-screen crank exactly and to the rider's feet in rate only: FTMS reports cadence, not crank angle, about once a second.
+
+| Param | From | Moves |
+| --- | --- | --- |
+| `prop` | the boat's speed, 0 once the clutch is halfway to the winch | the putt's gate, the water's level and pitch |
+| `load` | `p_eff_w` over 250 W | the putt's level and pitch, the crackle, the gear whistle |
+| `reel` | line coming in, smoothed, 0 unless fishing and not on a run | the ratchet |
+| `tension` | the rod's shown tension | the line's creak, song and pitch, the rod's groan, the winch |
+| `near` | distance to your boat, 1 within 150 m, out of earshot from 700 m | another boat's level |
+| `near_dock`, `speed` | your boat (bed params) | gulls, rigging and the harbour; wind and hull slaps |
+
+Listen: `node tools/audio/preview.mjs --game=fishing` writes `build/audio_preview/fishing.mp3` (out of the harbour, flat out, cast, bite, the fight, the catch) with a solo per rpm. `node tools/audio/scorecard.mjs --game=fishing` holds the mix to its numbers; `tests/games/fishing/audio/` holds the sync, the cue map and the sound list.
