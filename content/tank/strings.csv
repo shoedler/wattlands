@@ -239,7 +239,7 @@ TANK_HUD_TAB_SHORT_DYNAMO,GUN
 TANK_HUD_TAB_SHORT_STEAM,LDR
 TANK_HUD_TAB_SHORT_ARC,LGT
 TANK_HUD_TAB_SHORT_FEED,SEC
-TANK_HELP_SEATS,"Five seats: < > and OK move you, at once"
+TANK_HELP_SEATS,"Six seats: < > and OK move you, at once"
 TANK_HELP_SEAT_LOCK,"ERG / SIM: your trainer follows within 30 s"
 TANK_ENGINE_REPAIR,Rivet hammer
 TANK_SEAT_REPAIRS,Repairs
