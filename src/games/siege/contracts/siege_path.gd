@@ -156,22 +156,13 @@ func point_at(prog: float, lat: float = 0.0) -> Vector3:
 	if points.size() < 2:
 		return points[0] if points.size() == 1 else Vector3.ZERO
 	var p := clampf(prog, 0.0, length_m)
-	return point_on(segment_at(p), p, lat)
-
-
-## point_at for a prog already clamped to the path, on the segment that holds it. Needs 2 points.
-func point_on(i: int, p: float, lat: float) -> Vector3:
+	var i := segment_at(p)
 	var seg := maxf(cum[i + 1] - cum[i], 0.0001)
 	var at := points[i].lerp(points[i + 1], (p - cum[i]) / seg)
 	if lat != 0.0:
 		var d := seg_dir[i]
 		at += Vector3(d.y, -d.x, 0.0) * lat
 	return at
-
-
-## True when segment `i` is the one segment_at(p) returns, for a p already clamped to the path.
-func holds(i: int, p: float) -> bool:
-	return i <= cum.size() - 2 and cum[i] <= p and (i == cum.size() - 2 or p < cum[i + 1])
 
 
 ## Unit travel direction on the ground at `prog`.

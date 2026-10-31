@@ -42,13 +42,23 @@ var seg: int = 0
 
 ## Recomputes `pos` from prog_m and lat_m.
 func place(path: SiegePath) -> void:
-	if path.points.size() < 2:
+	var cum := path.cum
+	var last := cum.size() - 2
+	if last < 0:
 		pos = path.point_at(prog_m, lat_m)
 		return
 	var p := clampf(prog_m, 0.0, path.length_m)
-	if not path.holds(seg, p):
-		seg = path.segment_at(p)
-	pos = path.point_on(seg, p, lat_m)
+	var i := seg
+	if i > last or cum[i] > p or (i < last and p >= cum[i + 1]):
+		i = path.segment_at(p)
+		seg = i
+	var at := path.points[i].lerp(
+		path.points[i + 1], (p - cum[i]) / maxf(cum[i + 1] - cum[i], 0.0001)
+	)
+	if lat_m != 0.0:
+		var d := path.seg_dir[i]
+		at += Vector3(d.y, -d.x, 0.0) * lat_m
+	pos = at
 
 
 func alive() -> bool:
