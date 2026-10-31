@@ -217,6 +217,28 @@ func test_game_controls_at_anchors_after_kit_widgets() -> void:
 	)
 
 
+func test_a_game_banner_warns_by_default_and_a_spec_can_quiet_it() -> void:
+	var sfx := get_node_or_null("/root/Sfx") as WlSfx
+	if sfx == null:
+		return
+	var was_muted := sfx.muted
+	sfx.muted = true
+	_hud.sounds = true
+	_hud.build(_spec(), _ctx)
+	var plays := sfx.play_count
+	_hud.show_banner("LOUD", [], 1.0)
+	assert_eq(sfx.play_count, plays + 1, "the default stays")
+	assert_eq(sfx.last_played, "warning")
+	var quiet := _spec()
+	quiet.banner_sound = ""
+	_hud.build(quiet, _ctx)
+	plays = sfx.play_count
+	_hud.show_banner("QUIET", [], 1.0)
+	assert_eq(sfx.play_count, plays, "no sound")
+	assert_eq(_hud.banner().game_text(), "QUIET", "the banner still shows")
+	sfx.muted = was_muted
+
+
 func test_toast_and_banner_areas_at_anchors() -> void:
 	var spec := (
 		HudSpec

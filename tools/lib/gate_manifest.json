@@ -1,0 +1,162 @@
+{
+  "never_edit": ["docs/BRIEF.md", "docs/games/**", "docs/concept/**", "docs/research.md", ".gitattributes", ".claude/settings.json"],
+  "lead_only": ["README.md", "CHANGELOG.md", "CREDITS.md", "CLAUDE.md", "LICENSE", ".gitignore", "project.godot", "gdlintrc", "addons/gut/**",
+    "addons/wattlands/contracts/**", "tests/green_count_floor.txt", "tests/pending_allowlist.txt",
+    "tools/lib/gut_gate.mjs", "tools/lib/run_tests.mjs", "tools/lib/gate*", "tools/lib/safety_pins.json"],
+  "quiet_tests": ["tests/games/*/perf/**", "tests/games/siege/combat/test_siege_perf.gd", "tests/games/siege/view2/test_siege_view.gd",
+    "tests/games/siege/view2/test_siege_v2_drawers.gd", "tests/games/tank/rules/test_tank_determinism.gd"],
+  "shard_pins": [],
+  "lead_branches": ["^main$", "^queue"],
+  "branch_ws": [["^tooling/", "gate"], ["^audio/", "audio"], ["^cleanup/", "cleanup"], ["^docs/", "docs"], ["^wo/", "workout"],
+    ["^game/tank", "tank"], ["^game/workout", "workout"], ["^game/siege", "siege"], ["^game/fishing", "fishing"]],
+  "workstreams": {
+    "tank":    { "game": "tank" },
+    "workout": { "game": "workout" },
+    "siege":   { "game": "siege" },
+    "fishing": { "game": "fishing" },
+    "audio":   { "paths": ["tools/audio/**", "addons/wattlands/audio/**", "addons/wattlands/core/settings.gd", "tests/audio/**", "assets/_shared/audio/**", "assets/*/audio/**",
+                 "src/games/*/**", "tests/games/*/**", "src/app/**", "tests/app/**", "content/strings/**", "docs/AUDIO_PIPELINE.md", "docs/GAME_SDK.md",
+                 "docs/decisions/audio*.md", "docs/changelog.d/audio*.md", "docs/credits.d/*.md", "docs/{decisions,changelog.d}/{tank,workout}.md", ".github/workflows/game-*.yml"],
+                 "also": ["tools/lib/run_tests.mjs"] },
+    "cleanup": { "paths": ["**"], "deny": ["addons/wattlands/trainer/**", "tests/governor/**", "tests/control/**", "tests/arch/**"] },
+    "docs":    { "paths": ["docs/**", ".claude/agents/**", "assets/readme/**"], "also": ["README.md", "CLAUDE.md", "CHANGELOG.md", "CREDITS.md"] },
+    "gate":    { "paths": ["tools/**", "docs/decisions/gate.md", "docs/changelog.d/gate.md"], "also": ["tools/lib/**"], "deny": ["tools/lib/safety_pins.json"] }
+  },
+  "safety_pin_globs": [
+    "addons/wattlands/trainer/**",
+    "addons/wattlands/core/locks.gd",
+    "addons/wattlands/core/ride_pause.gd",
+    "addons/wattlands/core/rider_profile.gd",
+    "addons/wattlands/core/local_rider.gd",
+    "addons/wattlands/core/trainer_service.gd",
+    "addons/wattlands/sim/gesture_recognizer.gd",
+    "addons/wattlands/sdk/{plan_validator,directive_router}.gd",
+    "addons/wattlands/contracts/{directive_sink,effort_directive,trainer_device}.gd",
+    "addons/gut/**",
+    "tests/governor/**",
+    "tests/control/**",
+    "tests/arch/test_no_bypass.gd",
+    "tests/sdk/{test_conformance,test_plan_validator,test_directive_sink}.gd",
+    "tests/scenarios/workout/**",
+    "tests/trainer/{test_ftms_client,test_ftms_trainer}.gd",
+    "tests/core/test_locks.gd",
+    "tests/core/integration/{test_safe_unlink,test_trainer_stack}.gd",
+    "tests/app/test_session_safety.gd",
+    "tests/pending_allowlist.txt",
+    "tests/scenarios/lib/{scenario_lib,scenario_test}.gd",
+    "tests/core/helpers/{core_test_util,fakes}.gd",
+    "tests/trainer/{unlocked_ftms_client,fake_kickr_transport}.gd",
+    "tests/sdk/helpers/session_kit.gd",
+    "tests/app/app_test_base.gd",
+    "addons/wattlands/core/{app_state,ftp_test}.gd",
+    "addons/wattlands/ui/input_router.gd",
+    "addons/wattlands/sdk/{sdk_conformance,report_collector}.gd",
+    "tools/e2e/run.mjs",
+    "tools/e2e/lib/game.mjs",
+    "tools/fit_check/check.mjs",
+    "tools/e2e/lib/checks.mjs",
+    "tools/lib/gut_gate.mjs",
+    "tools/lib/run_tests.mjs",
+    "tools/lib/godot_lock.mjs",
+    "tools/lib/gate.mjs",
+    "tools/lib/gate_core.mjs",
+    "tools/lib/gate_manifest.json",
+    "tools/run_tests",
+    "tools/run_tests.ps1",
+    "tools/check_scripts.gd",
+    "tools/godot.sh",
+    "tools/godot.ps1",
+    "tools/run_game_sim",
+    "tools/run_game_sim.ps1",
+    "tools/env.sh",
+    "tools/env.ps1",
+    "gdlintrc"
+  ],
+  "safety_pin_except": {
+    "tools/lib/run_tests.mjs": ["NODE_SUITES"]
+  },
+  "safety_pin_lines": {
+    "addons/wattlands/core/settings.gd": [
+      "\t\"difficulty_pct\": [0.0, 100.0],",
+      "\t\"haptic_intensity_pct\": [0.0, 100.0],",
+      "\t\"grade_min_pct\": [-10.0, 0.0],",
+      "\t\"grade_max_pct\": [0.0, 16.0],",
+      "\tclamp_profile(profile)",
+      "\tfor k: String in PROFILE_RANGES.keys():",
+      "\t\t\tc = clampf(f, float(lim[0]), float(lim[1]))",
+      "\t\t\tp.set(k, c)",
+      "\t\tif PROFILE_RANGES.has(k):",
+      "\t\t\tvar c := clampf(f, float(lim[0]), float(lim[1]))",
+      "\t\t\tv = c",
+      "\tvar gmin := float(out.get(\"grade_min_pct\", template[\"grade_min_pct\"]))",
+      "\tvar gmax := float(out.get(\"grade_max_pct\", template[\"grade_max_pct\"]))",
+      "\tif gmin > gmax:",
+      "\t\tout.erase(\"grade_min_pct\")",
+      "\t\tout.erase(\"grade_max_pct\")"
+    ],
+    "addons/wattlands/sdk/game_host.gd": [
+      "\tif not bus.panic_requested.is_connected(_on_panic):",
+      "\t\tbus.panic_requested.connect(_on_panic)",
+      "\t\t\t&\"panic\":",
+      "\t\t\t\tif rider != null:",
+      "\t\t\t\t\trider.panic()",
+      "\t\t\t&\"panic\":",
+      "\t\t\t\tif rider != null:",
+      "\t\t\t\t\trider.panic()",
+      "func _on_panic() -> void:",
+      "\t\trider.panic()"
+    ],
+    "src/app/session_launcher.gd": [
+      "\t\t\t\t\"skip_warmup\": profile.skip_warmup,",
+      "\t\t\t\t\"skip_warmup\": false,"
+    ],
+    "addons/wattlands/sdk/game_sim_runner.gd": [
+      "\t\t\"skip_warmup\": false,"
+    ],
+    "tests/games/tank/sim/run_sims.sh": [
+      "set -euo pipefail",
+      "seeds=\"${TANK_SEEDS:-1 2 3}\"",
+      "  args=(\"$out\" \"--seeds=${seeds// /,}\")",
+      "  if [ \"${TANK_FIT:-1}\" != \"0\" ]; then args+=(--fit); fi",
+      "  node tests/games/tank/sim/check_sims.mjs \"${args[@]}\""
+    ],
+    "tests/games/siege/sim/run_sims.sh": [
+      "set -euo pipefail",
+      "seeds=\"${SIEGE_SEEDS:-1 2 3}\"",
+      "      node tools/fit_check/check.mjs \"${files[@]}\" \"--expect-laps=$laps\" || status=1",
+      "    node tests/games/siege/sim/check_sims.mjs \"$out\" \"--seeds=${seeds// /,}\" || status=1",
+      "exit \"$status\""
+    ],
+    "tests/games/fishing/sim/run_sims.sh": [
+      "set -euo pipefail",
+      "seeds=\"${FISHING_SEEDS:-1 2 3 4 5}\"",
+      "args=(\"$out\" \"--seeds=${seeds// /,}\")",
+      "node tests/games/fishing/sim/check_sims.mjs \"${args[@]}\""
+    ]
+  },
+  "append_only_pins": {
+    "tests/games/tank/sim/check_sims.mjs": ["checkS4", "checkS5", "directiveProblems", "appliedProblems", "directivesProblems", "planProblems", "traceProblems", "cleanProblems", "classify", "runChecks", "main"],
+    "tests/games/siege/sim/check_sims.mjs": ["checkS5", "checkS6", "directiveProblems", "traceProblems", "planProblems", "checkAll", "main"],
+    "tests/games/fishing/sim/check_sims.mjs": ["checkAll", "main"]
+  },
+  "append_only_tables": {
+    "tests/games/tank/sim/check_sims.mjs": ["CHECKS"],
+    "tests/games/siege/sim/check_sims.mjs": ["SCENARIOS"],
+    "tests/games/fishing/sim/check_sims.mjs": ["CHECKS"],
+    "tools/lib/run_tests.mjs": ["NODE_SUITES"]
+  },
+  "append_only_anchors": {
+    "tests/games/tank/sim/check_sims.mjs": {
+      "directiveProblems": ["if (kind === 'bank' || kind === 'arc') {"],
+      "appliedProblems": ["if (kind === 'bank' || kind === 'arc') over('ERG target %', got.target_pct, q.target_pct);"],
+      "classify": ["if (reason === 'boiler' && q.mode === 'SIM' && q.mode_grade !== undefined) return 'boiler';"]
+    }
+  },
+  "append_only_moves": { "result": "tools/lib/sim_report.mjs", "pick": "tools/lib/sim_report.mjs" },
+  "matrix_required_rows": {
+    "tank": ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S9", "S10", "S11", "S12", "S13", "FIT"],
+    "siege": ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S9", "S10"],
+    "fishing": ["ALL", "R1", "R2", "R3", "R4", "R5", "R6", "W1", "W2", "W3", "D", "FIT"]
+  },
+  "matrix_min_runs": { "tank": 37, "siege": 37, "fishing": 15 }
+}

@@ -128,6 +128,34 @@ func near(enemies: Array[SiegeEnemyState], x: float, y: float, r: float) -> Arra
 	return out
 
 
+## The hit points of the live enemies within `r` m of (x, y), or at least `cap` as soon as they
+## reach it. Reads the grid like near() without building a list.
+func hp_near(enemies: Array[SiegeEnemyState], x: float, y: float, r: float, cap: float) -> float:
+	if not _grid_built:
+		_build(enemies)
+	var x0 := floori((x - r) / CELL_M)
+	var x1 := floori((x + r) / CELL_M)
+	var y0 := floori((y - r) / CELL_M)
+	var y1 := floori((y + r) / CELL_M)
+	var r2 := r * r
+	var sum := 0.0
+	for cx in range(x0, x1 + 1):
+		for cy in range(y0, y1 + 1):
+			var cell: Variant = _grid.get(_key(cx, cy))
+			if cell == null:
+				continue
+			for e: SiegeEnemyState in cell:
+				if e.hp <= 0.0:
+					continue
+				var dx := e.pos.x - x
+				var dy := e.pos.y - y
+				if dx * dx + dy * dy <= r2:
+					sum += e.hp
+					if sum >= cap:
+						return sum
+	return sum
+
+
 func _build(enemies: Array[SiegeEnemyState]) -> void:
 	_grid.clear()
 	for e in enemies:

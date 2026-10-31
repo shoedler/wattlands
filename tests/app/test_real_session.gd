@@ -328,12 +328,19 @@ func test_a_client_hud_from_session_start() -> void:
 		n += 1
 	assert_eq(s.host.local_phase_state().kind, Wl.FREE, "in the e2e sprint (SIM)")
 	hud.screen_size_override = Vector2(1920, 1080)
+	# Rect placements follow the PixelViewport, which sizes itself from the window, not from the
+	# override (a headless root is 1920 x 1920), so it goes on the same 1080p screen.
+	var pv := s.host.pixel_viewport()
+	pv.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	pv.size = Vector2(1920, 1080)
 	hud.relayout()
-	var gear := hud.widget(HudSpec.GEAR)
-	assert_true(gear != null and gear.visible, "the gear shows in SIM")
-	var box := hud.anchor_box(HudSpec.BOTTOM_RIGHT)
-	var bottom := box.position.y + box.size.y
-	assert_lte(bottom, 1080.0 - WlTheme.MARGIN_PX + 0.5, "the gear sits at the bottom margin")
+	assert_gt(hud.spec().controls.size(), 0, "the game's own HUD Controls")
+	for c: Dictionary in hud.spec().controls:
+		var node := c["control"] as Control
+		assert_true(node.is_visible_in_tree(), "%s shows" % node.name)
+		assert_lte(node.get_global_rect().end.y, 1080.5, "%s stays on screen" % node.name)
+		var plate: Rect2 = hud.map_rect(c["at"] as Rect2i)
+		assert_lte(plate.end.y, 1080.5, "%s's whole plate stays on screen" % node.name)
 	s.open_menu()
 	assert_true(s.overlay.visible and s.overlay_scrim.visible, "the overlay and its scrim show")
 	assert_gt(s.top_layer.layer, hud.layer, "the overlay draws above the HUD")

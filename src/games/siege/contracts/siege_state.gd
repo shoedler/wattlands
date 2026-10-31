@@ -203,6 +203,18 @@ func built_pads() -> Array[int]:
 func enemy(id: int) -> SiegeEnemyState:
 	if id <= 0:
 		return null
+	# Enemies keep their spawn order, so ids ascend; a miss still reads them all in case they don't.
+	var lo := 0
+	var hi := enemies.size() - 1
+	while lo <= hi:
+		var mid := (lo + hi) >> 1
+		var at := enemies[mid]
+		if at.id == id:
+			return at
+		if at.id < id:
+			lo = mid + 1
+		else:
+			hi = mid - 1
 	for e in enemies:
 		if e.id == id:
 			return e
