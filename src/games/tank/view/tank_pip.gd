@@ -403,11 +403,12 @@ func _labels(size: Vector2, shown: Array[Dictionary], target: float) -> void:
 	for d in shown:
 		if near.is_empty() or float(d["left"]) > float(near["left"]):
 			near = d
-	var range_text := range_label(target)
-	if v.mirrored:
-		TankHudDraw.text(self, 5.0, 3.0, range_text, LABEL)
-	else:
-		TankHudDraw.text_r(self, size.x - 5.0, 3.0, range_text, LABEL)
+	if target > 0.0:
+		var range_text := range_label(target)
+		if v.mirrored:
+			TankHudDraw.text(self, 5.0, 3.0, range_text, LABEL)
+		else:
+			TankHudDraw.text_r(self, size.x - 5.0, 3.0, range_text, LABEL)
 	if near.is_empty():
 		return
 	var col := OURS if bool(near["friendly"]) else THEIRS
