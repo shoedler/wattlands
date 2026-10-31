@@ -378,3 +378,35 @@ Short ADRs for the siege game: date, decision, alternatives, reason. Game sessio
 - Alternatives: endurance 0.70 (B, B, B, but 35% under the T3 mean, so S9 fails); 0.74 (T3 passes, grades D, C, D with one Breach in two seeds); 0.80 (51% over the mean).
 - Reason: 0.72 is the only tried value that passes T3 with at most one Breach per run (seeds 1-3: D with one Breach, A, B). The lead's extra bar of "C or better" for a compliant endurance team is missed on seed 1; listed as a known gap in the README.
 
+
+## 2026-10-31 Own HUD (v0.3.0)
+- Decision: Siege draws its own Roman HUD, no kit widgets, the way Diesel Domestiques does: Controls at art-px rects, on the art grid, from models that are pure data. The letter, icons and slot shapes are baked from the mock's code (`hud_bake.mjs`, `--check` in the node step). A plate redraws only when its model changes.
+- Alternatives: kit widgets with a palette and a pixel font (the v0.2.0 HUD's look; it can't carry the materials or the layout the mock was reviewed in).
+- Reason: the mock passed an art and a cyclist critic together; the reviewed design is the layout.
+
+## 2026-10-31 What the critics changed (v0.3.0)
+- Decision: kept from the reviews: one value in one place; the applied target from telemetry, never the plan; a red chip as the only alarm, never coloured text alone; a 3 s mean with in-band hysteresis; `--` for stale power; low cadence only while rescue is armed; a next line in applied-style watts; the Overdrive plate says why it is closed; the heart rate cell goes away without a sensor but stays as `--` on a dropout.
+- Reason: a rider on the rivet reads one number; 0 W for a dropped stream, or a target rescue overrode, would be a lie at the worst moment.
+
+## 2026-10-31 Gold's size (v0.3.0)
+- Decision: gold is NUM (28 px) in waves and KEY (48 px) while the shop is open; the plate grows and the stations move down 12 art px.
+- Alternatives: 48 px always (the v0.2.0 rule, and the old brief's "gold is at least 48 px").
+- Reason: in a wave gold can't be spent and only grows; in a break it is the number that decides. The brief's HUD section now says so.
+
+## 2026-10-31 Low-cadence warning (v0.3.0)
+- Decision: SPIN UP: RESCUE AT 45 shows while rescue is armed (ERG, target at or above 60% FTP in whole watts) after 1.5 s under 70 rpm and clears at 72. The rule lives in `HudRiderNumbers`.
+- Alternatives: the 3 s of rescue's own rule (the warning would come with the rescue); no dwell (one low 1 Hz sample flashes a red alarm).
+- Reason: BRIEF 4.6.3 fires after 3 s under 45, so half that warns first; 70 is the cadence rescue asks for.
+
+## 2026-10-31 Coasting's line on the chip (v0.3.0)
+- Decision: PEDAL: LOAD DROPPED sits on the red chip and wins over rescue's line. The mock has no coasting state.
+- Reason: BRIEF 4.6.12: the coasting floor wins over rescue, so that line is the true one; the rider is ten seconds from AFK.
+
+## 2026-10-31 The cadence band is a second directive call (v0.3.0)
+- Decision: the host publishes `cadence_band(peer, 80, 100)` once at the first step, for every rider. `test_siege_static`, `test_siege_package` and S5 now allow exactly that beside the Overdrive request; a band of other values fails S5.
+- Reason: the HUD asks for 80-100 rpm and the metronome should click at its centre. It never changes load, and bots already rode 90 rpm without a band.
+
+## 2026-10-31 Live review of the HUD (v0.3.0)
+- Decision: stale power shows NO TRAINER DATA: KEEP PEDALLING ahead of coasting, with no target; Overdrive's line follows the band state (SPRINT, HOLD, EASE TO); the shop plate is 364 art px with the coin in a fixed column; the clock column is 4 px wider and the watts 4 narrower; chips keep 2 px clear of digits, so the gate number moves down 2 px and its bar is 3 px tall; three help strings are one line so their panels stay under 480 px (the kit fixes a wrapped panel at 560).
+- Alternatives: keep the mock's 340 px shop (OUTPUT runs into the note); a platform option for a help panel's width.
+- Reason: the governor counts a silent stream as coasting, so "pedal" would be a false instruction to a rider who is pedalling, and so is SHIFT UP to one already in the band.

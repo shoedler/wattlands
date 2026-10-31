@@ -110,7 +110,7 @@ Helpers:
 - `SiegeBallistics.step` moves the position by the mean of the old and new velocity (ADR "trapezoidal position step").
 - Spread per kind: `content.station_def(src)` for src 1..3, `content.pad_def(SiegeIds.PAD_SCORPION)` for src 11..14 (`spread_deg`, `speed_spread`, `k`).
 - `SiegeSnapHistory` (`game.history` on clients): `advance(delta)`, `prog_of(id, fallback)`, `lat_of(id, fallback)`, `pos_of(id, fallback: Vector3) -> Vector3`.
-- `SiegeGame.station_key(id)` is the station's name key (`SIEGE_STATION_MINE` ...); `SiegeHud.READOUT_GATE`, `READOUT_GOLD` are fed by the module.
+- `SiegeGame.station_key(id)` is the station's name key (`SIEGE_STATION_MINE` ...). `SiegeGame.hud_plan(peer)` is a rider's plan with the cool-down, on every peer, for the HUD.
 
 `SiegeState` extra fields: `projectiles` (host only), `gate_damage`, `leaks`, `engines_total`, `engines_stopped`, `wave` (`SiegeWaveState`: `rush_s`, `rush_next`, `gate_damage`, `leaks`), and `station(id)`, `pad(n)`, `range_band(id)`, `pad_band(n)`, `in_band(id, p)`, `station_cap(id)`, `cauldron_max()`, `curtain_max()`, `docked_tower()`, `alive_by_type()` (index = enemy code, 6 entries), `target_hot(id)`.
 

@@ -352,6 +352,10 @@ export function planLaps(report, peer = hostPeer(report)) {
 export function directiveProblems(name, d) {
   const probs = [];
   const at = `${name}: directive ${d?.id}`;
+  if (d.kind === 'cadence_band') {
+    const r = d.requested ?? {};
+    return Number(r.lo_rpm) === 80 && Number(r.hi_rpm) === 100 ? [] : [`${at}: kind cadence_band ${JSON.stringify(r)}, wanted 80-100 rpm`];
+  }
   if (d.kind !== 'request') return [`${at}: kind ${d.kind} (Siege only requests)`];
   const req = isObj(d.requested) ? { ...d.requested } : {};
   delete req.id;
@@ -477,7 +481,7 @@ export function checkS6(reports) {
     if (s.index !== i) probs.push(`phase ${i} is missing or out of order (index ${s.index})`);
     if (s.ended_by !== 'duration') probs.push(`phase ${s.index} ${s.label} ended by "${s.ended_by}", not its duration`);
   });
-  const odd = (r.directives ?? []).filter((d) => d.kind !== 'request' || d.requested?.reason !== 'overdrive');
+  const odd = (r.directives ?? []).filter((d) => d.kind !== 'cadence_band' && (d.kind !== 'request' || d.requested?.reason !== 'overdrive'));
   if (odd.length) probs.push(`${odd.length} directives other than Overdrive's (a rescue never rewrites the plan)`);
   return result('S6', title, probs, `rescue at ${fmt(first)} s, ${spans.length}/${plan.length} phases ran`);
 }

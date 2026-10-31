@@ -13,7 +13,7 @@ const MANIFEST := {
 		"Co-op siege defense at a Roman wheel fort. Your watts turn a great treadwheel; couple it"
 		+ " to a ballista, an onager, an arrow organ, the tar works or the gold mine."
 	),
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"min_players": 1.0,
 	"max_players": 4.0,
 	"bots": true,
@@ -211,10 +211,16 @@ func test_nothing_reaches_the_trainer_except_ctx_directives() -> void:
 	assert_gte(scanned, 15)
 
 
-func test_the_only_directive_siege_sends_is_a_request() -> void:
+func test_the_only_directives_siege_sends_are_a_request_and_the_cadence_band() -> void:
 	var re := RegEx.create_from_string("directives\\.(\\w+)\\(")
 	var calls := {}
 	for path in _files(F.GAME_DIR, ["gd"]):
 		for mt in re.search_all(_code_only(FileAccess.get_file_as_string(path))):
 			calls[mt.get_string(1)] = path
-	assert_eq(calls.keys(), ["request"], "only request (Overdrive's SIM block): %s" % [calls])
+	var names: Array = calls.keys()
+	names.sort()
+	assert_eq(
+		names,
+		["cadence_band", "request"],
+		"Overdrive's SIM block and the band, no load: %s" % [calls]
+	)

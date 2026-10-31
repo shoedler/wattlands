@@ -5,15 +5,16 @@ extends RefCounted
 ## everything else the rules sell now (anyone may buy anything): a gate repair, each station's
 ## next upgrade, the next mine level, a Scorpion on each empty pad, each built pad's next upgrade,
 ## Iron bands and the three perks. Prices come from the rules (SiegeShop.price). Pure: the panel
-## pages the result through a PedalScanList (pages(): ROWS rows at 32 px, the last row of a
-## page "More" when there is more).
+## pages the result through a PedalScanList (pages(): ROWS rows, the last row of a page "More" when
+## there is more).
 ##
-## An entry is {"id": {"item", "at"}, "text", "detail", "cost", "disabled", "recommended"}; `at`
+## An entry is {"id": {"item", "at"}, "name", "text", "detail", "cost", "disabled", "recommended"}
+## ("name" is the item alone, "text" the name with its price); `at`
 ## is the station (upgrade) or the pad (scorpion, pad_upgrade). The Save entry (ITEM_SAVE) and
 ## the More entry (ITEM_MORE) are never sent as intents.
 
-## Rows a page shows (the shop's rect holds four at 32 px).
-const ROWS := 4
+## Rows a page shows (the Quartermaster plate holds five in the BODY face).
+const ROWS := 5
 const ITEM_MORE := "more"
 
 
@@ -88,12 +89,13 @@ static func _entry(
 	var save := item == SiegeIds.ITEM_SAVE
 	var cost := 0 if save else cost_of(state, item, at)
 	var affordable := save or (cost >= 0 and float(cost) <= floorf(rider.gold))
-	# one line per entry (the cost after the name), so six fit the shop's rect at 32 px
-	var text := text_of(state, strings, item, at)
+	var item_name := text_of(state, strings, item, at)
+	var text := item_name
 	if not save:
-		text = "%s   %s" % [text, strings.t("SIEGE_SHOP_COST", [cost])]
+		text = "%s   %s" % [item_name, strings.t("SIEGE_SHOP_COST", [cost])]
 	return {
 		"id": {"item": item, "at": at},
+		"name": item_name,
 		"text": text,
 		"detail": strings.t("SIEGE_SHOP_RECOMMENDED") if recommended else "",
 		"cost": cost,
@@ -154,7 +156,8 @@ static func candidates(state: SiegeState) -> Array:
 
 ## The entries cut into pages of ROWS rows: the first page keeps the head of the list (the pick
 ## and "Save gold" on top); when there is more, each page's last row is a More entry ("More
-## (2/3)") that moves on to the next page, and the last page's More goes back to the first.
+## items: 2 of 5", the page it opens) that moves on to the next page, and the last page's More
+## goes back to the first.
 static func pages(list: Array[Dictionary], strings: GameStrings) -> Array:
 	var out: Array = []
 	if list.size() <= ROWS:

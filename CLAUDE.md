@@ -4,6 +4,19 @@ Wattlands is a multiplayer fitness party app for the Wahoo KICKR CORE smart trai
 
 Read `docs/ARCHITECTURE.md` for the layers and `docs/GAME_SDK.md` for the game contract. `docs/OWNERSHIP.md` maps every path to its owner and lists what the game briefs need from the platform. Decisions live in `docs/DECISIONS.md` (merged from the fragments in `docs/decisions/`).
 
+## Definition of done
+
+A bigger change (a game version, an art or HUD overhaul, a platform feature) is done only when all of these hold:
+
+- The game is released on GitHub: merged to main, pushed, with a tagged release and the Windows zip.
+- The local exe is built from that commit (`node tools/export_windows.mjs --smoke`).
+- No temp leftovers on the machine: no worktrees, branches, recordings, screenshots or scratch files of the change.
+- Main is clean: on `main`, nothing uncommitted, level with `origin/main`.
+
+## Think about the other games
+
+Before building something for one game, ask whether the other games need it too. A rider warning, a telemetry rule or a HUD state that any game could use belongs in the platform, so every game gets it. Say in your report what you moved there and what could still move.
+
 ## Safety comes first
 
 - BRIEF 4.6 (the safety governor) outranks every gameplay idea, in every brief. Change a design to fit it, never the other way round. Never weaken a 4.6 threshold or a BRIEF 7 assertion to reach green; report what fails instead.
@@ -60,4 +73,4 @@ A game session adds one game under its own paths and changes nothing else:
 - Gates: the game's own tests under `tests/games/<id>/`, `tools/check_scripts.gd`, gdlint and `gdformat --check` (the static step of `tools/run_tests`), `tests/sdk/test_conformance.gd` (unchanged), the game's simulation matrix through `tools/run_game_sim`, `tools/fit_check` on every FIT the sims wrote, `node tools/e2e/run.mjs --games=<id>`, and the full `tools/run_tests` at or above the previous green count.
 - Every game provides a help overlay through `HudSpec.help` (short texts with arrows; the platform shows it on F1 and once on a rider's first session of the game). See `docs/GAME_SDK.md`. Castellum Rotae, Workout and Diesel Domestiques don't have one yet: the next session on each of those games adds it.
 - Write `src/games/<id>/HARDWARE_TEST.md`, a real-trainer checklist in the style of `docs/HARDWARE_TEST_PLAN.md`; the platform plan only links to it.
-- Platform-change policy: change the platform only when a game's P0 item is blocked. Keep it small, additive and tested (no renamed API, no changed default, nothing weakened in BRIEF 4.6 or 7), update `docs/GAME_SDK.md` if the API grows, keep the platform suite green, and commit it alone with the prefix `platform:`.
+- Platform-change policy: change the platform when a game's P0 item is blocked, or when the change is one every game should have (see "Think about the other games"). Keep it small, additive and tested (no renamed API, no changed default, nothing weakened in BRIEF 4.6 or 7), update `docs/GAME_SDK.md` if the API grows, keep the platform suite green, and commit it alone with the prefix `platform:`.

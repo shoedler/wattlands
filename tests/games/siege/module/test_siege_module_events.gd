@@ -60,7 +60,7 @@ func test_a_purchase_and_a_route_speak_to_their_own_rider_only() -> void:
 	client.apply_event(SiegeEvents.route(0, 3))
 	client.apply_event(SiegeEvents.route(1, 4))
 	assert_eq(_keys(K.toasts(client)), ["SIEGE_TOAST_BUY_OK", "SIEGE_TOAST_ROUTE"])
-	assert_eq(K.toasts(client)[0][1], ["Great onager: +25% range"], "the item by its new level")
+	assert_eq(K.toasts(client)[0][1], ["Great onager +25% range"], "the item by its new level")
 	assert_eq(client.state.rider_at(1).target, 4, "the route shows at once")
 	assert_eq(client.state.rider_at(1).reconnect_s, 2.0)
 	assert_eq(client.state.rider_at(0).target, 3)
@@ -381,7 +381,7 @@ func test_a_client_shows_its_route_change_at_once_and_the_host_has_the_last_word
 
 
 func test_the_hud_route_card_predicts_button_routes_like_control_routes() -> void:
-	# SiegeGame.predict_route(to) is what the route card calls for its buttons (intent via "button"),
+	# SiegeGame.predict_route(to) takes a route intent or a target (intent via "button"),
 	# so a button routes at once on a client exactly as the controls do.
 	var none: Array[StringName] = []
 	var right: Array[StringName] = [&"right"]

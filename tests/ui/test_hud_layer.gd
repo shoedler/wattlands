@@ -908,6 +908,65 @@ func test_trainer_control_lost_shows_the_notice_once_until_ready() -> void:
 	sfx.muted = was_muted
 
 
+## A trainer link drop mid-ride warns the rider in every game: once per drop, up through the
+## reconnect, gone on ready.
+func test_trainer_disconnect_warns_once_until_ready() -> void:
+	var sfx := _sfx()
+	assert_not_null(sfx, "the Sfx autoload")
+	if sfx == null:
+		return
+	var was_muted := sfx.muted
+	sfx.muted = true
+	_hud.sounds = true
+	_hud.build(_spec(), _ctx)
+	var b := _hud.banner()
+	var panel := b.trainer_label().get_parent() as Control
+	var plays := sfx.play_count
+	_bus.trainer_status_changed.emit(TrainerDevice.STATUS_DISCONNECTED, "link lost")
+	assert_eq(b.trainer_text(), tr("TRAINER_DISCONNECTED_NOTICE"))
+	assert_string_contains(b.trainer_text(), "disconnected")
+	assert_true(panel.visible)
+	assert_eq(sfx.play_count, plays + 1, "one sound")
+	assert_eq(sfx.last_played, "warning")
+	_bus.trainer_status_changed.emit(TrainerDevice.STATUS_SCANNING, "")
+	_bus.trainer_status_changed.emit(TrainerDevice.STATUS_CONNECTING, "")
+	_bus.trainer_status_changed.emit(TrainerDevice.STATUS_DISCONNECTED, "again")
+	_bus.trainer_status_changed.emit(TrainerDevice.STATUS_CONNECTED, "")
+	assert_eq(b.trainer_text(), tr("TRAINER_DISCONNECTED_NOTICE"), "up through the reconnect")
+	assert_eq(sfx.play_count, plays + 1, "once per drop")
+	_bus.trainer_status_changed.emit(TrainerDevice.STATUS_READY, "")
+	assert_eq(b.trainer_text(), "", "cleared when the trainer is back")
+	assert_false(panel.visible)
+	_bus.trainer_status_changed.emit(TrainerDevice.STATUS_ERROR, "gatt")
+	assert_eq(b.trainer_text(), tr("TRAINER_DISCONNECTED_NOTICE"), "an error is a drop too")
+	assert_eq(sfx.play_count, plays + 2, "a new drop warns again")
+	sfx.muted = was_muted
+
+
+## Each state says what is true now: a link drop outdates a control loss, and control lost after
+## a reconnect replaces the drop's notice.
+func test_trainer_disconnect_and_control_loss_share_one_notice() -> void:
+	_hud.build(_spec(), _ctx)
+	var b := _hud.banner()
+	_bus.trainer_control_lost.emit("held")
+	assert_eq(b.trainer_text(), tr("TRAINER_ANOTHER_APP_CONTROL"))
+	_bus.trainer_status_changed.emit(TrainerDevice.STATUS_DISCONNECTED, "")
+	assert_eq(b.trainer_text(), tr("TRAINER_DISCONNECTED_NOTICE"))
+	_bus.trainer_control_lost.emit("held")
+	assert_eq(b.trainer_text(), tr("TRAINER_ANOTHER_APP_CONTROL"))
+	_bus.trainer_status_changed.emit(TrainerDevice.STATUS_READY, "")
+	assert_eq(b.trainer_text(), "")
+
+
+## The drop's notice survives a rebuild, and an idle TrainerService never seeds it.
+func test_trainer_disconnect_survives_a_rebuild_and_is_not_seeded() -> void:
+	_hud.build(_spec(), _ctx)
+	assert_eq(_hud.banner().trainer_text(), "", "no notice before a drop")
+	_bus.trainer_status_changed.emit(TrainerDevice.STATUS_DISCONNECTED, "")
+	_hud.build(_spec(), _ctx)
+	assert_eq(_hud.banner().trainer_text(), tr("TRAINER_DISCONNECTED_NOTICE"))
+
+
 ## The notice is not a safety banner: it shows with show_safety_banners off, next to the
 ## rescue banner, and stays up across a rebuild.
 func test_trainer_notice_ignores_show_safety_banners_and_survives_a_rebuild() -> void:

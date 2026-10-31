@@ -381,6 +381,7 @@ func hud_spec() -> HudSpec:
   Fishing's 4-lane zone (639 × 252 px at 1080p) holds the timeline (380 × 108 minimum) above a row of power gauge and cadence (300 + 290 = 590 × 106), 108 + 12 + 106 = 226 px of its 252; W′ and the gear need a second rect or must share one, each widget then shrinking toward its minimum.
 - The HUD draws at native resolution above the game view (base size 1920 × 1080, `canvas_items` stretch, so HUD sizes are 1080p pixels). `HudLayer` is a CanvasLayer with `layer` = `HudLayer.LAYER` = 10: give your view's own CanvasLayer a lower `layer` (Siege's vignette: 1..9) to draw under the HUD, a higher one to draw above it. Anchored stacks sit `WlTheme.MARGIN_PX` (32 px) from the screen edges with `WlTheme.GAP_PX` (12 px) between entries.
 - **Own power readout**: the HudLayer adds a power gauge at `bottom_left` when no widget shows raw W and %FTP. A game whose own controls always show both for the local rider sets `HudSpec.shows_power = true` instead.
+- **Trainer notices**: the HudLayer shows a notice in your banner area, whatever your spec says, when another app holds the trainer and when the trainer link drops (disconnected or error, until it is ready again), with the "warning" sound. Keep your `banners_at` place clear of anything that must stay readable.
 - **Local telemetry for game controls**: a Control in `HudSpec.controls` that defines `set_telemetry(t: Telemetry)` gets the local rider's full telemetry every tick, heart rate included (game frames never carry heart rate).
 - **Reserved corners**: `HudLayer.reserve_corner(anchor, size)` keeps `size` (1080p pixels from that corner's 32 px margin) clear at a corner anchor (`top_left`, `top_right`, `bottom_left`, `bottom_right`) for something the host draws there; `reserved_corner(anchor)` returns it (`Vector2.ZERO` when none; reserving `Vector2.ZERO` releases the corner). That corner's stack moves inward by the reserved height plus 12 px (bottom corners up, top corners down) and the centre stack of the same edge keeps clear of the reserved width. The app reserves no corner (panic is Backspace held 1 s, View + Menu, or the pause overlay's Panic item; there is no on-screen button). A `Rect2i` placement is not moved by a reserved corner.
 - **Help** (`help`): every game must provide `HudSpec.help`, a short tour of its screen: entries `{"text": key or text, "at": Vector2, "arrow_to": Vector2 (optional)}`, with `at` and `arrow_to` in art pixels on `pixel_base` in a 2D game (with `pixel_flex` they move like your HUD rects: a point inside a `Rect2i` placement moves with that rect, any other with its half of the canvas; `HudLayer.help_art_point()`), else 0..1 of the screen. The platform draws each entry as a small panel centred on `at` (kept on screen) with an arrow from the panel to `arrow_to`, in your `palette` (`panel`, `panel_border`, `text`, `accent` for the arrow, `font`), above the game and the HUD, with the title `UI_HELP_TITLE`; with `grid_px` in a 2D game the panels sit on whole art pixels and the arrows are drawn in art pixels. It opens once, the first time a rider starts a session of your game on that profile (remembered per profile and game id in `help_seen.json`, `HelpSeen`; GameHost config `auto_help`, which the app sets), and whenever the rider presses `help` (F1, the left stick click). `help` again, `back` (Esc) or `confirm` closes it (those presses never reach your game), and so do 20 s. Your sim keeps running underneath. With no entries, `help` shows the toast "No help for this game yet". Keep it to 3–6 entries of one short line each, using your own string keys.
@@ -437,6 +438,23 @@ The template does the same with its lap toast (host: `peer = ctx.local_peer`; cl
 - Signals: `item_chosen(index, id, auto: bool)` (auto is true for an auto-confirm), `item_picked(index, id, via: String)` emitted with it (`via` is `"action"`, `"surge"` or `"auto"`), `backed_out`, `highlight_changed(index)`.
 
 The platform never edits intents: tag your own, for example Siege's buy `{"k": "buy", "item": id, "pad": n, "auto": 1}` when `via == "auto"`.
+
+### 10.4 HudRiderNumbers
+
+`HudRiderNumbers` (`addons/wattlands/ui/hud/hud_rider_numbers.gd`, a RefCounted) holds the rules a game's own rider numbers want, so a game with its own HUD does not write them again. Call `feed(t: Telemetry)` from your Control's `set_telemetry`, then read:
+
+| Call | Gives |
+| --- | --- |
+| `mean_power_w()` | The displayed watts: a 3 s mean over `Telemetry.t`, not the latest 1 Hz sample |
+| `is_stale()` | True when the power is not known (0 W with a cadence older than 3 s, a dropped peer, `age_s` > 3 s): show `--`, not 0. 0 W with a fresh cadence is a rider who stopped. The mean restarts when data returns |
+| `set_band(lo_w, hi_w)`, `band_state()`, `in_band()` | `UNDER`, `IN_BAND` or `OVER` with hysteresis: in takes the mean inside the band, out takes it past the band by a quarter of its width (at least 3 W), so a 5 % band does not flicker |
+| `heart_state()`, `heart_bpm()` | `HR_LIVE`, `HR_DROPOUT` (a sensor seen this session or known to the TrainerService: show `--`) or `HR_NONE` (no cell). 0 bpm alone never claims "no sensor" |
+| `rescue_armed()`, `low_cadence()` | BRIEF 4.6.3's arming as telemetry shows it (ERG, target at or above 60 % FTP in whole watts; set `ftp_w`), and a warning that holds while armed with the cadence under 70 for 1.5 s, clearing at 72, never during rescue or coasting |
+| `cadence_stale()` | The cadence is older than 3 s |
+| `RESCUE_LOW_RPM`, `RESCUE_RECOVER_RPM` | The cadences rescue fires under and ends at, for a game's own wording (a game never names the trainer stack) |
+| `opted_in_weight_kg(override_kg)`, `wprime_j()` (static) | The weight for W/kg when the rider opted in, else 0 (pass `HudLayer.wkg_weight_kg`), and the profile's W′ |
+
+Kit widgets keep their own rules; nothing here changes a default. Castellum Rotae's cockpit is the worked example (`src/games/siege/hud/siege_cockpit_model.gd`).
 
 ## 11. Input, intents and Autopilot
 
