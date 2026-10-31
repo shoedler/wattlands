@@ -25,6 +25,8 @@ const FOOT_STEP := 18.0
 const FOOT_TOP := 344.0
 const X_SEP := 0.62
 const X_EDGE := 1.0
+## place(): how far a muzzle stands clear of a nearer tank's turret.
+const MUZZLE_CLEAR := 3.0
 
 
 static func far_w(canvas_x: float) -> float:
@@ -71,7 +73,9 @@ static func foot_y(range_m: float, lane: int) -> float:
 
 ## Where the far sprites stand together: `rows` are [{id, range_m, lane, half_w}], the result id -> Vector2 foot (panel
 ## x, stage y). Nearest first: each one back is higher by FOOT_STEP at least and stands X_SEP clear of the one before
-## it; a field too full for that shares what room there is. A lone sprite stands where the map says.
+## it; a field too full for that shares what room there is. A lone sprite stands where the map says. A row may also
+## give "muzzle" (Vector2) and "turret" (Rect2), both from its foot: a shooter's muzzle never lands on a nearer turret,
+## where its firing mark would read as the nearer tank's.
 static func place(rows: Array, fw: float) -> Dictionary:
 	var sorted := rows.duplicate()
 	sorted.sort_custom(_nearer)
@@ -99,12 +103,34 @@ static func place(rows: Array, fw: float) -> Dictionary:
 	for j in range(1, n):
 		var sep := (float(sorted[j]["half_w"]) + float(sorted[j - 1]["half_w"])) * X_SEP * k
 		xs[j] = _inside(maxf(xs[j], xs[j - 1] + sep), float(sorted[j]["half_w"]), fw)
+		xs[j] = _inside(_past_turrets(sorted, xs, ys, j), float(sorted[j]["half_w"]), fw)
 	for j2 in range(n - 2, -1, -1):
 		var sep2 := (float(sorted[j2]["half_w"]) + float(sorted[j2 + 1]["half_w"])) * X_SEP * k
 		xs[j2] = _inside(minf(xs[j2], xs[j2 + 1] - sep2), float(sorted[j2]["half_w"]), fw)
 	for m in n:
 		out[sorted[m]["id"]] = Vector2(roundf(xs[m]), roundf(ys[m]))
 	return out
+
+
+## Row `j`'s x with its muzzle past the turret of every nearer row it would land on.
+static func _past_turrets(
+	sorted: Array, xs: PackedFloat32Array, ys: PackedFloat32Array, j: int
+) -> float:
+	var x := xs[j]
+	var mz: Variant = (sorted[j] as Dictionary).get("muzzle")
+	if not mz is Vector2:
+		return x
+	var at: Vector2 = mz
+	for i in j:
+		var t: Variant = (sorted[i] as Dictionary).get("turret")
+		if not t is Rect2:
+			continue
+		var box := (t as Rect2).grow(MUZZLE_CLEAR)
+		box.position += Vector2(xs[i], ys[i])
+		var p := Vector2(x, ys[j]) + at
+		if box.has_point(p):
+			x = box.end.x - at.x
+	return x
 
 
 static func _nearer(a: Dictionary, b: Dictionary) -> bool:

@@ -1,7 +1,8 @@
 class_name TankSeam
 extends Node2D
 ## v4: the iron column between the near and the far panel (SPEC_TANK 4.6), full height, with the range plate
-## of the current target centred on it. It stays quiet: dark iron a little above the night's black, dim edges,
+## of the current target centred on it, only while there is a range to give. It stays quiet: dark iron a little above
+## the night's black, dim edges,
 ## small dull rivets, so it divides the scene without competing with it. The HUD's tags layer draws above it; it
 ## never shakes.
 
@@ -29,6 +30,11 @@ func plate_rect() -> Rect2:
 	return Rect2(Vector2(roundf(rect.get_center().x - PLATE_SIZE.x * 0.5), PLATE_Y), PLATE_SIZE)
 
 
+## The plate stands only with a range to give: "--" is no news.
+func shows_plate() -> bool:
+	return v.target_range_m(v.game.state) > 0.0
+
+
 func _draw() -> void:
 	if v == null or v.game == null or v.game.state == null:
 		return
@@ -41,6 +47,8 @@ func _draw() -> void:
 		draw_rect(Rect2(Vector2(cx, y), Vector2(2, 2)), RIVET_DARK)
 		draw_rect(Rect2(Vector2(cx, y), Vector2.ONE), RIVET_LIT)
 		y += RIVET_EVERY
+	if not shows_plate():
+		return
 	var p := plate_rect()
 	TankHudDraw.plate(self, p, PLATE_EDGE, 0)
 	var label := TankPip.range_label(v.target_range_m(v.game.state))

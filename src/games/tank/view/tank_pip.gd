@@ -5,9 +5,10 @@ extends Node2D
 ## far enemy on the ground line, the target's bright, a shooter's red; the gun's arc to the target, faint, while
 ## nothing flies. A shell is a hot tracer with a bright trail: ours amber, with one predicted arc for the newest; theirs
 ## red, trail only, blinking while Surge can still make it miss; a flash where it leaves, a puff where it lands.
-## The seconds the newest shell has left on the top near-side corner, the target's range on the other. With nothing
-## to show it folds to a small dim tab; during a tow it is gone. Mirrored with the far panel (free roam, west); its text
-## never mirrors. Pure view: it reads the snapshot's fields and never writes them.
+## The seconds the newest shell has left on the top near-side corner, the target's range on the other. Between shots it
+## folds to its ground ruler, the hull and a tick per enemy, and opens on a launch; with no enemy it folds to a small
+## dim tab; during a tow it is gone. Mirrored with the far panel (free roam, west); its text never mirrors. Pure view:
+## it reads the snapshot's fields and never writes them.
 
 const BEZEL := Color("#17140f")
 const FRAME := Color("#6b5230")
@@ -18,7 +19,7 @@ const GROUND_TICK := Color("#27403a")
 const GROUND_TICK_M := 500.0
 const OURS := Color("#f0b45a")
 const THEIRS := Color("#e8502e")
-const THEIRS_DIM := Color("#6e2616")
+const THEIRS_DIM := Color("#8e3420")
 const CORE := Color("#fff4d8")
 const AIM := Color(0.62, 0.78, 0.68, 0.34)
 const MARK := Color("#6f8a7c")
@@ -31,9 +32,13 @@ const FLOOR_ABOVE := 9.0
 ## Height: a square root's stretch, so 42 m at 1220 m uses 15 px of the box and 174 m at 2400 m stays inside it.
 const UP_K := 2.35
 ## The folded tab with nothing to show, how fast it unfolds (s), how dim it sits.
-const TAB := Vector2(52, 13)
+const TAB := Vector2(17, 13)
 const FOLD_S := 0.25
 const TAB_ALPHA := 0.62
+## The ruler it folds to between shots: its height and how far its ground line sits over its bottom.
+const STRIP_H := 17.0
+const STRIP_GROUND := 5.0
+const STRIP_ALPHA := 0.86
 const DASH_EVERY := 6.0
 const AIM_EVERY := 8.0
 const BLINK_HZ := 5.0
@@ -43,6 +48,9 @@ const SECONDS := "S"
 const TRAIL_N := 16
 const TRAIL_STEP_M := 22.0
 const TRAIL_A := 1.0
+## How bright a trail's tail stays: theirs must read from their end of the arc, ours fades out.
+const TRAIL_TAIL_OURS := 0.0
+const TRAIL_TAIL_THEIRS := 0.42
 ## This many samples behind the head the trail is 2 px thick.
 const TRAIL_THICK := 6
 ## The flash where a shell leaves the gun (s).
@@ -60,8 +68,8 @@ var rect: Rect2 = Rect2()
 var puffs: Array[Dictionary] = []
 ## Shell id -> {land (m), left (s), friendly}: what each far shell was doing last frame.
 var _flying: Dictionary = {}
-## 0 folded to its tab .. 1 open.
-var open: float = 1.0
+## 0 folded to its ruler or its tab .. 1 open.
+var open: float = 0.0
 
 
 func _init(view: TankView) -> void:
@@ -176,9 +184,19 @@ func busy(state: TankState) -> bool:
 	return false
 
 
+## True while a shell is up, or its landing's puff still shows: the screen opens for these.
+func flying(state: TankState) -> bool:
+	if not puffs.is_empty():
+		return true
+	for s in state.shells:
+		if s.far:
+			return true
+	return false
+
+
 ## One frame: a far shell gone since the last one, near its end, leaves a puff where it landed.
 func frame(state: TankState, dt: float) -> void:
-	open = move_toward(open, 1.0 if busy(state) else 0.0, dt / FOLD_S)
+	open = move_toward(open, 1.0 if flying(state) else 0.0, dt / FOLD_S)
 	for i in range(puffs.size() - 1, -1, -1):
 		puffs[i]["t"] = float(puffs[i]["t"]) + dt
 		if float(puffs[i]["t"]) >= PUFF_S:
@@ -205,7 +223,10 @@ func _draw() -> void:
 	if state.hull.tow_s > 0.0:
 		return
 	if open < 1.0:
-		_tab(state)
+		if busy(state):
+			_strip(state)
+		else:
+			_tab(state)
 		return
 	var size := rect.size
 	_screen(size)
@@ -226,8 +247,20 @@ func _draw() -> void:
 	_labels(size, shown, target)
 
 
-## The plate folded (or folding) to its dim tab on the seam: the hull's icon and what the range plate says.
-func _tab(state: TankState) -> void:
+## The screen folded (or folding) to its ruler between shots: the ground line and its ticks, the hull, a tick per enemy.
+func _strip(state: TankState) -> void:
+	var size := Vector2(rect.size.x, lerpf(STRIP_H, rect.size.y, open))
+	var a := lerpf(STRIP_ALPHA, 1.0, open)
+	draw_rect(Rect2(Vector2.ZERO, size), Color(BEZEL, a))
+	TankHudDraw.frame(self, Rect2(Vector2.ZERO, size), Color(FRAME, a))
+	var ground := size.y - STRIP_GROUND
+	_ground(size, ground)
+	_hull(size, ground)
+	_marks(state, size, ground)
+
+
+## The plate folded (or folding) to its dim tab on the seam: the hull's icon, no more.
+func _tab(_state: TankState) -> void:
 	var tab := TAB.lerp(rect.size, open)
 	var at := Vector2(rect.size.x - tab.x, 0.0) if v.mirrored else Vector2.ZERO
 	var a := lerpf(TAB_ALPHA, 1.0, open)
@@ -236,11 +269,6 @@ func _tab(state: TankState) -> void:
 	var x := at.x + (tab.x - 13.0 if v.mirrored else 4.0)
 	draw_rect(Rect2(Vector2(x, at.y + 6.0), Vector2(9, 3)), Color(HULL, a * 0.7))
 	draw_rect(Rect2(Vector2(x + 3.0, at.y + 4.0), Vector2(3, 2)), Color(HULL, a * 0.7))
-	var label := range_label(v.target_range_m(state))
-	if v.mirrored:
-		TankHudDraw.text(self, at.x + 4.0, at.y + 3.0, label, Color(LABEL, a))
-	else:
-		TankHudDraw.text_r(self, at.x + tab.x - 4.0, at.y + 3.0, label, Color(LABEL, a))
 
 
 ## The newest of our shells has its predicted arc; theirs and our older ones only their trails.
@@ -316,7 +344,7 @@ func _mark(x: float, ground: float, half: float, target: bool, shooting: bool) -
 		draw_rect(Rect2(Vector2(x - 1.0, ground - h - 4.0), Vector2(3, 1)), col)
 
 
-## The tracer: a flash where it left, a bright trail that fades, thick behind the head, a hot head with a halo.
+## The tracer: a flash where it left, a bright trail that fades, thick behind the head, a hot round head in its glow.
 func _tracer(d: Dictionary) -> void:
 	var friendly := bool(d["friendly"])
 	var col := OURS if friendly else THEIRS
@@ -327,12 +355,19 @@ func _tracer(d: Dictionary) -> void:
 	if bool(d["evadable"]) and fposmod(v.time * BLINK_HZ, 1.0) >= 0.5:
 		col = THEIRS_DIM
 	var trail: PackedVector2Array = d["trail"]
+	var tail := TRAIL_TAIL_OURS if friendly else TRAIL_TAIL_THEIRS
 	for i in trail.size():
-		var a := TRAIL_A * (1.0 - float(i) / float(TRAIL_N))
+		var a := TRAIL_A * lerpf(1.0, tail, float(i) / float(TRAIL_N))
 		var thick := Vector2(1, 2) if i < TRAIL_THICK else Vector2.ONE
 		draw_rect(Rect2(trail[i], thick), Color(col, a))
-	draw_rect(Rect2(p - Vector2(3, 3), Vector2(6, 6)), Color(col, 0.3))
-	draw_rect(Rect2(p - Vector2(2, 2), Vector2(4, 4)), col)
+	# corners cut, so the head is a glow and no box
+	var glow := Color(col, 0.3)
+	draw_rect(Rect2(p + Vector2(-3, -2), Vector2(1, 4)), glow)
+	draw_rect(Rect2(p + Vector2(2, -2), Vector2(1, 4)), glow)
+	draw_rect(Rect2(p + Vector2(-2, -3), Vector2(4, 1)), glow)
+	draw_rect(Rect2(p + Vector2(-2, 2), Vector2(4, 1)), glow)
+	draw_rect(Rect2(p + Vector2(-1, -2), Vector2(2, 4)), col)
+	draw_rect(Rect2(p + Vector2(-2, -1), Vector2(4, 2)), col)
 	draw_rect(Rect2(p - Vector2.ONE, Vector2(2, 2)), CORE)
 
 

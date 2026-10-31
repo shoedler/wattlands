@@ -99,6 +99,10 @@ const GLOW_SIZE := 64
 ## head can be told from a plate.
 const RIV_LIT := Color("#505b4f")
 const RIV_DIM := Color("#384139")
+## A head on a plate this dark (L) is a step over it and no more, its shadow pixel under it: on the low dark plates a
+## pale head reads as a speck of dust, not a fastener.
+const RIV_LOW := Color("#262c27")
+const RIV_LOW_UNDER := 0.075
 const BURN: Array[Color] = [Color("#0d0a08"), Color("#1c1410"), Color("#2b1e16"), Color("#3f2a1c")]
 const BURN_LIP := Color("#6a4628")
 const BURN_LUM_MAX := 0.14
@@ -232,12 +236,15 @@ func _hull_image(id: String, L: Dictionary) -> Dictionary:
 	_moon_rim(img)
 	_rivet_seams(img, L["parts"], L["details"], span)
 	_thin_peaks(img)
+	_quiet_specks(img)
+	_hatch_rooms(img, L["details"])
 	if not front.is_invisible():
 		front = _finish(front, sz)
 		_surface(front, L.get("front_parts", []), L.get("front_details", []), sz, span, seed + 5)
 		_under_overhang(front)
 		_rivet_seams(front, L.get("front_parts", []), L.get("front_details", []), span)
 		_thin_peaks(front)
+		_quiet_specks(front)
 	if id == "destroyer":
 		var g: Vector2i = L["glint"]
 		Px.rect(img, Rect2i(g.x - 2, g.y - 1, 5, 4), OUTLINE)
@@ -318,6 +325,8 @@ func _turret_image(L: Dictionary) -> Image:
 	)
 	_moon_rim(img)
 	_rivet_seams(img, parts, L.get("turret_details", []), span)
+	_quiet_specks(img)
+	_hatch_rooms(img, L.get("turret_details", []))
 	return img
 
 
@@ -370,15 +379,17 @@ func _belly(img: Image, L: Dictionary) -> void:
 		low = maxf(low, float(w["y"]))
 		x0 = minf(x0, float(w["x"]) - r)
 		x1 = maxf(x1, float(w["x"]) + r)
-	# the belly band between the hull's plates and the wheels' hubs, closing any gap up to the plates
+	var tyres := bool(g.get("tyres", false))
+	# the belly band between the hull's plates and the wheels' hubs, closing any gap up to the plates; an armoured
+	# car's hull comes down between its wheels and keeps its plates there
 	for y in range(int(top) - 3, int(low) + 1):
 		for x in range(int(x0) + 1, int(x1)):
-			if y < int(top) - 1 and img.get_pixel(x, y).a > 0.5:
+			if (y < int(top) - 1 or tyres) and img.get_pixel(x, y).a > 0.5:
 				continue
 			var k := float(y - top) / maxf(low - top, 1.0)
 			Px.put(img, x, y, COLD[1] if k > 0.4 or Px.vnoise(x, y, 7.0, 73) < 0.55 else COLD[3])
 	for w2: Dictionary in wheels:
-		if bool(w2.get("far", false)):
+		if bool(w2.get("far", false)) or tyres:
 			continue
 		var r2 := float(w2["r"])
 		var c := Vector2(float(w2["x"]), float(w2["y"]))
@@ -521,8 +532,17 @@ func _secondary(img: Image, L: Dictionary) -> void:
 	)
 
 
-## Where a kind shows warmth (TankEnemyDraw.draw_light): the louvres' engine vents and the hatches' lit cracks, each
-## [x, y, w, h, on_turret]. The atlas stays cold: the warmth is light, in the light layer.
+## A lit hatch's inside is dark in the atlas, under its frame: the amber is light, added by TankEnemyDraw._hatch, and
+## on a grey panel it would read as a grey sticker.
+func _hatch_rooms(img: Image, details: Array) -> void:
+	for d: Dictionary in details:
+		if str(d.get("kind", "")) == "hatch" and bool(d.get("lit", true)) and d.has("rect"):
+			Px.rect(img, (d["rect"] as Rect2i).grow(-1), COLD[1])
+
+
+## Where a kind shows warmth (TankEnemyDraw.draw_light): the louvres' engine vents and the lit hatches, each
+## [x, y, w, h, on_turret]. The atlas stays cold: the warmth is light, in the light layer. A hatch marked "lit": false
+## is a shut door.
 func _warm_of(L: Dictionary) -> Dictionary:
 	var vents: Array = []
 	var hatches: Array = []
@@ -535,7 +555,7 @@ func _warm_of(L: Dictionary) -> Dictionary:
 			var out := [r.position.x, r.position.y, r.size.x, r.size.y, layer]
 			if str(d.get("kind", "")) == "louvre":
 				vents.append(out)
-			elif str(d.get("kind", "")) == "hatch":
+			elif str(d.get("kind", "")) == "hatch" and bool(d.get("lit", true)):
 				hatches.append(out)
 	return {"vents": vents, "hatches": hatches}
 
@@ -656,7 +676,10 @@ func _rivet(
 		return
 	var k := _night_k(p.y, span.x, span.y)
 	var dim := roll < 0.62 or grime > 0.62 or k < 0.42
-	Px.put(img, p.x, p.y, RIV_DIM if dim else RIV_LIT)
+	var head := RIV_DIM if dim else RIV_LIT
+	if _lum(img.get_pixel(p.x, p.y)) < RIV_LOW_UNDER:
+		head = RIV_LOW
+	Px.put(img, p.x, p.y, head)
 	Px.put(img, p.x + 1, p.y + 1, COLD[1])
 	if Px.h2(p.x, p.y, 51) > 0.9:
 		_streak(
@@ -682,7 +705,41 @@ func _streak(img: Image, poly: PackedVector2Array, at: Vector2i, n: int, seed: i
 
 
 func _is_head(c: Color) -> bool:
-	return c.is_equal_approx(RIV_LIT) or c.is_equal_approx(RIV_DIM)
+	return c.is_equal_approx(RIV_LIT) or c.is_equal_approx(RIV_DIM) or c.is_equal_approx(RIV_LOW)
+
+
+## What is left of the pale specks on the dark plates, whatever made them: a lone pixel far over all its neighbours comes
+## down to a head's quiet value. A rim and a seam's run have neighbours of their light, and stay.
+func _quiet_specks(img: Image) -> void:
+	var src := img.duplicate() as Image
+	var w := src.get_width()
+	var h := src.get_height()
+	for y in range(1, h - 1):
+		for x in range(1, w - 1):
+			var c := src.get_pixel(x, y)
+			if c.a < 0.5 or _is_glass(c) or c.is_equal_approx(RIV_LOW):
+				continue
+			var l := _lum(c)
+			var most := 0.0
+			var open_side := false
+			for q: Vector2i in [
+				Vector2i(1, 0),
+				Vector2i(-1, 0),
+				Vector2i(0, 1),
+				Vector2i(0, -1),
+				Vector2i(1, 1),
+				Vector2i(-1, -1),
+				Vector2i(1, -1),
+				Vector2i(-1, 1)
+			]:
+				var n := src.get_pixel(x + q.x, y + q.y)
+				if n.a < 0.5:
+					open_side = true
+					break
+				most = maxf(most, _lum(n))
+			if open_side or most >= RIV_LOW_UNDER or l <= most * 1.5:
+				continue
+			img.set_pixel(x, y, RIV_LOW)
 
 
 ## Grime on the fasteners: in patches the heads are gone, under it they are dim; the rest keep their light.
@@ -1179,6 +1236,7 @@ func _keeps(c: Color) -> bool:
 		_is_glass(c)
 		or c.is_equal_approx(RIV_LIT)
 		or c.is_equal_approx(RIV_DIM)
+		or c.is_equal_approx(RIV_LOW)
 		or c.is_equal_approx(Hull.RIV_HI_EN)
 		or c.is_equal_approx(COLD[18])
 		or c.is_equal_approx(COLD[19])
@@ -1456,9 +1514,9 @@ func _wheel(img: Image, c: Vector2, r: float, ang: float, kind: String, teeth: i
 			elif kind == "roller":
 				col = (COLD[13] if lit > 0.2 else COLD[8]) if rho > 0.8 else COLD[3]
 			elif kind == "road" and rho > r - 1.2:
-				col = COLD[6] if lit > 0.35 else COLD[2]
+				col = COLD[8] if lit > 0.35 else COLD[3]
 			elif rho > r - (2.3 if kind == "road" else 1.6):
-				col = COLD[14] if lit > 0.15 else (COLD[9] if lit > -0.5 else COLD[6])
+				col = COLD[15] if lit > 0.15 else (COLD[10] if lit > -0.5 else COLD[7])
 			elif rho < maxf(r * 0.3, 1.5):
 				# the hub, the brightest thing on a wheel: even a little wheel shows it
 				col = COLD[4] if rho < 0.7 else (COLD[14] if lit > -0.2 else COLD[11])
@@ -1585,8 +1643,8 @@ func _track(thick: float, pitch: float) -> Dictionary:
 			var lit := lit_i == 0
 			# the belt is dark iron: the top run lies in the hull's shade, two ramp steps under the plates, so only
 			# its gaps and grousers read, and almost no light on the sides and the lower run
-			var hi: Color = COLD[4] if lit else COLD[5]
-			var mid: Color = COLD[3] if lit else COLD[4]
+			var hi: Color = COLD[5] if lit else COLD[5]
+			var mid: Color = COLD[4] if lit else COLD[4]
 			var low: Color = COLD[1] if lit else COLD[3]
 			var body: Color = COLD[1] if lit else COLD[2]
 			var joint: Color = OUTLINE if lit else COLD[1]

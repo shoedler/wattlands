@@ -1,10 +1,11 @@
 class_name TankFarPanel
 extends SubViewport
 ## v4: the far panel (SPEC_TANK 4.2, 4.3): a long-lens view of the enemy, in its own SubViewport so it never
-## runs the depth of field. `Back` is the night sky and ridge at a third of the near panel's parallax and lower
-## (a long lens sees less sky, and few stars), a glow of moonlit air on the horizon, three walls of firs with mist at
-## their feet and the ground band over them; `Base` a stage's little base far off at the treeline's foot
-## (TankForest.far_base), the scrub along that foot, and `BaseLight` the base's lamps, behind every enemy; `World` the
+## runs the depth of field. `Back` is the night sky, a faint Milky Way and a few soft stars, the mountains over the firs
+## (TankFarSky) at a third of the near panel's parallax, a glow of moonlit air on the horizon, three walls of firs with
+## mist at their feet and the ground band over them; `Base` a stage's little base far off at the treeline's foot, a dark
+## silhouette (TankForest.far_base), `BaseLight` its lamps, `Scrub` the scrub and the mist it stands its foot in, all
+## behind every enemy; `World` the
 ## wrecks and the far enemies back to front by range and the Behemoth; `Light` (additive) slit glows, the moon on each
 ## enemy, the firing mark (a hot line along a shooter's bore), the searchlight's cold pool on
 ## the target, fires, shells and impact flashes from the panel's own TankFx; `Veil` the dark a tow fades it to, the
@@ -15,7 +16,9 @@ extends SubViewport
 ## canvas_rect() and canvas_point() turn panel px into canvas px for the HUD and the view.
 
 const PLANE_PARALLAX := 0.3
-const PLANE_DROP := 40.0
+## How fast the sky and the mountains slide against the near panel's road, at PLANE_PARALLAX.
+const SKY_SLIDE := 0.04
+const RIDGE_SLIDE := 0.12
 ## The ground band's top (stage y): above the feet of the rearmost lane at the far end (338).
 const GROUND_TOP := 326.0
 const GROUND_H := 170.0
@@ -26,16 +29,10 @@ const SHADE_TOP := Color(0, 0, 0, 0.22)
 const SHADE_BOTTOM := Color(0, 0, 0, 0.4)
 const SHADE_TOP_END := 150.0
 const SHADE_BOTTOM_START := 440.0
-## The sky, its own grade as the near panel's: darker at the top. A long lens sees few stars: dim single pixels.
+## The sky, its own grade as the near panel's: darker at the top.
 const SKY_TOP := Color(0.03, 0.078, 0.092)
 const SKY_LOW := Color(0.05, 0.125, 0.145)
 const SKY_LOW_Y := 280.0
-const STARS := 26
-const STAR_TILE := 420.0
-const STAR_TOP := 8.0
-const STAR_ROWS := 190.0
-const STAR := Color(0.62, 0.78, 0.84)
-const STAR_A := Vector2(0.1, 0.34)
 ## The moonlit air the treeline stands against: from clear at its top to this at the horizon.
 const HORIZON_GLOW := Color(0.14, 0.26, 0.3, 0.34)
 const HORIZON_TOP := 150.0
@@ -48,9 +45,14 @@ const FOREST_SLIDE: Array[float] = [0.18, 0.34, 0.6]
 const MIST := Color(0.2, 0.33, 0.36, 0.3)
 const MIST_ROWS := 26.0
 const MIST_BELOW := 18.0
-## A stage's base stands far off at the treeline's foot, in the air, never under an enemy's tracks.
+## A stage's base stands far off at the treeline's foot, never under an enemy's tracks: a dark shape in the far air,
+## its foot in the scrub and in a mist that has no edge, and its lamp off any hull that stands before it.
 const BASE_FOOT := 345.0
-const BASE_AIR := Color(0.6, 0.7, 0.74)
+const BASE_NIGHT := Color(0.26, 0.34, 0.38)
+const BASE_MIST := Color(0.2, 0.33, 0.36, 0.24)
+const BASE_MIST_ROWS := 34.0
+const BASE_MIST_BELOW := 12.0
+const LAMP_CLEAR := 6.0
 ## The scrub along the treeline's foot (TankEnemyKit.far_scrub_rect), its foot and slide.
 const SCRUB_FOOT := 346.0
 const SCRUB_SLIDE := 0.7
@@ -104,13 +106,18 @@ const VEIL_ROWS := 5
 const VEIL_NOISE_HZ := 12.0
 const VEIL_NOISE := Color(0.32, 0.36, 0.34)
 const VEIL_NOISE_A := 0.05
-## The firing mark: a hot line down the bore and a flare off the muzzle, in a colour and a shape no idle cue uses (the
-## exhausts and vents are round warm orange, the slits cold).
+## The firing mark: a hot barrel down the bore and a short flare off the muzzle, in a colour and a shape no idle cue
+## uses (the exhausts and vents are round warm orange, the slits cold). Only the soonest shots burn; the rest of a crowded
+## field keep the cross on the muzzle and the HUD's tick, so it never turns into a laser show.
 const SIGNAL := Color(1.0, 0.1, 0.26)
 const SIGNAL_CORE := Color(1.0, 0.86, 0.8)
 const SIGNAL_HZ := 7.0
-const SIGNAL_FLARE := 11.0
-const SIGNAL_CROSS := 4.0
+const SIGNAL_FLARE := 4.0
+const SIGNAL_CROSS := 3.0
+const SIGNAL_BURNS := 3
+## A smashed bogie's fire: the flame's height and where it stands over the part's middle.
+const BOGIE_FLAME := 14.0
+const BOGIE_FLAME_UP := 2.0
 
 var v: TankView = null
 var kit: TankEnemyKit = TankEnemyKit.shared()
@@ -132,6 +139,7 @@ var _root: Node2D = null
 var _back: Node2D = null
 var _base: Node2D = null
 var _base_light: Node2D = null
+var _scrub_layer: Node2D = null
 var _world: Node2D = null
 var _light: Node2D = null
 var _veil: Node2D = null
@@ -157,7 +165,9 @@ func _init(view: TankView, sd: int) -> void:
 	_back = _layer("Back")
 	_back.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 	_base = _layer("Base")
+	_base.modulate = BASE_NIGHT
 	_base_light = _layer("BaseLight")
+	_scrub_layer = _layer("Scrub")
 	_world = _layer("World")
 	_light = _layer("Light")
 	var add := CanvasItemMaterial.new()
@@ -169,6 +179,7 @@ func _init(view: TankView, sd: int) -> void:
 	_back.draw.connect(_draw_back)
 	_base.draw.connect(_draw_base)
 	_base_light.draw.connect(_draw_base_light)
+	_scrub_layer.draw.connect(_draw_scrub)
 	_world.draw.connect(_draw_world)
 	_light.draw.connect(_draw_light)
 	_veil.draw.connect(_draw_veil)
@@ -193,7 +204,7 @@ func layout(canvas: Vector2, mirrored: bool, y_off: float) -> void:
 	var want := Vector2i(int(far_w), int(canvas.y))
 	if size != want:
 		size = want
-	for l: Node2D in [_base, _base_light, _world, _light]:
+	for l: Node2D in [_base, _base_light, _scrub_layer, _world, _light]:
 		l.scale = Vector2(-1, 1) if mirrored else Vector2.ONE
 		l.position = Vector2(far_w, 0) if mirrored else Vector2.ZERO
 
@@ -258,7 +269,7 @@ func frame(state: TankState, dt: float) -> void:
 	veil = move_toward(
 		veil, 1.0 if towed else 0.0, dt / (VEIL_IN_S if towed else TankView.RESTART_FADE_S)
 	)
-	for l: Node2D in [_back, _base, _base_light, _world, _light, _veil]:
+	for l: Node2D in [_back, _base, _base_light, _scrub_layer, _world, _light, _veil]:
 		l.queue_redraw()
 
 
@@ -298,7 +309,9 @@ func _track(state: TankState, dt: float) -> void:
 		var rec := _record(e.id, kind, e.lane, rng, state)
 		_advance_rec(rec, rng, state, dt)
 		var half := float(kit.kind(kind)["size"].x) * 0.5
-		rows.append({"id": e.id, "range_m": rng, "lane": e.lane, "half_w": half})
+		var row := {"id": e.id, "range_m": rng, "lane": e.lane, "half_w": half}
+		row.merge(_anatomy(kind, rng))
+		rows.append(row)
 	var placed := TankFarMap.place(rows, far_w)
 	for row: Dictionary in rows:
 		var id: int = row["id"]
@@ -316,6 +329,23 @@ func _track(state: TankState, dt: float) -> void:
 	for id2: int in _seen.keys():
 		if not alive.has(id2):
 			_seen.erase(id2)
+
+
+## What TankFarMap.place needs to keep this kind's muzzle off a nearer tank's turret: both from the foot.
+func _anatomy(kind: String, rng: float) -> Dictionary:
+	var row := kit.kind(kind)
+	var out := {}
+	if not row.has("gun"):
+		return out
+	var elev := TankBallistics.far_elevation(rng, v.far_v0(), v.far_g())
+	var pose := {"elev_deg": elev if not is_nan(elev) else 0.0}
+	out["muzzle"] = TankEnemyDraw.muzzle(kit, kind, Vector2.ZERO, pose)
+	if row.has("turret"):
+		var t: Dictionary = row["turret"]
+		var sz: Vector2 = row["size"]
+		var from := Vector2(sz.x * 0.5, float(row["ground"]))
+		out["turret"] = Rect2((t["at"] as Vector2) - from, (t["rect"] as Rect2).size)
+	return out
 
 
 func _track_boss(state: TankState, dt: float) -> void:
@@ -666,11 +696,9 @@ func _draw_back() -> void:
 	var bottom := float(size.y) - _y_off + OVERDRAW
 	ci.draw_rect(Rect2(-OVERDRAW, top, w, bottom - top), SKY_LOW)
 	_band(ci, top, SKY_LOW_Y, SKY_TOP, SKY_LOW)
-	_stars(ci)
 	var tint := TankForest.forest_tint(v, v.game.state)
-	for p in v.rig.planes:
-		if str(p["layer"]) == "back" and str(p["name"]) == "ridge":
-			_plane(ci, p, tint)
+	_tile(ci, TankFarSky.sky(), SKY_SLIDE, Color.WHITE)
+	_tile(ci, TankFarSky.ridge(), RIDGE_SLIDE, tint)
 	_band(ci, HORIZON_TOP, HORIZON_END, Color(HORIZON_GLOW, 0.0), HORIZON_GLOW)
 	_forest(ci, tint)
 	_ground(ci, bottom)
@@ -679,19 +707,13 @@ func _draw_back() -> void:
 	_band(ci, SHADE_BOTTOM_START, bottom, clear, SHADE_BOTTOM)
 
 
-## A few dim stars, scattered by hash: never a lattice, never louder than the near panel's sky.
-func _stars(ci: CanvasItem) -> void:
-	var slide := v.plane_x * TankView.S * PLANE_PARALLAX * 0.05
-	for i in STARS:
-		var hx := TankDraw.hash01(float(i) * 1.37 + 2.0)
-		var hy := TankDraw.hash01(float(i) * 2.71 + 9.0)
-		var ha := TankDraw.hash01(float(i) * 4.13 + 5.0)
-		var x := fposmod(hx * STAR_TILE - slide, STAR_TILE)
-		if x > far_w:
-			continue
-		var y := STAR_TOP + hy * hy * STAR_ROWS
-		var c := Color(STAR, lerpf(STAR_A.x, STAR_A.y, ha * ha))
-		ci.draw_rect(Rect2(roundf(x), roundf(y), 1, 1), c)
+## A baked layer (TankFarSky) tiled across the panel, at its slide.
+func _tile(ci: CanvasItem, tex: Texture2D, slide: float, mod: Color) -> void:
+	var w := float(tex.get_width())
+	var x := -fposmod(v.plane_x * TankView.S * PLANE_PARALLAX * slide, w)
+	while x < far_w + OVERDRAW:
+		ci.draw_texture(tex, Vector2(roundf(x), 0.0), mod)
+		x += w
 
 
 func _ready_to_draw() -> bool:
@@ -725,15 +747,6 @@ func _forest(ci: CanvasItem, tint: Color) -> void:
 func _mist(ci: CanvasItem, foot: float) -> void:
 	_band(ci, foot - MIST_ROWS, foot, Color(MIST, 0.0), MIST)
 	_band(ci, foot, foot + MIST_BELOW, MIST, Color(MIST, 0.0))
-
-
-func _plane(ci: CanvasItem, p: Dictionary, mod: Color) -> void:
-	var w: float = p["w"]
-	var x := -fposmod(v.plane_x * TankView.S * float(p["parallax"]) * PLANE_PARALLAX, w) - w
-	var tex: Texture2D = p["tex"]
-	while x < far_w + OVERDRAW:
-		ci.draw_texture(tex, Vector2(roundf(x), float(p["y0"]) + PLANE_DROP), mod)
-		x += w
 
 
 func _ground(ci: CanvasItem, bottom: float) -> void:
@@ -784,9 +797,28 @@ func _draw_base() -> void:
 		return
 	var bx := TankForest.far_base(v, v.game.state)
 	if not is_nan(bx):
-		TankForest.draw_base(_base, v, bx, BASE_FOOT)
-		var row := Rect2(-OVERDRAW, BASE_FOOT - 40.0, far_w + OVERDRAW * 2.0, 44.0)
-		_base.draw_rect(row, Color(BASE_AIR, 0.1))
+		TankForest.draw_base(_base, v, bx, BASE_FOOT, lamp_clear(bx))
+
+
+## False while a far sprite stands across the base's lamp post: it would rise out of the hull like a lamp on the tank.
+func lamp_clear(bx: float) -> bool:
+	var x := bx + TankForest.LAMP_X
+	for r: Rect2 in rects.values():
+		if x >= r.position.x - LAMP_CLEAR and x <= r.end.x + LAMP_CLEAR:
+			return false
+	if boss_box.size != Vector2.ZERO:
+		return x < boss_box.position.x - LAMP_CLEAR or x > boss_box.end.x + LAMP_CLEAR
+	return true
+
+
+## The base's foot in its mist, soft at both edges, and the scrub along the treeline, over both.
+func _draw_scrub() -> void:
+	if v == null or not _ready_to_draw():
+		return
+	if not is_nan(TankForest.far_base(v, v.game.state)):
+		var ci := _scrub_layer
+		_band(ci, BASE_FOOT - BASE_MIST_ROWS, BASE_FOOT, Color(BASE_MIST, 0.0), BASE_MIST)
+		_band(ci, BASE_FOOT, BASE_FOOT + BASE_MIST_BELOW, BASE_MIST, Color(BASE_MIST, 0.0))
 	_scrub()
 
 
@@ -801,7 +833,7 @@ func _scrub() -> void:
 	var tint := TankForest.forest_tint(v, v.game.state)
 	while x < far_w + OVERDRAW:
 		var at := Rect2(Vector2(roundf(x), SCRUB_FOOT - r.size.y), r.size)
-		_base.draw_texture_rect_region(tex, at, r, tint)
+		_scrub_layer.draw_texture_rect_region(tex, at, r, tint)
 		x += r.size.x
 
 
@@ -810,7 +842,7 @@ func _draw_base_light() -> void:
 		return
 	var bx := TankForest.far_base(v, v.game.state)
 	if not is_nan(bx):
-		TankForest.draw_base_light(_base_light, v, bx, BASE_FOOT)
+		TankForest.draw_base_light(_base_light, v, bx, BASE_FOOT, lamp_clear(bx))
 
 
 func _draw_world() -> void:
@@ -849,12 +881,7 @@ func _enemy(ci: CanvasItem, e: TankEnemyState) -> void:
 	var foot: Vector2 = feet[e.id]
 	var r: Rect2 = rects[e.id]
 	TankEnemyDraw.draw(ci, kit, TankIds.enemy_of(e.code), foot, pose_of(e, foot))
-	if e.hp_max > 0.0 and e.hp < e.hp_max:
-		var bw := roundf(r.size.x * 0.4)
-		var bp := Vector2(roundf(r.position.x + r.size.x * 0.3), r.position.y - 5.0)
-		ci.draw_rect(Rect2(bp, Vector2(bw, 2)), Color(0, 0, 0, 0.5))
-		var fill := roundf(bw * clampf(e.hp / e.hp_max, 0.0, 1.0))
-		ci.draw_rect(Rect2(bp, Vector2(fill, 2)), Color(0.78, 0.3, 0.2, 0.75))
+	TankEnemyDraw.hp_bar(ci, r, r.position.y - 5.0, e.hp, e.hp_max)
 
 
 func _wreck(ci: CanvasItem, w: Dictionary) -> void:
@@ -886,6 +913,7 @@ func _draw_light() -> void:
 	var state := v.game.state
 	var ci := _light
 	_search_pool(ci, state)
+	var burning := burning_shots(state)
 	for e in state.enemies:
 		if not feet.has(e.id):
 			continue
@@ -894,7 +922,11 @@ func _draw_light() -> void:
 		_moonlight(ci, rects[e.id])
 		TankEnemyDraw.draw_light(ci, kit, TankIds.enemy_of(e.code), foot, pose)
 		if e.telegraph_s > 0.0:
-			_telegraph(ci, TankEnemyDraw.bore(kit, TankIds.enemy_of(e.code), foot, pose), 1.0)
+			var bore := TankEnemyDraw.bore(kit, TankIds.enemy_of(e.code), foot, pose)
+			if burning.has(e.id):
+				_telegraph(ci, bore, 1.0)
+			else:
+				_muzzle_cross(ci, bore[1], 1.0)
 	_boss_light(ci, state)
 	for w in wrecks:
 		_wreck_fire(ci, w, state.t)
@@ -913,9 +945,29 @@ func _moonlight(ci: CanvasItem, r: Rect2) -> void:
 	TankLightDraw.ground_glow(ci, pool, r.size.x * 0.6, Color(MOON, MOON_POOL))
 
 
+## The enemies whose barrels burn this frame: the soonest shots, the Behemoth's taking a place of its own.
+func burning_shots(state: TankState) -> Array[int]:
+	var due: Array[TankEnemyState] = []
+	for e in state.enemies:
+		if feet.has(e.id) and e.telegraph_s > 0.0:
+			due.append(e)
+	due.sort_custom(_due_sooner)
+	var n := SIGNAL_BURNS
+	if boss_box.size != Vector2.ZERO and state.boss.telegraph_s > 0.0:
+		n -= 1
+	var out: Array[int] = []
+	for i in mini(n, due.size()):
+		out.append(due[i].id)
+	return out
+
+
+static func _due_sooner(a: TankEnemyState, b: TankEnemyState) -> bool:
+	return a.telegraph_s < b.telegraph_s
+
+
 ## The firing mark, above every nearer tank (the Light layer): the barrel burns along its bore from breech to muzzle,
-## its hot line runs on past the muzzle, a hard cross stands on the tip, all blinking fast. No orb: the warm orbs are
-## the exhausts' and the vents'.
+## a short flare off its end, a hard cross on the tip, all blinking fast. No orb: the warm orbs are the exhausts' and
+## the vents'.
 func _telegraph(ci: CanvasItem, bore: Array[Vector2], size_k: float) -> void:
 	var from := bore[0]
 	var tip := bore[1]
@@ -931,6 +983,12 @@ func _telegraph(ci: CanvasItem, bore: Array[Vector2], size_k: float) -> void:
 	for j in flare:
 		var q := (tip + d * float(j)).floor()
 		ci.draw_rect(Rect2(q, Vector2.ONE), Color(SIGNAL, beat * (1.0 - float(j) / float(flare))))
+	_muzzle_cross(ci, tip, size_k)
+
+
+## A shot due: the hard cross on the muzzle, blinking.
+func _muzzle_cross(ci: CanvasItem, tip: Vector2, size_k: float) -> void:
+	var beat := 0.65 + 0.35 * signf(sin(v.time * TAU * SIGNAL_HZ))
 	var at := tip.floor()
 	var arm := int(SIGNAL_CROSS * size_k)
 	ci.draw_rect(Rect2(at + Vector2(0, -arm), Vector2(1, arm * 2 + 1)), Color(SIGNAL, 0.8 * beat))
@@ -965,10 +1023,8 @@ func _boss_light(ci: CanvasItem, state: TankState) -> void:
 	for i in mini(b.bogie_hp.size(), BOGIE_U.size()):
 		if b.bogie_hp[i] > 0.0 and b.phase != TankIds.BOSS_DEAD:
 			continue
-		var at := boss_part_at(i)
-		var fl := 0.7 + 0.3 * sin(v.time * 8.0 + i * 2.0) * sin(v.time * 4.7 + i)
-		TankDraw.glow_at(ci, at, 22.0, Color(FIRE, 0.5 * fl))
-		TankDraw.glow_at(ci, at + Vector2(0, -4), 7.0, Color(FIRE_CORE, 0.8 * fl))
+		var at := boss_part_at(i) - Vector2(0, BOGIE_FLAME_UP)
+		TankEnemyDraw.burn(ci, kit, TankIds.BOSS_ID, at, BOGIE_FLAME, v.time, float(i) * 3.7)
 	if b.telegraph_s > 0.0:
 		_telegraph(ci, TankEnemyDraw.bore(kit, TankIds.BOSS_ID, boss_foot, pose), 1.6)
 

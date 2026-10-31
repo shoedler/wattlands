@@ -140,7 +140,7 @@ static func recon() -> Dictionary:
 		"details":
 		[
 			{"kind": "louvre", "rect": Rect2i(6, 12, 9, 3)},
-			{"kind": "hatch", "rect": Rect2i(40, 17, 8, 8)},
+			{"kind": "hatch", "rect": Rect2i(40, 17, 8, 8), "lit": false},
 			{"kind": "rail", "a": Vector2i(6, 4), "b": Vector2i(30, 4)},
 			{"kind": "bar", "at": Vector2i(8, 8), "w": 2},
 		],
@@ -159,7 +159,7 @@ static func recon() -> Dictionary:
 				"seams_y": [3],
 				"cast": true,
 				"seed": 83,
-				"tone": 0.08,
+				"tone": 0.16,
 				"rivet": 7
 			},
 			{

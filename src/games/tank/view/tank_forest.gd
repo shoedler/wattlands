@@ -26,6 +26,8 @@ const DIP_SHADE := 0.05
 ## whole clearing on screen ahead of the tank's nose at the start, the gate last, so the tank rolls
 ## out past it), a gun line's (rules px), and the free-roam start's metre.
 const BASE_W := 236.0
+## The lamp post's x in a base.
+const LAMP_X := 120.0
 const ROAM_START_M := 60.0
 ## The forest variants: zone id -> the forest planes' tint.
 const ZONE_TINT := {
@@ -296,15 +298,19 @@ static func base_ground(v: TankView, x0: float) -> float:
 ## sodded concrete bunker (formwork joints, a vent grille, a periscope pipe, rust under the slit's
 ## frame) with a dark firing slit behind sandbags, a hooded lamp on a post, crates
 ## under a tarp, fuel drums, the gate's red and white barrier raised. `at_g` stands it on that row instead of the road
-## (the far panel: at the treeline's foot, with no earth bank: nothing under an enemy's tracks).
-static func draw_base(ci: CanvasItem, v: TankView, x0: float, at_g: float = NAN) -> void:
+## (the far panel: at the treeline's foot, with no earth bank: nothing under an enemy's tracks); `lamp` false leaves
+## the post out (the far panel, while a hull stands across it).
+static func draw_base(
+	ci: CanvasItem, v: TankView, x0: float, at_g: float = NAN, lamp: bool = true
+) -> void:
 	var g := base_ground(v, x0) if is_nan(at_g) else at_g
 	if is_nan(at_g):
 		_bank(ci, x0, g)
 	_fence(ci, x0, g, true)
 	_bunker(ci, x0 + 26.0, g)
 	_drums(ci, x0 + 98.0, g)
-	_lamp_post(ci, x0 + 120.0, g)
+	if lamp:
+		_lamp_post(ci, x0 + LAMP_X, g)
 	_crates(ci, x0 + 130.0, g)
 	_barrier(ci, x0 + 182.0, g)
 	_fence(ci, x0, g, false)
@@ -480,11 +486,15 @@ static func _barrier(ci: CanvasItem, x: float, g: float) -> void:
 
 ## The base's light on the world light layer (behind the tank): the lamp, its cone and pool, the
 ## slit's faint glow.
-static func draw_base_light(ci: CanvasItem, v: TankView, x0: float, at_g: float = NAN) -> void:
+static func draw_base_light(
+	ci: CanvasItem, v: TankView, x0: float, at_g: float = NAN, lamp: bool = true
+) -> void:
 	for l in base_lights(v, x0, at_g):
 		var p: Vector2 = l["p"]
 		if str(l["kind"]) == "slit":
 			TankDraw.glow_at(ci, p, 10.0, Color(1.0, 0.55, 0.25, 0.1))
+			continue
+		if not lamp:
 			continue
 		TankDraw.glow_at(ci, p, 5.0, Color(1.0, 0.86, 0.6, 0.8))
 		TankDraw.glow_at(ci, p + Vector2(0, 14), 36.0, Color(LAMP.r, LAMP.g, LAMP.b, 0.24))

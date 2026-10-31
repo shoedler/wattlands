@@ -30,7 +30,7 @@ extends TankHudCtl
 ## they no longer flash when the condition toggles).
 
 const POST_H := 44.0
-## A post's plate while a near threat lives: its bottom this far over the road line, above the headlight's beam.
+## A post's plate: its bottom this far over the road line, above the headlight's beam and the near threats' lane.
 const PLATE_LIFT := 95.0
 ## The tick that marks a shooter with no plate of its own, its size, and the chevron it draws.
 const TICK_SIZE := Vector2(9, 6)
@@ -46,6 +46,7 @@ const PIN_ARROW_L := ["...#", "..##", ".###", "####", ".###", "..##", "...#"]
 const TAG_CLEAR := 8.0
 const WARN_H := 26.0
 const SPEED_H := 17.0
+const SPEED_LEGS := 4.0
 ## The seam's range plate (TankSeam, SPEC_TANK 4.6): the shell's tag stands beside it, at its height.
 const SEAM_PLATE_Y := 216.0
 const SEAM_PLATE_W := 46.0
@@ -222,7 +223,8 @@ func layout() -> Dictionary:
 	var speed := Rect2()
 	if float(m["speed"]) > 0.5:
 		var txt := tx("TANK_HUD_SPEED", [roundi(float(m["speed"]))])
-		speed = speed_rect(m["rear"], D.tall_w(txt) + 16.0, bool(m["mirrored"]), body, near)
+		var under := float(TankHud.anchored(TankHud.LAYOUT["mine"], canvas()).position.y)
+		speed = speed_rect(m["rear"], D.tall_w(txt) + 16.0, bool(m["mirrored"]), body, near, under)
 		out["speed"] = speed
 	var gy := float(m["ground"])
 	var threats: Array[Rect2] = []
@@ -280,9 +282,10 @@ static func _union(body: Array[Rect2]) -> Rect2:
 
 
 ## The speed plate (canvas art px), `w` wide, under the hull's rear on the road, TAG_CLEAR below
-## the tracks (it grows toward the tank while driving west), inside the near panel.
+## the tracks (it grows toward the tank while driving west), inside the near panel. Where the road has no room for it
+## above the rider's panel (`under`, its top; a short canvas), it stands over the hull's rear deck, in the air.
 static func speed_rect(
-	rear: Vector2, w: float, mirrored: bool, body: Array[Rect2], near: Rect2
+	rear: Vector2, w: float, mirrored: bool, body: Array[Rect2], near: Rect2, under: float = INF
 ) -> Rect2:
 	var x := rear.x - 10.0
 	if mirrored:
@@ -292,6 +295,8 @@ static func speed_rect(
 	var u := _union(body)
 	if u.size != Vector2.ZERO:
 		y = maxf(y, u.end.y + TAG_CLEAR)
+		if y + SPEED_H + SPEED_LEGS > under:
+			y = u.position.y - TAG_CLEAR - SPEED_H
 	return Rect2(roundf(x), roundf(y), w, SPEED_H)
 
 
@@ -310,8 +315,9 @@ static func post_rect(x: float, gy: float) -> Rect2:
 ## Pinned to the near panel's edge while beyond it; pushed out past the tank (TAG_CLEAR) when it would
 ## stand on it (the tank reaching its halt line); its plate on the post's left, else its right,
 ## whichever keeps clear of the tank, the post stepping back from the seam so the plate fits when the
-## tank leaves room for that. With near threats alive (`threats`, their rects) the road lane is theirs: the plate
-## goes over the beam against the seam, and a pinned line stands no post (pole false).
+## tank leaves room for that; it goes over the beam against the seam, always, so it never jumps when a threat comes, and
+## only where a tank on a narrow canvas would not leave it room does it keep the post's side. With near threats alive
+## (`threats`, their rects) the road lane is theirs: a pinned line stands no post (pole false).
 static func post_layout(
 	x: float, size: Vector2, gy: float, near: Rect2, body: Array[Rect2], threats: Array[Rect2] = []
 ) -> Dictionary:
@@ -338,14 +344,14 @@ static func post_layout(
 			if clear_of(post_rect(back, gy), body):
 				x = back
 				plate.position.x = x + 9.0
-	if threats.is_empty():
-		return {"x": x, "plate": plate, "pinned": pinned, "pole": true}
 	var lift_y := maxf(gy - PLATE_LIFT - size.y, SEAM_PLATE_Y + SEAM_PLATE_H + 2.0)
 	var lifted := Rect2(near.end.x - 12.0 - size.x, lift_y, size.x, size.y)
 	if near.get_center().x < u.get_center().x:
 		lifted.position.x = near.position.x + 12.0
 	lifted.position = lifted.position.round()
-	return {"x": x, "plate": lifted, "pinned": pinned, "pole": not pinned}
+	if clear_of(lifted, body):
+		plate = lifted
+	return {"x": x, "plate": plate, "pinned": pinned, "pole": threats.is_empty() or not pinned}
 
 
 ## The SURGE tag for a shooter at `anchor` (canvas art px; its muzzle in the far panel), `size` art px: {rect,
@@ -475,9 +481,11 @@ func paint() -> void:
 func _speed_tag(r: Rect2) -> void:
 	var txt := tx("TANK_HUD_SPEED", [roundi(float(m["speed"]))])
 	D.rect(self, Rect2(r.position + Vector2(2, r.size.y), Vector2(r.size.x - 2, 1)), D.SHADOW)
-	for lx: float in [r.position.x + 5.0, r.end.x - 7.0]:
-		D.rect(self, Rect2(lx, r.end.y, 2, 4), D.RIVET_LO)
-		D.rect(self, Rect2(lx, r.end.y, 1, 4), D.FRAME_IN)
+	# on the road it stands on its legs; over the deck (a short canvas) it has none
+	if r.position.y >= float(m["ground"]) - SPEED_H:
+		for lx: float in [r.position.x + 5.0, r.end.x - 7.0]:
+			D.rect(self, Rect2(lx, r.end.y, 2, SPEED_LEGS), D.RIVET_LO)
+			D.rect(self, Rect2(lx, r.end.y, 1, SPEED_LEGS), D.FRAME_IN)
 	D.plate(self, r, D.FRAME, 0)
 	D.tall(self, r.position.x + 8, r.position.y + 4, txt, D.TEXT)
 

@@ -14,6 +14,7 @@ const SLIT_GLOW := Color("#7fe0d0")
 ## Fastener heads: lit, and dimmed by grime. Colours nothing but a head uses.
 const RIV_LIT := Color("#505b4f")
 const RIV_DIM := Color("#384139")
+const RIV_LOW := Color("#262c27")
 ## The moon's rim (enemy_bake.gd COLD 18, 19).
 const MOON: Array[Color] = [Color("#46555a"), Color("#5c6e75")]
 ## A torn hole's mouth (enemy_bake.gd HOLE).
@@ -190,9 +191,13 @@ func _heads(r: Rect2) -> Array[Vector2i]:
 	for y in ri.size.y:
 		for x in ri.size.x:
 			var c := _atlas.get_pixel(ri.position.x + x, ri.position.y + y)
-			if c.a > 0.5 and (c.is_equal_approx(RIV_LIT) or c.is_equal_approx(RIV_DIM)):
+			if c.a > 0.5 and _is_head_colour(c):
 				out.append(Vector2i(x, y))
 	return out
+
+
+static func _is_head_colour(c: Color) -> bool:
+	return c.is_equal_approx(RIV_LIT) or c.is_equal_approx(RIV_DIM) or c.is_equal_approx(RIV_LOW)
 
 
 ## The gaps along the rows of heads: each head's distance to the next on (about) its row, when near enough to
@@ -485,7 +490,7 @@ func _is_head_at(row: Dictionary, hull: Array, i: int) -> bool:
 	var w: int = hull[0]
 	var r: Rect2 = row["base"]
 	var c := _atlas.get_pixel(int(r.position.x) + i % w, int(r.position.y) + i / w)
-	return c.is_equal_approx(RIV_LIT) or c.is_equal_approx(RIV_DIM)
+	return _is_head_colour(c)
 
 
 ## One row's single-pixel peaks, as x: brighter than both neighbours by a step of the ramp.

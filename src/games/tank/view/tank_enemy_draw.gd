@@ -28,13 +28,20 @@ const SLIT_CORE := Color(0.85, 1.0, 0.96)
 ## exhaust's glow and the Behemoth's furnace. Light only: the atlas stays cold.
 const WARM := Color(1.0, 0.5, 0.18)
 const WARM_CORE := Color(1.0, 0.8, 0.46)
-## How a vent, a hatch and the exhaust burn, and the spill on the plates round them.
+## How a vent and the exhaust burn, and the spill on the plates round them.
 const VENT_K := 0.5
 const VENT_SPILL := 0.3
-const HATCH_K := 0.85
-const HATCH_SPILL := 0.26
+## A lit hatch is a little room: amber deepening from its top row to its sill (added to the dark the atlas paints inside
+## its frame), one dim warm row on the frame's lower edge and one on the plate under it.
+const HATCH_TOP := Color(0.19, 0.06, 0.0)
+const HATCH_SILL := Color(0.68, 0.31, 0.07)
+const HATCH_EDGE := Color(0.2, 0.1, 0.035)
+const HATCH_PLATE := Color(0.11, 0.055, 0.02)
 const EXHAUST_K := 0.7
 const EXHAUST_SPILL := 0.34
+## A near threat's dark outline.
+const HALO := Color(0.012, 0.014, 0.014)
+const HALO_AT: Array[Vector2] = [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]
 ## A wreck's fire: hot at its core, red at its edge.
 const FIRE_CORE := Color(1.0, 0.95, 0.68)
 const FIRE := Color(1.0, 0.66, 0.16)
@@ -69,6 +76,9 @@ static func draw(
 	if tex == null or not row.has("base"):
 		return
 	var veil := _veil(pose)
+	var halo := float(pose.get("halo", 0.0))
+	if halo > 0.0 and not bool(pose.get("wrecked", false)):
+		_halo(ci, tex, row, foot, pose, halo)
 	if bool(pose.get("wrecked", false)):
 		_set_xf(ci, _flat(row, foot, pose))
 		_shadow(ci, tex, row, pose)
@@ -107,6 +117,30 @@ static func draw(
 		ci.draw_texture_rect_region(tex, _at(t["at"], t["rect"]), t["rect"], tint)
 		if veil.a > 0.0:
 			ci.draw_texture_rect_region(tex, _at(t["at"], t["sil"]), t["sil"], veil)
+	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+
+## A dark line round the whole sprite (pose.halo its alpha): so near threats in a crowd part from one another.
+static func _halo(
+	ci: CanvasItem, tex: Texture2D, row: Dictionary, foot: Vector2, pose: Dictionary, a: float
+) -> void:
+	var xf: Transform2D = hull_pose(row, foot, pose)["stage"]
+	var txf := turret_xf(row, pose)
+	var col := Color(HALO.r, HALO.g, HALO.b, a)
+	var g: Dictionary = row["gun"]
+	var gsil: Rect2 = g["sil"]
+	var gat := Rect2(-(g["origin"] as Vector2), gsil.size)
+	var gxf := _gun_xf(row, pose, txf)
+	for d: Vector2 in HALO_AT:
+		var shift := Transform2D(0.0, d)
+		_set_xf(ci, shift * xf)
+		ci.draw_texture_rect_region(tex, _at(Vector2.ZERO, row["sil"]), row["sil"], col)
+		_set_xf(ci, shift * xf * gxf)
+		ci.draw_texture_rect_region(tex, gat, gsil, col)
+		if row.has("turret"):
+			var t: Dictionary = row["turret"]
+			_set_xf(ci, shift * xf * txf)
+			ci.draw_texture_rect_region(tex, _at(t["at"], t["sil"]), t["sil"], col)
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
 
 
@@ -170,14 +204,7 @@ static func _warm_lights(
 			y += 2.0
 	for h: Array in row.get("hatches", []):
 		_set_xf(ci, txf if int(h[4]) == 1 else xf)
-		var hr := Rect2(float(h[0]), float(h[1]), float(h[2]), float(h[3]))
-		var crack := Rect2(hr.position.x + 1.0, hr.end.y - 2.0, hr.size.x - 2.0, 1.0)
-		if tex != null and glow.size.x > 0.0:
-			_glow(ci, tex, glow, crack.get_center(), hr.size.x * 0.8 + 3.0, WARM, HATCH_SPILL * k)
-		ci.draw_rect(crack, WARM * (HATCH_K * k))
-		ci.draw_rect(
-			Rect2(crack.get_center().x - 1.0, crack.position.y, 2.0, 1.0), WARM_CORE * (HATCH_K * k)
-		)
+		_hatch(ci, Rect2(float(h[0]), float(h[1]), float(h[2]), float(h[3])), k * breath)
 	var ex: Variant = row.get("exhaust")
 	if ex is Vector2:
 		_set_xf(ci, xf)
@@ -188,6 +215,53 @@ static func _warm_lights(
 			_glow(ci, tex, glow, at, rad, WARM, EXHAUST_SPILL * k * fl)
 		ci.draw_rect(Rect2(at + Vector2(-1, -1), Vector2(3, 2)), WARM * (EXHAUST_K * k * fl))
 		ci.draw_rect(Rect2(at + Vector2(0, -1), Vector2(1, 1)), WARM_CORE * (EXHAUST_K * k * fl))
+
+
+## A lit hatch: its rows of amber, from its top to its sill, its spill on the frame's low edge and the plate under it.
+static func _hatch(ci: CanvasItem, hr: Rect2, k: float) -> void:
+	var inner := hr.grow(-1.0)
+	var n := int(inner.size.y)
+	for i in n:
+		var u := float(i) / maxf(float(n - 1), 1.0)
+		var c := HATCH_TOP.lerp(HATCH_SILL, u)
+		var row := Rect2(inner.position + Vector2(0.0, float(i)), Vector2(inner.size.x, 1.0))
+		ci.draw_rect(row, Color(c.r, c.g, c.b, k))
+	var edge := Rect2(hr.position.x, hr.end.y - 1.0, hr.size.x, 1.0)
+	ci.draw_rect(edge, Color(HATCH_EDGE.r, HATCH_EDGE.g, HATCH_EDGE.b, k))
+	var plate := Rect2(hr.position.x + 1.0, hr.end.y, hr.size.x - 2.0, 1.0)
+	ci.draw_rect(plate, Color(HATCH_PLATE.r, HATCH_PLATE.g, HATCH_PLATE.b, k))
+
+
+## A fire on a hull still alive (a Behemoth's smashed bogie): the wreck's stepped flame at `at`, a warm pool on the
+## plates beside it. Identity transform; `seed_v` keeps two fires apart.
+static func burn(
+	ci: CanvasItem,
+	kit: TankEnemyKit,
+	kind: String,
+	at: Vector2,
+	height: float,
+	time: float,
+	seed_v: float
+) -> void:
+	var t := floorf(time * FIRE_STEPS) / FIRE_STEPS
+	var breathe := 0.82 + 0.18 * sin(t * 13.0 + seed_v)
+	var glow: Rect2 = kit.kind(kind).get("glow", Rect2())
+	var tex := kit.texture()
+	if tex != null and glow.size.x > 0.0:
+		_glow(ci, tex, glow, at + Vector2(0.0, 1.0), height * 1.2, FIRE_EDGE, 0.26 * breathe)
+	_flame(ci, at, height, t, seed_v, 1.0)
+
+
+## A hurt enemy's bar, `y` its top: a dark framed track with its share of red, centred over the rect.
+static func hp_bar(ci: CanvasItem, r: Rect2, y: float, hp: float, hp_max: float) -> void:
+	if hp_max <= 0.0 or hp >= hp_max:
+		return
+	var w := roundf(r.size.x * 0.4)
+	var x := roundf(r.position.x + r.size.x * 0.3)
+	ci.draw_rect(Rect2(x - 1.0, y - 1.0, w + 2.0, 4.0), Color(0.012, 0.012, 0.01, 0.92))
+	ci.draw_rect(Rect2(x, y, w, 2.0), Color(0.16, 0.13, 0.11))
+	var fill := roundf(w * clampf(hp / hp_max, 0.0, 1.0))
+	ci.draw_rect(Rect2(x, y, fill, 2.0), Color(0.72, 0.28, 0.18))
 
 
 ## The Behemoth's furnace: white-hot in the gaps between the louvre's bars, each gap at its own
