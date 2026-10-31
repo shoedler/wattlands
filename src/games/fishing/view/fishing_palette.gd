@@ -55,7 +55,6 @@ const HUD_PANEL := DEEP
 const HUD_PANEL_FRAME := SURFACE
 const HUD_TEXT := FOAM
 const HUD_DIM := HAZE
-const HUD_BAR := SURFACE
 const HUD_TRACK := MID
 const HUD_ALERT := ACCENT
 

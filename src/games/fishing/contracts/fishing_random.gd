@@ -13,7 +13,6 @@ extends RefCounted
 const STREAM_PREROLL := 1  ## FishingPreroll's per-slot stream
 const STREAM_LANE := 2  ## the lane's rules stream (spots, bites, strikes)
 const STREAM_PULL := 3  ## the lane's pull scheduler stream
-const STREAM_VIEW := 4  ## cosmetic randomness in the view
 
 const _M := 0xFFFFFFFF
 
@@ -83,9 +82,3 @@ func pick_weighted(weights: Array) -> int:
 		if x < 0.0:
 			return i
 	return weights.size() - 1
-
-
-func duplicate_stream() -> FishingRandom:
-	var r := FishingRandom.new()
-	r.state = state
-	return r
