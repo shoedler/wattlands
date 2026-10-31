@@ -392,7 +392,8 @@ static func _line(kind: String, key: String, args: Array, left: float) -> Dictio
 ## latest end of an open-ended segment), blocks [{type, len}] (every segment by its nominal
 ## length), index, progress (0..1 of the nominal length), obj_key and obj_args (the holding force,
 ## or Regroup), warn, next (the next segment's label key), diff_key and hard (difficulty()),
-## losses}; {} without content.
+## losses}; {} without content. The cool-down has no segment of its own: the plate names it and
+## counts its 180 s down (PlanValidator.COOLDOWN_S).
 static func mission(state: TankState) -> Dictionary:
 	if state == null or state.content == null:
 		return {}
@@ -414,8 +415,11 @@ static func mission(state: TankState) -> Dictionary:
 		obj_key = "TANK_OBJ_REGROUP"
 		obj_args = []
 	var diff := difficulty(state)
+	var cooling := state.in_cooldown()
+	if cooling:
+		end_s = PlanValidator.COOLDOWN_S
 	return {
-		"title": str(cur.get("label", "")),
+		"title": "TANK_PHASE_COOLDOWN" if cooling else str(cur.get("label", "")),
 		"left_s": maxf(end_s - state.seg.elapsed_s, 0.0),
 		"blocks": blocks,
 		"index": i,

@@ -194,6 +194,19 @@ func test_the_mission_plate_gives_the_difficulty_and_the_losses() -> void:
 	assert_eq(n["diff_key"], "TANK_HUD_DIFF_NORMAL", "a state's default")
 
 
+## The cool-down is past the mission's last segment: a named plate and a real clock, not a blank 0:00.
+func test_the_mission_plate_names_the_cool_down_and_counts_it_down() -> void:
+	var s := TankFixturesV4.make("hard", 3)
+	s.seg.seg = TankIds.SEG_COOLDOWN
+	s.seg.phase_index = s.content.segments().size()
+	s.seg.elapsed_s = 30.0
+	var m := TankHudModel.mission(s)
+	assert_eq(m["title"], "TANK_PHASE_COOLDOWN")
+	assert_almost_eq(float(m["left_s"]), PlanValidator.COOLDOWN_S - 30.0, 0.001)
+	s.seg.elapsed_s = PlanValidator.COOLDOWN_S + 5.0
+	assert_eq(float(TankHudModel.mission(s)["left_s"]), 0.0, "never below zero")
+
+
 func test_an_unknown_or_auto_difficulty_reads_normal_on_the_plate() -> void:
 	var s := TankFixturesV4.make("hard", 3)
 	for v: String in [TankIds.DIFF_AUTO, "", "nonsense"]:

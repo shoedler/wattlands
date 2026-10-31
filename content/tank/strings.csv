@@ -52,7 +52,7 @@ TANK_TOAST_BLOCKED,Obstacle ahead
 TANK_TOAST_TRAPS_CLEARED,Tank traps shoved aside
 TANK_BANNER_SEGMENT,{0}
 TANK_BANNER_BOSS,The Behemoth
-TANK_BANNER_BOSS_PHASE2,The bogies are broken: hit the turret
+TANK_BANNER_BOSS_PHASE2,Bogies broken: hit the turret
 TANK_BANNER_VICTORY,Foundry Gate taken
 TANK_BANNER_WITHDRAWN,The Behemoth got away
 TANK_CARD_SPEED,Speed
@@ -265,6 +265,7 @@ TANK_PHASE_HOLD_2,Stage 2: Holding action
 TANK_PHASE_HOLD_3,Stage 3: Holding action
 TANK_PHASE_AMBUSH_ADVANCE,Ambush: Advance
 TANK_PHASE_AMBUSH_HOLD,Ambush: Holding action
+TANK_PHASE_COOLDOWN,Cool-down: spin easy
 TANK_OBJ_HOLD,Holding force {0}/{1}
 TANK_CONTENT_AMBUSH_15,Ambush (15 min)
 TANK_MISSION_AMBUSH_15,Ambush
