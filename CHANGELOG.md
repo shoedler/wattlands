@@ -28,6 +28,7 @@ The games get their sound. Turbo Reel, Castellum Rotae and Workout now have soun
 - Safety prompts stay clear at the loudest moment of a ride, not just a calm one: `warning` and `rescue` push everything else down further and for longer, in every game. Interface sounds step back too; a start countdown and the metronome keep their level.
 - A game can choose or silence the sound of its routine banners (`HudSpec.banner_sound`); safety banners always warn.
 - A long pause no longer saves up the far sounds of the landscape to play them all at once when you ride on.
+- A client restarted during a session no longer quits with "no game" when the host's broadcast reaches it before the lobby does.
 
 ## v0.9.0 (2026-10-31)
 
