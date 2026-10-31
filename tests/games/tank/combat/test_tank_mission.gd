@@ -11,10 +11,6 @@ func _segments(c: TankContent, type: String) -> Array:
 	return c.segments().filter(func(s: Dictionary) -> bool: return s["type"] == type)
 
 
-static func _is_rear_light(e: Dictionary) -> bool:
-	return e["enemy"] == "light" and e.get("from") == "rear"
-
-
 func _count(list: Array, enemy: String, key: String = "enemy") -> int:
 	var n := 0
 	for e: Dictionary in list:
@@ -87,48 +83,166 @@ func test_every_stage_has_a_light_sprint_prompt_and_a_medium_in_its_advance() ->
 		assert_gte(_count(enc, "medium"), 1, "stage %d: a medium to hold the band for" % s["stage"])
 
 
-func test_stages_2_and_3_end_in_a_heavy_tank_duel_at_the_gun_line() -> void:
+func _table(list: Array, key: String) -> Array:
+	var out: Array = []
+	for e: Dictionary in list:
+		out.append([int(e[key]), str(e["enemy"]), int(e.get("min_crew", 1))])
+	return out
+
+
+func _force(list: Array) -> Array:
+	var out: Array = []
+	for e: Dictionary in list:
+		var hold: Array = e["hold_m"].map(func(m: float) -> int: return int(m))
+		out.append([str(e["enemy"]), int(e["count"]), hold, int(e.get("min_crew", 1))])
+	return out
+
+
+## SPEC_TANK 3.2, the Advances.
+func test_the_advance_tables() -> void:
+	var adv := _segments(_load("ashfall_road"), "advance")
+	assert_eq(
+		_table(adv[0]["encounters"], "at_m"),
+		[
+			[130, "light", 1],
+			[250, "recon", 2],
+			[360, "medium", 1],
+			[600, "destroyer", 1],
+			[700, "tankette", 2],
+			[830, "light", 1]
+		]
+	)
+	assert_eq(
+		_table(adv[1]["encounters"], "at_m"),
+		[[109, "medium", 1], [349, "recon", 2], [589, "destroyer", 1], [800, "light", 1]]
+	)
+	assert_eq(
+		_table(adv[2]["encounters"], "at_m"),
+		[
+			[95, "medium", 1],
+			[266, "tankette", 2],
+			[475, "light", 1],
+			[608, "destroyer", 1],
+			[760, "recon", 2]
+		]
+	)
+	assert_eq(adv[0]["obstacles"].map(func(o: Dictionary) -> String: return o["type"]), ["wire"])
+	assert_eq(adv[1]["obstacles"].map(func(o: Dictionary) -> String: return o["type"]), ["wreck"])
+	assert_eq(adv[2]["obstacles"].size(), 0)
+
+
+## SPEC_TANK 3.2, the holding actions and the boss's near list: heavies and destroyers on the move at
+## long range; no dug-in, no stationary gun.
+func test_the_holding_action_tables() -> void:
 	var c := _load("ashfall_road")
 	var lines := _segments(c, "gun_line")
-	assert_eq(_count(lines[0]["enemies"], "heavy"), 0)
-	assert_gte(_count(lines[0]["enemies"], "dugin"), 3)
-	for i in [1, 2]:
-		assert_eq(_count(lines[i]["enemies"], "heavy"), 1, "stage %d" % (i + 1))
-	# P4 rules ADR: gun line 3 keeps one dug-in beside its heavy and destroyer (2 -> 1, the -50%
-	# bound) so a crew's duel stays inside T1's 160 s.
-	assert_gte(_count(lines[1]["enemies"], "dugin"), 2)
-	assert_eq(_count(lines[2]["enemies"], "dugin"), 1)
-	assert_eq(_count(lines[2]["enemies"], "destroyer"), 1, "stage 3 adds a tank destroyer")
-	for g: Dictionary in lines:
+	assert_eq(
+		_force(lines[0]["enemies"]), [["medium", 2, [1200, 1500], 1], ["light", 2, [900, 1050], 2]]
+	)
+	assert_eq(_table(lines[0]["near"], "at_s"), [[15, "tankette", 2], [40, "recon", 2]])
+	assert_eq(
+		_force(lines[1]["enemies"]), [["heavy", 1, [1500], 1], ["medium", 2, [1150, 1450], 2]]
+	)
+	assert_eq(_table(lines[1]["near"], "at_s"), [[20, "recon", 2], [55, "tankette", 2]])
+	assert_eq(
+		_force(lines[2]["enemies"]),
+		[["heavy", 1, [1600], 1], ["destroyer", 1, [1900], 2], ["medium", 1, [1200], 2]]
+	)
+	assert_eq(_table(lines[2]["near"], "at_s"), [[25, "recon", 2], [60, "recon", 2]])
+	assert_eq(
+		_table(c.segment(10)["near"], "at_s"),
+		[[30, "tankette", 2], [90, "recon", 2], [150, "tankette", 2]]
+	)
+	for i in 3:
+		var g: Dictionary = lines[i]
+		assert_eq(g["label"], "TANK_PHASE_HOLD_%d" % (i + 1), "the UI says Holding action")
 		assert_lte(float(g["max_s"]), 180.0, "a 90% gun line lasts at most 180 s")
 		assert_eq(float(g["duration_s"]), 120.0)
 		assert_eq(float(g["min_s"]), 60.0)
+	assert_eq(c.mission()["difficulty_default"], TankIds.DIFF_NORMAL)
+	assert_eq(_load("drill").mission()["difficulty_default"], TankIds.DIFF_EASY)
 
 
-## The brief's lists, except one medium fewer in stages 2 and 3 (2 -> 1, the -50% bound; ADR
-## "Balance iteration 1") and stage 1's rear light and destroyer (P4 rules ADR): every Advance still
-## has a telegraphed shot and a medium (T6).
-func test_the_brief_enemy_lists_per_stage() -> void:
-	var c := _load("ashfall_road")
-	var adv := _segments(c, "advance")
-	var s1: Array = adv[0]["encounters"]
-	assert_eq([_count(s1, "light"), _count(s1, "medium"), _count(s1, "destroyer")], [3, 1, 1])
+func test_the_schema_refuses_a_rear_spawn_and_a_hold_nearer_than_the_kind() -> void:
+	var files := TankContent.read_files("ashfall_road")
+	files["mission"]["segments"][1]["encounters"][0]["from"] = "rear"
+	var errors := TankContentSchema.validate_mission(files["mission"], "ashfall_road")
+	assert_true(", ".join(errors).contains("from"), ", ".join(errors))
+	files = TankContent.read_files("ashfall_road")
+	files["mission"]["segments"][5]["enemies"][0]["hold_m"] = [1000]
+	assert_false(TankContent.from_dicts(files, "ashfall_road").ok(), "a heavy nearer than 1300 m")
+
+
+func test_nothing_in_the_shipped_lists_is_a_dug_in_or_comes_from_behind() -> void:
+	for id in ["ashfall_road", "drill"]:
+		for s: Dictionary in _load(id).segments():
+			for key in ["encounters", "enemies", "near"]:
+				for e: Dictionary in s.get(key, []):
+					assert_has(TankIds.ENEMY_TYPES, str(e["enemy"]))
+					assert_false(e.has("from"), "%s %s" % [id, s["id"]])
+					assert_false(e.has("at_px"), "%s %s" % [id, s["id"]])
+
+
+## Hard's count above a list's own total goes to the last entries, the lightest and latest first.
+func test_hard_counts_spill_to_the_last_entries() -> void:
+	var rig := TankRulesRig.new(4)
+	var total := func(l: Array[int]) -> int:
+		var n := 0
+		for v in l:
+			n += v
+		return n
+	var seg1: Array = rig.content.segment(1)["encounters"]
+	assert_eq(total.call(TankEncounters.crew_counts(rig.state, seg1)), 6, "Normal crew 4")
+	rig.state.difficulty = TankIds.DIFF_HARD
+	var hard := TankEncounters.crew_counts(rig.state, seg1)
+	assert_eq(total.call(hard), 8, "Hard crew 4: 6 x 1.3 rounded")
+	assert_eq(hard, [1, 1, 1, 1, 2, 2] as Array[int], "the last two get the extra")
+	var hold2 := TankEncounters.crew_counts(rig.state, rig.content.segment(5)["enemies"])
+	assert_eq(hold2, [1, 3] as Array[int], "a heavy and 3 mediums")
+	rig.enter(5, 0.0)
+	var heavy := TankIds.enemy_code(TankIds.ENEMY_HEAVY)
+	var heavies := rig.state.enemies.filter(func(e: TankEnemyState) -> bool: return e.code == heavy)
+	assert_eq(heavies.size(), 1)
+	assert_eq(rig.state.enemies.size(), 4)
+	var easy := TankRulesRig.new(4)
+	easy.state.difficulty = TankIds.DIFF_EASY
 	assert_eq(
-		s1.filter(_is_rear_light).size(), 1, "stage 1's rear light: a flank shot no gun reaches"
+		total.call(TankEncounters.crew_counts(easy.state, seg1)), 5, "Easy crew 4: 6 x 0.85 rounded"
 	)
-	assert_eq(adv[0]["obstacles"].map(func(o: Dictionary) -> String: return o["type"]), ["wire"])
-	var s2: Array = adv[1]["encounters"]
-	assert_eq([_count(s2, "medium"), _count(s2, "destroyer"), _count(s2, "light")], [1, 1, 1])
-	assert_eq(
-		s2.filter(func(e: Dictionary) -> bool: return e.get("from") == "rear").size(),
-		1,
-		"one light from the rear"
-	)
-	assert_eq(adv[1]["obstacles"].map(func(o: Dictionary) -> String: return o["type"]), ["wreck"])
-	var s3: Array = adv[2]["encounters"]
-	assert_eq([_count(s3, "medium"), _count(s3, "destroyer"), _count(s3, "light")], [1, 1, 2])
-	assert_eq(s3.filter(_is_rear_light).size(), 1)
-	assert_eq(adv[2]["obstacles"].size(), 0)
+
+
+func test_near_threats_of_a_holding_action_come_by_seconds() -> void:
+	var rig := TankRulesRig.new(4)
+	rig.no_fire = true
+	rig.no_bow = true
+	rig.enter(2, 1.0)
+	assert_eq(rig.of_type("ambush").size(), 0)
+	rig.run(14.5)
+	assert_eq(rig.of_type("ambush").size(), 1, "at_s 15: a tankette")
+	assert_eq(rig.of_type("ambush")[0]["e"], TankIds.enemy_code(TankIds.ENEMY_TANKETTE))
+	rig.run(25.0)
+	assert_eq(rig.of_type("ambush").size(), 2, "at_s 40: a recon car")
+	assert_eq(rig.of_type("ambush")[1]["e"], TankIds.enemy_code(TankIds.ENEMY_RECON))
+	var solo := TankRulesRig.new(1)
+	solo.no_fire = true
+	solo.enter(2, 1.0)
+	solo.run(45.0)
+	assert_eq(solo.of_type("ambush").size(), 0, "min_crew 2: a solo rider meets none")
+
+
+func test_an_advance_spawns_each_frame_through_its_own_class() -> void:
+	var rig := TankRulesRig.new(4)
+	rig.no_fire = true
+	rig.no_bow = true
+	rig.enter(1, 1.0)
+	rig.hull().distance_m = 251.0
+	rig.run(0.1)
+	var near := rig.state.enemies.filter(func(e: TankEnemyState) -> bool: return e.is_near())
+	var far := rig.state.enemies.filter(func(e: TankEnemyState) -> bool: return not e.is_near())
+	assert_eq(near.size(), 1, "the recon car")
+	assert_eq(far.size(), 1, "the light")
+	assert_gt(far[0].range_m, 0.0)
+	assert_eq(rig.of_type("ambush").size(), 1)
 
 
 func test_encounters_are_ordered_and_inside_the_advance() -> void:
@@ -185,13 +299,6 @@ func test_the_boss_segment_and_the_cooldown_backdrops() -> void:
 	var boss := c.segment(10)
 	assert_eq(boss["type"], "boss")
 	assert_eq([int(boss["duration_s"]), int(boss["min_s"]), int(boss["max_s"])], [240, 120, 360])
-	var hull_w := float(c.tank_def(TankIds.TANK_LANDSHIP)["hull_px"][0])
-	var stop := float(TankConst.REAR_SCREEN_X) + hull_w + float(c.boss_def()["stop_px"])
-	assert_gt(
-		float(boss["boss"]["start_left_px"]),
-		stop,
-		"the Behemoth starts past the longest tank's stop line"
-	)
 	assert_gt(float(boss.get("end_hold_s", 0.0)), 0.0, "a death beat before the boss phase ends")
 	assert_eq(boss["backdrop"], TankIds.BACKDROP_BASE, "v3: the Behemoth's gate at a little base")
 	assert_eq(c.mission()["cooldown"]["backdrop_victory"], TankIds.BACKDROP_BASE)
@@ -234,7 +341,7 @@ func test_no_crew_meets_more_than_16_enemies_at_once_even_if_none_dies() -> void
 
 
 ## v3: enemy counts by crew size (0.5 / 0.7 / 0.85 / 1.0 per segment, at least 1).
-func test_each_crew_meets_its_scaled_gun_line() -> void:
+func test_each_crew_meets_its_scaled_holding_force() -> void:
 	for crew in [1, 2, 3, 4]:
 		var rig := TankRulesRig.new(crew)
 		for i in 3:
@@ -243,54 +350,45 @@ func test_each_crew_meets_its_scaled_gun_line() -> void:
 			for n in TankEncounters.crew_counts(rig.state, rig.content.segment(index)["enemies"]):
 				want += n
 			rig.enter(index, 0.0)
-			assert_eq(rig.state.gun_line.guns_total, want, "crew %d gun line %d" % [crew, i + 1])
+			assert_eq(rig.state.gun_line.guns_total, want, "crew %d hold %d" % [crew, i + 1])
 			assert_eq(rig.state.enemies.size(), want)
-			# A solo rider meets gun lines 2 and 3's heavy alone (min_crew 2 on the rest).
-			assert_gte(want, 1 if crew == 1 else 2, "a gun line is never a walkover")
+			# A solo rider meets holds 2 and 3's heavy alone (min_crew 2 on the rest).
+			assert_gte(want, 1 if crew == 1 else 2, "a holding action is never a walkover")
 
 
-func test_the_gun_line_enemies_stand_where_the_mission_put_them_clamped_to_the_screen() -> void:
-	var rig := TankRulesRig.new(3)
+func test_the_holding_force_stands_where_the_mission_put_it() -> void:
+	var rig := TankRulesRig.new(4)
 	rig.enter(8, 0.0)
-	var front_screen := 16.0 + rig.hull().hull_w
-	for e in rig.state.enemies:
-		var far_screen := front_screen + e.hold_px + e.w
-		assert_lte(far_screen, 632.0 + 0.01)
-		assert_gte(e.hold_px, rig.content.num("enemies", "lanes.min_hold_px", 60.0) - 0.01)
+	var holds: Array = rig.state.enemies.map(func(e: TankEnemyState) -> float: return e.hold_m)
+	assert_eq(holds, [1600.0, 1900.0, 1200.0])
 
 
 ## The segment's total x the crew's scale (rounded, at least 1), taken from the list in order.
 func test_enemy_counts_scale_by_crew_size_per_segment() -> void:
 	var c := TankFixtures.content()
 	assert_eq(c.value("enemies", "crew_count_scale", []), [0.5, 0.7, 0.85, 1.0])
-	var want := {1: 0, 2: 3, 3: 3, 4: 4}
-	var adv_want := {1: 3, 2: 4, 3: 4, 4: 5}
-	for crew: int in want:
+	var adv_want := {1: 2, 2: 4, 3: 5, 4: 6}
+	var hold2 := {1: [1, 0], 2: [1, 1], 3: [1, 2], 4: [1, 2]}
+	for crew: int in adv_want:
 		var rig := TankRulesRig.new(crew)
-		var dug := TankEncounters.crew_counts(rig.state, rig.content.segment(5)["enemies"])
-		# Gun line 2: a heavy first (every crew meets it), then four dug-ins in one entry (min_crew
-		# 2: a solo rider meets the heavy alone).
-		assert_eq(dug, [1, want[crew]] as Array[int], "crew %d" % crew)
+		assert_eq(
+			TankEncounters.crew_counts(rig.state, rig.content.segment(5)["enemies"]),
+			hold2[crew] as Array[int],
+			"hold 2, crew %d" % crew
+		)
 		var adv := TankEncounters.crew_counts(rig.state, rig.content.segment(1)["encounters"])
 		var n := 0
-		for k in adv.size():
-			n += adv[k]
-			if k > 0:
-				assert_lte(adv[k], adv[k - 1], "the list's first entries first")
-		assert_eq(n, adv_want[crew], "Advance 1's five, crew %d" % crew)
-	var gl1 := {1: [2, 0, 0, 0], 2: [2, 1, 1, 0], 3: [2, 1, 1, 0], 4: [2, 1, 1, 1]}
-	for crew: int in gl1:
-		var rig := TankRulesRig.new(crew)
-		var got := TankEncounters.crew_counts(rig.state, rig.content.segment(2)["enemies"])
-		assert_eq(got, gl1[crew] as Array[int], "gun line 1, crew %d" % crew)
+		for k in adv:
+			n += k
+		assert_eq(n, adv_want[crew], "Advance 1, crew %d" % crew)
 	var hp := TankRulesRig.new(1)
 	hp.enter(5, 0.0)
 	for e in hp.state.enemies:
 		assert_eq(e.hp_max, float(c.enemy_def(TankIds.enemy_of(e.code))["hp"]), "HP the same")
 
 
-## v3 solo balance: an entry with min_crew (an enemy, a gun-line gun or a barricade) is not there for
-## smaller crews, and does not count in their total; crews from min_crew on meet it as before.
+## v3 solo balance: an entry with min_crew (an enemy, a holding force's unit or a barricade) is not
+## there for smaller crews, and does not count in their total; crews from min_crew on meet it as before.
 func test_min_crew_entries_skip_the_smaller_crews() -> void:
 	var solo := TankRulesRig.new(1)
 	solo.enter(1, 0.0)

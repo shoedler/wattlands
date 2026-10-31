@@ -88,7 +88,9 @@ func test_the_aim_aux_solution_puts_a_real_shell_in_the_box() -> void:
 		var rig := TankRulesRig.new(crew)
 		rig.enter(4)
 		var aux := TankAux.of(rig.state)
-		var e := rig.spawn(TankIds.ENEMY_MEDIUM, 1, 250.0)
+		var e := TankEncounters.add_obstacle(
+			rig.state, TankIds.OBST_WIRE, rig.hull().x_px + rig.hull().hull_w + 130.0
+		)
 		TankTargets.build(rig.state, aux)
 		var t := TankTargets.by_id(aux, e.id)
 		var aim: Array[Vector2] = [Vector2.ZERO]
@@ -129,3 +131,100 @@ func test_dispersion_is_half_a_degree_and_widens_below_a_bank_of_20() -> void:
 	assert_eq(TankBallistics.dispersion_deg(c, 20.0), 0.5)
 	assert_eq(TankBallistics.dispersion_deg(c, 19.9), 1.5)
 	assert_eq(TankBallistics.dispersion_deg(c, 0.0), 1.5)
+
+
+# --- v4: the far frame -----------------------------------------------------------------------------
+
+const FAR_V0 := 560.0
+const FAR_G := 70.0
+
+
+## SPEC_TANK section 2's table: range, elevation, flight, metres per degree.
+func test_the_far_frames_table() -> void:
+	var rows := [[800.0, 5.1, 1.43, 153.0], [1500.0, 9.8, 2.72, 147.0], [2200.0, 14.7, 4.06, 136.0]]
+	for row: Array in rows:
+		var e := TankBallistics.far_elevation(float(row[0]), FAR_V0, FAR_G)
+		assert_almost_eq(e, float(row[1]), 0.05, "%.0f m" % row[0])
+		assert_almost_eq(TankBallistics.far_flight(e, FAR_V0, FAR_G), float(row[2]), 0.01)
+		var per_deg := (
+			TankBallistics.far_range(e + 0.5, FAR_V0, FAR_G)
+			- TankBallistics.far_range(e - 0.5, FAR_V0, FAR_G)
+		)
+		assert_almost_eq(per_deg, float(row[3]), 2.0, "m per degree at %.0f m" % row[0])
+
+
+func test_far_range_inverts_far_elevation() -> void:
+	for r: float in [700.0, 800.0, 1234.0, 1900.0, 2500.0, 4000.0]:
+		var e := TankBallistics.far_elevation(r, FAR_V0, FAR_G)
+		assert_almost_eq(TankBallistics.far_range(e, FAR_V0, FAR_G), r, 1e-3, "%.0f m" % r)
+	assert_true(is_nan(TankBallistics.far_elevation(5000.0, FAR_V0, FAR_G)), "out of range")
+	assert_true(is_nan(TankBallistics.far_elevation(0.0, FAR_V0, FAR_G)))
+
+
+func test_far_lead_lands_on_a_moving_target() -> void:
+	for rate: float in [-30.0, -10.0, 0.0, 8.0, 20.0, 37.7]:
+		for r: float in [900.0, 1500.0, 2200.0]:
+			var e := TankBallistics.far_lead(r, rate, FAR_V0, FAR_G)
+			var t := TankBallistics.far_flight(e, FAR_V0, FAR_G)
+			var land := TankBallistics.far_range(e, FAR_V0, FAR_G)
+			assert_almost_eq(land, r + rate * t, 0.5, "%.0f m at %.0f m/s" % [r, rate])
+
+
+func test_the_per_tick_far_flight_lands_where_the_arc_says() -> void:
+	var rig := TankRulesRig.new(1)
+	rig.enter(3)
+	var aux := TankAux.of(rig.state)
+	var e := TankBallistics.far_elevation(1500.0, FAR_V0, FAR_G)
+	var s := TankShellState.new()
+	s.id = rig.state.take_id()
+	s.type = TankIds.SHELL_HEAVY
+	s.far = true
+	s.friendly = true
+	s.impact_r = 1500.0
+	s.left_s = TankBallistics.far_flight(e, FAR_V0, FAR_G)
+	s.vx = FAR_V0 * cos(deg_to_rad(e))
+	s.vy = FAR_V0 * sin(deg_to_rad(e))
+	var flight := s.left_s
+	rig.state.shells.append(s)
+	var events: Array[Dictionary] = []
+	var peak := 0.0
+	for i in 20:
+		TankShells.step(rig.state, aux, Wl.SIM_DT, events)
+		var t := (i + 1) * Wl.SIM_DT
+		assert_almost_eq(
+			s.y, TankBallistics.far_height(t, e, FAR_V0, FAR_G), 1e-2, "y at tick %d" % i
+		)
+		assert_almost_eq(s.x, s.vx * t, 1e-2)
+		peak = maxf(peak, s.y)
+	assert_gt(peak, 0.0, "it rises")
+	TankShells.step(rig.state, aux, flight, events)
+	assert_eq(rig.state.shells.size(), 0, "it lands when left_s runs out")
+
+
+## The evade floor (v3's ADR, BRIEF 4.6's spirit): telegraph + the shortest flight is at least 6 s at
+## Hard, for every telegraphing kind, at the nearest it can hold (a shift never goes nearer).
+func test_hard_telegraph_plus_flight_is_at_least_6_s() -> void:
+	var c := TankFixtures.content()
+	var hard := float(c.value("enemies", "difficulty.hard", {})["telegraph"])
+	var rows := {
+		TankIds.ENEMY_HEAVY: [float(c.enemy_def(TankIds.ENEMY_HEAVY)["telegraph_s"]), 1300.0],
+		TankIds.ENEMY_DESTROYER:
+		[float(c.enemy_def(TankIds.ENEMY_DESTROYER)["telegraph_s"]), 1700.0],
+		TankIds.ENEMY_LIGHT:
+		[float(c.enemy_def(TankIds.ENEMY_LIGHT)["flank"]["telegraph_s"]), 800.0 - 60.0],
+	}
+	for kind: String in rows:
+		var row: Array = rows[kind]
+		var def := c.enemy_def(kind)
+		var nearest := float(def["hold_m"][0]) - float(def.get("weave_m", 0.0))
+		assert_eq(nearest, float(row[1]), kind)
+		var e := TankBallistics.far_elevation(nearest, FAR_V0, FAR_G)
+		var total := float(row[0]) * hard + TankBallistics.far_flight(e, FAR_V0, FAR_G)
+		assert_gte(total, 6.0, "%s: %.2f s" % [kind, total])
+	var boss := c.boss_def()
+	var stop := float(boss["far"]["stop_m"])
+	var be := TankBallistics.far_elevation(stop, FAR_V0, FAR_G)
+	var bt := (
+		float(boss["main"]["telegraph_s"]) * hard + TankBallistics.far_flight(be, FAR_V0, FAR_G)
+	)
+	assert_gte(bt, 6.0, "the Behemoth at its stop line: %.2f s" % bt)

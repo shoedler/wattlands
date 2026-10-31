@@ -29,6 +29,14 @@ var enemy_shots: Dictionary = {}
 var enemy_flank_done: Dictionary = {}
 ## Running telegraphs (TankEvade): shooter id -> {held: {slot: s}, able: {slot: true}}.
 var evade: Dictionary = {}
+## v4: far enemy id -> seconds until its next shift (enemies.json shift_every_s).
+var enemy_shift: Dictionary = {}
+## v4: near threat id -> what is left of this step: seconds of a burst or a pause, px of a dash.
+var near_left: Dictionary = {}
+## v4: the depth lane the next near threat takes (they alternate 0, 1).
+var near_lane: int = 0
+## v4: the Behemoth's d(range)/dt in m/s this tick (the lead solver reads it).
+var boss_rate_mps: float = 0.0
 ## Enemy shell id -> seconds until it lands (the arrival resolves the hit rolled at fire time).
 var shell_left: Dictionary = {}
 ## The auto-aim's choice this tick (TankAim.current): target, elevation and facing; reset to

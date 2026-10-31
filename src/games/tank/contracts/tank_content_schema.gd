@@ -19,10 +19,10 @@ extends RefCounted
 ##                  every engine has an entry for every segment type of TABLE_SEGMENTS; start_engines
 ##                  per tank: the seat of each slot (TankIds.MAX_CREW distinct seats; a crew of n
 ##                  uses the first n); v3 retired rotation (seat choice replaces it)
-##   enemies.json   types {light, medium, destroyer, dugin, heavy, recon, tankette}: {code, hp, gun
+##   enemies.json   types {light, medium, destroyer, heavy, recon, tankette}: {code, hp, gun
 ##                  {damage, every_s, hit}, light_mult, flank? {telegraph_s, damage, hit}}, then by
-##                  kind ENEMY_FAR_SPEC, ENEMY_NEAR_SPEC or ENEMY_FRAME_SPEC (dugin); boss;
-##                  miss_px; clamp; lanes; crew_count_scale (v3: enemy counts by crew size, one
+##                  kind ENEMY_FAR_SPEC or ENEMY_NEAR_SPEC; boss; miss_px; miss_m;
+##                  crew_count_scale (v3: enemy counts by crew size, one
 ##                  factor in (0, 1] per crew size 1..TankIds.MAX_CREW) (ENEMIES_SPEC); difficulty
 ##                  (v4: easy, normal, hard, DIFFICULTY_MULTS and tank_loss, nothing else)
 ##   missions/<id>.json  {id, label, difficulty_default?, score_stages?, segments: [{id, type, stage,
@@ -206,8 +206,6 @@ const ENEMY_NEAR_SPEC := {
 	"flee_after_s": "pos",
 	"flee_px_s": "pos",
 }
-## Any other kind (the dug-in until it goes): the old frame's sprite size and lane.
-const ENEMY_FRAME_SPEC := {"size_px": "pair", "lane": "nonneg"}
 ## v4: enemies.json difficulty.<level>: these multipliers, each in DIFFICULTY_MIN..DIFFICULTY_MAX, and
 ## the bool tank_loss. Any other key is refused, so a retune cannot sneak an effort number in.
 const DIFFICULTY_MULTS: Array[String] = ["hp", "damage", "accuracy", "count", "telegraph", "repair"]
@@ -219,9 +217,6 @@ const ENEMIES_SPEC := {
 	"boss.bogie_hp": "pos",
 	"boss.turret_hp": "pos",
 	"boss.hull_px": "pair",
-	"boss.creep_px_s": "nonneg",
-	"boss.stop_px": "nonneg",
-	"boss.pushback_px": "nonneg",
 	"boss.main.damage": "nonneg",
 	"boss.main.every_s": "pair",
 	"boss.main.every_s_phase2": "pair",
@@ -236,10 +231,7 @@ const ENEMIES_SPEC := {
 	"boss.far.part_offset_m": "arr",
 	"boss.far.part_half_m": "arr",
 	"miss_px": "pair",
-	"clamp.ahead_max_right_px": "pos",
-	"clamp.behind_min_show_px": "nonneg",
-	"lanes.count": "pos",
-	"lanes.gap_px": "nonneg",
+	"miss_m": "pair",
 }
 ## An enemy type's optional flank shot (v2, the light tank's, brief 2.4): its first shot after it
 ## reaches its hold distance, telegraphed.
@@ -635,10 +627,6 @@ static func validate_enemies(d: Variant) -> Array[String]:
 				errors.append("enemies.json types.%s.code: must be %d" % [t, TankIds.enemy_code(t)])
 			if (types[t] as Dictionary).has("flank"):
 				check_spec(types[t]["flank"], FLANK_SPEC, "enemies.json types.%s.flank" % t, errors)
-			var lanes: Variant = dig(d, "lanes.count")
-			var lane: Variant = (types[t] as Dictionary).get("lane")
-			if _num(lanes) and _num(lane) and int(lane) >= int(lanes):
-				errors.append("enemies.json types.%s.lane: must be below lanes.count" % t)
 	_check_difficulty((d as Dictionary).get("difficulty"), errors)
 	var scale: Variant = (d as Dictionary).get("crew_count_scale")
 	var scale_ok: bool = scale is Array and (scale as Array).size() == TankIds.MAX_CREW
@@ -674,9 +662,7 @@ static func validate_enemies(d: Variant) -> Array[String]:
 
 ## The keys a kind needs besides ENEMY_SPEC.
 static func _frame_spec(type: String) -> Dictionary:
-	if TankIds.FAR_KINDS.has(type):
-		return ENEMY_FAR_SPEC
-	return ENEMY_NEAR_SPEC if TankIds.NEAR_KINDS.has(type) else ENEMY_FRAME_SPEC
+	return ENEMY_FAR_SPEC if TankIds.FAR_KINDS.has(type) else ENEMY_NEAR_SPEC
 
 
 ## v4: enemies.json difficulty: every level, its multipliers and tank_loss, and no other key: the
@@ -1046,6 +1032,8 @@ static func _check_segment(s: Variant, where: String, errors: Array[String]) -> 
 		for e: Variant in s.get("encounters", []):
 			if not (e is Dictionary) or not TankIds.ENEMY_TYPES.has(str(e.get("enemy", ""))):
 				errors.append("%s encounters: each needs a known enemy" % where)
+			elif (e as Dictionary).has("from"):
+				errors.append('%s encounters: "from" is gone: nothing comes from behind' % where)
 	_check_near(s.get("near", []), where, errors)
 	for key in ["encounters", "enemies", "obstacles", "near"]:
 		for e: Variant in s.get(key, []) if s.get(key, []) is Array else []:

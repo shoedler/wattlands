@@ -1,26 +1,17 @@
 class_name TankAim
 extends RefCounted
-## The auto-aim (brief 2.4 Gun): which target, which facing, which elevation. Owner: rules
-## (combat). Priority: a tank destroyer in its telegraph, dug-in, heavy, medium (or a destroyer
-## not telegraphing), light, obstacle; nearer first. The elevation is the lower arc to the target
-## with lead; a target the gun cannot reach (elevation outside the limits, or no solution) is
-## skipped. The hull frame moves with the shells (they inherit the hull's velocity), so the lead
-## only covers the target's motion relative to the hull.
+## The auto-aim (brief 2.4 Gun; v4): which target and which elevation. Owner: rules (combat).
+## Priority: a tank destroyer in its telegraph, the Behemoth's bogies, heavy, medium (or a destroyer
+## not telegraphing), light, obstacle; nearer first. A far target's elevation is the far frame's lower
+## arc with lead on its range rate; near arcs (barricades, drill wrecks) solve in the near frame, where
+## the hull frame moves with the shells. A target the gun cannot reach is skipped. A near threat is
+## never the main gun's (only the Secondaries hit them), and the turret never traverses: nothing stands
+## behind the hull.
 
 
 ## The main gun's muzzle in world art px at `elev_deg` facing `facing`.
 static func muzzle_world(state: TankState, aux: TankAux, elev_deg: float, facing: int) -> Vector2:
 	return TankTargets.hull_origin(state) + aux.geo.muzzle(state.hull.tank, elev_deg, facing)
-
-
-## The turret ring's world x (the mirror axis; the side a target is on).
-static func ring_x(state: TankState, aux: TankAux) -> float:
-	return state.hull.x_px + aux.geo.ring(state.hull.tank).x
-
-
-## The facing the gun needs to shoot at world x `x`.
-static func facing_for(state: TankState, aux: TankAux, x: float) -> int:
-	return TankIds.FACE_RIGHT if x >= ring_x(state, aux) else TankIds.FACE_LEFT
 
 
 ## The elevation in degrees that sends a shell through `aim` (world px) when the target moves at
@@ -67,6 +58,8 @@ static func aim_points(t: TankTarget, facing: int) -> Array[Vector2]:
 static func solve_target(
 	state: TankState, aux: TankAux, t: TankTarget, facing: int, aim_out: Array[Vector2]
 ) -> float:
+	if t.far:
+		return _solve_far(state, t)
 	var hull_v := Vector2(TankConst.m_to_px(state.hull.speed_mps), 0.0)
 	for p in aim_points(t, facing):
 		var e := solve(state, aux, p, t.vel - hull_v, facing)
@@ -78,6 +71,22 @@ static func solve_target(
 		aim_out[0] = t.center()
 		return lo
 	return NAN
+
+
+## A far target's elevation: the lower arc with lead, inside the gun's limits, else NAN.
+static func _solve_far(state: TankState, t: TankTarget) -> float:
+	var c := state.content
+	var e := TankBallistics.far_lead(
+		t.range_m,
+		t.rate_mps,
+		c.num("tanks", "gun.far.v0_mps", 560.0),
+		c.num("tanks", "gun.far.g_mps2", 70.0)
+	)
+	if is_nan(e):
+		return NAN
+	var lo := c.num("tanks", "gun.elev_min_deg", -12.0)
+	var hi := c.num("tanks", "gun.elev_max_deg", 30.0)
+	return e if e >= lo - 1e-6 and e <= hi + 1e-6 else NAN
 
 
 ## Whether a shell fired at `elev_deg` (the gun's lowest elevation, for a target too close and low
@@ -106,7 +115,7 @@ static func grazes(
 
 ## The auto-aim's target: the manual one while it stands and can be reached, else the best by
 ## priority. `drill_ok`: the depot's drill wrecks are targets (aim and fire drills). Sets
-## `elev_out[0]` to the elevation to it and `facing_out[0]` to the facing it needs; null when
+## `elev_out[0]` to the elevation to it and `facing_out[0]` to the facing (always ahead); null when
 ## nothing can be aimed at.
 static func pick(
 	state: TankState, aux: TankAux, drill_ok: bool, elev_out: Array[float], facing_out: Array[int]
@@ -117,63 +126,50 @@ static func pick(
 	var aim: Array[Vector2] = [Vector2.ZERO]
 	if aux.manual_target:
 		var m := TankTargets.by_id(aux, state.hull.target_id)
-		if m == null or (m.drill and not drill_ok) or rear_light(m) or not in_reach(state, m):
+		if m == null or m.near or (m.drill and not drill_ok) or not in_reach(state, m):
 			aux.manual_target = false
 		else:
-			var f := facing_for(state, aux, m.center().x)
-			var e := solve_target(state, aux, m, f, aim)
+			var e := solve_target(state, aux, m, TankIds.FACE_RIGHT, aim)
 			if not is_nan(e):
 				elev_out[0] = e
-				facing_out[0] = f
+				facing_out[0] = TankIds.FACE_RIGHT
 				return m
 			aux.manual_target = false
 	for _n in aux.targets.size():
 		var best: TankTarget = null
 		var best_key := INF
 		for t in aux.targets:
-			if skip.has(t.id) or (t.drill and not drill_ok) or rear_light(t):
+			if skip.has(t.id) or t.near or (t.drill and not drill_ok):
 				continue
 			if not TankTargets.engageable(t, cam) or not in_reach(state, t):
 				continue
-			var key := float(t.tier) * 100000.0 + absf(t.center().x - muzzle.x)
+			var off := t.sort_key() if t.far else absf(t.sort_key() - muzzle.x)
+			var key := float(t.tier) * 100000.0 + off
 			if key < best_key:
 				best_key = key
 				best = t
 		if best == null:
 			return null
-		var f := facing_for(state, aux, best.center().x)
-		var e := solve_target(state, aux, best, f, aim)
+		var e := solve_target(state, aux, best, TankIds.FACE_RIGHT, aim)
 		if not is_nan(e):
 			elev_out[0] = e
-			facing_out[0] = f
+			facing_out[0] = TankIds.FACE_RIGHT
 			return best
 		skip[best.id] = true
 	return null
 
 
-## A light tank behind the hull: the main gun never lays on it (v2's rule, ADR G1: it shows only
-## a little over the hull's rear), so its flank shot's sprint prompt always comes (T6).
-static func rear_light(t: TankTarget) -> bool:
-	return (
-		t.kind == TankTarget.KIND_ENEMY
-		and t.enemy != null
-		and t.enemy.side < 0
-		and t.enemy.code == TankIds.enemy_code(TankIds.ENEMY_LIGHT)
-	)
-
-
-## Whether the main gun can see `t` (v3, the Lights seat): always while the searchlights are lit;
-## dark, only within the headlight's range: the target's near edge at most tanks.json
-## arc.dark_range_px off the hull's front (off its rear for a target behind it).
+## Whether the main gun can see `t` (the Lights seat): a far target up to gun.far.max_range_m while
+## the searchlights are lit, and up to arc.dark_range_m in the dark. Near arcs (barricades, drill
+## wrecks) are always within reach.
 static func in_reach(state: TankState, t: TankTarget) -> bool:
-	if TankGun.searchlights_lit(state):
+	if not t.far:
 		return true
-	var hull := state.hull
-	var reach := state.content.num("tanks", "arc.dark_range_px", 260.0)
-	var front := hull.x_px + float(hull.hull_w)
-	if t.rect.end.x <= hull.x_px:
-		return hull.x_px - t.rect.end.x <= reach + 1e-6
-	return t.rect.position.x - front <= reach + 1e-6
+	var c := state.content
+	var reach := c.num("tanks", "gun.far.max_range_m", 2500.0)
+	if not TankGun.searchlights_lit(state):
+		reach = minf(reach, c.num("tanks", "arc.dark_range_m", 2300.0))
+	return t.range_m <= reach + 1e-6
 
 
 ## The auto-aim's choice for this tick, computed once per step (aux.aim_valid is cleared at the

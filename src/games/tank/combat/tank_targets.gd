@@ -16,15 +16,9 @@ static func hull_origin(state: TankState) -> Vector2:
 	return Vector2(state.hull.x_px, TankConst.GROUND_Y - SKIRT_GAP - state.hull.hull_h)
 
 
-## An enemy's hit box in world art px (the dug-in's is only its turret above the concrete).
-static func enemy_rect(state: TankState, aux: TankAux, e: TankEnemyState) -> Rect2:
-	var top := float(TankConst.GROUND_Y - e.h)
-	var def := state.content.enemy_def(TankIds.enemy_of(e.code))
-	if str(def.get("hitbox", "")) == "turret":
-		var hb := aux.geo.enemy_hitbox(str(def.get("sprite", "enemy_dugin")))
-		if hb.size.x > 0.0:
-			return Rect2(e.x_px + hb.position.x, top + hb.position.y, hb.size.x, hb.size.y)
-	return Rect2(e.x_px, top, e.w, e.h)
+## An enemy's hit box in world art px (a far enemy has none: TankTargets.build empties it).
+static func enemy_rect(e: TankEnemyState) -> Rect2:
+	return Rect2(e.x_px, float(TankConst.GROUND_Y - e.h), e.w, e.h)
 
 
 ## The Behemoth's top-left in world art px: its bogies stand on the ground line.
@@ -54,8 +48,6 @@ static func obstacle_rect(state: TankState, o: TankObstacleState) -> Rect2:
 ## The tier of an enemy for the auto-aim (TankTarget.TIER_*).
 static func enemy_tier(e: TankEnemyState) -> int:
 	match TankIds.enemy_of(e.code):
-		TankIds.ENEMY_DUGIN:
-			return TankTarget.TIER_DUGIN
 		TankIds.ENEMY_HEAVY:
 			return TankTarget.TIER_HEAVY
 		TankIds.ENEMY_DESTROYER:
@@ -78,7 +70,7 @@ static func build(state: TankState, aux: TankAux) -> void:
 		t.id = e.id
 		t.kind = TankTarget.KIND_ENEMY
 		t.tier = enemy_tier(e)
-		t.rect = enemy_rect(state, aux, e)
+		t.rect = enemy_rect(e)
 		t.vel = Vector2(float(aux.enemy_vx.get(e.id, 0.0)), 0.0)
 		t.enemy = e
 		aux.targets.append(t)
@@ -115,6 +107,7 @@ static func build(state: TankState, aux: TankAux) -> void:
 				t.far = true
 				t.range_m = b.range_m + float(_boss_far(state, "part_offset_m")[i])
 				t.hit_half_m = float(_boss_far(state, "part_half_m")[i])
+				t.rate_mps = aux.boss_rate_mps
 				t.rect = Rect2()
 			aux.targets.append(t)
 			aux.enemy_in_range = true
