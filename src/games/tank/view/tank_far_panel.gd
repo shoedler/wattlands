@@ -4,8 +4,9 @@ extends SubViewport
 ## runs the depth of field. `Back` is the night sky and ridge at a third of the near panel's parallax and lower
 ## (a long lens sees less sky, and few stars), a glow of moonlit air on the horizon, three walls of firs with mist at
 ## their feet and the ground band over them; `Base` a stage's little base far off at the treeline's foot
-## (TankForest.far_base), the scrub along that foot, and `BaseLight` the base's lamps, behind every enemy; `World` the wrecks, the far enemies by lane back to front and the Behemoth; `Light` (additive) slit
-## glows, the moon on each enemy, the firing mark (a hot line along a shooter's bore), the searchlight's cold pool on
+## (TankForest.far_base), the scrub along that foot, and `BaseLight` the base's lamps, behind every enemy; `World` the
+## wrecks and the far enemies back to front by range and the Behemoth; `Light` (additive) slit glows, the moon on each
+## enemy, the firing mark (a hot line along a shooter's bore), the searchlight's cold pool on
 ## the target, fires, shells and impact flashes from the panel's own TankFx; `Veil` the dark a tow fades it to, the
 ## forest's silhouette still under it. TankView draws its texture over the near stage.
 ##

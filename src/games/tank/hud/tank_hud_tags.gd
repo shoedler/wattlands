@@ -49,6 +49,7 @@ const SPEED_H := 17.0
 ## The seam's range plate (TankSeam, SPEC_TANK 4.6): the shell's tag stands beside it, at its height.
 const SEAM_PLATE_Y := 216.0
 const SEAM_PLATE_W := 46.0
+const SEAM_PLATE_H := 14.0
 ## Free roam: the turn marker shows once the turning place ahead is this near (game metres).
 const TURN_MARKER_M := 160.0
 ## The angle meters' fade in, fade out and hold after their condition ends (s).
@@ -339,7 +340,8 @@ static func post_layout(
 				plate.position.x = x + 9.0
 	if threats.is_empty():
 		return {"x": x, "plate": plate, "pinned": pinned, "pole": true}
-	var lifted := Rect2(near.end.x - 12.0 - size.x, gy - PLATE_LIFT - size.y, size.x, size.y)
+	var lift_y := maxf(gy - PLATE_LIFT - size.y, SEAM_PLATE_Y + SEAM_PLATE_H + 2.0)
+	var lifted := Rect2(near.end.x - 12.0 - size.x, lift_y, size.x, size.y)
 	if near.get_center().x < u.get_center().x:
 		lifted.position.x = near.position.x + 12.0
 	lifted.position = lifted.position.round()
