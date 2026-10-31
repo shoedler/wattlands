@@ -9,30 +9,28 @@ extends RefCounted
 ## as in a mission, map_m is the hull centre's place on the road and TankHullState.dir which way the
 ## frame's +x points along it. A turn (the driver's `turn` intent, 30 s cooldown, or the Autopilot at
 ## a map end after 3 s) stops the tank for 8 s; at its midpoint flip() mirrors the travel frame about
-## the hull's centre (enemies change sides, shells and obstacles mirror, the turret keeps pointing
-## the same way along the road), so every map point keeps its place.
+## the hull's centre: the obstacles mirror, every map point keeps its place, and everything that moves
+## leaves the field with no credit (v4: the enemy stands ahead of the tank, never behind it).
 ##
 ## One tick: TankRules.step calls pre() after the riders are read (the work clock, the turn, the
 ## map ends, time up, strongpoints, patrols), TankDrive moves the hull (halted(), stop_ahead_m()
 ## and moved()), and post() runs last (points from this tick's events, kilometres, the strongpoints
 ## that fell, the engagement halt for the next tick, the fight past time up and the phase's end).
 ##
-## Patrols every 50-110 s of WORK time (valley.json patrols): ahead (75%) or behind, a kind drawn by
-## weight (heavy only past 10 min of WORK time with no heavy alive), counts scaled by the tank, trimmed
-## to 6 enemies on the field; none after time up. Strongpoints: one dug-in tank per spot of the map,
-## on the field only while its spot is near the screen, back 10 min after it falls. The tank halts
-## while a strongpoint ahead is within engage_px or a heavy tank within engage_heavy_px. Time up at
-## the roam phase's min_s: no new patrols or strongpoints; a fight in progress (an enemy within
-## fight_px) may run on; then the phase's objective is done and the director ends it for every rider
-## in one step (at the latest OVERTIME_MARGIN_S before max_s), the cool-down follows and the module
-## finishes "time_up".
+## Patrols every 50-110 s of WORK time (valley.json patrols): a kind drawn by weight (heavy only past
+## 10 min of WORK time with no heavy alive), far kinds in the far panel, near kinds from the bushes,
+## counts scaled by the crew and difficulty.count, trimmed to 6 enemies on the field; none with too
+## little road ahead and none after time up. Strongpoints: a holding force of one (strongpoints.enemy)
+## per spot of the map, on the field once its spot is within strongpoints.spawn_m ahead in the travel
+## direction, back 10 min after it falls. The tank halts while one stands or a heavy holds within
+## engage_heavy_m. Time up at the roam phase's min_s: no new patrols or strongpoints; a fight in
+## progress (a far enemy within fight_m, or a near threat) may run on; then the phase's objective is
+## done and the director ends it for every rider in one step (at the latest OVERTIME_MARGIN_S before
+## max_s), the cool-down follows and the module finishes "time_up". Under a tow (TankEncounters.lose)
+## nothing spawns.
 
 ## How long before max_s a fight past time up is cut so that the director's end_phase lands first.
 const OVERTIME_MARGIN_S := 1.0
-## A strongpoint joins the field this far beyond the screen's edges (rules px) and leaves it past
-## DESPAWN_PX (hysteresis).
-const SPAWN_PX := 16.0
-const DESPAWN_PX := 64.0
 const EPS := 1e-6
 
 # --- Setup ------------------------------------------------------------------------------------------
@@ -100,7 +98,7 @@ static func pre(
 	_forced_turn(state, events)
 	_time_up(state, events)
 	_strongpoints(state, aux, dt)
-	_patrols(state, aux, dt)
+	_patrols(state, aux, dt, events)
 
 
 ## The turn (brief 2.10): the running stop counts down and flips the travel frame at its midpoint;
@@ -140,15 +138,15 @@ static func _forced_turn(state: TankState, events: Array[Dictionary]) -> void:
 	start_turn(state, -1, events)
 
 
-## Whether a turn may start now: free roam, no turn running, the cooldown over, not broken down,
-## inside a plan phase or the cool-down.
+## Whether a turn may start now: free roam, no turn running, the cooldown over, not broken down or
+## under tow, inside a plan phase or the cool-down.
 static func can_turn(state: TankState) -> bool:
 	var r := state.roam
 	return (
 		r.active
 		and r.turn_s <= 0.0
 		and r.turn_cd_s <= 0.0
-		and not state.hull.breakdown
+		and not state.hull.out_of_action()
 		and state.seg.seg != TankIds.SEG_NONE
 	)
 
@@ -168,45 +166,27 @@ static func start_turn(state: TankState, slot: int, events: Array[Dictionary]) -
 	events.append(TankEvents.turn(slot, -state.hull.dir))
 
 
-## Mirrors the travel frame about the hull's centre (the turn's midpoint): the direction and the
-## turret's facing flip, enemies change sides (station keepers re-reserve a held place on their new
-## side and move to it; a running telegraph is called off), shells and obstacles mirror.
+## Mirrors the travel frame about the hull's centre (the turn's midpoint): the direction flips, the
+## obstacles mirror, and every enemy and shell leaves the field with no credit: nothing is ever behind
+## the tank, so a patrol that was ahead is simply gone and the next comes from the new ahead.
 static func flip(state: TankState, aux: TankAux) -> void:
 	var hull := state.hull
 	var cx := hull.x_px + float(hull.hull_w) * 0.5
 	hull.dir = -hull.dir
-	hull.facing = -hull.facing
-	hull.traverse_s = 0.0
-	aux.manual_target = false
-	for e in state.enemies:
-		e.x_px = 2.0 * cx - e.x_px - float(e.w)
-		e.side = -e.side
-		var dist := TankEnemies.distance(state, e)
-		aux.enemy_dist[e.id] = dist
-		if e.telegraph_s > 0.0 or e.mode == TankIds.EM_TELEGRAPH:
-			e.telegraph_s = 0.0
-			TankEvade.forget(aux, e.id)
-			if e.mode == TankIds.EM_TELEGRAPH:
-				e.mode = TankIds.EM_HOLD
-		if e.fixed:
-			e.hold_px = dist
-			continue
-		if e.mode == TankIds.EM_LEAVE:
-			e.hold_px = 1.0e9 if e.side > 0 else 400.0
-			continue
-		var want := TankEnemies.clamp_hold(state, e.w, e.side, e.hold_px)
-		if e.side > 0:
-			# A pursuer behind the hull holds -8 px (its last 24 px at the edge); turned ahead it
-			# must not keep that and sit inside the hull's nose: ahead holds start at min_hold_px.
-			want = maxf(want, state.content.num("enemies", "lanes.min_hold_px", 60.0))
-		TankEnemies.reserve_hold(state, aux, e, want, e.lane)
-		if e.mode != TankIds.EM_ENTER:
-			e.mode = TankIds.EM_MOVE
-	for s in state.shells:
-		s.x = 2.0 * cx - s.x
-		s.vx = -s.vx
+	TankEncounters.clear_field(state, aux)
+	field_cleared(state)
 	for o in state.obstacles:
 		o.x_px = 2.0 * cx - o.x_px - float(o.w)
+
+
+## The field went clear (a flip, a lost tank): no strongpoint stands any more and the next patrol's
+## wait starts over.
+static func field_cleared(state: TankState) -> void:
+	var r := state.roam
+	if not r.active:
+		return
+	r.strong_id.fill(0)
+	r.patrol_s = _draw(state, state.content.value("valley", "patrols.every_s", [50, 110]))
 
 
 ## Which map end the tank stands at (the road stops at the turning place in the travel direction)
@@ -239,13 +219,14 @@ static func _time_up(state: TankState, events: Array[Dictionary]) -> void:
 		events.append(TankEvents.time_up(r.patrols))
 
 
-## The roam phase is on and still spawning (WORK, before time up, nobody all AFK).
+## The roam phase is on and still spawning (WORK, before time up, not under tow).
 static func spawning(state: TankState) -> bool:
 	return (
 		state.roam.active
 		and state.seg.seg == TankIds.SEG_ROAM
 		and state.seg.kind == Wl.WORK
 		and not state.roam.time_up
+		and state.hull.tow_s <= 0.0
 	)
 
 
@@ -266,48 +247,33 @@ static func map_of(state: TankState, x: float) -> float:
 	return state.roam.map_m + (x - cx) / TankConst.PX_PER_M * float(hull.dir)
 
 
-## Strongpoints join the field when their spot nears the screen (never in the drive-out or after
-## time up) and leave it, still standing, once it is well off screen; a fallen one counts down its
-## return.
+## A strongpoint joins the field once its spot lies within strongpoints.spawn_m ahead in the travel
+## direction (never in the drive-out, under tow or after time up, never behind the tank): a holding
+## force of one strongpoints.enemy in the far panel, not part of a gun line. A fallen one counts down
+## its return.
 static func _strongpoints(state: TankState, aux: TankAux, dt: float) -> void:
+	if state.hull.tow_s > 0.0:
+		return
 	var r := state.roam
 	var map := state.roam_map
-	var cam := state.camera_x()
-	var w := float((state.content.enemy_def(TankIds.ENEMY_DUGIN).get("size_px", [73, 19]))[0])
+	var reach := _num(state, "strongpoints.spawn_m", 500.0)
+	var type := str(state.content.value("valley", "strongpoints.enemy", TankIds.ENEMY_HEAVY))
 	for i in map.strongpoints.size():
 		if r.strong_back_s[i] > 0.0:
 			r.strong_back_s[i] = maxf(r.strong_back_s[i] - dt, 0.0)
 			continue
-		var left := travel_x(state, map.strongpoints[i]) - w * 0.5
-		var id := r.strong_id[i]
-		if id != 0:
-			var e := state.enemy(id)
-			if e == null:
-				r.strong_id[i] = 0
-			elif left > cam + TankConst.SCREEN_W + DESPAWN_PX or left + w < cam - DESPAWN_PX:
-				state.enemies.erase(e)
-				TankEnemies.forget(aux, e.id)
+		if r.strong_id[i] != 0:
+			if state.enemy(r.strong_id[i]) == null:
 				r.strong_id[i] = 0
 			continue
 		if not spawning(state) or alive(state, aux) >= int(_num(state, "patrols.max_alive", 6)):
 			continue
-		if left > cam + TankConst.SCREEN_W + SPAWN_PX or left + w < cam - SPAWN_PX:
+		var ahead := (map.strongpoints[i] - r.map_m) * float(state.hull.dir)
+		if ahead < 0.0 or ahead > reach:
 			continue
-		r.strong_id[i] = _spawn_strongpoint(state, aux, left, w)
-
-
-static func _spawn_strongpoint(state: TankState, aux: TankAux, left: float, w: float) -> int:
-	var hull := state.hull
-	var side := 1 if left + w * 0.5 >= hull.x_px + float(hull.hull_w) * 0.5 else -1
-	var e := TankEnemies.spawn(state, aux, TankIds.ENEMY_DUGIN, side, 0.0, true, false, -1)
-	if e == null:
-		return 0
-	e.x_px = left
-	e.mode = TankIds.EM_HOLD
-	var dist := TankEnemies.distance(state, e)
-	e.hold_px = dist
-	aux.enemy_dist[e.id] = dist
-	return e.id
+		var e := TankFar.spawn(state, aux, type, -1.0, false, -1)
+		if e != null:
+			r.strong_id[i] = e.id
 
 
 ## Enemies on the field that count against patrols.max_alive (alive and not breaking off).
@@ -322,7 +288,9 @@ static func alive(state: TankState, aux: TankAux) -> int:
 # --- Patrols ------------------------------------------------------------------------------------------
 
 
-static func _patrols(state: TankState, aux: TankAux, dt: float) -> void:
+## A patrol comes when its wait ran out, always ahead: far kinds in the far panel, near kinds from the
+## bushes. With too little road ahead (patrols.clear_ahead_m) or a full field it retries later.
+static func _patrols(state: TankState, aux: TankAux, dt: float, events: Array[Dictionary]) -> void:
 	var r := state.roam
 	if not spawning(state):
 		return
@@ -330,15 +298,11 @@ static func _patrols(state: TankState, aux: TankAux, dt: float) -> void:
 	if r.patrol_s > 0.0:
 		return
 	var room := int(_num(state, "patrols.max_alive", 6)) - alive(state, aux)
-	if room <= 0:
+	if room <= 0 or road_ahead_m(state) < _num(state, "patrols.clear_ahead_m", 150.0):
 		r.patrol_s = _num(state, "patrols.retry_s", 10.0)
 		return
 	var kind := roll_kind(state)
-	var side := 1
-	if state.rng != null and state.rng.randf() >= _num(state, "patrols.ahead_share", 0.75):
-		side = -1
-	if road_ahead_m(state) < _num(state, "patrols.clear_ahead_m", 150.0):
-		side = -1
+	var mult := TankDifficulty.mult(state, "count")
 	for u: Variant in kind.get("units", []):
 		var cnt: Array = u.get("count", [1, 1])
 		var n := (
@@ -346,12 +310,20 @@ static func _patrols(state: TankState, aux: TankAux, dt: float) -> void:
 		)
 		if n <= 0:
 			continue
-		n = mini(state.content.crew_count(n, state.hull.tank, state.crew), room)
+		n = mini(state.content.crew_count(n, state.hull.tank, state.crew, mult), room)
 		for _k in n:
-			if TankEnemies.spawn(state, aux, str(u.get("enemy", "")), side, -1.0, false, false, -1):
+			if _spawn_unit(state, aux, str(u.get("enemy", "")), events) != null:
 				room -= 1
 	r.patrols += 1
 	r.patrol_s = _draw(state, state.content.value("valley", "patrols.every_s", [50, 110]))
+
+
+static func _spawn_unit(
+	state: TankState, aux: TankAux, type: String, events: Array[Dictionary]
+) -> TankEnemyState:
+	if TankIds.NEAR_KINDS.has(type):
+		return TankNear.spawn(state, aux, type, -1, events)
+	return TankFar.spawn(state, aux, type, -1.0, false, -1)
 
 
 ## A patrol kind (valley.json patrols.kinds) drawn by weight; a kind with a heavy tank only past
@@ -407,19 +379,11 @@ static func halted(state: TankState) -> bool:
 
 
 ## How far (game metres from the current distance) the tank may roll this tick: the turning place
-## ahead, and the engagement distance of a strongpoint ahead.
+## ahead.
 static func stop_ahead_m(state: TankState) -> float:
 	if not state.roam.active:
 		return INF
-	var out := road_ahead_m(state)
-	var engage := _num(state, "strongpoints.engage_px", 180.0)
-	var front := state.hull.x_px + float(state.hull.hull_w)
-	for id in state.roam.strong_id:
-		var e := state.enemy(id) if id != 0 else null
-		if e == null or e.side < 0 or e.hp <= 0.0:
-			continue
-		out = minf(out, maxf(e.x_px - front - engage, 0.0) / TankConst.PX_PER_M)
-	return out
+	return road_ahead_m(state)
 
 
 ## The hull moved `dm` game metres this tick (TankDrive): the map place, the odometers.
@@ -456,8 +420,8 @@ static func post(state: TankState, aux: TankAux, events: Array[Dictionary]) -> v
 	_finish(state, aux)
 
 
-## Points from this tick's events (brief 2.10): kills by crew fire per type, evaded shots and
-## breakdowns; a fallen strongpoint starts its return clock.
+## Points from this tick's events (brief 2.10): kills by crew fire per type, evaded shots, breakdowns
+## and lost tanks; a fallen strongpoint starts its return clock.
 static func _score(state: TankState, events: Array[Dictionary]) -> void:
 	var r := state.roam
 	for ev in events:
@@ -479,7 +443,7 @@ static func _score(state: TankState, events: Array[Dictionary]) -> void:
 					var pe := int(_num(state, "points.evade", 5.0))
 					r.points += pe
 					r.evade_points += pe
-			TankEvents.BREAKDOWN:
+			TankEvents.BREAKDOWN, TankEvents.TANK_LOST:
 				var pb := int(_num(state, "points.breakdown", -40.0))
 				r.points += pb
 				r.breakdown_points += pb
@@ -496,31 +460,28 @@ static func _kilometres(state: TankState) -> void:
 		r.km_paid = full
 
 
-## The tank halts to engage (brief 2.10 "Engage"): a strongpoint ahead within engage_px (+1 px for
-## the tick the drive stopped at it) or a heavy tank within engage_heavy_px on either side.
+## The tank halts to engage (brief 2.10 "Engage"): a strongpoint stands, or a heavy tank holds within
+## engage_heavy_m.
 static func engaged(state: TankState, aux: TankAux) -> bool:
-	if state.hull.breakdown or state.in_cooldown():
+	if state.hull.out_of_action() or state.in_cooldown():
 		return false
-	var engage := _num(state, "strongpoints.engage_px", 180.0) + 1.0
-	var heavy_px := _num(state, "engage_heavy_px", 400.0)
+	var reach := _num(state, "engage_heavy_m", 2000.0)
 	var heavy := TankIds.enemy_code(TankIds.ENEMY_HEAVY)
 	for e in state.enemies:
 		if e.hp <= 0.0 or not TankEnemies.holds_position(aux, e):
 			continue
-		var d := TankEnemies.distance(state, e)
-		if e.code == heavy and d <= heavy_px:
-			return true
-		if e.side > 0 and state.roam.strong_id.has(e.id) and d <= engage:
+		if state.roam.strong_id.has(e.id) or (e.code == heavy and e.range_m <= reach):
 			return true
 	return false
 
 
-## A fight is in progress (brief 2.10 time up): an enemy alive within fight_px of the hull.
+## A fight is in progress (brief 2.10 time up): a far enemy within fight_m not retiring, or a near
+## threat that has not fled.
 static func fighting(state: TankState, aux: TankAux) -> bool:
-	var px := _num(state, "fight_px", 400.0)
+	var reach := _num(state, "fight_m", 2200.0)
 	for e in state.enemies:
 		if e.hp > 0.0 and TankEnemies.holds_position(aux, e):
-			if TankEnemies.distance(state, e) <= px:
+			if e.is_near() or e.range_m <= reach:
 				return true
 	return false
 

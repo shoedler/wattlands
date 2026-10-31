@@ -58,7 +58,10 @@ static func _move(state: TankState, d: TankDieselState, ri: TankRiderInput, dt: 
 	)
 	if ri != null:
 		sm.rider_mass_kg = ri.rider_mass_kg
-	if state.roam.active:
+	if hull.tow_s > 0.0:
+		# v4: under tow the rider pedals flat (the director sends the same).
+		hull.grade_pct = 0.0
+	elif state.roam.active:
 		hull.grade_pct = TankRoam.grade_pct(state, state.seg.kind == Wl.WARMUP)
 	else:
 		hull.grade_pct = TankTerrain.for_segment(
@@ -69,8 +72,10 @@ static func _move(state: TankState, d: TankDieselState, ri: TankRiderInput, dt: 
 		power = d.p_eff_w
 	# v3: an empty Drive seat stops the tank.
 	var manned := d != null and not d.is_empty()
-	var rolls := manned and _may_move(state) and not hull.breakdown and not state.all_afk
-	hull.holding = not rolls and not hull.breakdown and state.seg.seg != TankIds.SEG_CHECKPOINT
+	var rolls := manned and _may_move(state) and not hull.out_of_action() and not state.all_afk
+	hull.holding = (
+		not rolls and not hull.out_of_action() and state.seg.seg != TankIds.SEG_CHECKPOINT
+	)
 	if state.seg.seg == TankIds.SEG_CHECKPOINT or state.seg.seg == TankIds.SEG_BOSS:
 		hull.holding = true
 	hull.blocked_by = 0

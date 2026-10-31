@@ -142,13 +142,7 @@ const FAR_KINDS: Array[String] = [ENEMY_LIGHT, ENEMY_MEDIUM, ENEMY_DESTROYER, EN
 ## v4: burst from the bushes in the near panel (TankEnemyState.x_px); only the bow guns hit them.
 const NEAR_KINDS: Array[String] = [ENEMY_RECON, ENEMY_TANKETTE]
 const ENEMY_TYPES: Array[String] = [
-	ENEMY_LIGHT,
-	ENEMY_MEDIUM,
-	ENEMY_DESTROYER,
-	ENEMY_DUGIN,
-	ENEMY_HEAVY,
-	ENEMY_RECON,
-	ENEMY_TANKETTE
+	ENEMY_LIGHT, ENEMY_MEDIUM, ENEMY_DESTROYER, ENEMY_HEAVY, ENEMY_RECON, ENEMY_TANKETTE
 ]
 ## 6 is BOSS_CODE.
 const ENEMY_CODES := {
@@ -259,19 +253,12 @@ const INTENT_TURN := "turn"
 ## seat (0.3.1: no seat lock; refused on reserve and in the cool-down) and the trainer follows.
 const INTENT_SEAT := "seat"
 const INTENT_KINDS: Array[String] = [
-	INTENT_AIM,
-	INTENT_TARGET,
-	INTENT_TRAVERSE,
-	INTENT_FIRE,
-	INTENT_LATCH,
-	INTENT_OVER,
-	INTENT_TURN,
-	INTENT_SEAT
+	INTENT_AIM, INTENT_TARGET, INTENT_FIRE, INTENT_LATCH, INTENT_OVER, INTENT_TURN, INTENT_SEAT
 ]
 ## Intents that end a human's Autopilot fallback (brief 2.5; v3: and its automatic seating); over
 ## never does. (v2: the Ram and its "ram" intent are gone, brief 2.4; v3: so is "lever".)
 const DELIBERATE_KINDS: Array[String] = [
-	INTENT_AIM, INTENT_TARGET, INTENT_TRAVERSE, INTENT_FIRE, INTENT_LATCH, INTENT_TURN, INTENT_SEAT
+	INTENT_AIM, INTENT_TARGET, INTENT_FIRE, INTENT_LATCH, INTENT_TURN, INTENT_SEAT
 ]
 
 const VIA_ACTION := "action"

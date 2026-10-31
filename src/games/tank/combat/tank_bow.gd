@@ -3,9 +3,10 @@ extends RefCounted
 ## The bow guns (v3 brief "One tank, five seats": the Secondaries seat, a crank-driven twin belt
 ## feed; owner: rules). Two short guns in the nose fire exactly TankFeedState.ROUNDS_PER_REV (2)
 ## rounds per pedal revolution of the Secondaries rider, alternating guns (round k from gun
-## (k - 1) mod 2), at the nearest enemy, or Behemoth part, ahead whose near edge is bow.min_px ..
-## bow.max_px (40-220 px) off the hull front, else at a wire or wreck barricade there
-## (bow.clear_rounds rounds that hit clear it). With nothing in range the guns are silent. The
+## (k - 1) mod 2), at the nearest near threat (recon, tankette) whose near edge is bow.min_px ..
+## bow.max_px off the hull front, else at a wire or wreck barricade there (bow.clear_rounds rounds
+## that hit clear it). v4: far enemies and the Behemoth are out of their reach. With nothing in range
+## the guns are silent. The
 ## revolutions come from the rider's cadence (TankFeedState.rev_acc integrates cadence / 60 per
 ## second), so the rate is 2 x cadence rounds a minute (TankFeedState.rpm).
 ##
@@ -34,7 +35,7 @@ static func step(
 		and not st.reserve
 		and not st.unpowered
 		and not state.all_afk
-		and not state.hull.breakdown
+		and not state.hull.out_of_action()
 		and not TankStations.in_rescue(ri)
 	)
 	if not powered or t == null:
@@ -59,20 +60,20 @@ static func distance(state: TankState, t: TankTarget) -> float:
 	return t.rect.position.x - (state.hull.x_px + float(state.hull.hull_w))
 
 
-## The bow guns' target: the nearest standing enemy or Behemoth part ahead within range, else the
-## nearest wire or wreck barricade within range; null for none.
+## The bow guns' target: the nearest standing near threat within range, else the nearest wire or
+## wreck barricade within range; null for none.
 static func target(state: TankState, aux: TankAux) -> TankTarget:
 	var c := state.content
-	var lo := c.num("tanks", "bow.min_px", 40.0)
-	var hi := c.num("tanks", "bow.max_px", 220.0)
+	var lo := c.num("tanks", "bow.min_px", 4.0)
+	var hi := c.num("tanks", "bow.max_px", 200.0)
 	var best: TankTarget = null
 	var best_d := INF
 	var prop: TankTarget = null
 	var prop_d := INF
 	for t in aux.targets:
-		if t.drill or not TankShells.collidable(t):
+		if t.drill or not TankShells.collidable(t) or t.kind == TankTarget.KIND_BOSS:
 			continue
-		if t.kind == TankTarget.KIND_ENEMY and t.enemy.side < 0:
+		if t.kind == TankTarget.KIND_ENEMY and not t.near:
 			continue
 		var d := distance(state, t)
 		if d < lo - 1e-6 or d > hi + 1e-6:
@@ -134,7 +135,4 @@ static func _round(
 			t.obstacle.cleared = true
 		return
 	var dmg := TankDamage.against(c, TankIds.SHELL_BOW, t)
-	if t.kind == TankTarget.KIND_ENEMY:
-		TankShells.damage_enemy(state, aux, t.enemy, dmg, TankEvents.BY_BOW, st.slot, events)
-	else:
-		TankShells.damage_boss(state, aux, t.part, dmg, st.slot, events)
+	TankShells.damage_enemy(state, aux, t.enemy, dmg, TankEvents.BY_BOW, st.slot, events)

@@ -1,6 +1,7 @@
 {
 	"_doc": "The e2e drill (brief 2.9): 130 s inside the warm-up limits (BRIEF 4.6.8). A 30 s depot, a fixed 70 s skirmish of WARMUP kind against 2 light tanks and 1 medium, a 30 s checkpoint at 50%. No haptics (every phase lies in the first 300 s); at most one mode switch per rider. Owner: rules. Schema: TankContentSchema.validate_mission.",
 	"id": "drill",
+	"difficulty_default": "easy",
 	"label": "TANK_CONTENT_DRILL",
 	"plan_table": "drill_plans",
 	"segments": [
@@ -30,9 +31,9 @@
 			"length_m": 500,
 			"terrain": [[0, 0.5], [150, 2], [300, 1], [450, 0], [500, 0]],
 			"encounters": [
-				{"at_m": 0, "enemy": "light", "count": 1, "from": "front"},
-				{"at_m": 60, "enemy": "medium", "count": 1, "from": "front"},
-				{"at_m": 160, "enemy": "light", "count": 1, "from": "front"}
+				{"at_m": 0, "enemy": "light", "count": 1},
+				{"at_m": 60, "enemy": "medium", "count": 1},
+				{"at_m": 160, "enemy": "light", "count": 1}
 			],
 			"obstacles": []
 		},

@@ -12,7 +12,6 @@ extends RefCounted
 ##                                              v3: move to that seat (or step through TankIds.SEATS)
 ##   {"k": "aim", "d": 1 | -1, "via"?}          nudge the elevation up / down (auto-aim pauses 5 s)
 ##   {"k": "target", "d": 1 | -1, "via"?}       cycle targets
-##   {"k": "traverse", "via"?}                  flip the turret's facing
 ##   {"k": "fire", "via"?}                      fire the loaded shell
 ##   {"k": "latch", "via"?}                     latch a light shell at >= 40% (steam, Bulwark hoist)
 ##   {"k": "over", "via"?}                      Overpressure inside the window (steam)
@@ -31,19 +30,13 @@ extends RefCounted
 
 const MAX_KEYS := 6
 ## Which seat may send which intent (brief 2.2, 2.6; v3 seat table): the Gun (dynamo) aims, picks
-## targets, traverses and fires; the Loader (steam engine) latches and overpressures; Drive (the
+## targets and fires; the Loader (steam engine) latches and overpressures; Drive (the
 ## diesel) owns the free-roam `turn` (brief 2.10); Lights (arc), Secondaries (feed) and Repairs own no
 ## action. v3: every seat owns `seat` (any rider may ask to move; the rules judge the move).
 const OWNERS := {
 	TankIds.ENGINE_DIESEL: [TankIds.INTENT_TURN, TankIds.INTENT_SEAT],
 	TankIds.ENGINE_DYNAMO:
-	[
-		TankIds.INTENT_AIM,
-		TankIds.INTENT_TARGET,
-		TankIds.INTENT_TRAVERSE,
-		TankIds.INTENT_FIRE,
-		TankIds.INTENT_SEAT
-	],
+	[TankIds.INTENT_AIM, TankIds.INTENT_TARGET, TankIds.INTENT_FIRE, TankIds.INTENT_SEAT],
 	TankIds.ENGINE_STEAM: [TankIds.INTENT_LATCH, TankIds.INTENT_OVER, TankIds.INTENT_SEAT],
 	TankIds.ENGINE_ARC: [TankIds.INTENT_SEAT],
 	TankIds.ENGINE_FEED: [TankIds.INTENT_SEAT],

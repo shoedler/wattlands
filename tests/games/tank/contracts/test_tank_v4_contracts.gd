@@ -317,7 +317,11 @@ func test_the_module_sets_difficulty_on_every_peer_from_the_option() -> void:
 		var g: TankGame = autofree(F.make_game(ctx))
 		assert_eq(g.state.difficulty, TankIds.DIFF_HARD, role)
 	var plain: TankGame = autofree(F.make_game(F.make_ctx(1, 0, "drill")))
-	assert_eq(plain.state.difficulty, TankIds.DIFF_NORMAL, "auto with no mission default")
+	assert_eq(plain.state.difficulty, TankIds.DIFF_EASY, "auto: the mission's default")
+	var files := TankContent.read_files("drill")
+	(files["mission"] as Dictionary).erase("difficulty_default")
+	var bare := TankContent.from_dicts(files, "drill")
+	assert_eq(TankDifficulty.resolve(TankIds.DIFF_AUTO, bare), TankIds.DIFF_NORMAL, "no default")
 
 
 func test_the_manifest_offers_the_option() -> void:

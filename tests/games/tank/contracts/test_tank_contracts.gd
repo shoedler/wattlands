@@ -147,7 +147,7 @@ func test_intents_normalize_and_reject_junk() -> void:
 func test_intents_belong_to_their_engine() -> void:
 	var expect := {
 		"diesel": ["turn", "seat"],
-		"dynamo": ["aim", "target", "traverse", "fire", "seat"],
+		"dynamo": ["aim", "target", "fire", "seat"],
 		"steam": ["latch", "over", "seat"],
 		"arc": ["seat"],
 		"feed": ["seat"],

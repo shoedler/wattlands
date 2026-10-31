@@ -218,10 +218,10 @@ func crew_scale(crew: int) -> float:
 
 
 ## (v3) An enemy count for a crew of `crew` (brief v3 "Difficulty is enemy count"): the count x
-## the tank's scale (the landship's 1.0) x crew_scale(crew), rounded, at least 1. Enemy HP is the
-## same for every crew size.
-func crew_count(count: int, tank: String, crew: int) -> int:
-	return maxi(1, roundi(count * enemy_scale(tank) * crew_scale(crew)))
+## the tank's scale (the landship's 1.0) x crew_scale(crew) x `mult` (v4: difficulty.count), rounded,
+## at least 1. Enemy HP is the same for every crew size.
+func crew_count(count: int, tank: String, crew: int, mult: float = 1.0) -> int:
+	return maxi(1, roundi(count * enemy_scale(tank) * crew_scale(crew) * mult))
 
 
 ## (v3 solo balance) The factor on the damage enemy and Behemoth shells do to the tank for a crew

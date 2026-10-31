@@ -3,11 +3,12 @@ extends RefCounted
 ## The seats' machines (brief 2.4 Dynamo, Steam, Arc generator; v3 brief "One tank, five seats",
 ## "Combat changes"; owner: rules): the Gun's capacitor bank (dynamo), the Loader's ready rack
 ## (steam: the boiler fills it, Overpressure, the light latch) and the Lights (arc generator:
-## searchlights, stall, the searchlight load). Drive is TankDrive, the main gun and its chambering
-## TankGun, the Secondaries' bow guns TankBow. Every energy is the seat's P_eff (reserve 60 W for an
-## AFK rider, 0 when everyone is AFK); an empty seat (slot -1) has none and does nothing: the bank
-## holds, no shell is loaded, the searchlights are dark. Pure: no random draws; time only through
-## `dt`. v3 retired the Bulwark's gearbox and the gunner's hoist.
+## searchlights, stall, the searchlight load), the Repairs (v4: the hull, per kJ in band). Drive is
+## TankDrive, the main gun and its chambering TankGun, the Secondaries' bow guns TankBow. Every
+## energy is the seat's P_eff (reserve 60 W for an AFK rider, 0 when everyone is AFK); an empty seat
+## (slot -1) has none and does nothing: the bank holds, no shell is loaded, the searchlights are dark.
+## Pure: no random draws; time only through `dt`. v3 retired the Bulwark's gearbox and the gunner's
+## hoist.
 
 
 static func step(
@@ -22,6 +23,8 @@ static func step(
 			_steam(state, aux, st as TankSteamState, ri, dt, events)
 		elif st is TankArcState:
 			_arc(state, aux, st as TankArcState, ri)
+		elif st is TankRepairState:
+			_repair(state, st as TankRepairState, ri, dt)
 
 
 # --- Helpers -------------------------------------------------------------------------------------
@@ -156,6 +159,45 @@ static func _arc(state: TankState, aux: TankAux, st: TankArcState, ri: TankRider
 	st.stalled = in_rescue(ri) and not state.all_afk
 	st.lit = st.slot >= 0 and st.in_band and not st.stalled and not st.reserve and not state.all_afk
 	st.note_fire(state.tick, aux.enemy_in_range and st.slot >= 0)
+
+
+# --- Repairs ---------------------------------------------------------------------------------------
+
+
+## The Repairs seat (v4): its rider's P_eff in band rebuilds tanks.json repair.hp_per_kj HP per kJ x
+## difficulty.repair, only below the hull's maximum, never on reserve, in rescue, in a breakdown or
+## under tow. `duty`, the director's load, is the share of the last 10 s the seat had a hull to mend.
+static func _repair(state: TankState, st: TankRepairState, ri: TankRiderInput, dt: float) -> void:
+	var hull := state.hull
+	var below := hull.hp < hull.hp_max and not hull.out_of_action()
+	st.working = (
+		st.slot >= 0
+		and st.in_band
+		and below
+		and not st.reserve
+		and not state.all_afk
+		and not in_rescue(ri)
+	)
+	st.note_work(state.tick, below and st.slot >= 0)
+	if not st.working:
+		return
+	var c := state.content
+	var hp := (
+		st.p_eff_w
+		* dt
+		/ 1000.0
+		* c.num("tanks", "repair.hp_per_kj", 3.0)
+		* TankDifficulty.mult(state, "repair")
+	)
+	hp = minf(hp, hull.hp_max - hull.hp)
+	hull.hp += hp
+	var r := state.rider_at(st.slot)
+	if r != null:
+		r.repaired_hp += hp
+	st.press_t += hp / c.num("tanks", "repair.patch_hp", 4.0)
+	while st.press_t >= 1.0:
+		st.press_t -= 1.0
+		st.patches += 1
 
 
 # --- Loader (steam) ------------------------------------------------------------------------------
