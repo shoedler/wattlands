@@ -251,7 +251,7 @@ func test_the_bow_guns_tilt_toward_the_nearest_enemy_ahead() -> void:
 	assert_almost_eq(v.bow_elev, TankView.BOW_REST_DEG, 0.01, "at rest without a target")
 	var e := TankEnemyState.new()
 	e.id = 77
-	e.code = TankIds.ENEMY_CODES[TankIds.ENEMY_LIGHT]
+	e.code = TankIds.ENEMY_CODES[TankIds.ENEMY_RECON]
 	e.x_px = s.hull.x_px + float(s.hull.hull_w) + 60.0
 	e.w = 80
 	e.h = 30

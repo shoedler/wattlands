@@ -14,7 +14,13 @@ extends Node2D
 ## TankFiring), Light (additive: the tank's own lights rotated with the hull: room lamps, the
 ## headlight, both searchlights, the position lights, the scene flash, shells and flashes;
 ## TankLightDraw), Front (smoke and the foreground plane), Post (the tilt-shift shading); then the
-## per-frame depth of field (TankDof) over the whole canvas.
+## per-frame depth of field (TankDof) over the near panel.
+##
+## The split screen (v4, SPEC_TANK section 4; TankFarMap holds the rects): the near panel on the left,
+## a riveted seam (TankSeam) with the target's range, the far panel on the right (TankFarPanel, a
+## SubViewport with its own night forest, drawn opaque over the near stage), with the shell screen
+## (TankPip) in its top. Far enemies and the Behemoth live there, in metres; near threats, obstacles and
+## drill wrecks on the near stage, in rules px. A far shell crosses all three (TankShellPath).
 ##
 ## The tank (TankBody, a SubViewport): the base art with the rooms painted live (TankInterior: each
 ## seat's machine turning on its rider's crank, a rider on each manned seat, a bare saddle and a
@@ -91,6 +97,13 @@ const SEARCH_HOLD_S := 2.0
 ## The rooms' backup lighting (the Lights seat unpowered) fades in and out over BACKUP_FADE_S, with
 ## the same hold.
 const BACKUP_FADE_S := 0.5
+## Their shells that miss: rules px of near road per metre the splash event names (40-90 m ahead).
+const SPLASH_PX_PER_M := 2.0
+## An incoming far shell's last stretch: where it enters at the near panel's edge (stage y), where it
+## strikes on the tank (sprite px from the nose, as _cue_hit) and how far ahead it falls when it will miss.
+const INCOMING_Y := 170.0
+const INCOMING_HIT := Vector2(-30, 140)
+const INCOMING_MISS_PX := Vector2(70, 170)
 
 var game: TankGame = null
 var audio: TankAudio = null
@@ -100,6 +113,9 @@ var rig: TankRig = null
 var kit: TankKit = null
 var fx: TankFx = TankFx.new()
 var dof: TankDof = null
+var far: TankFarPanel = null
+var seam: TankSeam = null
+var pip: TankPip = null
 var body: TankBody = null
 var interior: TankInterior = null
 var ground: TankGround = null
@@ -135,7 +151,11 @@ var seat_slots: Dictionary = {}
 var phases: Dictionary = {}
 var cadences: Dictionary = {}
 var powers: Dictionary = {}
-## Enemy id -> Rect2 (stage px) as drawn, its depth lane, and its angle on the relief.
+## The split screen this frame: {near, seam, far, pip: Rect2} on the canvas (TankFarMap.panels).
+var panels: Dictionary = {}
+## A far enemy's id -> Rect2 (canvas px) as drawn in the far panel.
+var far_rects: Dictionary = {}
+## A near enemy's id -> Rect2 (stage px) as drawn, its depth lane, and its angle on the relief.
 var enemy_rects: Dictionary = {}
 var lanes: Dictionary = {}
 var enemy_rots: Dictionary = {}
@@ -162,6 +182,9 @@ var hull_x: float = 0.0
 var _dir_seen: int = 0
 
 var _built: bool = false
+var _far_sprite: Node2D = null
+var _far_v0: float = 560.0
+var _far_g: float = 70.0
 var _layers: Dictionary = {}
 var _last_tick: int = -1
 var _last_render_t: float = -1.0
@@ -256,7 +279,26 @@ func _build() -> void:
 	dof = TankDof.new()
 	dof.enabled = miniature_option()
 	add_child(dof)
+	_build_panels(sd)
 	game.set_meta(TankHudGeom.VIEW_META, self)
+
+
+## The far panel's SubViewport and, over the near stage in this order, its sprite, the seam and the PiP.
+func _build_panels(sd: int) -> void:
+	if game.state.content != null:
+		_far_v0 = game.state.content.num("tanks", "gun.far.v0_mps", _far_v0)
+		_far_g = game.state.content.num("tanks", "gun.far.g_mps2", _far_g)
+	far = TankFarPanel.new(self, sd)
+	add_child(far)
+	_far_sprite = Node2D.new()
+	_far_sprite.name = "FarSprite"
+	_far_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_far_sprite.draw.connect(_draw_far)
+	add_child(_far_sprite)
+	seam = TankSeam.new(self)
+	add_child(seam)
+	pip = TankPip.new(self)
+	add_child(pip)
 
 
 func _exit_tree() -> void:
@@ -323,6 +365,7 @@ func advance(delta: float) -> void:
 	hull_x = history.hull_x_at(rt, state.hull.x_px) if clock.is_set() else state.hull.x_px
 	cam_x = hull_x - float(TankConst.REAR_SCREEN_X)
 	_roam_frame(state)
+	_panels_frame()
 	var cam_px := cam_x * S
 	scroll_px = cam_px - _prev_cam_px if _cam_primed else 0.0
 	if absf(scroll_px) > 200.0:
@@ -342,6 +385,7 @@ func advance(delta: float) -> void:
 	_feed_rounds(state)
 	firing.step(dt, scroll_px)
 	_track_enemies(state)
+	_far_frame(state, dt)
 	_bow_aim(state, dt)
 	_pose(dt)
 	_paint(state)
@@ -350,10 +394,12 @@ func advance(delta: float) -> void:
 	fx.step(dt, scroll_px)
 	_shake_frame()
 	if dof != null:
-		dof.update(canvas, BAND + Vector2(y_off, y_off))
+		dof.update(canvas, BAND + Vector2(y_off, y_off), panels["near"])
 	body.refresh()
 	for l: Node2D in _layers.values():
 		l.queue_redraw()
+	for n: Node2D in [_far_sprite, seam, pip]:
+		n.queue_redraw()
 	if audio != null:
 		audio.update(state, delta, game.ctx.local_peer if game.ctx != null else 0, feed)
 
@@ -362,6 +408,28 @@ func _layout() -> void:
 	canvas = canvas_size()
 	y_off = roundf((canvas.y - BASE.y) * 0.5)
 	tank_pos = Vector2(TANK_AT.x + maxf(canvas.x - BASE.x, 0.0) * WIDE_SHIFT, TANK_AT.y)
+
+
+## The split screen on this frame's canvas (mirrored going west: far on the left).
+func _panels_frame() -> void:
+	panels = TankFarMap.panels(canvas, mirrored)
+	far.layout(canvas, mirrored, y_off)
+	seam.rect = Rect2(panels["seam"])
+	pip.rect = Rect2(panels["pip"])
+	pip.position = pip.rect.position
+
+
+## The far panel's frame, and its enemies' and the Behemoth's rects on the canvas.
+func _far_frame(state: TankState, step_dt: float) -> void:
+	far.frame(state, step_dt)
+	far.age_wrecks(state.t)
+	far_rects.clear()
+	for id: int in far.rects:
+		far_rects[id] = far.canvas_rect(far.rects[id], far_panel_x())
+
+
+func far_panel_x() -> float:
+	return (panels["far"] as Rect2).position.x
 
 
 ## The canvas the view draws on (art px): the override, else the PixelViewport's SubViewport.
@@ -574,8 +642,56 @@ func enemy_x(e: TankEnemyState) -> float:
 	return history.enemy_x_at(e.id, clock.render_t, e.x_px) if clock.is_set() else e.x_px
 
 
-func boss_x(state: TankState) -> float:
-	return history.boss_x_at(clock.render_t, state.boss.x_px) if clock.is_set() else state.boss.x_px
+## A far enemy's range as drawn (m). 0 on a far kind means the old frame's rules: it stands at the
+## panel's near end.
+func far_range_of(e: TankEnemyState) -> float:
+	var r := (
+		history.enemy_range_at(e.id, clock.render_t, e.range_m) if clock.is_set() else e.range_m
+	)
+	return r if r > 0.0 else TankFarMap.RANGE_NEAR_M
+
+
+## The Behemoth's range as drawn (m), as far_range_of().
+func far_boss_range(state: TankState) -> float:
+	var live := state.boss.range_m
+	var r := history.boss_range_at(clock.render_t, live) if clock.is_set() else live
+	return r if r > 0.0 else TankFarMap.RANGE_NEAR_M
+
+
+## A shell's seconds until it lands, as drawn.
+func shell_left(s: TankShellState) -> float:
+	return history.shell_left_at(s.id, clock.render_t, s.left_s) if clock.is_set() else s.left_s
+
+
+func far_v0() -> float:
+	return _far_v0
+
+
+func far_g() -> float:
+	return _far_g
+
+
+## The current target's range (m); 0 without a far target (a barricade, a drill wreck, none).
+func target_range_m(state: TankState) -> float:
+	var id := state.hull.target_id
+	if id == 0:
+		return 0.0
+	if TankBossState.is_part_id(id):
+		return far_boss_range(state) + boss_part_offset(state, TankBossState.part_of(id))
+	var e := state.enemy(id)
+	if e == null or e.is_near():
+		return 0.0
+	return far_range_of(e)
+
+
+## Boss part `part`'s metres behind bogie 0 (enemies.json boss.far.part_offset_m).
+func boss_part_offset(state: TankState, part: int) -> float:
+	if state.content == null:
+		return 0.0
+	var off: Variant = (state.content.boss_def().get("far", {}) as Dictionary).get("part_offset_m")
+	if off is Array and part >= 0 and part < (off as Array).size():
+		return float((off as Array)[part])
+	return 0.0
 
 
 func shell_pos(s: TankShellState) -> Vector2:
@@ -915,6 +1031,8 @@ func apply_cue(state: TankState, kind: String, data: Dictionary) -> void:
 			_cue_hit(state, data)
 		TankEvents.KILL:
 			_cue_kill(state, data)
+		TankEvents.SPLASH:
+			_cue_splash(data)
 		TankEvents.EVADE:
 			if int(data.get("ok", 0)) == 1:
 				play_evade(evade_kind(state, int(data.get("s", -1))))
@@ -951,10 +1069,8 @@ func _cue_shot(state: TankState, data: Dictionary) -> void:
 			var dir := Vector2.RIGHT if e.side < 0 else Vector2.LEFT
 			fx.flash(mz, 18.0, 0.12, Color(1.0, 0.55, 0.25), dir)
 			fx.light_scene(mz, 0.35, Color(1.0, 0.55, 0.25))
-		elif sh == TankIds.SHELL_BOSS_MAIN:
-			var bm := boss_rect(state).position + boss_muzzle()
-			fx.flash(bm - Vector2(4, 0), 40.0, 0.18, Color(1.0, 0.55, 0.25), Vector2.LEFT)
-			fx.light_scene(bm, 0.8, Color(1.0, 0.55, 0.25))
+		else:
+			far.on_fired(state, src, sh)
 
 
 func _cue_hit(state: TankState, data: Dictionary) -> void:
@@ -970,33 +1086,37 @@ func _cue_hit(state: TankState, data: Dictionary) -> void:
 		var r: Rect2 = enemy_rects[id]
 		fx.boom(r.get_center() + Vector2(fx.rng.randf_range(-8, 8), 0), 16.0, 4)
 		return
+	if on == TankEvents.ON_ENEMY and far.rects.has(id):
+		far.on_enemy_hit(id)
+		return
 	if on == TankEvents.ON_BOSS and state.boss.phase != TankIds.BOSS_NONE:
-		var br := boss_rect(state)
-		var part := TankBossState.part_of(id)
-		var at := br.get_center()
-		var meta: Dictionary = kit.enemies.get("behemoth", {}).get("meta", {})
-		if part >= 0 and part < 3:
-			var b: Array = meta.get("bogies_at", [])
-			if part < b.size():
-				at = br.position + br.size * TankKit.vec(b[part])
-		elif part == TankBossState.TURRET_PART:
-			at = br.position + br.size * TankKit.vec(meta.get("turret_at", [0.6, 0.3]))
-		fx.boom(at, 22.0, 6)
+		far.on_boss_hit(TankBossState.part_of(id))
 		return
 	var x := float(data.get("x", 0))
 	if x != 0.0:
 		fx.boom(Vector2(sx(x), GROUND - 18.0), 16.0, 4)
 
 
+## A far shell landed on nothing: ours throws up earth in the far panel at its range; theirs on the road
+## ahead (`r` metres squeezed into the near panel's span).
+func _cue_splash(data: Dictionary) -> void:
+	var r := float(data.get("r", 0))
+	if int(data.get("f", 0)) == 1:
+		far.on_splash(r)
+		return
+	var ahead := minf(r * SPLASH_PX_PER_M, TankConst.NEAR_SPAN_PX * 0.95)
+	var x := minf(
+		sx(hull_x + float(game.state.hull.hull_w) + ahead), TankFarMap.near_end_x(canvas.x) - 6.0
+	)
+	fx.boom(Vector2(x, ground_y(x) - 6.0), 12.0, 4)
+
+
 func _cue_kill(state: TankState, data: Dictionary) -> void:
 	var id := int(data.get("id", 0))
 	if int(data.get("e", 0)) == TankIds.BOSS_CODE:
-		var br := boss_rect(state)
-		for i in 5:
-			fx.boom(br.position + br.size * Vector2(0.2 + 0.15 * i, 0.5 + 0.08 * (i % 2)), 40.0, 8)
-		fx.light_scene(br.get_center(), 1.0, Color(1.0, 0.5, 0.2))
+		far.on_boss_kill()
 		return
-	if not _seen.has(id):
+	if far.on_kill(state, id) or not _seen.has(id):
 		return
 	var w: Dictionary = (_seen[id] as Dictionary).duplicate()
 	w["t"] = state.t
@@ -1017,11 +1137,11 @@ func enemy_kind(e: TankEnemyState) -> String:
 	return k if kit.enemies.has(k) else "medium"
 
 
-## Depth lanes: each live enemy in the lane the rules hold it in (TankEnemyState.lane).
+## Depth lanes on the near stage: each live near threat in the lane the rules hold it in.
 func _lanes(state: TankState) -> Dictionary:
 	var out := {}
 	for e in state.enemies:
-		if e.mode != TankIds.EM_DEAD:
+		if e.mode != TankIds.EM_DEAD and e.is_near():
 			out[e.id] = clampi(e.lane, 0, LANES - 1)
 	return out
 
@@ -1105,16 +1225,6 @@ func enemy_muzzle(e: TankEnemyState, r: Rect2) -> Vector2:
 	if e.side < 0:
 		return Vector2(r.end.x - m.x, r.position.y + m.y)
 	return r.position + m
-
-
-## The Behemoth's sprite (stage px): its left edge where the rules have it, on the road.
-func boss_rect(state: TankState) -> Rect2:
-	var sz: Vector2 = kit.enemies.get("behemoth", {}).get("size", Vector2(583, 297))
-	return Rect2(Vector2(roundf(sx(boss_x(state))), roundf(ROAD_ENEMY_Y + 4.0 - sz.y)), sz)
-
-
-func boss_muzzle() -> Vector2:
-	return kit.enemies.get("behemoth", {}).get("muzzle", Vector2(16, 140))
 
 
 func boss_visible(state: TankState) -> bool:
@@ -1264,13 +1374,19 @@ func _emit(state: TankState, feed: Dictionary, step_dt: float) -> void:
 			fx.spark_burst(at_sprite(dr.get_center()), 4, Color(1, 0.7, 0.3), 40.0, 0.0)
 
 
-## Shells as drawn this frame: [{at, dir, friendly, type}], easing from the art muzzle onto the
-## rules' path over their first 260 px.
+## Shells on the near stage this frame: [{at, dir, friendly, type}]. A near shell eases from the art
+## muzzle onto the rules' path over its first 260 px; a far one shows only on its near stretches
+## (_far_shell_near).
 func shells_drawn(state: TankState) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var alive := {}
 	for s in state.shells:
 		alive[s.id] = true
+		if s.far:
+			var row := _far_shell_near(s)
+			if not row.is_empty():
+				out.append(row)
+			continue
 		var wp := shell_pos(s)
 		var p := Vector2(sx(wp.x), sy(wp.y))
 		var info: Dictionary = _shell_seen.get(s.id, {})
@@ -1297,6 +1413,47 @@ func shells_drawn(state: TankState) -> Array[Dictionary]:
 		if not alive.has(id):
 			_shell_seen.erase(id)
 	return out
+
+
+## A far shell on the near stage (SPEC_TANK 4.4), or {}: ours for its first LEAVE_S, from the muzzle along
+## the barrel off the near edge; theirs for its last ARRIVE_S, from the near edge onto the tank or, on a
+## peer that knows it will miss (will_hit is host only), the road ahead.
+func _far_shell_near(s: TankShellState) -> Dictionary:
+	var edge := TankFarMap.near_end_x(canvas.x)
+	var left := shell_left(s)
+	var from: Vector2
+	var to: Vector2
+	var k: float
+	if s.friendly:
+		k = TankShellPath.leave_k(TankShellPath.flight_s(s.left_s, s.vy, _far_g) - left)
+		if k < 0.0:
+			return {}
+		var info: Dictionary = _shell_seen.get(s.id, {})
+		if info.is_empty():
+			info = {"from": muzzle(), "dir": barrel_vector()}
+			_shell_seen[s.id] = info
+		from = info["from"]
+		var d: Vector2 = info["dir"]
+		to = from + d * (edge + 8.0 - from.x) / maxf(d.x, 0.1)
+	else:
+		k = TankShellPath.arrive_k(left)
+		if k < 0.0:
+			return {}
+		from = Vector2(edge + 8.0, INCOMING_Y)
+		to = _incoming_aim(s)
+	var at := from.lerp(to, k)
+	return {"at": at, "dir": (to - from).normalized(), "friendly": s.friendly, "type": s.type}
+
+
+## Where an incoming far shell strikes on the near stage.
+func _incoming_aim(s: TankShellState) -> Vector2:
+	var client := game.ctx != null and game.ctx.role == Wl.CLIENT
+	if s.will_hit or client:
+		return at_sprite(Vector2(headlight_x(), 0.0) + INCOMING_HIT)
+	var h := TankDraw.hash01(float(s.id) * 0.73)
+	var x := tank_pos.x + headlight_x() + lerpf(INCOMING_MISS_PX.x, INCOMING_MISS_PX.y, h)
+	x = minf(x, TankFarMap.near_end_x(canvas.x) - 6.0)
+	return Vector2(x, ground_y(x) - 2.0)
 
 
 # --- The HUD's geometry (TankHudGeom; canvas art px, 0,0 the canvas' top left) ----------------------
@@ -1389,7 +1546,10 @@ static func _bounds(t: Transform2D, r: Rect2) -> Rect2:
 	return out
 
 
+## An enemy's sprite on the canvas: in the far panel (canvas px already) or on the near stage.
 func hud_enemy_rect(id: int) -> Rect2:
+	if far_rects.has(id):
+		return far_rects[id]
 	if not enemy_rects.has(id):
 		return Rect2()
 	var r: Rect2 = _hud_rect(enemy_rects[id])
@@ -1397,15 +1557,15 @@ func hud_enemy_rect(id: int) -> Rect2:
 
 
 func hud_boss_rect() -> Rect2:
-	if game == null or game.state == null or not boss_visible(game.state):
+	if game == null or game.state == null or far == null or not boss_visible(game.state):
 		return Rect2()
-	var r := _hud_rect(boss_rect(game.state))
-	return Rect2(r.position + Vector2(0, y_off), r.size)
+	return far.canvas_rect(far.boss_box, far_panel_x())
 
 
 func hud_boss_muzzle() -> Vector2:
-	var r := hud_boss_rect()
-	return Vector2.ZERO if r.size == Vector2.ZERO else r.position + boss_muzzle()
+	if hud_boss_rect().size == Vector2.ZERO:
+		return Vector2.ZERO
+	return far.canvas_point(far.boss_muzzle(game.state), far_panel_x())
 
 
 # --- Layers ---------------------------------------------------------------------------------------------
@@ -1437,6 +1597,12 @@ func _draw_tank() -> void:
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
 	TankWorldDraw.draw_turn_dust(ci, self, game.state)
 	firing.draw(ci, self)
+
+
+## The far panel's picture over the near stage, opaque.
+func _draw_far() -> void:
+	if _built and far != null and not panels.is_empty():
+		_far_sprite.draw_texture(far.get_texture(), (panels["far"] as Rect2).position)
 
 
 func _draw_light() -> void:
