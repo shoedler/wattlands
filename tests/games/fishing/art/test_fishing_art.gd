@@ -204,7 +204,7 @@ func test_no_sprite_uses_a_player_colour_and_the_crew_frames_all_differ() -> voi
 	for c in FishingPalette.PLAYERS.slice(1):
 		players[_key(c)] = true
 	for id: String in _built:
-		if id.begins_with("card") or id.begins_with("picker") or id.begins_with("icon"):
+		if id.begins_with("card") or id.begins_with("icon"):
 			continue
 		for f: Image in _built[id]["frames"]:
 			for y in f.get_height():
@@ -286,7 +286,7 @@ func test_every_action_icon_is_11_by_9_with_slot_colour_pixels() -> void:
 
 
 func test_cards_are_opaque_160_by_90_and_the_picker_image_exists() -> void:
-	for id: String in ["picker_card", "card_roam", "card_workout"]:
+	for id: String in ["card_roam", "card_workout"]:
 		var f := _frame(id, 0)
 		assert_eq(f.get_size(), FishingArtGrids.CARD, id)
 		var clear := 0
@@ -298,6 +298,8 @@ func test_cards_are_opaque_160_by_90_and_the_picker_image_exists() -> void:
 		FileAccess.get_file_as_string("res://src/games/fishing/game.json")
 	)
 	assert_true(ResourceLoader.exists(str(m["picker_image"])), "picker_image loads")
+	assert_false(_built.has("picker_card"), "the picker card is a render, not a grid")
+	assert_false(str(m["picker_image"]).begins_with(DIR), "and lives outside the grid set")
 
 
 func test_the_pixel_font_png_is_the_glyph_grid_and_imports_as_a_font() -> void:

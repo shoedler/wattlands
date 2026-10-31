@@ -7,10 +7,12 @@ extends Node
 ## line on the shelf; shallows: waiting over seagrass and sand; abyss: by the basalt where the
 ## floor drops away; grouper: a fight in the deep; edge: stopped by the world's edge; workout:
 ## two boats on the endless workout map, one fighting; cruise: driving at FTP; hump: about 70 %
-## FTP, the stern squatting; plane: on the plane; towed: a tuna towing the boat stern first).
+## FTP, the stern squatting; plane: on the plane; towed: a tuna towing the boat stern first; card:
+## tools/picker_cards' picker card, a giant grouper close under the boat, the other boat away).
 ## `art` sets the art size (the flex PixelViewport's; capture at 3 screen px per art px with
-## --size), `hr_bpm` a heart rate sensor (0: none). The local rider's telemetry comes from its
-## state every frame (HudLayer.update and FishingGame.local_tm), as in a session.
+## --size), `hr_bpm` a heart rate sensor (0: none), `nohud` the view alone. The local rider's
+## telemetry comes from its state every frame (HudLayer.update and FishingGame.local_tm), as in a
+## session.
 
 const FX := preload("res://tests/games/fishing/view/fishing_view_fixtures.gd")
 ## Telemetry time runs this much faster than the preview, so the graphs fill in seconds.
@@ -19,6 +21,8 @@ const TIME_LAPSE := 12.0
 @export var scenario: String = "dock"
 @export var art: Vector2i = Vector2i(640, 360)
 @export var hr_bpm: int = 0
+## The picker card's render: the view alone, no HUD.
+@export var nohud: bool = false
 
 var game: FishingGame = null
 var hud: HudLayer = null
@@ -114,6 +118,9 @@ func _ready() -> void:
 		"grouper":
 			FX.set_fight(me, 14250.0, 8, 30.0, 420.0, 0.55, 0.05)
 			FX.set_wait(other, 14100.0, 6, 14.0, 120.0)
+		"card":
+			FX.set_fight(me, 14150.0, 8, 26.0, 20.0, 0.3, 0.0)
+			FX.set_drive(other, 13150.0, 15.0)
 		"edge":
 			FX.set_menu(me, 17890.0, 3)
 			FX.set_drive(other, 17700.0, 15.0)
@@ -128,6 +135,8 @@ func _ready() -> void:
 	pv.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(pv)
 	pv.set_game_view(game.make_view() as Node2D)
+	if nohud:
+		return
 	hud = HudLayer.new()
 	add_child(hud)
 	hud.build(game.hud_spec(), game.ctx, pv)
@@ -150,4 +159,5 @@ func _process(delta: float) -> void:
 	tm.applied_target_w = roundi(r.applied_target_w)
 	tm.heart_rate_bpm = hr_bpm
 	game.local_tm = tm
-	hud.update(tm, null, null)
+	if hud != null:
+		hud.update(tm, null, null)

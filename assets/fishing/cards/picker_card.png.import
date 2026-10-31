@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bda7ujah6j12h"
-path="res://.godot/imported/picker_card.png-acbb3cab373ad7fe74bc4fc191ebe847.ctex"
+uid="uid://cj1v5v0bopqon"
+path="res://.godot/imported/picker_card.png-3fd58df42d27e440f7769feaf43e2fb7.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/fishing/sprites/picker_card.png"
-dest_files=["res://.godot/imported/picker_card.png-acbb3cab373ad7fe74bc4fc191ebe847.ctex"]
+source_file="res://assets/fishing/cards/picker_card.png"
+dest_files=["res://.godot/imported/picker_card.png-3fd58df42d27e440f7769feaf43e2fb7.ctex"]
 
 [params]
 

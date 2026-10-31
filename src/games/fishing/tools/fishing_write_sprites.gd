@@ -75,7 +75,7 @@ static func art_json(sprites: Dictionary) -> Dictionary:
 			"size": [f.get_width(), f.get_height()],
 			"_source": "hand-authored grid, FishingArtGrids",
 		}
-		if id == "picker_card" or id.begins_with("card_"):
+		if id.begins_with("card_"):
 			entry["background"] = "opaque"
 		list.append(entry)
 	return {
