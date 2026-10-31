@@ -10,7 +10,7 @@ const OUTLINE = hex('#1c1e24');
 /** Cell pixels the view lines sprites up by; kit.json publishes them. */
 export const SMOKE_ORIGIN = [5, 15]; // goes on a chimney's top pixel
 export const CROWD_CELL = [26, 52];
-export const CROWD_HAND_UP = [18, 6]; // the raised near hand in row 1
+export const CROWD_HAND_UP = [18, 10]; // the raised near hand in row 1
 export const CROWD_HAND_DOWN_DY = 17; // the view holds a flag this far under it when the hands are down
 export const FLAG_GRIP = [1, 15]; // goes on a raised hand
 
@@ -249,49 +249,47 @@ export function balloon() {
   return c;
 }
 
-const SKINS = ['#e4b08a', '#c48c62', '#8c5c3c', '#eec6a2'].map(hex);
-const HAIRS = { brown: hex('#46322a'), black: hex('#1e1c20'), sand: hex('#8e7048'), grey: hex('#b4b2ac'), red: hex('#7a4228') };
-const CREASE_DARK = [44, 32, 58];
-const SUNNY = [255, 238, 196];
-// The air between the crowd and the riders: pale and cool. The crowd's every colour goes this far into it,
-// so nobody on the verge comes near a rider's value range or a rider's dark edge.
-const CROWD_AIR = [172, 184, 190];
-const CROWD_AIR_MIX = 0.4;
-const CROWD_EDGE = hex('#5e6672');
-const inAir = (c) => mix(c, CROWD_AIR, CROWD_AIR_MIX);
+// The crowd stands on the nearest plane, so it is as solid as the verge it stands on: opaque, warm mid values
+// keyed to the grass, no outline and no faces, a narrow value range, and nothing as dark, as bright or as loud
+// as a rider's kit. The view tints it with the riders' light.
+const SKINS = ['#cc9a78', '#b08058', '#80563c', '#d4aa8a'].map(hex);
+const HAIRS = { brown: hex('#5c4232'), black: hex('#403639'), sand: hex('#94784a'), grey: hex('#a4a29a'), red: hex('#824a2e') };
+const CREASE_DARK = [58, 44, 62];
+const SUNNY = [255, 232, 186];
+const GROUND_SHADE = [36, 48, 28, 120];
+const TUFT = [hex('#3e5e2c'), hex('#577a36')];
+const SHOES = [hex('#463e38'), hex('#544a42'), hex('#6c6256')];
 
-/** Three shades: the shadow leans violet, the light warm. Quieter than the riders' kit, as befits a crowd. */
+/** Three shades: the shadow leans violet, the light warm. A step quieter than the riders' kit. */
 const clothRamp = (s) => {
-  const c = mix(hex(s), [122, 120, 118], 0.22);
-  return [mix(c, CREASE_DARK, 0.5), c, mix(c, SUNNY, 0.34)];
+  const c = mix(hex(s), [118, 112, 100], 0.16);
+  return [mix(c, CREASE_DARK, 0.36), c, mix(c, SUNNY, 0.2)];
 };
-const skinRamp = (c) => [mix(c, [120, 50, 62], 0.45), c, mix(c, SUNNY, 0.3)];
+const skinRamp = (c) => [mix(c, [120, 56, 60], 0.3), c, mix(c, SUNNY, 0.14)];
 
-// The cheering 8: each column is a small group, back figures first. `a` marks the figure whose near hand
-// is at CROWD_HAND_UP in row 1, and CROWD_HAND_DOWN_DY under it in row 0: the view gives that hand a flag.
-// x: feet in the cell. lift: stands that far behind the next one. f: looks left (-1, toward the riders
-// coming), ahead (0), right (1). arms: [near, far] by row, hands down then hands up.
+// The cheering 8. The view stands them in clumps a few px apart in depth, so each cell is one person or a pair.
+// `a` marks the figure whose near hand is at CROWD_HAND_UP in row 1, and CROWD_HAND_DOWN_DY under it in row 0:
+// the view gives that hand a flag. x: feet in the cell. lift: stands that far behind the next one. f: looks left
+// (-1, toward the riders coming), ahead (0), right (1). arms: [near, far] by row, hands down then hands up.
+// Heights stop short of the nearest lane's helmets, whatever the depth, and vary by a head.
 const GROUPS = [
-  [{ a: true, x: 10, lift: 0, h: 44, f: -1, skin: 0, top: 'tee', shirt: '#a85a44', legs: '#b0a07c', hair: 'cap', tint: '#3c5a7c', hairCol: 'brown', far: ['hang', 'clap'], stance: 1 }],
+  [{ a: true, x: 10, lift: 0, h: 34, f: -1, skin: 0, top: 'tee', shirt: '#a4563c', legs: '#8e8258', hair: 'cap', tint: '#4e6c84', hairCol: 'brown', far: ['hang', 'clap'], stance: 1 }],
   [
-    { x: 3, lift: 2, h: 40, f: 0, skin: 3, top: 'tee', shirt: '#b49a58', legs: '#c8c0a8', hair: 'long', hairCol: 'red', near: ['hang', 'hang'], far: ['hang', 'hang'], top2: 'skirt' },
-    { a: true, x: 11, lift: 0, h: 45, f: -1, skin: 1, top: 'jacket', shirt: '#3e6a8c', inner: '#c8c4b4', legs: '#5c7490', hair: 'short', hairCol: 'black', far: ['hip', 'up'], stance: 4 },
+    { x: 4, lift: 1, h: 30, f: 0, skin: 3, top: 'tee', shirt: '#b48a3e', legs: '#9a9078', hair: 'long', hairCol: 'red', near: ['hang', 'hang'], far: ['hang', 'hang'], top2: 'skirt' },
+    { a: true, x: 12, lift: 0, h: 35, f: -1, skin: 1, top: 'jacket', shirt: '#4e6c84', inner: '#b8ae94', legs: '#4c4640', hair: 'short', hairCol: 'black', far: ['hip', 'up'], stance: 3 },
   ],
   [
-    { a: true, x: 8, lift: 1, h: 43, f: -1, skin: 2, top: 'stripe', shirt: '#4a7c6a', inner: '#d8d4c4', legs: '#7c5c4c', hair: 'short', hairCol: 'black', far: ['hang', 'up'], stance: 2 },
-    { x: 20, lift: 0, h: 26, f: -1, skin: 2, top: 'tee', shirt: '#c07840', legs: '#3c5a7c', hair: 'short', hairCol: 'black', near: ['hang', 'up'], far: ['hang', 'up'], shorts: true },
+    { a: true, x: 8, lift: 1, h: 35, f: -1, skin: 2, top: 'stripe', shirt: '#47776c', inner: '#c4b48c', legs: '#6c5444', hair: 'short', hairCol: 'black', far: ['hang', 'up'], stance: 2 },
+    { x: 20, lift: 0, h: 22, f: -1, skin: 2, top: 'tee', shirt: '#b0706a', legs: '#4a5a74', hair: 'short', hairCol: 'black', near: ['hang', 'up'], far: ['hang', 'up'], shorts: true },
   ],
-  [{ a: true, x: 7, lift: 3, h: 39, f: 0, skin: 3, top: 'jacket', shirt: '#7c7468', inner: '#a8a498', legs: '#8c8878', hair: 'bald', hairCol: 'grey', far: ['hang', 'hang'], stance: 1 }],
+  [{ a: true, x: 10, lift: 2, h: 33, f: 0, skin: 3, top: 'jacket', shirt: '#77793f', inner: '#a89c7c', legs: '#6e6650', hair: 'bald', hairCol: 'grey', far: ['hang', 'hang'], stance: 1 }],
+  [{ a: true, x: 11, lift: 1, h: 35, f: -1, skin: 0, top: 'tee', shirt: '#9c5a30', legs: '#4a5a74', hair: 'short', hairCol: 'brown', far: ['hip', 'up'], shorts: true, stance: 3 }],
+  [{ a: true, x: 12, lift: 0, h: 32, f: -1, skin: 3, top: 'dress', shirt: '#b0746a', legs: '#b0746a', hair: 'sunhat', tint: '#c4b48c', hairCol: 'sand', far: ['hip', 'clap'] }],
   [
-    { x: 2, lift: 3, h: 42, f: 1, skin: 0, top: 'tee', shirt: '#6c5a84', legs: '#6c7050', hair: 'short', hairCol: 'sand', near: ['cross', 'clap'], far: ['cross', 'clap'], stance: 3 },
-    { a: true, x: 10, lift: 1, h: 46, f: -1, skin: 0, top: 'tee', shirt: '#9c4a48', legs: '#4e5c74', hair: 'short', hairCol: 'brown', far: ['hip', 'up'], shorts: true, stance: 5 },
+    { a: true, x: 7, lift: 1, h: 35, f: -1, skin: 1, top: 'tee', shirt: '#77566c', legs: '#9a8c6c', hair: 'short', hairCol: 'grey', far: ['hang', 'up'], stance: 2 },
+    { x: 17, lift: 0, h: 29, f: -1, skin: 0, top: 'jacket', shirt: '#8c7c44', inner: '#c0b490', legs: '#5c4c40', hair: 'long', hairCol: 'black', near: ['hip', 'clap'], far: ['hip', 'clap'], stance: 1 },
   ],
-  [{ a: true, x: 12, lift: 2, h: 38, f: -1, skin: 3, top: 'dress', shirt: '#b4705c', legs: '#b4705c', hair: 'sunhat', tint: '#d0c49c', hairCol: 'sand', far: ['hip', 'clap'] }],
-  [
-    { a: true, x: 6, lift: 2, h: 46, f: -1, skin: 1, top: 'tee', shirt: '#4c7490', legs: '#b8a888', hair: 'short', hairCol: 'grey', far: ['hang', 'up'], stance: 2 },
-    { x: 16, lift: 0, h: 34, f: -1, skin: 0, top: 'jacket', shirt: '#8c8c50', inner: '#d4d0bc', legs: '#70604c', hair: 'long', hairCol: 'black', near: ['hip', 'clap'], far: ['hip', 'clap'], stance: 1 },
-  ],
-  [{ a: true, x: 9, lift: 4, h: 42, f: 0, skin: 0, top: 'stripe', shirt: '#5c6c9c', inner: '#c8ccd4', legs: '#60708c', hair: 'beanie', tint: '#a8503c', hairCol: 'brown', far: ['hang', 'clap'], shorts: true, stance: 4 }],
+  [{ a: true, x: 9, lift: 2, h: 34, f: 0, skin: 0, top: 'stripe', shirt: '#4a6484', inner: '#bcb49c', legs: '#6c6a50', hair: 'beanie', tint: '#a4563c', hairCol: 'brown', far: ['hang', 'clap'], shorts: true, stance: 3 }],
 ];
 
 /** Paints a capsule from a to b, shaded from the right: the crowd's sun is the world's. */
@@ -342,14 +340,12 @@ function person(c, spec, row) {
   const inner = clothRamp(spec.inner ?? spec.shirt);
   const legs = clothRamp(spec.legs);
   const hairCol = HAIRS[spec.hairCol];
-  const shoe = [hex('#16161c'), hex('#2c2c34'), hex('#5c5c66')];
-  const mask = new Map();
+  const shoe = SHOES;
   const put = (px, py, col) => {
     const xi = Math.round(px);
     const yi = Math.round(py);
     if (xi < 0 || yi < 0 || xi >= c.w || yi >= c.h) return;
     c.px(xi, yi, col);
-    mask.set(yi * c.w + xi, true);
   };
   const top = foot - h;
   const headR = Math.max(h * 0.078, 2.4);
@@ -360,7 +356,7 @@ function person(c, spec, row) {
   const kneeY = top + h * 0.74;
   const cx = x;
   const turn = f * 1; // the chest and the head sit a pixel toward where the figure looks
-  const shoulderW = h * 0.1;
+  const shoulderW = h * 0.115;
   const nearShoulder = [cx - (f || -1) * shoulderW, shoulderY + 1];
   const farShoulder = [cx + (f || -1) * shoulderW * 0.75 + turn, shoulderY + 1];
   const side = nearShoulder[0] > cx ? 1 : -1;
@@ -374,8 +370,8 @@ function person(c, spec, row) {
     const keep = (q) => [Math.min(Math.max(q[0], 2), CROWD_CELL[0] - 3), q[1]];
     const hand = keep(hand0);
     const elbow = keep(elbow0);
-    limb(put, sh, elbow, 1.7, 1.3, (s, t) => (t < sleeveEnd ? shadeOf(ramp, s) : shadeOf(skin, s)));
-    limb(put, elbow, hand, 1.3, 1.0, (s) => shadeOf(skin, s));
+    limb(put, sh, elbow, 1.6, 1.1, (s, t) => (t < sleeveEnd ? shadeOf(ramp, s) : shadeOf(skin, s)));
+    limb(put, elbow, hand, 1.0, 0.8, (s) => shadeOf(skin, s));
     put(hand[0], hand[1], skin[1]);
     put(hand[0], hand[1] - 1, skin[2]);
   };
@@ -393,8 +389,8 @@ function person(c, spec, row) {
     const hip = [cx + dx, hipY];
     const knee = [cx + (dx + footDx) * 0.55, kneeY];
     const ankle = [cx + footDx, foot - 2];
-    limb(put, hip, knee, h * 0.05, h * 0.036, (s) => shadeOf(ramp, s));
-    limb(put, knee, ankle, h * 0.036, h * 0.026, (s, t) => (t < (legEnd - 0.45) / 0.55 ? shadeOf(ramp, s) : shadeOf(bareLeg ? skin : ramp, s)));
+    limb(put, hip, knee, h * 0.058, h * 0.044, (s) => shadeOf(ramp, s));
+    limb(put, knee, ankle, h * 0.044, h * 0.032, (s, t) => (t < (legEnd - 0.45) / 0.55 ? shadeOf(ramp, s) : shadeOf(bareLeg ? skin : ramp, s)));
     const dir = f || -1;
     for (let i = -1; i <= 2; i++) put(cx + footDx + dir * i, foot, shoe[1]);
     for (let i = -1; i <= 1; i++) put(cx + footDx + dir * i, foot - 1, shoe[i === 0 ? 2 : 1]);
@@ -439,16 +435,6 @@ function person(c, spec, row) {
   const hx = Math.round(headX);
   const hy = Math.round(headY);
   const rr = Math.round(headR);
-  // The face turned the way the figure looks: an eye, a nose past the cheek, a mouth open on the cheer.
-  const eyeDark = hex('#26202a');
-  if (h > 34) {
-    put(hx + (f || -1) * (rr - 2), hy - 1, eyeDark);
-    if (f === 0) put(hx - (rr - 2) + 2 * (rr - 2), hy - 1, eyeDark);
-    if (f !== 0) put(hx + f * (rr + 0), hy, skin[1]);
-    put(hx + (f || 0) * (rr - 2), hy + 1 + (row === 1 ? 0 : 0), row === 1 ? hex('#6c2c30') : skin[0]);
-  } else {
-    put(hx + (f || -1) * (rr - 1), hy, eyeDark);
-  }
   // Hair and hats, from behind the face.
   const back = -(f || -1);
   const hairLit = mix(hairCol, SUNNY, 0.25);
@@ -491,22 +477,19 @@ function person(c, spec, row) {
   // The flag hand: the upper arm hangs and the forearm comes forward, or the forearm stands straight up.
   const flagElbow = row === 0 ? [nearShoulder[0] + 1.5, nearShoulder[1] + armLen] : [nearHand[0] + 1, nearShoulder[1] + 2];
   const elbow = spec.a ? flagElbow : ik(nearShoulder, nearHand, armLen, armLen, side);
-  limb(put, nearShoulder, elbow, 2.0, 1.6, () => shirt[0]);
-  limb(put, elbow, nearHand, 1.6, 1.3, () => skin[0]);
   arm(nearShoulder, nearHand, elbow, sleeveRamp, spec.top === 'jacket' ? 1 : 0.55);
 
-  // The figure's dark edge, to the left of and under it, drawn over whoever stands behind.
-  const out = [];
-  for (let y = 0; y < c.h; y++) {
-    for (let px = 0; px < c.w; px++) {
-      if (mask.has(y * c.w + px)) continue;
-      if ((px + 1 < c.w && mask.has(y * c.w + px + 1)) || (y > 0 && mask.has((y - 1) * c.w + px))) out.push([px, y]);
-    }
+  // A tuft or two of the verge in front of the shoes, so the figure stands in the grass.
+  for (const [dx, tall] of [
+    [side * -(stance + 2), 2],
+    [side * stance + 2, 1],
+    [0, 1],
+  ]) {
+    for (let j = 0; j <= tall; j++) put(cx + dx, foot + 1 - j, TUFT[j === 0 ? 0 : 1]);
   }
-  for (const [px, y] of out) c.px(px, y, CROWD_EDGE);
 }
 
-/** 26 x 56, 8 small groups across; row 0 hands down, row 1 hands up. */
+/** 26 x 52, 8 cells across; row 0 hands down, row 1 hands up. */
 export function crowd() {
   const [w, h] = CROWD_CELL;
   const c = new Canvas(w * GROUPS.length, h * 2);
@@ -516,17 +499,9 @@ export function crowd() {
       // A soft patch of trodden shade under the feet.
       for (const spec of group) {
         const fy = h - 1 - spec.lift;
-        for (let i = -6; i <= 6; i++) if (i % 2 === 0 || Math.abs(i) < 3) cell.px(spec.x + i, fy, [70, 84, 80, 80]);
+        for (let i = -6; i <= 6; i++) if (i % 2 === 0 || Math.abs(i) < 4) cell.px(spec.x + i, fy, GROUND_SHADE);
       }
       for (const spec of group) person(cell, spec, row);
-      // A whole step back in the air: only the riders keep full contrast.
-      for (let i = 0; i < cell.data.length; i += 4) {
-        if (cell.data[i + 3] !== 255) continue;
-        const u = inAir([cell.data[i], cell.data[i + 1], cell.data[i + 2]]);
-        cell.data[i] = u[0];
-        cell.data[i + 1] = u[1];
-        cell.data[i + 2] = u[2];
-      }
       c.blit(cell, s * w, row * h);
     }
   });
@@ -536,12 +511,13 @@ export function crowd() {
 /** 12 x 16, 4 frames: a generic striped hand flag, waving. */
 export function flag() {
   const c = new Canvas(48, 16);
-  // In the same air as the crowd that waves it, and small: no rider's pennant is ever mistaken for one.
-  const stripes = ['#ecece4', '#8094a8'].map((u) => inAir(hex(u)));
-  const shade = ['#bcbcb8', '#667a90'].map((u) => inAir(hex(u)));
+  // Cloth in the crowd's own muted colours, and small: no rider's pennant is ever mistaken for one.
+  const stripes = ['#cec6ac', '#68809a'].map(hex);
+  const shade = ['#aca68e', '#546a84'].map(hex);
+  const staff = hex('#74644a');
   for (let f = 0; f < 4; f++) {
     const x = f * 12;
-    c.rect(x + FLAG_GRIP[0], 3, 1, FLAG_GRIP[1] - 2, CROWD_EDGE);
+    c.rect(x + FLAG_GRIP[0], 3, 1, FLAG_GRIP[1] - 2, staff);
     for (let i = 0; i < 7; i++) {
       const u = ((i + f * 2) * Math.PI) / 4;
       const wave = Math.round(Math.sin(u));

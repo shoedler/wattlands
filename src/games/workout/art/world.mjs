@@ -195,77 +195,74 @@ function majorPeaks(w, topOf, minProminence, minGap) {
 }
 
 /**
- * The far range as a few big masses lit from the right. Each major peak sends one spine down the mountain,
- * and spurs branch off the spine and fan out. East of a ridgeline the rock looks at the sun; west of it, it
- * is in shade, darkest against the spine. Light and shade change at one angular edge per face: large planes,
- * tied to the crests, in the two middle tones, so the farthest land stays quiet.
+ * The far range as a few big masses lit from the right. Each major peak sends one ridgeline down the mountain,
+ * spurs fork off it and fall away along the slope. East of a ridgeline the rock looks at the sun, west of it the
+ * rock is in shade. Every face is a wedge that opens from nothing where its ridge starts, so no edge is ever cut
+ * across a row, and each edge runs with the fall of the slope. Only the top of a main ridge catches the light:
+ * a short broken line that parts the lit face from the shaded one.
  */
 function ridgeFaces(c, topOf, seed) {
   const rnd = mulberry32(seed ^ 0x37);
   const w = c.w;
   const ribs = [];
-  const rib = (x0, y0, spread, major, parent = null) => {
+  const rib = (x0, y0, spread, litGrow, shadeGrow) => {
     const key = ribs.length + 1;
-    const r = { x0, y0, spread, major, parent, dead: false };
-    r.at = (y) => x0 + spread * (y - y0) + zigzag(y, key, 3 + rnd.fixed, 11, seed) - zigzag(y0, key, 3 + rnd.fixed, 11, seed);
+    // A face's edge kinks as rock does, and grows in from nothing where the ridge starts.
+    const kink = (y, salt, amp, step) => zigzag(y, key + salt, amp, step, seed) * Math.min((y - y0) / 14, 1);
+    const r = {
+      y0,
+      at: (y) => x0 + spread * (y - y0) + zigzag(y, key, 4, 15, seed) - zigzag(y0, key, 4, 15, seed),
+      lit: (y) => Math.max((y - y0) * litGrow + kink(y, 200, 8, 13), 0),
+      shade: (y) => Math.max((y - y0) * shadeGrow + kink(y, 400, 5, 11), 0),
+    };
     ribs.push(r);
     return r;
   };
-  rnd.fixed = 2.5;
   const peaks = majorPeaks(w, topOf, 9, 76);
   peaks.forEach((p, i) => {
     const top = topOf(p);
-    const spine = rib(p, top, (rnd() - 0.5) * 0.36, true);
-    for (const side of [-1, 1]) {
-      // One spur each way off the spine, and sometimes a second, lower down.
-      const y1 = top + 9 + rnd() * 16;
-      rib(spine.at(y1), y1, side * (0.75 + rnd() * 0.65), false, spine);
-      if (rnd() < 0.45) {
-        const y2 = y1 + 12 + rnd() * 14;
-        rib(spine.at(y2), y2, side * (0.55 + rnd() * 0.5), false, spine);
-      }
-    }
+    const spine = rib(p, top, (rnd() - 0.5) * 0.5, 1.05 + rnd() * 0.6, 0);
+    spine.major = true;
+    // At most one spur each way off the ridge. West of the ridge, a lit face opens on the shaded side; east of it,
+    // a shaded fold cuts into the lit face.
+    const y1 = top + 12 + rnd() * 18;
+    if (rnd() < 0.8) rib(spine.at(y1), y1, -(0.8 + rnd() * 0.6), 0.4 + rnd() * 0.5, 0);
+    const y2 = top + 16 + rnd() * 20;
+    if (rnd() < 0.8) rib(spine.at(y2), y2, 0.75 + rnd() * 0.6, 0.9 + rnd() * 0.5, 0.45 + rnd() * 0.45);
     // A long saddle between two peaks gets one shoulder of its own.
     const next = peaks[(i + 1) % peaks.length];
     const gap = (next - p + w) % w || w;
     if (gap > 170) {
       const sx = (p + gap * (0.42 + rnd() * 0.16)) % w;
-      rib(sx, topOf(Math.round(sx)) + 1, 0.5 + rnd() * 0.5, false);
+      rib(sx, topOf(Math.round(sx)) + 1, 0.5 + rnd() * 0.5, 0.9 + rnd() * 0.6, 0);
     }
   });
+  // Oldest first: a spur's faces lie on top of the ridge it forks from.
+  ribs.sort((a, b) => a.y0 - b.y0);
+  const paint = (x, y, tone) => {
+    const wx = ((x % w) + w) % w;
+    if (y >= topOf(wx)) c.px(wx, y, ix(P.RIDGE + tone));
+  };
   for (let y = 0; y < c.h; y++) {
-    const live = [];
+    for (let x = 0; x < w; x++) {
+      if (y >= topOf(x)) c.px(x, y, ix(P.RIDGE + 1));
+    }
     for (const r of ribs) {
-      if (y >= r.y0 && !r.dead) live.push({ x: ((r.at(y) % w) + w) % w, rib: r });
-    }
-    live.sort((a, b) => a.x - b.x);
-    // Two ridgelines that run together end there, the lesser one for good: they never cross.
-    const row = [];
-    for (const r of live) {
-      const prev = row[row.length - 1];
-      const fresh = y - r.rib.y0 < 9 || (prev && y - prev.rib.y0 < 9);
-      if (prev && !fresh && r.x - prev.x <= 5) {
-        const lesser = r.rib.major && !prev.rib.major ? prev : prev.rib.major && !r.rib.major ? r : r.rib.y0 > prev.rib.y0 ? r : prev;
-        lesser.rib.dead = true;
-        if (lesser === prev) row[row.length - 1] = r;
-      } else {
-        row.push(r);
-      }
-    }
-    if (row.length === 0) continue;
-    for (let i = 0; i < row.length; i++) {
-      const a = row[i];
-      const b = row[(i + 1) % row.length];
-      const span = ((b.x - a.x + w) % w) || w;
-      const edge = span * (0.46 + 0.22 * hash2(Math.round(a.rib.x0), 11, seed)) + zigzag(y, Math.round(a.rib.x0) + 7, 5, 9, seed);
-      const deep = b.rib.major ? clamp(2 + (y - b.rib.y0) * 0.14 + zigzag(y, Math.round(b.rib.x0) + 3, 2, 7, seed), 0, span * 0.3) : 0;
-      for (let k = 0; k < Math.ceil(span); k++) {
-        const px = Math.round(a.x) + k;
-        const wx = ((px % w) + w) % w;
-        if (y < topOf(wx)) continue;
-        // The spine's own crest line, the lit plane behind it, the plane in shade, the deep edge against the next spine.
-        const index = a.rib.major && k < 1 ? 3 : k < edge ? 2 : span - k <= deep ? 0 : 1;
-        c.px(wx, y, ix(P.RIDGE + index));
+      if (y < r.y0) continue;
+      const x = Math.round(r.at(y));
+      const lit = Math.round(r.lit(y));
+      const shade = Math.round(r.shade(y));
+      for (let k = 0; k < lit; k++) paint(x + k, y, 2);
+      for (let k = 1; k <= shade; k++) paint(x - k, y, 1);
+      const d = y - r.y0;
+      if (!r.major) continue;
+      // Hard against a main ridge the shaded face goes a tone darker, for a little way down it.
+      const deep = Math.round(Math.min(d, 30 - d) * 0.12 + zigzag(y, Math.round(r.y0) + 9, 1.4, 7, seed) * 0.8);
+      for (let k = 1; k <= deep; k++) paint(x - k, y, 0);
+      // The short ridgeline: broken, a pixel or two wide, for the first rows under a main peak only.
+      if (d < 6 + 8 * hash2(Math.round(r.y0), 1, seed + 3) && hash2(d, r.y0 | 0, seed + 4) < 0.85 - d * 0.04) {
+        paint(x, y, 3);
+        if (hash2(d, (r.y0 | 0) + 1, seed + 5) < 0.3) paint(x - 1, y, 3);
       }
     }
   }
@@ -343,29 +340,29 @@ function fieldPixel(type, x, y, depth, tone, c, seed) {
 }
 
 /**
- * A bank of mist lying on a base line: `baseOf(x)` is its floor. Mist settles level, so its top stays nearly
- * flat, swelling and thinning in slow waves, and falls away fast at both ends, where it breaks into separate
- * shreds. Top and floor both wander, so it has no straight edge. The tone a step lighter is the band along its
- * top, where the light catches it. `over`: it lies on land (ground mist) rather than only on empty pixels
- * (hanging mist, which burns off through LUT alpha without leaving holes).
+ * A pool of mist lying on a base line: `baseOf(x)` is its middle. Mist settles level, so it stays nearly flat,
+ * swelling and thinning in slow waves, and thins to nothing at both ends: no end is ever cut off. Top and floor
+ * both wander, so it has no straight edge. The tone a step lighter is the band along its top, where the light
+ * catches it. `over`: it lies on land (ground mist) rather than only on empty pixels (hanging mist, which burns
+ * off through LUT alpha without leaving holes).
  */
 function mistBank(c, cx, len, thick, baseOf, index, seed, over = false) {
   const x0 = Math.round(cx - len / 2);
   const rnd = mulberry32(seed);
-  const [p0, p1, p2] = [rnd() * 6.28, rnd() * 6.28, rnd() * 6.28];
-  const [f0, f1, f2] = [0.05 + rnd() * 0.05, 0.13 + rnd() * 0.1, 0.09 + rnd() * 0.07];
+  const [p0, p1, p2, p3] = [rnd() * 6.28, rnd() * 6.28, rnd() * 6.28, rnd() * 6.28];
+  const [f0, f1, f2, f3] = [0.05 + rnd() * 0.05, 0.13 + rnd() * 0.1, 0.09 + rnd() * 0.07, 0.21 + rnd() * 0.1];
   for (let k = 0; k <= len; k++) {
     const t = k / len;
-    const taper = Math.sin(Math.PI * t) ** 0.45;
-    // Shreds toward the ends: whole gaps, longer the further out.
-    if (hash2((x0 + k) >> 3, 5, seed) > taper * taper * taper * 2.4) continue;
-    const swell = 0.74 + 0.16 * Math.sin(k * f0 + p0) + 0.1 * Math.sin(k * f1 + p1);
+    const taper = Math.sin(Math.PI * t) ** 1.15;
+    // Waves along it, deep enough that a long pool parts into shreds of its own.
+    const swell = 0.62 + 0.3 * Math.sin(k * f0 + p0) + 0.2 * Math.sin(k * f1 + p1);
     const h = thick * taper * swell;
-    if (h < 0.8) continue;
+    if (h < 0.6) continue;
     const px = x0 + k;
     const wx = ((px % c.w) + c.w) % c.w;
-    const floor = Math.round(baseOf(wx) + 1.1 * Math.sin(k * f2 + p2));
-    const top = Math.round(floor - h);
+    const mid = baseOf(wx) + 1.1 * Math.sin(k * f2 + p2);
+    const top = Math.round(mid - h * 0.72 + 0.7 * Math.sin(k * f3 + p3));
+    const floor = Math.round(mid + h * 0.28);
     for (let y = top; y <= floor; y++) {
       if (y < 0 || y >= c.h) continue;
       if (!over && c.get(wx, y)[3] !== 0) continue;
@@ -710,12 +707,12 @@ export function nearTreesPlane(seed) {
   for (let i = 0; i < 26; i++) {
     const gx = rndMist() * c.w;
     const lift = 2 + rndMist() * 3;
-    mistBank(c, gx, 30 + rndMist() * 110, 3 + rndMist() * 4, (x) => land(x) + lift, P.MIST_GROUND, seed + 700 + i * 7, true);
+    mistBank(c, gx, 24 + rndMist() * 70, 2.5 + rndMist() * 3, (x) => land(x) + lift, P.MIST_GROUND, seed + 700 + i * 7, true);
   }
   // Lower down, a few thin banks along the hedge in the field.
   for (let i = 0; i < 8; i++) {
     const gx = rndMist() * c.w;
-    mistBank(c, gx, 40 + rndMist() * 80, 2.5 + rndMist() * 2.5, (x) => 131 + 3 * f(x), P.MIST_GROUND, seed + 900 + i * 7, true);
+    mistBank(c, gx, 30 + rndMist() * 50, 2 + rndMist() * 2, (x) => 131 + 3 * f(x), P.MIST_GROUND, seed + 900 + i * 7, true);
   }
   return c;
 }
@@ -916,18 +913,35 @@ export function vergeNearPlane(seed, f) {
   return c;
 }
 
-/** A worn patch of earth on the bottom rows: an uneven outline, lumps along its top, grass over both ends. */
+/**
+ * A worn patch of earth low on the bank: a few small blobs run together, each its own size, so no two patches
+ * share a shape and none has a flat edge. The light catches only what faces up.
+ */
 function earthPatch(c, cx, w, hMax, seed) {
-  const x0 = Math.round(cx - w / 2);
-  for (let k = 0; k < w; k++) {
-    const u = (k + 0.5) / w;
-    const lumps = 0.4 + 0.45 * hash2(k >> 2, 3, seed) + 0.15 * hash2(k, 4, seed);
-    const h = Math.round(hMax * Math.sin(Math.PI * u) ** 0.6 * lumps);
-    for (let j = 0; j < h; j++) {
-      const top = j === h - 1;
-      const stone = hash2(x0 + k, j, seed + 1) < 0.1;
-      c.px(x0 + k, c.h - 1 - j, ix(P.EARTH + (stone ? 4 : top ? 3 : hash2(x0 + k >> 1, j, seed + 2) < 0.35 ? 0 : 1)));
+  const rnd = mulberry32(seed);
+  const blobs = 2 + Math.floor(rnd() * 3);
+  const painted = new Map();
+  for (let b = 0; b < blobs; b++) {
+    const bx = cx + (rnd() - 0.5) * w * 0.8;
+    const rx = 2.5 + rnd() * (w * 0.28);
+    const ry = 0.9 + rnd() * (hMax * 0.42);
+    const by = c.h - 1 - ry - rnd() * Math.max(hMax - 2 * ry, 0);
+    for (let j = Math.ceil(-ry) - 1; j <= Math.ceil(ry) + 1; j++) {
+      for (let i = Math.ceil(-rx) - 1; i <= Math.ceil(rx) + 1; i++) {
+        const x = Math.round(bx) + i;
+        const y = Math.round(by) + j;
+        if ((i * i) / (rx * rx) + (j * j) / (ry * ry) > 1 - 0.35 * hash2(x, y, seed)) continue;
+        if (y >= c.h) continue;
+        painted.set(y * c.w + (((x % c.w) + c.w) % c.w), true);
+      }
     }
+  }
+  for (const key of painted.keys()) {
+    const y = Math.floor(key / c.w);
+    const x = key - y * c.w;
+    const faceUp = !painted.has((y - 1) * c.w + x);
+    const stone = hash2(x, y, seed + 1) < 0.07;
+    c.px(x, y, ix(P.EARTH + (stone ? 4 : faceUp ? 3 : hash2(x >> 1, y, seed + 2) < 0.35 ? 0 : 1)));
   }
 }
 
@@ -967,24 +981,24 @@ export function foregroundPlane(seed, f) {
     if (clear(cx, w)) clump(cx, w, tall);
   }
   // Worn earth among the clumps, each patch its own shape, with grass growing over its edges.
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 16; i++) {
     const cx = Math.floor(rnd() * c.w);
-    const w = 18 + Math.floor(rnd() * 34);
-    const hMax = 4 + Math.floor(rnd() * 3);
+    const w = 7 + Math.floor(rnd() * rnd() * 26);
+    const hMax = 2 + Math.floor(rnd() * 4);
     const edgeTall = 3 + Math.floor(rnd() * 3);
     if (!clear(cx, w + 12)) continue;
     earthPatch(c, cx, w, hMax, seed + i * 31);
-    clump(cx - w / 2, 8, edgeTall);
-    clump(cx + w / 2, 10, edgeTall + 1);
-    clump(cx + w * 0.1, 5, edgeTall - 1);
+    clump(cx - w / 2 + rnd() * 3, 5 + Math.floor(rnd() * 5), edgeTall);
+    clump(cx + w / 2 - rnd() * 3, 5 + Math.floor(rnd() * 6), edgeTall + 1);
+    if (w > 14) clump(cx + (rnd() - 0.5) * w * 0.5, 4, edgeTall - 1);
   }
   // Small tufts everywhere, and stones among them.
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 90; i++) {
     const cx = Math.floor(rnd() * c.w);
     const w = 3 + Math.floor(rnd() * 5);
     if (clear(cx, w)) clump(cx, w, 2 + Math.floor(rnd() * 3));
   }
-  for (let i = 0; i < 26; i++) {
+  for (let i = 0; i < 44; i++) {
     const x = Math.floor(rnd() * (c.w - 24)) + 12;
     pebble(c, x, c.h - 2 - Math.floor(rnd() * 3), 2 + Math.floor(rnd() * 3));
   }

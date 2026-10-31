@@ -4,7 +4,8 @@
 // source rect (col * 88, row * 84, 88, 84). The stop pose ignores the frame (row 12, col 0).
 //
 // Paint order in a frame: far arm, far leg, far crank and pedal, frame tubes, fork, saddle, bars, chain
-// and chainring, rear cog and derailleur, torso, near leg, near crank and pedal, near arm, head, helmet.
+// and chainring, rear cog and derailleur, torso, near crank arm, near leg and shoe, near pedal, near arm,
+// head, helmet. The foot stands outboard of the crank, so the shoe covers the arm's end, never the reverse.
 // The bike faces right, so its drive side faces the viewer: the drivetrain sits over the frame. Wheels are
 // their own sprites, drawn before the frame, so the fork and stays sit over them.
 //
@@ -50,7 +51,9 @@ const farOf = (ramp) => [mix(ramp[0], FAR_SHADE, 0.42), mix(ramp[1], FAR_SHADE, 
 const SHORTS = [hex('#0d0e13'), hex('#1a1b20'), hex('#44464f')];
 // Socks stay off-white: the crank is what the eye follows down there.
 const SOCK = rampOf(hex('#cfd0d0'), 0.34, 0.1);
-const SHOE = [hex('#14151b'), hex('#2c2e38'), hex('#7c8090')];
+const SHOE = [hex('#14151b'), hex('#2c2e38'), hex('#50535f')];
+/** The sole under a dark shoe: a light line, one row above the pedal, so the foot reads apart from the arm. */
+export const SOLE = hex('#c4c8d0');
 const GLOVE = [hex('#101116'), hex('#22242b'), hex('#3a3c44')];
 const TUBES = {
   graphite: [hex('#1f2128'), hex('#3a3d44'), hex('#767b88')],
@@ -169,20 +172,23 @@ function drawArm(c, p, look, far, mask) {
   }
 }
 
-/** The shoe under the ankle: heel, sole on the pedal, toe past it. */
+/** The shoe from the ankle: a heel behind it, the ball over the pedal, the toe past it, a light sole under. */
 function drawShoe(c, l, far, mask) {
   const k = far ? farOf(SHOE) : SHOE;
+  const sole = far ? mix(SOLE, FAR_SHADE, 0.55) : SOLE;
   const tag = far ? TAG_FAR : TAG_NEAR_LEG;
   const ax = l.ankle[0];
   const ay = l.ankle[1];
-  const dirx = l.pedal[0] - ax;
-  // The foot points forward of the ankle-to-pedal line, tipping with the ankle swing.
-  const tilt = clamp(dirx * 0.22, -0.5, 0.5);
-  const heel = [ax - 2.2, ay + 1.4];
-  const toe = [l.pedal[0] + 3.4, l.pedal[1] - 1.2 + tilt];
+  // The toe tips up and down a little with the ankle's swing: the foot is ridden, not bolted on.
+  const tilt = clamp((ay - l.pedal[1] + 3.9) * 0.8, -0.6, 0.6);
+  const heel = [ax - 0.8, l.pedal[1] - 2.6];
+  const toe = [l.pedal[0] + 3.4, l.pedal[1] - 2.2 + tilt];
   capsule(c, heel, toe, 1.5, 1.05, (s) => (s < -0.5 ? k[0] : s > 0.5 ? k[2] : k[1]), mask, false, tag);
-  // The dark sole.
-  c.line(heel[0], heel[1] + 1, toe[0], toe[1] + 1, k[0]);
+  // The ankle into the shoe, so the sock meets it without a step.
+  capsule(c, [ax, ay], heel, 1.3, 1.4, () => k[1], mask, false, tag);
+  const soleY = Math.round(l.pedal[1]) - 1;
+  c.line(Math.round(heel[0]) - 1, soleY, Math.round(toe[0]) - 2, soleY, sole);
+  c.line(Math.round(toe[0]) - 2, soleY, Math.round(toe[0]), soleY + Math.round(tilt), sole);
 }
 
 function drawLeg(c, l, look, far, mask) {
@@ -205,28 +211,37 @@ function drawLeg(c, l, look, far, mask) {
   }
 }
 
+/** The far crank and its pedal, behind the frame and dim. */
+function drawFarCrank(c, pedal) {
+  const x = Math.round(pedal[0]);
+  const y = Math.round(pedal[1]);
+  const steel = farOf(METAL);
+  c.line(R.BB[0], R.BB[1], x, y, steel[0]);
+  c.rect(x - 2, y, 4, 1, steel[1]);
+}
+
 /**
- * The crank arm and pedal. The near arm is one clean stroke two pixels wide: amber body, lit side up or
- * to the right, a thin dark edge on the other side, so it stands off the ring. The far one stays dim.
+ * The near crank arm, one clean stroke from the axle to the pedal: amber body, lit side up or to the right,
+ * a thin dark edge on the other side, so it stands off the ring. The shoe goes over its end.
  */
-function drawCrank(c, pedal, far) {
+function drawCrankArm(c, pedal) {
   const x = Math.round(pedal[0]);
   const y = Math.round(pedal[1]);
   const [bx, by] = R.BB;
-  if (far) {
-    const steel = farOf(METAL);
-    c.line(bx, by, x, y, steel[0]);
-    c.rect(x - 2, y, 4, 1, steel[1]);
-    return;
-  }
   const steep = Math.abs(y - by) > Math.abs(x - bx);
   const [ox, oy] = steep ? [1, 0] : [0, -1];
   c.line(bx - ox, by - oy, x - ox, y - oy, CRANK_INK.edge);
   c.line(bx, by, x, y, CRANK_INK.body);
   c.line(bx + ox, by + oy, x + ox, y + oy, CRANK_INK.lit);
+  c.px(bx, by, CRANK_INK.edge);
+}
+
+/** The near pedal under the sole. */
+function drawPedal(c, pedal) {
+  const x = Math.round(pedal[0]);
+  const y = Math.round(pedal[1]);
   c.rect(x - 2, y + 1, 5, 1, CRANK_INK.edge);
   c.rect(x - 2, y, 5, 1, PEDAL);
-  c.px(bx, by, CRANK_INK.edge);
 }
 
 /** One run of chain, one pixel high: 2 dark, 2 light, and a warmer link every 16 px to follow. */
@@ -335,13 +350,14 @@ function drawBike(c, look) {
   const crown = [57.5, 56];
   // The whip flag's staff bracket on the rear axle: the view plants the pennant on its tip.
   c.line(R.REAR_HUB[0], R.REAR_HUB[1] - 2, R.PENNANT_FOOT[0], R.PENNANT_FOOT[1], METAL[0]);
-  // Stays, thin; then the main triangle: an open one, the top tube two pixels, a slot-colour band on the
-  // down tube.
+  // Stays, thin; then the main triangle: an open one, the top tube two pixels. The slot's colour is only a
+  // muted band high on the down tube, a long way from warm: the crank stays the one warm mark down there.
+  const band = look.sleeveRamp.map((u, i) => mix(u, tube[i], 0.72));
   capsule(c, R.REAR_HUB, cluster, 0.6, 0.6, flat([tube[0], tube[0], tube[1]]));
   capsule(c, R.REAR_HUB, R.BB, 0.8, 0.8, flat([tube[0], tube[0], tube[1]]));
   capsule(c, R.BB, cluster, 1.0, 0.9, shade);
   tube2(c, cluster, headTop, tube);
-  capsule(c, R.BB, headBottom, 1.4, 1.2, (s, t) => (t > 0.62 && t < 0.86 ? pick(look.sleeveRamp, s) : pick(tube, s)));
+  capsule(c, R.BB, headBottom, 1.4, 1.2, (s, t) => (t > 0.66 && t < 0.86 ? pick(band, s) : pick(tube, s)));
   // The bottle in its cage over the down tube.
   capsule(c, [43, 60], [47, 57], 1.4, 1.4, (s) => (s > 0.3 ? hex('#c4c8d4') : s < -0.3 ? hex('#5c606c') : hex('#8e929e')));
   c.px(48, 56, METAL[0]);
@@ -520,15 +536,16 @@ export function riderFrame(slot, name, k) {
   drawGroundShadow(c);
   drawArm(c, p, look, true, mask);
   drawLeg(c, p.far, look, true, mask);
-  drawCrank(c, p.farPedal, true);
+  drawFarCrank(c, p.farPedal);
   const farPixels = c.data.slice();
   drawBike(c, look);
   drawDrivetrain(c, p.frame);
   drawTorso(c, p, look, mask);
   const torsoPixels = c.data.slice();
+  drawCrankArm(c, p.nearPedal);
   drawLeg(c, p.near, look, false, mask);
   crease(c, mask, TAG_NEAR_LEG, TAG_FAR, farPixels, CREASE);
-  drawCrank(c, p.nearPedal, false);
+  drawPedal(c, p.nearPedal);
   drawArm(c, p, look, false, mask);
   crease(c, mask, TAG_NEAR_ARM, TAG_FAR, farPixels, CREASE);
   crease(c, mask, TAG_NEAR_ARM, TAG_TORSO, torsoPixels, look.bodyRamp[0]);
@@ -604,11 +621,12 @@ const BREATH_FRAMES = [
   ['....x...', '...xXx..', '...XXxx.', '...xxx..', '....x...', '........'],
   ['......x.', '....x...', '.....x.x', '......x.', '....x...', '........'],
 ];
+// Dust leaves the road: each frame sits higher and further back in its cell, and breaks up on the way.
 const DUST_FRAMES = [
-  ['..........', '..........', '..........', '....xx....', '...xXXx...', '....xx....'],
-  ['..........', '...xxx....', '..xXXXx...', '..xXXXXx..', '..xXXXx...', '...xxx....'],
-  ['...xx.....', '..xX.xx...', '.xX..Xxx..', '.x....Xx..', '.xx..xx...', '...xx.....'],
-  ['..x...x...', '..........', 'x.......x.', '.....x....', '.x........', '......x...'],
+  ['..........', '..........', '..........', '......x...', '.....xXx..', '......xx..'],
+  ['..........', '..........', '...x.xx...', '....xXXx..', '...xXXx...', '.....x....'],
+  ['..x.......', '.x..x.....', '...xX.x...', '.x..xx....', '....x.....', '..........'],
+  ['x.........', '...x......', '.x........', '....x.....', '..........', '..........'],
 ];
 const BUBBLES = {
   // Orange plate, a white chevron that lifts: the rider is being eased back up.
@@ -621,10 +639,10 @@ const BUBBLES = {
     ['.#######.', '#wwwwwww#', '#w#####w#', '#wwww##w#', '#www##ww#', '#ww##www#', '#w#####w#', '.#######.', '....#....'],
     ['.#######.', '#w#####w#', '#wwww##w#', '#www##ww#', '#ww##www#', '#w#####w#', '#wwwwwww#', '.#######.', '....#....'],
   ],
-  // Grey plate, two chain links with air between them, the gap flashing red: no connection.
+  // A pale plate and two dark chain links with clear air between them; a red spark blinks in the gap: broken.
   link: [
-    ['.-------.', '-gggrggg-', '-###r###-', '-#g#r#g#-', '-#g#r#g#-', '-###r###-', '-gggrggg-', '.-------.', '....-....'],
     ['.-------.', '-ggggggg-', '-###g###-', '-#g#g#g#-', '-#g#g#g#-', '-###g###-', '-ggggggg-', '.-------.', '....-....'],
+    ['.-------.', '-ggggggg-', '-###g###-', '-#g#r#g#-', '-#g#r#g#-', '-###g###-', '-ggggggg-', '.-------.', '....-....'],
   ],
 };
 
@@ -652,7 +670,7 @@ export function fxSheet() {
     o: hex('#e0642e'),
     W: hex('#fff8ec'),
     w: hex('#f2f4fa'),
-    g: hex('#b4b8c4'),
+    g: hex('#ccd8e8'),
     r: hex('#d8342c'),
   };
   for (const [name, x] of [

@@ -141,14 +141,13 @@ export function scene(parts, kit, row, { contact = () => 384, scroll = 0, riders
   roadRows(out, vergeFar, contact, (c) => c - kit.road.verge_far.above, scroll);
   roadRows(out, road, contact, (c) => c - kit.road.contact_row, scroll);
   if (crowd) {
-    // One per bucket, up to 4 px either way, a kind by hash, between crowd.from and crowd.to.
+    // Clumps with open verge between them, the ones further back first, in shade: as the view stands them.
     const [cw, ch] = kit.props.crowd.cell;
-    for (let i = 0; crowd.from + i * crowd.step < crowd.to; i++) {
-      const h = Math.floor(((Math.sin((i + 3) * 91.17) + 1) * 43758.5) % 1000);
-      const x = crowd.from + i * crowd.step + (h % 9) - 4;
-      const kind = (h >> 3) % kit.props.crowd.count;
-      const row = h % 3 === 0 ? 1 : 0;
-      stamp(out, parts.props.crowd, kind * cw, row * ch, cw, ch, x, Math.round(contact(x + cw / 2)) - kit.props.crowd.foot_above_contact - ch, tod.rider_tint);
+    const shaded = (depth) => tod.rider_tint.map((u) => u * (1 - depth * 0.07));
+    for (const [dx, kind, handsUp, depth] of [...crowd.people].sort((a, b) => b[3] - a[3])) {
+      const x = crowd.from + dx;
+      const y = Math.round(contact(x + cw / 2)) - kit.props.crowd.foot_above_contact - ch - depth;
+      stamp(out, parts.props.crowd, kind * cw, handsUp * ch, cw, ch, x, y, shaded(depth));
     }
   }
   const order = [...riders].sort((a, b) => a.lane - b.lane || a.x - b.x);
@@ -220,7 +219,18 @@ export function pickerCard(parts, kit) {
     [628, 700, 13, '#e88a3a'],
     [700, 740, 5, '#6f8296'],
   ].map(([x, x1, h, color, hatched]) => ({ x0: x + 1, x1, h, color, hatched, floor }));
-  const crowd = { from: x0 + 408, to: x0 + 490, step: 20 };
+  const crowd = {
+    from: x0 + 396,
+    people: [
+      [0, 4, 0, 2],
+      [11, 1, 1, 0],
+      [21, 7, 0, 3],
+      [60, 5, 1, 1],
+      [70, 2, 0, 4],
+      [81, 6, 1, 0],
+      [93, 0, 0, 2],
+    ],
+  };
   const full = scene(parts, kit, Math.floor(0.4 * 31), { contact, riders, blocks, crowd, scroll: 340 });
   const win = new Canvas(480, 270);
   for (let y = 0; y < 270; y++) for (let x = 0; x < 480; x++) win.px(x, y, full.get(x + x0, y + y0));
