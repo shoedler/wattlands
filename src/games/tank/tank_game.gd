@@ -66,6 +66,9 @@ func configure(p_ctx: GameContext) -> void:
 		return
 	var rng: RandomNumberGenerator = ctx.rng if ctx.is_authority() else null
 	state = TankRules.new_state(content, ctx.players, ctx.content_id, rng)
+	state.difficulty = TankDifficulty.resolve(
+		ctx.options.get("difficulty", TankIds.DIFF_AUTO), content
+	)
 
 
 func build_effort_plans() -> Dictionary:

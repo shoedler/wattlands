@@ -407,6 +407,7 @@ static func seat_needs(state: TankState, sit: Dictionary = {}, seg: String = "")
 		TankIds.ENGINE_STEAM: steam,
 		TankIds.ENGINE_ARC: arc,
 		TankIds.ENGINE_FEED: feed,
+		TankIds.ENGINE_REPAIR: 0.05,
 	}
 
 

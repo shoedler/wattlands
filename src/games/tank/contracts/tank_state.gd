@@ -27,6 +27,9 @@ var all_afk: bool = false
 var outcome: String = ""
 ## The next id for enemies, shells and obstacles (never reused).
 var next_id: int = 1
+## v4: TankIds.DIFF_EASY/NORMAL/HARD, resolved at the session start on every peer (from ctx.options; not
+## in the snapshot).
+var difficulty: String = TankIds.DIFF_NORMAL
 
 var seg: TankSegmentState = TankSegmentState.new()
 var hull: TankHullState = TankHullState.new()

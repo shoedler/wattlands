@@ -22,7 +22,7 @@ func _hud(ctx: GameContext) -> F.Hud:
 
 ## v3: every crew size rides the landship with its five seats; slot s starts on start seat s
 ## (Drive, Gun, Loader, Lights) and the seats past the crew stay empty.
-func test_every_crew_rides_the_one_tank_and_its_five_seats() -> void:
+func test_every_crew_rides_the_one_tank_and_its_six_seats() -> void:
 	var starts := ["diesel", "dynamo", "steam", "arc"]
 	for crew in [1, 2, 3, 4]:
 		var g := _game(F.make_ctx(crew))
@@ -31,12 +31,14 @@ func test_every_crew_rides_the_one_tank_and_its_five_seats() -> void:
 		var engines: Array = g.state.stations.map(
 			func(s: TankStationState) -> String: return s.engine
 		)
-		assert_eq(engines, ["diesel", "steam", "dynamo", "arc", "feed"], "rooms rear to front")
+		assert_eq(
+			engines, ["diesel", "steam", "dynamo", "arc", "repair", "feed"], "rooms rear to front"
+		)
 		for r in g.state.riders:
 			assert_eq(r.engine, starts[r.slot], "slot %d starts on its seat" % r.slot)
 			assert_eq(g.state.station(r.engine).slot, r.slot)
 		var empty := g.state.stations.filter(func(s: TankStationState) -> bool: return s.is_empty())
-		assert_eq(empty.size(), 5 - crew, "crew %d: the other seats are empty" % crew)
+		assert_eq(empty.size(), 6 - crew, "crew %d: the other seats are empty" % crew)
 
 
 func test_bad_content_is_rejected_at_load_and_gives_no_plans() -> void:

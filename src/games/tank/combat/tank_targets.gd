@@ -72,6 +72,7 @@ static func build(state: TankState, aux: TankAux) -> void:
 	aux.any_target = false
 	aux.enemy_in_range = false
 	var cam := state.camera_x()
+	var max_range := state.content.num("tanks", "gun.far.max_range_m", 2500.0)
 	for e in state.enemies:
 		var t := TankTarget.new()
 		t.id = e.id
@@ -81,7 +82,19 @@ static func build(state: TankState, aux: TankAux) -> void:
 		t.vel = Vector2(float(aux.enemy_vx.get(e.id, 0.0)), 0.0)
 		t.enemy = e
 		aux.targets.append(t)
-		if on_screen(t.rect, cam):
+		var type := TankIds.enemy_of(e.code)
+		if TankIds.FAR_KINDS.has(type) and e.range_m > 0.0:
+			t.far = true
+			t.range_m = e.range_m
+			t.rate_mps = e.rate_mps
+			t.hit_half_m = float(state.content.enemy_def(type).get("hit_half_m", 0.0))
+			t.rect = Rect2()
+			if t.range_m <= max_range:
+				aux.enemy_in_range = true
+				aux.any_target = true
+			continue
+		t.near = e.is_near()
+		if not t.near and on_screen(t.rect, cam):
 			aux.enemy_in_range = true
 			aux.any_target = true
 	var b := state.boss
@@ -98,6 +111,11 @@ static func build(state: TankState, aux: TankAux) -> void:
 				TankTarget.TIER_HEAVY if i == TankBossState.TURRET_PART else TankTarget.TIER_DUGIN
 			)
 			t.rect = boss_rect(state, aux, i)
+			if b.range_m > 0.0:
+				t.far = true
+				t.range_m = b.range_m + float(_boss_far(state, "part_offset_m")[i])
+				t.hit_half_m = float(_boss_far(state, "part_half_m")[i])
+				t.rect = Rect2()
 			aux.targets.append(t)
 			aux.enemy_in_range = true
 			aux.any_target = true
@@ -125,9 +143,38 @@ static func on_screen(r: Rect2, camera_x: float) -> bool:
 
 
 ## Whether the gun may engage `t`: on screen, except for the Behemoth's parts (the rear bogie of a
-## 320 px hull can stand past the right edge and still be in range).
+## 320 px hull can stand past the right edge and still be in range). v4: a far target always (its
+## reach is TankAim.in_reach); a near threat never (only the bow guns lay on it; TankBow does not call
+## this).
 static func engageable(t: TankTarget, camera_x: float) -> bool:
+	if t.far:
+		return true
+	if t.near:
+		return false
 	return t.kind == TankTarget.KIND_BOSS or on_screen(t.rect, camera_x)
+
+
+## v4: every target in the far frame this tick (enemies, then the Behemoth's parts).
+static func far_targets(aux: TankAux) -> Array[TankTarget]:
+	var out: Array[TankTarget] = []
+	for t in aux.targets:
+		if t.far:
+			out.append(t)
+	return out
+
+
+## v4: every near threat this tick (recon, tankette).
+static func near_threats(aux: TankAux) -> Array[TankTarget]:
+	var out: Array[TankTarget] = []
+	for t in aux.targets:
+		if t.near:
+			out.append(t)
+	return out
+
+
+## A list of enemies.json boss.far (one number per part).
+static func _boss_far(state: TankState, key: String) -> Array:
+	return state.content.value("enemies", "boss.far.%s" % key, [0.0, 0.0, 0.0, 0.0])
 
 
 ## The target with entity id `id` (boss parts negative), or null.

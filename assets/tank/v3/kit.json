@@ -413,6 +413,11 @@
       "id": "sec",
       "room": "sec",
       "engine": "feed"
+    },
+    {
+      "id": "repair",
+      "room": "turret_drive",
+      "engine": "repair"
     }
   ],
   "windows": {

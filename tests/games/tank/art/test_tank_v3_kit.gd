@@ -20,7 +20,7 @@ func test_the_manifest_is_sound() -> void:
 	var engines: Array = []
 	for seat2 in TankRig.SEATS:
 		engines.append(rig.seats[seat2]["engine"])
-	assert_eq(engines, ["diesel", "dynamo", "steam", "arc", "feed"], "brief v3 Seats")
+	assert_eq(engines, ["diesel", "dynamo", "steam", "arc", "feed", "repair"], "the six seats")
 
 
 func test_the_base_is_the_r6_pixel_art_with_at_most_63_colours() -> void:
@@ -115,5 +115,5 @@ func test_check_names_a_missing_file_a_room_outside_and_a_seat_without_a_room() 
 	var errs := "\n".join(TankRig.check(m))
 	assert_string_contains(errs, "missing file nope.png")
 	assert_string_contains(errs, "room gun outside the sprite")
-	assert_string_contains(errs, "seat sec has no room")
+	assert_string_contains(errs, "seat repair has no room")
 	assert_string_contains(errs, "window breechwin missing")

@@ -175,3 +175,22 @@ ADR "2026-10-29 v3.1 seats without a lock" holds the design; these are the contr
 - **Snapshot v4** (`VERSION` 4): `r` col 7 is `mode_wait_ms` (`R_MODE_WAIT_MS`; -1000 for the segment's end) and col 8 `mode_to` (`R_MODE_TO`: `MODE_TO_NONE` 0, `MODE_TO_ERG` 1, `MODE_TO_SIM` 2), in v3's seat-lock columns; nothing else moved.
 - **Plan meta.** A rider's phase meta `engine` is the seat the trainer is on, which can trail `TankRiderState.engine` by up to 30 s (or to the segment's end). The director's splits use the platform's `ctx.directives.split` (GAME_SDK section 8).
 - **Intents.** The Gun's target cycling is the `swap` action (R / LB); left / right open the seat picker on every seat.
+
+## v4 additions (0.4.0, the contract commit: additive, old rules still run)
+
+- **Ids.** `ENGINE_REPAIR` "repair" (code 7, the sixth seat, `TANK_ENGINE_REPAIR`, `TANK_SEAT_REPAIRS`; every seat owns `seat`); `ENEMY_RECON` 7, `ENEMY_TANKETTE` 8; `FAR_KINDS`, `NEAR_KINDS`, `is_near_code`; `EM_RETIRE` 7, `EM_PAUSE` 8; `DIFF_AUTO/EASY/NORMAL/HARD`, `DIFFICULTIES`. `ENEMY_DUGIN`, `FROM_REAR` and `INTENT_TRAVERSE` stay until the rules drop them.
+- **Frames.** A far kind has `TankEnemyState.range_m` (metres from the hull's front; `x_px` 0, `side` +1, `lane` 0-3 view only); a near kind has `x_px`. `range_m` 0 on a far kind means the old frame: the old rules run on it. `TankFarMap` holds the split screen's rects and the range mapping; `TankConst.NEAR_SPAN_PX`, `FAR_SPAWN_M`.
+- **Difficulty.** `TankState.difficulty`, resolved by `TankDifficulty.resolve` in `TankGame.configure` on every peer, not in the snapshot. `TankDifficulty.mult` and `tank_loss` read `enemies.json difficulty`; the schema refuses any key but the listed ones, so it cannot carry an effort number.
+- **Records.** `TankHullState.tow_s`, `out_of_action()`; `TankShellState.far`, `left_s`, `evadable`, `impact_r`; `TankBossState.range_m`; `TankSegmentState.next_near`; `TankScoreState.kills` of 9, `losses`, `near_escaped`; `TankRiderState.repaired_hp`, `engine_s` of 7; `TankRepairState` (`patches`, `press_t`, `duty`, `working`, `note_work`).
+- **Events.** `tank_lost`, `stage_restart`, `ambush`, `escaped`, `splash`. `shot` gains `rng_m` (always; 0 on a near shell) and, on a far shell only, `flight_s`, the one event number that is not an int (`TankEvents.FLOAT_FIELDS`, seconds to 0.01).
+- **Snapshot VERSION 5.** `tk` tow_ms; `e` range_m; `s` far, left_ms, evadable; `b` range_m; `sc` losses; the repair room's row (a patches, b press_pml, c duty_pml, `STF_WORKING`).
+- **Stubs until their builders.** `TankBots`, `TankEnemyKit`, `TankEnemyDraw`, `TankInterior.repair_bay`, `TankMech` (falls back to the diesel for "repair"). No rule works the Repairs seat yet: a rider there is in band and does nothing.
+- **Kit keys.** `TankEnemyKit.bushes()`, `bush_rects()`, `far_ground()` stub to null and empty; the manifest's top-level `bushes` and `far_ground` are in the class's header. A view guards on null.
+
+## v4 notes from the contract check (for the builders; nothing here is a rule yet)
+
+- **R.** Far kinds keep `size_px` in `enemies.json` until T: V, H and E test code (`TankViewUtil._roam_enemy`, `test_tank_hud_tags_clear`, `test_tank_net`) reads it, and the schema tolerates it. Every far shot passes `flight_s` and `rng_m` to `TankEvents.shot` (ours: where it lands; theirs: the shooter's range), with a test on both; they default to 0, so a missed call stays silent. Removing `INTENT_TRAVERSE` from `TankIntents.OWNERS` is the one edit R makes in that file.
+- **V.** `impact_r` is host only. Land our shell on `x + vx * left_s`, all snapshot fields.
+- **E.** `TankCues.on_event` handles `stage_restart`, `ambush` and `escaped` (`TANK_TOAST_RESTART`, `_AMBUSH`, `_ESCAPED`). H does not touch that file.
+- **H.** For `FAR_KINDS`, `enemy_rect` uses `TankFarMap` when the view's rect is not inside `panels.far`: until V merges, `_track_enemies` places far kinds through `sx(enemy_x)` with `x_px` 0. Far tags are not final before T-INT.
+- **S.** `test_tank_package.gd` changes at the `bots` assert and at the exact contents list (`ambush_15` second); its version assert stays with T's docs.

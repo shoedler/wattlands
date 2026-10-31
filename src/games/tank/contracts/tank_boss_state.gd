@@ -33,6 +33,8 @@ var telegraph_s: float = 0.0
 var secondary_s: float = 0.0
 ## The current telegraph's shot will miss (evaded: a rider held the sprint rule >= 3 s inside it).
 var evaded: bool = false
+## [snap] v4: range in metres to bogie 0.
+var range_m: float = 0.0
 
 
 ## The target id of part `index` (0..2 bogies, index 0 nearest the tank, 3 the turret).

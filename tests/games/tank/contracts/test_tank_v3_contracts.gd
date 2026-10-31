@@ -55,7 +55,9 @@ func test_the_feed_seat_and_the_seat_order() -> void:
 	assert_eq(TankIds.engine_of(4), "")
 	assert_eq(TankIds.ENGINE_LABELS[TankIds.ENGINE_FEED], "TANK_ENGINE_FEED")
 	assert_eq(
-		TankIds.SEATS, ["diesel", "dynamo", "steam", "arc", "feed"] as Array[String], "Drive first"
+		TankIds.SEATS,
+		["diesel", "dynamo", "steam", "arc", "feed", "repair"] as Array[String],
+		"Drive first"
 	)
 	var labels: Array = []
 	for e: String in TankIds.SEATS:
@@ -67,16 +69,17 @@ func test_the_feed_seat_and_the_seat_order() -> void:
 			"TANK_SEAT_GUN",
 			"TANK_SEAT_LOADER",
 			"TANK_SEAT_LIGHTS",
-			"TANK_SEAT_SECONDARIES"
+			"TANK_SEAT_SECONDARIES",
+			"TANK_SEAT_REPAIRS"
 		]
 	)
 	assert_eq(TankIds.ENGINES.size(), TankIds.SEATS.size())
 	for e: String in TankIds.SEATS:
 		assert_has(TankIds.ENGINES, e)
 	assert_eq(TankRiderState.ENGINE_INDEX[TankIds.ENGINE_FEED], 5)
-	assert_eq(TankRiderState.new().engine_s.size(), 6, "index 3 stays the retired Bulwark's")
-	assert_eq(TankIds.seat_step("feed", 1), "diesel", "next wraps")
-	assert_eq(TankIds.seat_step("diesel", -1), "feed", "prev wraps")
+	assert_eq(TankRiderState.new().engine_s.size(), 7, "index 3 stays the retired Bulwark's")
+	assert_eq(TankIds.seat_step("repair", 1), "diesel", "next wraps")
+	assert_eq(TankIds.seat_step("diesel", -1), "repair", "prev wraps")
 	assert_eq(TankIds.seat_step("dynamo", 1), "steam")
 	assert_eq(TankIds.seat_step("bulwark", 1), "diesel", "an unknown seat starts at Drive")
 
@@ -112,14 +115,14 @@ func test_the_seat_intent_normalizes_and_every_seat_owns_it() -> void:
 	var nxt := TankIntents.normalize({"k": "seat", "to": "next"})
 	assert_eq(TankIntents.seat_wanted(nxt, "arc"), "feed")
 	var prv := TankIntents.normalize({"k": "seat", "to": "prev"})
-	assert_eq(TankIntents.seat_wanted(prv, "diesel"), "feed")
+	assert_eq(TankIntents.seat_wanted(prv, "diesel"), "repair")
 	assert_eq(TankIntents.seat_wanted(TankIntents.normalize({"k": "fire"}), "dynamo"), "")
 
 
 func test_the_seat_event_carries_slot_and_engine_codes() -> void:
 	var e := TankEvents.seat(2, TankIds.ENGINE_ARC, TankIds.ENGINE_FEED)
 	assert_eq(e, {"type": "seat", "s": 2, "from": 5, "to": 6})
-	assert_eq(TankEvents.TYPES.back(), TankEvents.SEAT, "appended")
+	assert_gt(TankEvents.TYPES.find(TankEvents.SEAT), TankEvents.TYPES.find("time_up"), "appended")
 	assert_eq(TankEvents.INT_FIELDS[TankEvents.SEAT], ["s", "from", "to"])
 	assert_has(TankEvents.TYPES, TankEvents.LEVER, "the lever's name stays taken on the wire")
 	var cast := TankEventCast.cast(JSON.parse_string(JSON.stringify(e)))
@@ -161,7 +164,7 @@ func test_every_crew_starts_on_its_seats_and_the_rest_are_empty() -> void:
 		assert_eq(s.hull.code, 5)
 		assert_eq([s.hull.hull_w, s.hull.hull_h], [296, 65], "the r6 hull in rules px")
 		var rooms: Array = s.stations.map(func(st: TankStationState) -> String: return st.engine)
-		assert_eq(rooms, ["diesel", "steam", "dynamo", "arc", "feed"], "rear to front")
+		assert_eq(rooms, ["diesel", "steam", "dynamo", "arc", "repair", "feed"], "rear to front")
 		assert_is(s.station("feed"), TankFeedState)
 		for r in s.riders:
 			assert_eq(r.engine, want[r.slot], "crew %d slot %d" % [crew, r.slot])
@@ -172,7 +175,7 @@ func test_every_crew_starts_on_its_seats_and_the_rest_are_empty() -> void:
 			if st.is_empty():
 				empty.append(st.engine)
 				assert_eq(st.peer, 0)
-		assert_eq(empty.size(), 5 - crew, "crew %d: at least one seat is always empty" % crew)
+		assert_eq(empty.size(), 6 - crew, "crew %d: at least two seats are always empty" % crew)
 		assert_null(s.station_of(-1), "an empty seat is nobody's station")
 
 
@@ -214,7 +217,7 @@ func test_the_v3_fields_ride_the_snapshot_as_ints_and_round_trip() -> void:
 	fd.fire_tick = 49199
 	var snap := TankSnapshot.encode(host)
 	assert_eq(TankSnapshotSchema.check(snap), "")
-	assert_eq(snap["v"], 4, "0.3.1: mode_wait_ms and mode_to in v3's seat lock columns")
+	assert_eq(snap["v"], 5, "0.3.1: mode_wait_ms and mode_to in v3's seat lock columns; v4: 5")
 	var r1: Array = (snap["r"] as Array)[1]
 	assert_eq(r1.size(), TankSnapshotSchema.R_LEN)
 	assert_eq(r1[TankSnapshotSchema.R_MODE_WAIT_MS], 42345)
@@ -284,7 +287,7 @@ func test_crew_4_at_the_caps_with_every_v3_field_busy_fits_4_kb() -> void:
 	fd.fire_tick = 99999
 	var snap := TankSnapshot.encode(s)
 	assert_eq((snap["r"] as Array).size(), 4)
-	assert_eq((snap["st"] as Array).size(), 5)
+	assert_eq((snap["st"] as Array).size(), 6)
 	assert_eq((snap["e"] as Array).size(), TankConst.MAX_ENEMIES)
 	assert_eq((snap["s"] as Array).size(), TankConst.MAX_SHELLS)
 	assert_eq(TankSnapshotSchema.check(snap), "")
@@ -342,7 +345,9 @@ func test_the_landship_geometry_is_the_r6_hitbox_in_rules_px() -> void:
 		assert_true(rects[0].encloses(room), "%s's room is inside the hull" % e)
 	var xs: Array = []
 	for e: String in c.engines_of(t):
-		xs.append(g.seat_rect(t, e).position.x)
+		# v4: Repairs sits above the rooms, on the second floor; the floor below still runs in order.
+		if e != TankIds.ENGINE_REPAIR:
+			xs.append(g.seat_rect(t, e).position.x)
 	var sorted := xs.duplicate()
 	sorted.sort()
 	assert_eq(xs, sorted, "the rooms run rear to front in tanks.json order")
@@ -351,7 +356,7 @@ func test_the_landship_geometry_is_the_r6_hitbox_in_rules_px() -> void:
 # --- Content ----------------------------------------------------------------------------------------
 
 
-func test_the_content_has_the_one_tank_and_five_seats() -> void:
+func test_the_content_has_the_one_tank_and_six_seats() -> void:
 	for m: String in ["ashfall_road", "drill", "roam_30"]:
 		var c := TankContent.from_dicts(_files(m), m)
 		assert_eq(c.errors, [] as Array[String], m)

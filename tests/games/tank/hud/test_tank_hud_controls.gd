@@ -38,7 +38,7 @@ func test_every_control_builds_and_draws_for_crews_1_to_4() -> void:
 				assert_gt(c.draws, 0, "%s crew %d %s drew" % [c.name, crew, kind])
 
 
-func test_the_seat_panel_has_five_cards_in_seat_order_for_crews_1_to_4() -> void:
+func test_the_seat_panel_has_six_cards_in_seat_order_for_crews_1_to_4() -> void:
 	for crew in range(1, 5):
 		var s := X.state(crew)
 		var g: TankGame = autofree(X.game(s))
@@ -55,7 +55,7 @@ func test_the_seat_panel_has_five_cards_in_seat_order_for_crews_1_to_4() -> void
 			assert_eq(bool(c["empty"]), s.station(engine).is_empty(), engine)
 			if not bool(c["empty"]):
 				manned += 1
-		assert_eq(shown, TankIds.SEATS, "Drive, Gun, Loader, Lights, Secondaries")
+		assert_eq(shown, TankIds.SEATS, "Drive, Gun, Loader, Lights, Secondaries, Repairs")
 		assert_eq(manned, crew, "crew %d: one card per rider manned" % crew)
 	var four := TankHudModel.seat_cards(X.state(4), 1)
 	assert_eq(str(four[3]["engine"]), TankIds.ENGINE_ARC)

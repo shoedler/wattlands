@@ -32,8 +32,21 @@ var obstacle: TankObstacleState = null
 var part: int = -1
 ## Shells pass through it harmlessly and it never counts toward the score (a drill wreck).
 var drill: bool = false
+## v4: stands in the far frame (range_m, hit_half_m; its rect is empty).
+var far: bool = false
+## v4: a near threat (recon, tankette); the bow guns' target, never the main gun's.
+var near: bool = false
+## v4: far targets: metres from the hull's front, the rate it changes at, half its hit window.
+var range_m: float = 0.0
+var rate_mps: float = 0.0
+var hit_half_m: float = 0.0
 
 
 ## The point the gun aims at: the box centre.
 func center() -> Vector2:
 	return rect.get_center()
+
+
+## v4: what target lists sort on: range_m when far (its rect is empty), else the box centre's x.
+func sort_key() -> float:
+	return range_m if far else center().x

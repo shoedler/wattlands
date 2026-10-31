@@ -109,8 +109,9 @@ func test_game_json_is_exactly_the_brief() -> void:
 		["ashfall_road", "drill", "ashfall_road"]
 	)
 	assert_eq(int(m["first_run_priority"]), -1, "the first run never picks Tank")
-	# v3: seats replace rotation, so the game has no session option.
-	assert_false(m.has("options"), "no rotation option in v3")
+	# v4: the one session option is the difficulty (seats replaced rotation in v3).
+	assert_eq((m["options"] as Array).size(), 1, "no rotation option in v3")
+	assert_eq(str(m["options"][0]["id"]), "difficulty")
 	# v2 (brief 3.1): one per-rider option, the miniature (per-frame depth of field) toggle.
 	assert_eq(
 		m.get("player_options", []),

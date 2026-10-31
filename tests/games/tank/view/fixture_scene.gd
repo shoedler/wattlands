@@ -8,9 +8,11 @@ extends Control
 ##   crew=<1..4>        the tank (default 3; 4 is the Citadel's fixture with an arc-generator rider)
 ##   flex               pixel_flex on (min 852 x 480), as the GameHost sets it
 ##   nohud              no HUD (the picker and content cards are rendered this way)
-##   kind=state|gun_line|boss|cap|roam   the fixture (default state); cap is the Citadel at the snapshot
-##                      caps, 16 enemies and 24 shells always in view, the gun firing every 0.4 s; roam is
-##                      free roam on roam_30's valley (TankViewUtil.roam_state) with the free-roam HUD
+##   kind=state|gun_line|boss|cap|roam|v4:<name>   the fixture (default state); cap is the Citadel at
+##                      the snapshot caps, 16 enemies and 24 shells always in view, the gun firing every
+##                      0.4 s; roam is free roam on roam_30's valley (TankViewUtil.roam_state) with the
+##                      free-roam HUD; v4:<name> is TankFixturesV4 (SPEC_TANK section 7), moved by its
+##                      tick(), no gun firing unless fire= says so
 ##   dir=-1             (roam) the tank drives west: the world drawn mirrored
 ##   at=<m>             (roam) the hull's place on the valley road in metres (default its middle)
 ##   zone=<id>          (roam) the hull in the middle of that zone (lake, village, quarry, meadow, forest)
@@ -23,6 +25,7 @@ extends Control
 ##   still              the hull holds still
 ##   stats              print frame times after 300 frames (or seconds=<n> of wall time), then quit
 ##   seconds=<n>        with stats: measure for n seconds of wall time instead of 300 frames
+##   novsync            vsync off, so stats read the real frame time and not the display's 16.7 ms
 
 const F := preload("res://tests/games/tank/tank_fakes.gd")
 const U := preload("res://tests/games/tank/view/tank_view_util.gd")
@@ -41,13 +44,35 @@ var _next_shell_id: int = 900
 var _times: Array[float] = []
 var _frames: int = 0
 var _elapsed: float = 0.0
+var _stats_done: bool = false
+## The TankFixturesV4 name of this run ("" for the older kinds).
+var _v4: String = ""
+var _v4_cues_due: bool = false
 
 
 func _ready() -> void:
 	_opts = _options()
+	if _opts.has("novsync"):
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	var crew := clampi(int(_opts.get("crew", 3)), 1, 4)
 	var content := "ashfall_road"
-	match str(_opts.get("kind", "state")):
+	var kind_opt := str(_opts.get("kind", "state"))
+	var bots := 0
+	if kind_opt.begins_with("v4:"):
+		_v4 = kind_opt.trim_prefix("v4:")
+		_v4_cues_due = true
+		state = TankFixturesV4.make(_v4, crew)
+		content = TankFixturesV4.content_id(_v4)
+		crew = state.riders.size()
+		for r in state.riders:
+			if r.is_bot:
+				bots += 1
+		crew -= bots
+		if not _opts.has("fire"):
+			_opts["fire"] = "0"
+	match kind_opt if _v4 == "" else "v4":
+		"v4":
+			pass
 		"cap":
 			state = _cap_state()
 			if not _opts.has("fire"):
@@ -77,7 +102,7 @@ func _ready() -> void:
 			st.slot = -1
 			st.peer = 0
 	var peer := int(_opts.get("peer", 1))
-	var ctx := F.make_ctx(crew, 0, content, Wl.SOLO, peer)
+	var ctx := F.make_ctx(crew, bots, content, Wl.SOLO, peer)
 	game = F.make_game(ctx)
 	game.state = state
 	pv = PixelViewport.new()
@@ -97,6 +122,10 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_frames += 1
+	if _v4_cues_due and _frames >= 2:
+		_v4_cues_due = false
+		for e: Dictionary in TankFixturesV4.cues(_v4):
+			game.cue.emit(str(e["type"]), e)
 	if _opts.has("stats"):
 		_times.append(delta)
 		_elapsed += delta
@@ -130,6 +159,9 @@ func _process(delta: float) -> void:
 
 
 func _tick() -> void:
+	if _v4 != "":
+		TankFixturesV4.tick(state, Wl.SIM_DT)
+		return
 	state.tick += 1
 	state.t = state.tick * Wl.SIM_DT
 	state.seg.elapsed_s += Wl.SIM_DT
@@ -220,6 +252,12 @@ func _fire() -> void:
 	game.cue.emit(TankEvents.SHOT, TankEvents.shot(0, TankIds.SHELL_HEAVY, s.id))
 
 
+## tools/screenshot may quit first (--frames, with vsync off): the frames so far still count.
+func _exit_tree() -> void:
+	if _opts.has("stats") and not _stats_done and not _times.is_empty():
+		_print_stats()
+
+
 func _options() -> Dictionary:
 	var out := {}
 	var raw: Array[String] = []
@@ -238,6 +276,7 @@ func _options() -> Dictionary:
 
 
 func _print_stats() -> void:
+	_stats_done = true
 	var sorted := _times.duplicate()
 	sorted.sort()
 	var mean := 0.0
@@ -253,7 +292,10 @@ func _print_stats() -> void:
 			over += 1
 	var worst: float = 0.0 if sorted.is_empty() else sorted.back()
 	var fmt := "tank view fixture: mean %.2f ms, p99 %.2f ms, worst %.2f ms, "
-	fmt += "%d of %d frames over 16.7 ms, %d enemies, %d shells"
+	fmt += "%d of %d frames over 16.7 ms, %d enemies, %d shells, %d draw calls"
+	var calls := RenderingServer.get_rendering_info(
+		RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME
+	)
 	print(
 		(
 			fmt
@@ -264,7 +306,8 @@ func _print_stats() -> void:
 				over,
 				_times.size(),
 				state.enemies.size(),
-				state.shells.size()
+				state.shells.size(),
+				calls
 			]
 		)
 	)

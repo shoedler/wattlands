@@ -164,13 +164,15 @@ func test_the_seat_cards_stay_clear_of_my_numbers_and_the_corner() -> void:
 			assert_false(on_canvas.intersects(mine), "card %d by my numbers on %s" % [i, art])
 			assert_false(on_canvas.intersects(clear), "card %d in the corner on %s" % [i, art])
 			assert_true(Rect2i(Vector2i.ZERO, art).encloses(on_canvas))
-			assert_gte(c.size.x, 76.0, "a readable card")
+			assert_gte(c.size.x, 64.0, "a readable card (v4: six cards at 852 x 480)")
 			if i > 0:
 				assert_gt(c.position.x, cards[i - 1].end.x, "left to right, no overlap")
-		if art.x >= 960:
+		if art.x >= 1100:
 			assert_eq(cards[0].size.x, float(TankHudSeats.CARD_W), "full cards on %s" % art)
+		elif art.x == 960:
+			assert_eq(cards[0].size.x, 82.0, "six cards on the base canvas")
 	var narrow := TankHudSeats.card_rects(TankHud.FLEX_MIN)
-	assert_lt(narrow[0].size.x, float(TankHudSeats.CARD_W), "five narrow cards on 852 x 480")
+	assert_lt(narrow[0].size.x, float(TankHudSeats.CARD_W), "six narrow cards on 852 x 480")
 
 
 func test_the_hud_code_names_no_kit_widget() -> void:

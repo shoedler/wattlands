@@ -3,8 +3,9 @@ extends TankRecord
 ## Team counters for the score and the results (G0 contract; brief 2.8). Host only except the
 ## [snap] fields the HUD's objective line and boss bars need.
 
-## Kills by code: index TankIds.ENEMY_CODES value, BOSS_CODE for the Behemoth (index 0 unused).
-var kills: Array[int] = [0, 0, 0, 0, 0, 0, 0]
+## Kills by code: index TankIds.ENEMY_CODES value, BOSS_CODE for the Behemoth (index 0 unused; v4:
+## 7 recon, 8 tankette).
+var kills: Array[int] = [0, 0, 0, 0, 0, 0, 0, 0, 0]
 ## Kills by crew fire, main gun or bow guns (a support barrage kills nothing).
 var crew_kills: int = 0
 ## [snap]
@@ -31,3 +32,7 @@ var evades_ok: int = 0
 ## (v2) Bow-gun bursts fired and the ones that hit.
 var bow_shots: int = 0
 var bow_hits: int = 0
+## [snap] v4: TANK LOST count.
+var losses: int = 0
+## v4: near threats that got away (no reward, no penalty).
+var near_escaped: int = 0

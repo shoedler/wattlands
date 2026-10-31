@@ -110,7 +110,7 @@ func test_a_solo_rider_that_never_pedals_gets_through_on_the_reserve_alone() -> 
 	rig.play()
 	assert_true(rig.in_cooldown())
 	assert_eq(rig.state.outcome, TankIds.OUTCOME_WITHDRAWN)
-	assert_eq(rig.state.score.kills, [0, 0, 0, 0, 0, 0, 0] as Array[int])
+	assert_eq(rig.state.score.kills, [0, 0, 0, 0, 0, 0, 0, 0, 0] as Array[int])
 	assert_eq(rig.state.score.shots, 0)
 	assert_eq(rig.state.score.hits, 0)
 

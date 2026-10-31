@@ -20,7 +20,7 @@ extends RefCounted
 ## (machines quantised to UNIT_STEPS per crank revolution, flicker to FLICKER_HZ), each at most
 ## MAX_HZ, at most `budget` units per call; the texture uploads once per call that painted.
 
-const UNITS: Array[String] = ["drive", "gun", "lights", "sec", "loader", "bow"]
+const UNITS: Array[String] = ["drive", "gun", "lights", "sec", "loader", "bow", "repair"]
 ## The rooms and windows each unit paints into (it is clipped to them).
 const UNIT_RECTS := {
 	"drive": ["drive"],
@@ -29,6 +29,7 @@ const UNIT_RECTS := {
 	"sec": ["sec"],
 	"loader": ["loader", "shaft", "rackwin", "breechwin"],
 	"bow": ["boxwin", "boxwin2"],
+	"repair": ["turret_drive"],
 }
 const UNIT_STEPS := 24.0
 const FLICKER_HZ := 15.0
@@ -224,6 +225,16 @@ func _paint_unit(u: String, inp: Dictionary) -> void:
 			loader(inp.get("loader_seat", {}), inp.get("loader", {}), t)
 		"bow":
 			receivers(float((inp.get("bow", {}) as Dictionary).get("revs", -1.0)))
+		"repair":
+			var rp: Dictionary = inp.get("repair", {})
+			repair_bay(
+				rig.rooms["turret_drive"],
+				float(rp.get("revs", 0.0)),
+				int(rp.get("slot", -1)),
+				_on(rp),
+				float(rp.get("press_t", 0.0)),
+				int(rp.get("patches", 0))
+			)
 
 
 static func _ang(st: Dictionary) -> float:
@@ -330,6 +341,16 @@ func wheel(c: Vector2, r: float, ang: float, rim: Color, spokes: int = 4, teeth:
 			sp = minf(sp, TAU / spokes - sp) * rho
 			if sp < 0.8:
 				p(x, y, rim.darkened(0.1) if lit else rim.darkened(0.3))
+
+
+# --- Repair --------------------------------------------------------------------------------------------
+
+
+## v4: the Repairs machine in room `rr` (stub until builder A: the rider on its saddle).
+func repair_bay(
+	rr: Rect2, revs: float, slot: int, on: bool, _press_t: float, _patches: int
+) -> void:
+	seat(int(rr.position.x + 2), int(rr.end.y - 2), revs * TAU if on else 0.0, slot)
 
 
 # --- The pedal station ------------------------------------------------------------------------------------

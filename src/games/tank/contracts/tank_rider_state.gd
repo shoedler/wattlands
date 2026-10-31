@@ -10,7 +10,8 @@ const ENGINE_INDEX := {
 	TankIds.ENGINE_DYNAMO: 1,
 	TankIds.ENGINE_STEAM: 2,
 	TankIds.ENGINE_ARC: 4,
-	TankIds.ENGINE_FEED: 5
+	TankIds.ENGINE_FEED: 5,
+	TankIds.ENGINE_REPAIR: 6
 }
 ## Indexes of shells_by_type.
 const SHELL_INDEX := {
@@ -71,7 +72,7 @@ var connected: bool = true
 var work_s: float = 0.0
 var band_s: float = 0.0
 ## Game seconds per engine (ENGINE_INDEX).
-var engine_s: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+var engine_s: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 ## (v2) Telegraphed shots that resolved while this rider could evade, and those this rider's own
 ## surge made miss (brief 2.8: evades tried and successful).
 var evades_tried: int = 0
@@ -84,6 +85,8 @@ var berm_absorbed: float = 0.0
 var shots: int = 0
 var hits: int = 0
 var shells_by_type: Array[int] = [0, 0, 0, 0]
+## v4: hull HP this rider rebuilt.
+var repaired_hp: float = 0.0
 
 # --- Host-only helpers (never serialized: "_" names and Objects are skipped by TankRecord) -----------
 ## The sprint rule for evade and Overpressure: SprintRule.create(ftp, evade.sprint_window_s), the

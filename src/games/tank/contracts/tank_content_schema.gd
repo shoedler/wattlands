@@ -8,7 +8,7 @@ extends RefCounted
 ##
 ## Files:
 ##   tanks.json     tanks {landship} (v3: one tank, TankIds.TANKS): {code (TankIds.TANK_CODES),
-##                  crew [1, TankIds.MAX_CREW], hull_px, engines (its five seats rear to front, each
+##                  crew [1, TankIds.MAX_CREW], hull_px, engines (its six seats rear to front, each
 ##                  of TankIds.SEATS once), turrets, enemy_scale, geometry (GEOMETRY_SPEC, rules px in
 ##                  the hull frame; TankGeometry reads it)}; hull, drive, evade, berm, in_band,
 ##                  power_ratio, dynamo, steam (v3: the Loader's rack), gun, damage, bow (v3: the
@@ -19,14 +19,16 @@ extends RefCounted
 ##                  every engine has an entry for every segment type of TABLE_SEGMENTS; start_engines
 ##                  per tank: the seat of each slot (TankIds.MAX_CREW distinct seats; a crew of n
 ##                  uses the first n); v3 retired rotation (seat choice replaces it)
-##   enemies.json   types {light, medium, destroyer, dugin, heavy}: {code, hp, size_px, gun {damage,
-##                  every_s, hit}, light_mult, lane, flank? {telegraph_s, damage, hit}}; boss;
+##   enemies.json   types {light, medium, destroyer, dugin, heavy, recon, tankette}: {code, hp, gun
+##                  {damage, every_s, hit}, light_mult, flank? {telegraph_s, damage, hit}}, then by
+##                  kind ENEMY_FAR_SPEC, ENEMY_NEAR_SPEC or ENEMY_FRAME_SPEC (dugin); boss;
 ##                  miss_px; clamp; lanes; crew_count_scale (v3: enemy counts by crew size, one
-##                  factor in (0, 1] per crew size 1..TankIds.MAX_CREW) (ENEMIES_SPEC)
-##   missions/<id>.json  {id, label, segments: [{id, type, stage, kind, duration_s,
-##                  min_s?, max_s?, label, name, backdrop (TankIds.BACKDROPS), terrain?, length_m?,
-##                  encounters?,
-##                  obstacles?, enemies?, props?, drills?, boss?}], cooldown}
+##                  factor in (0, 1] per crew size 1..TankIds.MAX_CREW) (ENEMIES_SPEC); difficulty
+##                  (v4: easy, normal, hard, DIFFICULTY_MULTS and tank_loss, nothing else)
+##   missions/<id>.json  {id, label, difficulty_default?, score_stages?, segments: [{id, type, stage,
+##                  kind, duration_s, min_s?, max_s?, label, name, backdrop (TankIds.BACKDROPS),
+##                  terrain?, length_m?, encounters?, near? [{at_s, enemy, count?, min_crew?}],
+##                  obstacles?, enemies? [{.., hold_m?: [metres]}], props?, drills?, boss?}], cooldown}
 ##   missions/<id>.json with "kind": "roam" (free roam, brief 2.10): {id, kind, label, minutes}
 ##                  (validate_roam; TankContent.expand_roam turns it into the drive-out and the roam)
 ##   roam/valley.json  the free-roam valley: length, zones, terrain, strongpoints, patrols, turn,
@@ -85,6 +87,13 @@ const TANKS_SPEC := {
 	"gun.shell_speed_px_s": "pos",
 	"gun.gravity_px_s2": "pos",
 	"gun.aim_tol_deg": "pos",
+	"gun.far.v0_mps": "pos",
+	"gun.far.g_mps2": "pos",
+	"gun.far.max_range_m": "pos",
+	"gun.far.nudge_deg": "pos",
+	"gun.far.aim_tol_deg": "pos",
+	"gun.far.dispersion_deg": "pair",
+	"gun.far.splash_m": "nonneg",
 	"damage.light": "nonneg",
 	"damage.heavy": "nonneg",
 	"damage.over": "nonneg",
@@ -98,6 +107,9 @@ const TANKS_SPEC := {
 	"bow.clear_rounds": "pos",
 	"arc.dark_dispersion_mult": "pos",
 	"arc.dark_range_px": "pos",
+	"arc.dark_range_m": "pos",
+	"repair.hp_per_kj": "pos",
+	"repair.patch_hp": "pos",
 	"caps.enemies": "pos",
 	"caps.shells": "pos",
 }
@@ -145,6 +157,12 @@ const STATIONS_SPEC := {
 	"arc.substeps": "pos",
 	"arc.substep_s": "pos",
 	"arc.max_step_pts": "pos",
+	"repair.base_pct": "pos",
+	"repair.span_pct": "nonneg",
+	"repair.every_s": "pos",
+	"repair.substeps": "pos",
+	"repair.substep_s": "pos",
+	"repair.max_step_pts": "pos",
 	"boiler.grade_pct": "nonneg",
 	"boiler.warmup_grade_pct": "nonneg",
 	"boiler.max_rise_pct": "pos",
@@ -158,16 +176,43 @@ const STATIONS_SPEC := {
 	"haptics.boss_hit.duration_s": "pos",
 	"haptics.cooldown_s": "nonneg",
 }
+## What every enemy kind has.
 const ENEMY_SPEC := {
 	"code": "pos",
 	"hp": "pos",
-	"size_px": "pair",
 	"light_mult": "nonneg",
-	"lane": "nonneg",
 	"gun.damage": "nonneg",
 	"gun.every_s": "pos",
 	"gun.hit": "frac",
 }
+## v4: a kind of TankIds.FAR_KINDS (the far frame).
+const ENEMY_FAR_SPEC := {
+	"hold_m": "pair",
+	"enter_m": "pos",
+	"enter_mps": "pos",
+	"move_mps": "pos",
+	"hit_half_m": "pos",
+}
+## v4: a kind of TankIds.NEAR_KINDS (the near frame: bursts from the bushes, flees).
+const ENEMY_NEAR_SPEC := {
+	"size_px": "pair",
+	"spawn_px": "pair",
+	"burst_s": "pos",
+	"burst_px_s": "pos",
+	"dash_px": "pos",
+	"dash_px_s": "pos",
+	"pause_s": "pair",
+	"flee_px": "pos",
+	"flee_after_s": "pos",
+	"flee_px_s": "pos",
+}
+## Any other kind (the dug-in until it goes): the old frame's sprite size and lane.
+const ENEMY_FRAME_SPEC := {"size_px": "pair", "lane": "nonneg"}
+## v4: enemies.json difficulty.<level>: these multipliers, each in DIFFICULTY_MIN..DIFFICULTY_MAX, and
+## the bool tank_loss. Any other key is refused, so a retune cannot sneak an effort number in.
+const DIFFICULTY_MULTS: Array[String] = ["hp", "damage", "accuracy", "count", "telegraph", "repair"]
+const DIFFICULTY_MIN := 0.3
+const DIFFICULTY_MAX := 3.0
 const ENEMIES_SPEC := {
 	"types": "obj",
 	"boss.bogies": "pos",
@@ -184,6 +229,12 @@ const ENEMIES_SPEC := {
 	"boss.secondary.damage": "nonneg",
 	"boss.secondary.every_s": "pos",
 	"boss.secondary.hit": "frac",
+	"boss.far.start_m": "pos",
+	"boss.far.stop_m": "pos",
+	"boss.far.creep_mps": "nonneg",
+	"boss.far.pushback_m": "nonneg",
+	"boss.far.part_offset_m": "arr",
+	"boss.far.part_half_m": "arr",
 	"miss_px": "pair",
 	"clamp.ahead_max_right_px": "pos",
 	"clamp.behind_min_show_px": "nonneg",
@@ -203,6 +254,8 @@ const SCORING_SPEC := {
 	"objectives.stage_frac": "nonneg",
 	"objectives.boss_frac": "nonneg",
 	"survival_per_breakdown": "nonneg",
+	"survival_per_loss": "nonneg",
+	"loss_grade_cap": "str",
 	"grades.S": "num",
 	"grades.A": "num",
 	"grades.B": "num",
@@ -333,6 +386,9 @@ const STATION_BOUNDS: Array = [
 	["arc.base_pct", ">=", ERG_MIN_PCT, "arc targets inside 50..100% (4.6.1)"],
 	["arc.max_step_pts", "<=", BANK_MAX_STEP_PTS, "<= 10 points per update (4.6.2)"],
 	["arc.substep_s", ">=", BANK_MIN_SUBSTEP_S, "sub-steps >= 1 s apart (4.6.2)"],
+	["repair.base_pct", ">=", ERG_MIN_PCT, "repair targets inside 50..100% (4.6.1)"],
+	["repair.max_step_pts", "<=", BANK_MAX_STEP_PTS, "<= 10 points per update (4.6.2)"],
+	["repair.substep_s", ">=", BANK_MIN_SUBSTEP_S, "sub-steps >= 1 s apart (4.6.2)"],
 	["boiler.grade_pct", "<=", BOILER_MAX_PCT, "boiler 8% x difficulty <= +8% (4.6.6)"],
 	["boiler.warmup_grade_pct", "<=", BOILER_WARMUP_MAX_PCT, "warm-up SIM <= +3% (4.6.8)"],
 	["boiler.max_rise_pct", "<=", BOILER_MAX_RISE_PCT, "boiler rises <= 0.5% a step"],
@@ -544,12 +600,12 @@ static func _check_station_bounds(d: Dictionary, errors: Array[String]) -> void:
 		var ok := float(v) >= float(c[2]) if c[1] == ">=" else float(v) <= float(c[2])
 		if not ok:
 			errors.append("stations.json %s: must be %s %s (%s)" % [c[0], c[1], c[2], c[3]])
-	for k: String in ["bank", "arc"]:
+	for k: String in ["bank", "arc", "repair"]:
 		var sub_pts := float(d[k]["max_step_pts"]) / maxf(float(d[k]["substeps"]), 1.0)
 		if sub_pts > BANK_MAX_SUBSTEP_PTS + 1e-9:
 			var why := "%s.max_step_pts / %s.substeps: must be <= 10/3, got %s (3.3%%/s, 4.6.2)"
 			errors.append("stations.json " + why % [k, k, sub_pts])
-	for k: String in ["bank", "arc"]:
+	for k: String in ["bank", "arc", "repair"]:
 		if float(d[k]["base_pct"]) + float(d[k]["span_pct"]) > ERG_MAX_PCT:
 			errors.append("stations.json %s: base_pct + span_pct must be <= 100 (4.6.1)" % k)
 	if not bool(d["bank"]["clamp_to_range"]):
@@ -574,6 +630,7 @@ static func validate_enemies(d: Variant) -> Array[String]:
 				errors.append("enemies.json types: missing %s" % t)
 				continue
 			check_spec(types[t], ENEMY_SPEC, "enemies.json types.%s" % t, errors)
+			check_spec(types[t], _frame_spec(t), "enemies.json types.%s" % t, errors)
 			if int(types[t].get("code", 0)) != TankIds.enemy_code(t):
 				errors.append("enemies.json types.%s.code: must be %d" % [t, TankIds.enemy_code(t)])
 			if (types[t] as Dictionary).has("flank"):
@@ -582,6 +639,7 @@ static func validate_enemies(d: Variant) -> Array[String]:
 			var lane: Variant = (types[t] as Dictionary).get("lane")
 			if _num(lanes) and _num(lane) and int(lane) >= int(lanes):
 				errors.append("enemies.json types.%s.lane: must be below lanes.count" % t)
+	_check_difficulty((d as Dictionary).get("difficulty"), errors)
 	var scale: Variant = (d as Dictionary).get("crew_count_scale")
 	var scale_ok: bool = scale is Array and (scale as Array).size() == TankIds.MAX_CREW
 	if scale_ok:
@@ -614,6 +672,41 @@ static func validate_enemies(d: Variant) -> Array[String]:
 	return errors
 
 
+## The keys a kind needs besides ENEMY_SPEC.
+static func _frame_spec(type: String) -> Dictionary:
+	if TankIds.FAR_KINDS.has(type):
+		return ENEMY_FAR_SPEC
+	return ENEMY_NEAR_SPEC if TankIds.NEAR_KINDS.has(type) else ENEMY_FRAME_SPEC
+
+
+## v4: enemies.json difficulty: every level, its multipliers and tank_loss, and no other key: the
+## table may never carry an effort number (BRIEF 4.6; TankDifficulty).
+static func _check_difficulty(table: Variant, errors: Array[String]) -> void:
+	if not (table is Dictionary):
+		errors.append("enemies.json difficulty: expected an object")
+		return
+	for level: String in TankIds.DIFFICULTIES:
+		var where := "enemies.json difficulty.%s" % level
+		var row: Variant = (table as Dictionary).get(level)
+		if not (row is Dictionary):
+			errors.append("%s: missing" % where)
+			continue
+		for key: String in DIFFICULTY_MULTS:
+			var v: Variant = (row as Dictionary).get(key)
+			if not _num(v) or float(v) < DIFFICULTY_MIN or float(v) > DIFFICULTY_MAX:
+				errors.append(
+					"%s.%s: expected %s..%s" % [where, key, DIFFICULTY_MIN, DIFFICULTY_MAX]
+				)
+		if not ((row as Dictionary).get("tank_loss") is bool):
+			errors.append("%s.tank_loss: expected a bool" % where)
+		for key: Variant in row:
+			if str(key) != "tank_loss" and not DIFFICULTY_MULTS.has(str(key)):
+				errors.append("%s: unknown key %s (only the listed ones may vary)" % [where, key])
+	for level: Variant in table:
+		if not TankIds.DIFFICULTIES.has(str(level)):
+			errors.append("enemies.json difficulty: unknown level %s" % level)
+
+
 ## True for an array of one value per crew size 1..MAX_CREW, each in [lo, hi] (`ints`: whole).
 static func _crew_list(v: Variant, lo: float, hi: float, ints: bool) -> bool:
 	if not (v is Array) or (v as Array).size() != TankIds.MAX_CREW:
@@ -635,6 +728,10 @@ static func validate_mission(d: Variant, mission_id: String = "") -> Array[Strin
 		errors.append("%s id: must be %s" % [at, mission_id])
 	if not (d.get("label") is String):
 		errors.append("%s label: expected a strings key" % at)
+	if d.has("difficulty_default") and not TankIds.DIFFICULTIES.has(str(d["difficulty_default"])):
+		errors.append("%s difficulty_default: one of %s" % [at, ", ".join(TankIds.DIFFICULTIES)])
+	if d.has("score_stages") and not (_num(d["score_stages"]) and float(d["score_stages"]) > 0.0):
+		errors.append("%s score_stages: expected > 0" % at)
 	var segs: Variant = d.get("segments")
 	if not (segs is Array) or (segs as Array).is_empty():
 		errors.append("%s segments: expected a non-empty array" % at)
@@ -826,11 +923,12 @@ static func dig_index(d: Variant, path: String) -> Variant:
 	return cur
 
 
-## What needs two files ({tanks, stations, mission}; run once each file validated alone): the
-## start engines are rooms of their tank (v3: four of its five seats); the mission's plan table
+## What needs two files ({tanks, stations, mission, enemies?}; run once each file validated alone):
+## the start engines are rooms of their tank (v4: four of its six seats); the mission's plan table
 ## exists and holds every segment type it uses; an ERG phase planned at or above 90% (target or
 ## ramp, not the bank's range top) lasts at most 180 s at its longest; WARMUP-kind terrain stays
-## inside stations.json terrain.warmup_grade_pct.
+## inside stations.json terrain.warmup_grade_pct; v4: a holding force's hold_m stays at or above its
+## kind's hold_m[0] (the 6 s evade floor at Hard rests on it, SPEC_TANK section 2).
 static func validate_cross(files: Dictionary) -> Array[String]:
 	var errors: Array[String] = []
 	var tanks: Dictionary = files.get("tanks", {})
@@ -872,12 +970,26 @@ static func validate_cross(files: Dictionary) -> Array[String]:
 			)
 			if hard and longest > HARD_ERG_MAX_S:
 				errors.append("%s: %s rides ERG >= 90%% for over 180 s (4.6.1)" % [where, engine])
+		_check_hold_m(s, files.get("enemies", {}), where, errors)
 		if str(SEGMENT_KINDS.get(type, "")) == Wl.WARMUP and s.get("terrain") is Array:
 			for pt: Array in s["terrain"]:
 				if float(pt[1]) < float(warm[0]) or float(pt[1]) > float(warm[1]):
 					errors.append("%s terrain: outside terrain.warmup_grade_pct" % where)
 					break
 	return errors
+
+
+## v4: no entry of a segment's enemies holds nearer than its kind's hold_m[0].
+static func _check_hold_m(s: Dictionary, enemies: Dictionary, where: String, errors: Array) -> void:
+	for e: Variant in s.get("enemies", []) if s.get("enemies", []) is Array else []:
+		if not (e is Dictionary) or not (e.get("hold_m") is Array):
+			continue
+		var low: Variant = dig_index(enemies, "types.%s.hold_m.0" % str(e.get("enemy", "")))
+		for m: Variant in e["hold_m"]:
+			if not _num(m) or (_num(low) and float(m) < float(low)):
+				errors.append(
+					"%s enemies: %s hold_m %s below the kind's hold_m[0]" % [where, e["enemy"], m]
+				)
 
 
 static func _check_plan_entry(e: Variant, where: String, errors: Array[String]) -> void:
@@ -934,7 +1046,8 @@ static func _check_segment(s: Variant, where: String, errors: Array[String]) -> 
 		for e: Variant in s.get("encounters", []):
 			if not (e is Dictionary) or not TankIds.ENEMY_TYPES.has(str(e.get("enemy", ""))):
 				errors.append("%s encounters: each needs a known enemy" % where)
-	for key in ["encounters", "enemies", "obstacles"]:
+	_check_near(s.get("near", []), where, errors)
+	for key in ["encounters", "enemies", "obstacles", "near"]:
 		for e: Variant in s.get(key, []) if s.get(key, []) is Array else []:
 			var mc: Variant = (e as Dictionary).get("min_crew", 1) if e is Dictionary else 1
 			if not _num(mc) or int(mc) < 1 or int(mc) > TankIds.MAX_CREW:
@@ -944,6 +1057,22 @@ static func _check_segment(s: Variant, where: String, errors: Array[String]) -> 
 			errors.append("%s max_s: a 90%% gun line lasts at most 180 s (4.6.1)" % where)
 	if s.has("terrain"):
 		_check_terrain(s["terrain"], str(SEGMENT_KINDS[type]) == Wl.WARMUP, where, errors)
+
+
+## v4: a segment's near list: [{at_s, enemy (a near kind), count?, min_crew?}], at_s ascending.
+static func _check_near(list: Variant, where: String, errors: Array[String]) -> void:
+	var last := -1.0
+	for e: Variant in list if list is Array else [null]:
+		var ok: bool = (
+			e is Dictionary
+			and _num(e.get("at_s"))
+			and float(e["at_s"]) >= last
+			and TankIds.NEAR_KINDS.has(str(e.get("enemy", "")))
+		)
+		if not ok:
+			errors.append("%s near: [{at_s, enemy: a near kind}, ...] at_s ascending" % where)
+			return
+		last = float(e["at_s"])
 
 
 ## [[distance_m, grade_pct], ...] ascending, every grade inside -3..+6% (0..+2% in WARMUP kinds).

@@ -38,3 +38,14 @@ var dmg_since_backoff: float = 0.0
 var weave: float = 0.0
 ## The encounter index that spawned it (-1 for a gun line or the boss).
 var encounter: int = -1
+## [snap] v4: far kinds: range in metres from the hull's front to the enemy; 0 for a near kind.
+var range_m: float = 0.0
+## v4: far kinds: the range it is heading for or holds (host only).
+var hold_m: float = 0.0
+## v4: far kinds: d(range)/dt in m/s this tick (host only; the lead solver reads it).
+var rate_mps: float = 0.0
+
+
+## v4: a near kind (recon, tankette): x_px and the near frame; a far kind has range_m instead.
+func is_near() -> bool:
+	return TankIds.is_near_code(code)

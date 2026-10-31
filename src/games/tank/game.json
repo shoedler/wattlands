@@ -16,6 +16,9 @@
   "e2e_content": "drill",
   "zero_input_content": "ashfall_road",
   "first_run_priority": -1,
+  "options": [{"id": "difficulty", "type": "choice", "default": "auto", "label": "TANK_OPT_DIFFICULTY", "choices": [
+    {"value": "auto", "label": "TANK_DIFF_AUTO"}, {"value": "easy", "label": "TANK_DIFF_EASY"},
+    {"value": "normal", "label": "TANK_DIFF_NORMAL"}, {"value": "hard", "label": "TANK_DIFF_HARD"}]}],
   "player_options": [{"id": "miniature", "type": "toggle", "default": true, "label": "TANK_OPT_MINIATURE"}],
   "content_cards": {
     "ashfall_road": {"image": "res://assets/tank/v2/card_mission.png", "detail": "TANK_CARD_MISSION", "featured": true},

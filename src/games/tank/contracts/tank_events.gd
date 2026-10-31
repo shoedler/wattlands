@@ -10,9 +10,12 @@ extends RefCounted
 ##   rotation   reserved (v3 retired rotation: seat choice replaces it): never emitted, kept in TYPES
 ##              and INT_FIELDS so the name stays taken on the wire
 ##   shot       {s: slot or -1 (enemy), sh: shell type, id: shell id, src: enemy id or 0,
-##               e: enemy code or 0}
+##               e: enemy code or 0, rng_m: v4 far shells: the range in metres (ours: where it
+##               lands, theirs: the shooter's range), 0 on a near shell; a far shell also carries
+##               flight_s: seconds of flight, a float to 0.01 s (FLOAT_FIELDS)}
 ##   hit        {on: ON_*, id: target id (0 the tank), dmg: the round's damage before the berm
-##               (rounded), sh: shell type, b: the part the berm absorbed (rounded), x: world x px};
+##               (rounded), sh: shell type, b: the part the berm absorbed (rounded), x: world x px,
+##               v4: range in m for a far hit on an enemy or the boss};
 ##               a tank hit by the Behemoth's main gun has sh SHELL_BOSS_MAIN
 ##   kill       {id, e: enemy code (BOSS_CODE for the Behemoth), by: BY_*, s: credited slot or -1}
 ##   ram, dodge reserved (v1's Ram and boss dodge; v2 removed both, brief 2.4): never emitted, kept
@@ -36,6 +39,14 @@ extends RefCounted
 ## Additive (v3, brief "Seat choice and switching"):
 ##   seat       {s: slot, from: the engine code of the seat left, to: the engine code of the seat
 ##               taken}                                         a rider moved seats (arrived)
+## Additive (v4):
+##   tank_lost  {n: losses so far, sg: seg code, st: stage}        the hull hit 0 HP on Normal or Hard
+##   stage_restart {sg, st, hp}                       the tow ended, the world is set up again
+##   ambush     {id, e}                               a near threat burst from the bushes
+##   escaped    {id, e}                               it got away (no reward, no penalty)
+##   splash     {r: metres from the hull, sh, f: 1 ours / 0 theirs}      a far shell hit nothing
+## v4 semantics (R): a telegraphed far shot's evade event comes at impact, after its shot; every
+## telegraphed shot that lands raises one. hit's dmg stays before difficulty (haptics read it).
 ##
 ## Semantics the haptics depend on (brief 2.7; the director reads them this way):
 ## - An evaded shot misses: no `hit` event, so no haptic.
@@ -70,6 +81,16 @@ const TURN := "turn"
 const TIME_UP := "time_up"
 ## v3: a rider moved seats.
 const SEAT := "seat"
+## v4: {n: losses so far, sg: seg code, st: stage}.
+const TANK_LOST := "tank_lost"
+## v4: {sg, st, hp}: the tow ended, the world is set up again.
+const STAGE_RESTART := "stage_restart"
+## v4: {id, e}: a near threat burst from the bushes.
+const AMBUSH := "ambush"
+## v4: {id, e}: it got away (no reward, no penalty).
+const ESCAPED := "escaped"
+## v4: {r: metres from the hull, sh, f: 1 ours / 0 theirs}: a shell hit nothing.
+const SPLASH := "splash"
 const TYPES: Array[String] = [
 	SEGMENT,
 	ROTATION,
@@ -87,7 +108,12 @@ const TYPES: Array[String] = [
 	EVADE,
 	TURN,
 	TIME_UP,
-	SEAT
+	SEAT,
+	TANK_LOST,
+	STAGE_RESTART,
+	AMBUSH,
+	ESCAPED,
+	SPLASH
 ]
 
 ## hit "on"
@@ -105,7 +131,7 @@ const BY_BOW := 3
 const INT_FIELDS := {
 	SEGMENT: ["i", "sg", "st"],
 	ROTATION: ["r[][]"],
-	SHOT: ["s", "sh", "id", "src", "e"],
+	SHOT: ["s", "sh", "id", "src", "e", "rng_m"],
 	HIT: ["on", "id", "dmg", "sh", "b", "x"],
 	KILL: ["id", "e", "by", "s"],
 	RAM: ["s", "ok", "id"],
@@ -120,17 +146,43 @@ const INT_FIELDS := {
 	TURN: ["s", "dir"],
 	TIME_UP: ["p"],
 	SEAT: ["s", "from", "to"],
+	TANK_LOST: ["n", "sg", "st"],
+	STAGE_RESTART: ["sg", "st", "hp"],
+	AMBUSH: ["id", "e"],
+	ESCAPED: ["id", "e"],
+	SPLASH: ["r", "sh", "f"],
 }
+## v4: the one event number that is not an int: seconds of flight, rounded to 0.01 s (whole seconds
+## would lose what the incoming whistle's pitch needs). Only on far shots.
+const FLOAT_FIELDS := {SHOT: ["flight_s"]}
 
 
 static func segment(index: int, seg: String, stage: int) -> Dictionary:
 	return {"type": SEGMENT, "i": index, "sg": TankIds.seg_code(seg), "st": stage}
 
 
+## `flight_s` > 0 marks a far shell (v4): only then does the event carry flight_s.
 static func shot(
-	slot: int, shell: int, shell_id: int, src: int = 0, enemy_code: int = 0
+	slot: int,
+	shell: int,
+	shell_id: int,
+	src: int = 0,
+	enemy_code: int = 0,
+	flight_s: float = 0.0,
+	rng_m: float = 0.0
 ) -> Dictionary:
-	return {"type": SHOT, "s": slot, "sh": shell, "id": shell_id, "src": src, "e": enemy_code}
+	var e := {
+		"type": SHOT,
+		"s": slot,
+		"sh": shell,
+		"id": shell_id,
+		"src": src,
+		"e": enemy_code,
+		"rng_m": roundi(rng_m)
+	}
+	if flight_s > 0.0:
+		e["flight_s"] = roundf(flight_s * 100.0) / 100.0
+	return e
 
 
 static func hit(
@@ -197,6 +249,31 @@ static func turn(slot: int, dir: int) -> Dictionary:
 ## TANK_TEAM_PATROLS equals it).
 static func time_up(patrols: int = 0) -> Dictionary:
 	return {"type": TIME_UP, "p": patrols}
+
+
+## v4: the crew lost the tank (`n` losses so far) on stage `stage` of segment `seg`.
+static func tank_lost(n: int, seg: String, stage: int) -> Dictionary:
+	return {"type": TANK_LOST, "n": n, "sg": TankIds.seg_code(seg), "st": stage}
+
+
+## v4: the tow ended; the stage starts over with the hull at `hp`.
+static func stage_restart(seg: String, stage: int, hp: float) -> Dictionary:
+	return {"type": STAGE_RESTART, "sg": TankIds.seg_code(seg), "st": stage, "hp": roundi(hp)}
+
+
+## v4: enemy `id` of code `code` burst from the bushes.
+static func ambush(id: int, code: int) -> Dictionary:
+	return {"type": AMBUSH, "id": id, "e": code}
+
+
+## v4: near threat `id` got away.
+static func escaped(id: int, code: int) -> Dictionary:
+	return {"type": ESCAPED, "id": id, "e": code}
+
+
+## v4: far shell `shell` (a type) landed `range_m` from the hull and hit nothing.
+static func splash(range_m: float, shell: int, friendly: bool) -> Dictionary:
+	return {"type": SPLASH, "r": roundi(range_m), "sh": shell, "f": int(friendly)}
 
 
 ## True for a hit on the tank that the brief's "Hit of >= 8 damage" haptic covers (brief 2.7):
