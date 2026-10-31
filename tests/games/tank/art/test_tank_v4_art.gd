@@ -340,6 +340,115 @@ func test_the_moon_only_reaches_open_top_edges() -> void:
 		)
 
 
+## The moon is on every hull's deck, in its own cold colours, not snapped to the sage: the turret and the deck under
+## it are one moon. At most a broken rim says nothing if there is no rim at all.
+func test_the_moon_reaches_every_kinds_deck() -> void:
+	var fewest := {
+		"tankette": 8,
+		"recon": 15,
+		"light": 18,
+		"medium": 25,
+		"heavy": 35,
+		"destroyer": 35,
+		"behemoth": 90,
+	}
+	for k: String in fewest:
+		var ri := Rect2i(_kit.kind(k)["base"])
+		var n := 0
+		for y in range(ri.position.y, ri.end.y):
+			for x in range(ri.position.x, ri.end.x):
+				var c := _atlas.get_pixel(x, y)
+				if c.a > 0.5 and (c.is_equal_approx(MOON[0]) or c.is_equal_approx(MOON[1])):
+					n += 1
+		assert_gte(n, int(fewest[k]), "%s: moon on the deck" % k)
+
+
+# --- Wear at the plates' scale ----------------------------------------------------------------------------
+
+
+## The std of the mean L of the fully opaque 8 x 8 blocks of hull and skirts, above the wheels (the hero's armour:
+## stern 5, bow 8.5, deck 12). Fine noise of the rivets' size does not move it.
+func _hull_block_std(k: String) -> float:
+	var row := _kit.kind(k)
+	var base := Rect2i(row["base"])
+	var front := Rect2i(row["front"]) if row.has("front") else Rect2i()
+	var wheels: Array[Vector3] = row["gear"]["wheels"]
+	var wheel_top := int(wheels[0].y - wheels[0].z) - 1
+	var means: Array[float] = []
+	for y0 in range(0, wheel_top - 7, 4):
+		for x0 in range(0, base.size.x - 7, 4):
+			var total := 0.0
+			var whole := true
+			for y in range(y0, y0 + 8):
+				for x in range(x0, x0 + 8):
+					var c := _atlas.get_pixel(base.position.x + x, base.position.y + y)
+					if front.has_area():
+						var f := _atlas.get_pixel(front.position.x + x, front.position.y + y)
+						if f.a > 0.5:
+							c = f
+					whole = whole and c.a > 0.5
+					total += _luma(c)
+			if whole:
+				means.append(total / 64.0)
+	var mean := 0.0
+	for m in means:
+		mean += m
+	mean /= maxf(float(means.size()), 1.0)
+	var v := 0.0
+	for m2 in means:
+		v += (m2 - mean) * (m2 - mean)
+	return sqrt(v / maxf(float(means.size()), 1.0))
+
+
+func test_the_wear_shows_at_the_scale_of_the_plates() -> void:
+	for k: String in ["light", "medium", "heavy", "destroyer", "behemoth"]:
+		var std := _hull_block_std(k)
+		assert_gte(std, 5.0, "%s: plates and patches apart in value (block std %.1f)" % [k, std])
+
+
+# --- The table's lights -----------------------------------------------------------------------------------
+
+
+## SPEC_TANK 5.2's lights, and no hull slit hangs on the running gear: a cold lamp on a turning wheel is the
+## brightest thing on the bow.
+func test_the_slits_are_the_tables_and_stand_on_the_armour() -> void:
+	var table := {
+		"tankette": [1, 0],
+		"recon": [2, 1],
+		"light": [2, 0],
+		"medium": [3, 0],
+		"heavy": [4, 0],
+		"destroyer": [2, 0],
+		"behemoth": [6, 0],
+	}
+	for k: String in table:
+		var row := _kit.kind(k)
+		assert_eq((row["slits"] as Array).size(), int(table[k][0]), "%s: slits" % k)
+		assert_eq((row["lamps"] as Array).size(), int(table[k][1]), "%s: lamps" % k)
+		var g: Dictionary = row["gear"]
+		var round_things: Array[Vector3] = []
+		round_things.append_array(g["wheels"] as Array[Vector3])
+		if g.has("sprocket"):
+			round_things.append(g["sprocket"])
+		if g.has("idler"):
+			round_things.append(g["idler"])
+		for b: Dictionary in row.get("bogies", []):
+			round_things.append(b["sprocket"])
+		for s: Array in row["slits"]:
+			if int(s[3]) != 0:
+				continue
+			for x in range(int(s[0]), int(s[0]) + int(s[2])):
+				var at := Vector2(float(x) + 0.5, float(s[1]) + 0.5)
+				for w in round_things:
+					# the wheel, the belt round it, a tooth or a tyre's rim
+					var reach := w.z + 0.5 + float(g["T"]) + 1.0
+					assert_gt(
+						at.distance_to(Vector2(w.x, w.y)),
+						reach,
+						"%s: slit %s is off the gear" % [k, s]
+					)
+
+
 # --- Running gear -----------------------------------------------------------------------------------------
 
 
@@ -354,6 +463,49 @@ func _p95_l(r: Rect2) -> float:
 				ls.append(_luma(c))
 	ls.sort()
 	return ls[int(ls.size() * 0.95)] if not ls.is_empty() else 0.0
+
+
+## The top run lies in the hull's shade: its median two ramp steps under the plates over it, on the kinds with no
+## skirt to hide it, so it is no bright band under the armour.
+func test_the_top_run_is_darker_than_the_hull() -> void:
+	for k: String in ["light", "destroyer", "behemoth"]:
+		var row := _kit.kind(k)
+		var tr: Rect2 = row["track"]["rect"]
+		var lit := _median_l(Rect2(tr.position, Vector2(tr.size.x, tr.size.y * 0.5)))
+		var wheels: Array[Vector3] = row["gear"]["wheels"]
+		var base: Rect2 = row["base"]
+		var hull := _median_l(
+			Rect2(base.position, Vector2(base.size.x, float(int(wheels[0].y - wheels[0].z) - 3)))
+		)
+		assert_lte(lit + 5.0, hull, "%s: top run %.0f under the hull's %.0f" % [k, lit, hull])
+
+
+func _median_l(r: Rect2) -> float:
+	var ri := Rect2i(r)
+	var ls: Array[float] = []
+	for y in range(ri.position.y, ri.end.y):
+		for x in range(ri.position.x, ri.end.x):
+			var c := _atlas.get_pixel(x, y)
+			if c.a > 0.5:
+				ls.append(_luma(c))
+	ls.sort()
+	return ls[ls.size() / 2] if not ls.is_empty() else 0.0
+
+
+## Few big teeth at twice the shoes' pitch, so each sits in a gap of the belt; the drum under the road wheels' light.
+func test_a_sprockets_teeth_keep_the_shoes_pitch() -> void:
+	for k: String in ["tankette", "light", "medium", "heavy", "destroyer", "behemoth"]:
+		var row := _kit.kind(k)
+		var s: Dictionary = row["sheets"]["sprocket"]
+		var teeth := int(s["teeth"])
+		assert_between(teeth, 3, 8, "%s: few teeth" % k)
+		assert_almost_eq(
+			float(s["period"]), TAU / float(teeth), 0.001, "%s: its sheet is one tooth" % k
+		)
+		var arc := TAU * (float(s["r"]) + 0.5) / float(teeth)
+		var shoes := arc / float(row["track"]["pitch"])
+		assert_almost_eq(shoes, 2.0, 0.25, "%s: a tooth to every second shoe" % k)
+		assert_lte(_p95_l(s["rect"]), _p95_l(row["sheets"]["road"]["rect"]), "%s: no louder" % k)
 
 
 ## The belt is the quietest band: the top run at the hero's track (p95 71), the lower run almost nothing.
@@ -398,6 +550,40 @@ func test_the_tankette_is_a_box_above_its_wheels() -> void:
 
 
 # --- Silhouettes ------------------------------------------------------------------------------------------
+
+
+## "A low riveted box", at 1x: square at its stern and its nose, clear of the belt's curve, stepped down at the
+## front, and the MG runs out past all of it at its own height.
+func test_the_tankette_is_a_stepped_square_box_with_its_gun_past_the_hull() -> void:
+	var row := _kit.kind("tankette")
+	var b := Rect2i(row["base"])
+	var left := func(y: int) -> int:
+		for x in b.size.x:
+			if _atlas.get_pixel(b.position.x + x, b.position.y + y).a > 0.5:
+				return x
+		return b.size.x
+	var right := func(y: int) -> int:
+		for x in range(b.size.x - 1, -1, -1):
+			if _atlas.get_pixel(b.position.x + x, b.position.y + y).a > 0.5:
+				return x
+		return -1
+	assert_eq(left.call(6), left.call(10), "a square stern")
+	assert_lte(
+		int(right.call(6)) + 4, int(right.call(9)), "the nose steps out below the box's front"
+	)
+	var muzzle: Vector2 = row["muzzle_at_0"]
+	assert_gt(muzzle.x, float(right.call(9)), "the MG ends past the whole hull")
+	var gun_row := int(muzzle.y)
+	assert_lt(
+		int(right.call(gun_row)), int((row["gun"]["trunnion"] as Vector2).x), "clear of the box"
+	)
+	var top := 99
+	for x in b.size.x:
+		for y in b.size.y:
+			if _atlas.get_pixel(b.position.x + x, b.position.y + y).a > 0.5:
+				top = mini(top, y)
+				break
+	assert_gte(top, 4, "the drum stands proud of the box by four rows or more")
 
 
 ## The filled shape's top edge over `n` columns of the sprite's width, as a share of its height (hull and turret
@@ -558,6 +744,67 @@ func test_wrecks_are_burnt_and_torn() -> void:
 		assert_false(hist.has(SLIT_GLOW.to_html(false)), "%s: dead slits" % k)
 		assert_true(hist.has("0d0a08") or hist.has("1c1410"), "%s: charred" % k)
 		assert_true(row.has("wreck_fire"), "%s burns somewhere" % k)
+
+
+## Charred, not brown paint: a wreck is darker than the live hulls, its lightest burn colour only on edges and lips.
+func test_a_wreck_is_darker_than_the_live_hull() -> void:
+	for k: String in TankEnemyKit.SIZES:
+		var row := _kit.kind(k)
+		var wreck: Rect2 = row["wreck"]
+		var wheels: Array[Vector3] = row["gear"]["wheels"]
+		var base: Rect2 = row["base"]
+		var hull := _median_l(
+			Rect2(base.position, Vector2(base.size.x, float(int(wheels[0].y - wheels[0].z) - 3)))
+		)
+		assert_lte(_median_l(wreck), hull, "%s: burnt, not lit" % k)
+		var ri := Rect2i(wreck)
+		var n := 0
+		var edge := 0
+		for y in range(ri.position.y, ri.end.y):
+			for x in range(ri.position.x, ri.end.x):
+				var c := _atlas.get_pixel(x, y)
+				if c.a > 0.5:
+					n += 1
+					edge += int(c.is_equal_approx(Color("#3f2a1c")))
+		assert_lt(float(edge) / float(n), 0.15, "%s: the top burn colour is for lips and edges" % k)
+
+
+## Every fire stands on the hull or the turret, never on a barrel with nothing burning under it.
+func test_every_fire_stands_on_the_hull_or_the_turret() -> void:
+	for k: String in TankEnemyKit.SIZES:
+		var row := _kit.kind(k)
+		var sil := Rect2i(row["sil"])
+		for f: Array in row["wreck_fires"]:
+			var foot := Vector2i(int(f[0]), int(f[1]) + 2)
+			var on_hull := (
+				_atlas.get_pixel(sil.position.x + foot.x, sil.position.y + foot.y).a > 0.5
+			)
+			var on_turret := false
+			if row.has("turret"):
+				var ts := Rect2i(row["turret"]["sil"])
+				var at := Vector2i(row["turret"]["at"] as Vector2)
+				# a wreck's turret sits a little askew
+				for dy in range(-5, 6):
+					for dx in range(-5, 6):
+						var q := foot + Vector2i(dx, dy) - at
+						if Rect2i(Vector2i.ZERO, ts.size).has_point(q):
+							if _atlas.get_pixel(ts.position.x + q.x, ts.position.y + q.y).a > 0.5:
+								on_turret = true
+			assert_true(on_hull or on_turret, "%s: the fire at %s has plate under it" % [k, foot])
+
+
+## The glow is the atlas's falloff: nothing at its edge, full at its heart, never a step.
+func test_the_glow_fades_to_nothing_with_no_edge() -> void:
+	var r := Rect2i(_kit.kind("medium")["glow"])
+	var y := r.position.y + r.size.y / 2
+	assert_lt(_atlas.get_pixel(r.position.x, y).a, 0.01, "nothing at its rim")
+	assert_gt(_atlas.get_pixel(r.position.x + r.size.x / 2, y).a, 0.8, "full at its heart")
+	var last := 0.0
+	for x in range(r.position.x, r.position.x + r.size.x / 2):
+		var a := _atlas.get_pixel(x, y).a
+		assert_gte(a, last - 0.005, "it only rises towards the heart")
+		assert_lt(a - last, 0.12, "no step")
+		last = a
 
 
 ## A flame scales with the kind: the Behemoth's is several times the tankette's, and it burns in more places.

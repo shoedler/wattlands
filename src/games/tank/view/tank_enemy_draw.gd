@@ -96,11 +96,10 @@ static func draw_light(
 	var row := kit.kind(kind)
 	if not row.has("base"):
 		return
-	var k := 1.0 - clampf(float(pose.get("dim", 0.0)), 0.0, 1.0)
-	k *= 1.0 - 0.5 * clampf(float(pose.get("haze", 0.0)), 0.0, 1.0)
 	if bool(pose.get("wrecked", false)):
-		_fire(ci, row, foot, pose)
+		_fire(ci, kit.texture(), row, foot, pose)
 		return
+	var k := light_k(pose)
 	var hull := hull_pose(row, foot, pose)
 	var xf: Transform2D = hull["stage"]
 	var txf := xf * turret_xf(row, pose)
@@ -125,6 +124,14 @@ static func draw_light(
 		ci.draw_rect(fr.grow(3.0), SLIT * (0.1 * k * fl))
 		ci.draw_rect(fr, SLIT * (0.4 * k * fl))
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+
+## The strength of the slits and lamps in a pose: dimmed and hazed with the rest, and gone under a hit's flash,
+## which lights the whole shape.
+static func light_k(pose: Dictionary) -> float:
+	var k := 1.0 - clampf(float(pose.get("dim", 0.0)), 0.0, 1.0)
+	k *= 1.0 - 0.5 * clampf(float(pose.get("haze", 0.0)), 0.0, 1.0)
+	return k * (1.0 - clampf(float(pose.get("flash", 0.0)), 0.0, 1.0))
 
 
 ## Where a shot leaves the gun, on the stage.
@@ -315,7 +322,8 @@ static func _gear(
 		return
 	var circles := belt_circles(g, wheels)
 	var key := "%s" % kind
-	_track(ci, tex, row, _belt_cached(key, circles), travel, tint)
+	var belt := _belt_cached(key, circles)
+	_track(ci, tex, row, belt, travel, tint)
 	if g.has("idler"):
 		var idl: Vector3 = g["idler"]
 		_sheet(ci, tex, sheets["idler"], Vector2(idl.x, idl.y), travel / idl.z, tint)
@@ -326,7 +334,8 @@ static func _gear(
 		_sheet(ci, tex, sheets["roller"], Vector2(r.x, r.y), travel / r.z, tint)
 	if g.has("sprocket"):
 		var sp: Vector3 = g["sprocket"]
-		_sheet(ci, tex, sheets["sprocket"], Vector2(sp.x, sp.y), travel / sp.z, tint)
+		var a2 := sprocket_angle(belt, sp, travel)
+		_sheet(ci, tex, sheets["sprocket"], Vector2(sp.x, sp.y), a2, tint)
 
 
 ## The Behemoth: each bogie its own run; a wrecked one is a charred sprite with its track thrown.
@@ -357,13 +366,16 @@ static func _bogies(
 			circles.append(_circle(Vector2(r.x, r.y), r.z))
 		for k in range(n - 1, -1, -1):
 			circles.append(_circle(wc[k], bw[k].z))
-		_track(ci, tex, row, _belt_cached("bogie%d" % i, circles), travel, tint)
+		var belt := _belt_cached("bogie%d" % i, circles)
+		_track(ci, tex, row, belt, travel, tint)
 		for k2 in n:
 			_sheet(ci, tex, sheets["road"], wc[k2], travel / bw[k2].z, tint)
 		for r2 in rl:
 			_sheet(ci, tex, sheets["roller"], Vector2(r2.x, r2.y), travel / r2.z, tint)
-		_sheet(ci, tex, sheets["sprocket"], Vector2(sp.x, sp.y), travel / sp.z, tint)
 		ci.draw_texture_rect_region(tex, _at(b["at"], b["rect"]), b["rect"], tint)
+		# the sprocket stands whole in front of the bogie's frame
+		var a3 := sprocket_angle(belt, sp, travel)
+		_sheet(ci, tex, sheets["sprocket"], Vector2(sp.x, sp.y), a3, tint)
 
 
 ## The belt's circles, clockwise on screen from the leftmost end wheel: the return rollers left to right,
@@ -398,6 +410,24 @@ static func _belt_cached(key: String, circles: Array[Vector3]) -> Dictionary:
 	b["circles"] = circles
 	_belts[key] = b
 	return b
+
+
+## The sprocket's angle at `travel`: it turns with the belt on its pitch circle, a tooth in the shoe's gap where
+## tooth and belt meet (`_track` puts a gap at `travel` + k pitch along the belt).
+static func sprocket_angle(b: Dictionary, sp: Vector3, travel: float) -> float:
+	var c := Vector2(sp.x, sp.y)
+	var rp := sp.z + 0.5
+	var pts: Array = b["pts"]
+	var top := c - Vector2(0.0, rp)
+	var best := INF
+	var at: Array = pts[0]
+	for e: Array in pts:
+		var d := (e[0] as Vector2).distance_squared_to(top)
+		if d < best:
+			best = d
+			at = e
+	var th := ((at[0] as Vector2) - c).angle()
+	return th + (travel - float(at[2])) / rp
 
 
 ## A wheel's sheet frame for angle `ang`, centred on `c`.
@@ -514,7 +544,9 @@ static func along(pts: Array, total: float, s: float, cursor: int) -> Array:
 
 
 ## The wreck's fires, each its flame out of its torn mouth, sized with the kind.
-static func _fire(ci: CanvasItem, row: Dictionary, foot: Vector2, pose: Dictionary) -> void:
+static func _fire(
+	ci: CanvasItem, tex: Texture2D, row: Dictionary, foot: Vector2, pose: Dictionary
+) -> void:
 	var fires: Array = row.get("wreck_fires", [])
 	if fires.is_empty():
 		return
@@ -522,43 +554,91 @@ static func _fire(ci: CanvasItem, row: Dictionary, foot: Vector2, pose: Dictiona
 	d *= 1.0 - 0.45 * clampf(float(pose.get("haze", 0.0)), 0.0, 1.0)
 	var t := floorf(float(pose.get("time", 0.0)) * FIRE_STEPS) / FIRE_STEPS
 	_set_xf(ci, _flat(row, foot, pose))
+	var glow: Rect2 = row.get("glow", Rect2())
 	for i in fires.size():
 		var f: Array = fires[i]
-		_flame(
-			ci,
-			Vector2(float(f[0]), float(f[1])),
-			float(f[2]),
-			t + float(i) * 1.37,
-			foot.x + i * 13.0,
-			d
-		)
+		var at := Vector2(float(f[0]), float(f[1]))
+		var height := float(f[2])
+		var seed := foot.x + i * 13.0
+		var breathe := 0.82 + 0.18 * sin((t + float(i) * 1.37) * 13.0 + seed)
+		# its glow on what is round it, from the mouth: strongest on the plate it lights, nothing at its edge
+		if tex != null and glow.size.x > 0.0:
+			_glow(ci, tex, glow, at, height * 1.25, FIRE_EDGE, 0.34 * d * breathe)
+			_glow(
+				ci,
+				tex,
+				glow,
+				at - Vector2(0.0, height * 0.2),
+				height * 0.6,
+				FIRE,
+				0.3 * d * breathe
+			)
+		_flame(ci, at, height, t + float(i) * 1.37, seed, d)
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
 
 
-## One tongue of fire `height` px tall, standing on `at`: stepped rows, wide at the foot, licking to one side,
-## its edge red, then orange, a yellow-white core low down. `a` is the fire's strength, never its colour.
+## The fire's tongues for its height: one on the small kinds, up to three of unequal height on the large.
+static func tongues_of(height: float) -> int:
+	return 1 if height < 11.0 else (2 if height < 22.0 else 3)
+
+
+## A fire `height` px tall standing on `at`: its tongues, the shorter ones behind, and an ember or two above.
 static func _flame(
 	ci: CanvasItem, at: Vector2, height: float, t: float, seed: float, a: float
 ) -> void:
-	var row_h := maxf(floorf(height / 12.0), 1.0)
+	var n := tongues_of(height)
+	for i in range(n - 1, -1, -1):
+		var share: float = [1.0, 0.66, 0.44][i]
+		var off: float = [0.0, -0.3, 0.34][i] * height * 0.5
+		_tongue(
+			ci,
+			at + Vector2(roundf(off), 0.0),
+			height * share,
+			t + float(i) * 0.7,
+			seed + i * 5.3,
+			a
+		)
+	if n > 1:
+		for e in n - 1:
+			# embers climb off the tip, each on its own clock
+			var u := fposmod(t * (0.9 + 0.3 * float(e)) + seed * 0.37 + float(e) * 0.41, 1.0)
+			var q := (
+				at
+				+ Vector2(
+					roundf(sin(u * 5.0 + seed + float(e)) * height * 0.18 + float(e) * 3.0 - 1.0),
+					-roundf(height * (0.86 + 0.5 * u))
+				)
+			)
+			var col := FIRE if u < 0.5 else FIRE_EDGE
+			ci.draw_rect(Rect2(q, Vector2.ONE), Color(col.r, col.g, col.b, a * (1.0 - u * 0.7)))
+
+
+## One tongue of fire: stepped rows, wide at the foot, licking to one side, its edge red and broken, then orange, a
+## yellow-white core low down. It ends in a torn tip, never a thin stick. `a` is the fire's strength, never its
+## colour.
+static func _tongue(
+	ci: CanvasItem, at: Vector2, height: float, t: float, seed: float, a: float
+) -> void:
+	var row_h := maxf(floorf(height / 14.0), 1.0)
 	var rows := int(height / row_h)
 	var breathe := 0.82 + 0.18 * sin(t * 13.0 + seed)
-	var w0 := maxf(height * 0.46, 3.0)
-	# its glow on what is round it
-	_glow(ci, at - Vector2(0.0, height * 0.35), height * 0.8, FIRE_EDGE, 0.09 * a * breathe)
-	_glow(ci, at - Vector2(0.0, height * 0.3), height * 0.45, FIRE, 0.14 * a * breathe)
+	var w0 := maxf(height * 0.42, 3.0)
 	for k in rows:
 		var u := float(k) / float(rows)
 		if u > breathe:
 			break
 		var y := at.y + 1.0 - float(k + 1) * row_h
 		var lick := roundf(sin(t * 7.0 + seed + float(k) * 0.55) * u * height * 0.2)
-		var w := roundf(w0 * pow(1.0 - u, 0.7) * (0.85 + 0.15 * sin(t * 17.0 + float(k) + seed)))
-		if w < 1.0:
-			continue
+		var w := w0 * pow(1.0 - u, 0.8) * (0.85 + 0.15 * sin(t * 17.0 + float(k) + seed))
+		# a broken edge: this row wider or narrower than the last, on no regular beat
+		w += roundf(sin(float(k) * 2.4 + seed * 1.7 + floorf(t * 6.0)) * minf(height * 0.05, 1.5))
+		w = roundf(w)
+		if w < (2.0 if height >= 14.0 else 1.0):
+			break
 		var x := at.x + lick
+		var left := x - roundf(w * 0.5)
 		ci.draw_rect(
-			Rect2(x - roundf(w * 0.5), y, w, row_h),
+			Rect2(left, y, w, row_h),
 			Color(FIRE_EDGE.r, FIRE_EDGE.g, FIRE_EDGE.b, a * (1.0 - u * 0.45))
 		)
 		var mid := roundf(w * 0.66)
@@ -574,19 +654,13 @@ static func _flame(
 			)
 
 
-## A soft round glow in stepped rows.
-static func _glow(ci: CanvasItem, c: Vector2, r: float, col: Color, a: float) -> void:
-	var step := maxf(ceilf(r / 5.0), 1.0)
-	var y := -r
-	while y < r:
-		var mid := y + step * 0.5
-		var half := roundf(sqrt(maxf(r * r - mid * mid, 0.0)))
-		if half >= 1.0:
-			ci.draw_rect(
-				Rect2(roundf(c.x) - half, roundf(c.y + y), half * 2.0, step),
-				Color(col.r, col.g, col.b, a)
-			)
-		y += step
+## A soft glow: the atlas's falloff, scaled, so it has no steps and no edge. The colour's alpha is its strength.
+static func _glow(
+	ci: CanvasItem, tex: Texture2D, src: Rect2, c: Vector2, r: float, col: Color, a: float
+) -> void:
+	ci.draw_texture_rect_region(
+		tex, Rect2(c - Vector2(r, r), Vector2(r, r) * 2.0), src, Color(col.r, col.g, col.b, a)
+	)
 
 
 # --- No kit --------------------------------------------------------------------------------------------------

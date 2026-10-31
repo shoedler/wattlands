@@ -62,9 +62,17 @@ const RP_IRON: Array[Color] = [
 const RP_HEAD: Array[Color] = [
 	Color("#21140f"), Color("#5a4034"), Color("#94705a"), Color("#d9b394"), Color("#f7dcc0")
 ]
-const RP_HAFT: Array[Color] = [Color("#1e100a"), Color("#59331d"), Color("#8c5a33")]
-const RP_CHAIN: Array[Color] = [Color("#1d120d"), Color("#5a3a26"), Color("#8c6240")]
+const RP_HAFT: Array[Color] = [
+	Color("#1e100a"), Color("#59331d"), Color("#8c5a33"), Color("#c08c58")
+]
+## The chain, a step or two brighter than the wall behind it, so it reads at 1x.
+const RP_CHAIN: Array[Color] = [Color("#3f281b"), Color("#85593a"), Color("#bd8d5c")]
 const RP_PLATE: Array[Color] = [Color("#3c1e13"), Color("#7a4326"), Color("#ad6c40")]
+## The room's edges: dark copper, as its neighbours' falloff, never a black outline.
+const RP_EDGE := Color("#2e1d18")
+## The flywheel: its centre from the room's left and from its floor row, its radius.
+const RP_FLYWHEEL := Vector2(31.5, -8.5)
+const RP_FLY_R := 7.5
 
 const OUT := Color("#0b0806")
 const OUT6 := Color("#050302")
@@ -390,48 +398,55 @@ func repair_bay(rr: Rect2, revs: float, slot: int, on: bool, press_t: float, pat
 	var ang := rv * TAU
 	var cc := seat(x0 + 1, fy, ang, slot)
 	var lift := TankMech.hammer_lift(rv)
+	var lamp := Vector2(x0 + 40.5, y0 + 3.5)
 	# the helve's pillar, behind everything
-	pr(Rect2i(x0 + 18, y0 + 4, 4, fy - y0 - 4), RP_IRON[1])
-	pr(Rect2i(x0 + 18, y0 + 4, 1, fy - y0 - 4), RP_IRON[3])
-	pr(Rect2i(x0 + 21, y0 + 4, 1, fy - y0 - 4), RP_IRON[0])
+	pr(Rect2i(x0 + 18, y0 + 6, 4, fy - y0 - 6), RP_IRON[1])
+	pr(Rect2i(x0 + 21, y0 + 6, 1, fy - y0 - 6), RP_IRON[3])
+	pr(Rect2i(x0 + 18, y0 + 6, 1, fy - y0 - 6), RP_IRON[0])
 	pr(Rect2i(x0 + 16, fy - 2, 8, 2), RP_IRON[2])
 	pr(Rect2i(x0 + 16, fy - 2, 8, 1), RP_IRON[3])
 	# the flywheel on its pedestal, its one chain, 1:1 with the crank
-	var fw := Vector2(x0 + 30.5, fy - 6.5)
+	var fw := Vector2(x0, fy) + RP_FLYWHEEL
 	pr(Rect2i(floori(fw.x) - 4, fy - 2, 9, 2), RP_IRON[2])
 	pr(Rect2i(floori(fw.x) - 4, fy - 2, 9, 1), RP_IRON[3])
 	_rp_chain(cc, fw, 2.5, 2.0, rv * 8.0)
-	wheel(fw, 6.0, ang, RP_IRON[3], 5)
+	_rp_flywheel(fw, RP_FLY_R, ang, lamp)
 	# the cam on its shaft: a lobe that lifts the tappet; the tappet to the helve
-	var piv := Vector2(x0 + 20.5, y0 + 4.5)
+	var piv := Vector2(x0 + 20.5, y0 + 8.5)
 	var head_x := x0 + 48.5
 	var rest_y := fy - 12.0
-	var end := Vector2(head_x, rest_y - 9.0 * lift)
+	var end := Vector2(head_x, rest_y - 8.0 * lift)
 	var tap_x := fw.x
 	var tap_top := piv.y + (end.y - piv.y) * (tap_x - piv.x) / (head_x - piv.x)
-	var cam_top := fw.y - 2.0 - 2.6 * lift
-	pl(Vector2(tap_x, tap_top + 1.0), Vector2(tap_x, cam_top), RP_IRON[4])
+	var cam_top := fw.y - 1.4 - 1.6 * lift
+	pl(Vector2(tap_x, tap_top + 2.0), Vector2(tap_x, cam_top), RP_IRON[4])
 	for a2 in 16:
 		var th := TAU * float(a2) / 16.0
 		var along := fposmod(th / TAU + 0.25 - fposmod(rv, 1.0), 1.0)
-		var rad := 1.6 + 2.6 * TankMech.hammer_lift(fposmod(rv, 1.0) - along)
+		var rad := 1.4 + 1.6 * TankMech.hammer_lift(fposmod(rv, 1.0) - along)
 		for k3 in 3:
 			var q2 := fw + Vector2(cos(th), sin(th)) * rad * (1.0 - float(k3) * 0.35)
 			p(floori(q2.x), floori(q2.y), RP_IRON[4] if k3 == 0 and sin(th) < 0.2 else RP_IRON[2])
 	p(floori(fw.x), floori(fw.y), RP_IRON[0])
-	# the helve: wood with iron straps, a bearing on the pillar, its end in the head's eye
-	pl(piv + Vector2(0, 1), end + Vector2(0, 1), RP_HAFT[0])
-	pl(piv, end, RP_HAFT[2])
+	# the helve: a dark underside and a lit top, so it stands off the wall, iron straps, its end in the head's eye
+	pl(piv + Vector2(0, 2), end + Vector2(0, 2), RP_HAFT[0])
+	pl(piv + Vector2(0, 1), end + Vector2(0, 1), RP_HAFT[2])
+	pl(piv, end, RP_HAFT[3])
 	for k4 in 3:
 		var q3 := piv.lerp(end, 0.3 + float(k4) * 0.24)
 		p(floori(q3.x), floori(q3.y), RP_IRON[4])
-		p(floori(q3.x), floori(q3.y) + 1, RP_IRON[2])
-	pr(Rect2i(floori(piv.x) - 1, floori(piv.y) - 1, 3, 3), RP_IRON[1])
-	p(floori(piv.x), floori(piv.y), RP_IRON[4])
-	_rp_hammer(end)
+		p(floori(q3.x), floori(q3.y) + 1, RP_IRON[3])
+		p(floori(q3.x), floori(q3.y) + 2, RP_IRON[1])
+	# the bearing it rocks on: a boss with a lit side and a bore
+	pr(Rect2i(floori(piv.x) - 2, floori(piv.y) - 2, 5, 5), RP_IRON[1])
+	pr(Rect2i(floori(piv.x) - 1, floori(piv.y) - 2, 4, 1), RP_IRON[4])
+	pr(Rect2i(floori(piv.x) + 2, floori(piv.y) - 1, 1, 3), RP_IRON[3])
+	pr(Rect2i(floori(piv.x) - 1, floori(piv.y) - 1, 3, 3), RP_IRON[2])
+	p(floori(piv.x), floori(piv.y), RP_IRON[0])
+	_rp_hammer(end, lamp)
 	# the anvil on its stump and the patch plate on it, under the head
 	var anvil := Rect2i(x0 + 42, fy - 6, 14, 4)
-	box(anvil, RP_IRON[2], RP_IRON[4], RP_IRON[0])
+	_rp_box(anvil, RP_IRON[2], RP_IRON[4], RP_IRON[1])
 	pr(Rect2i(x0 + 45, fy - 3, 8, 3), RP_IRON[1])
 	pr(Rect2i(x0 + 45, fy - 3, 1, 3), RP_IRON[3])
 	pr(Rect2i(x0 + 39, fy - 7, 20, 1), RP_PLATE[1])
@@ -457,12 +472,12 @@ func repair_bay(rr: Rect2, revs: float, slot: int, on: bool, press_t: float, pat
 	pr(Rect2i(px - 1, y0 + 1, 7, 2), RP_IRON[3])
 	var ty := y0 + 5 + roundi(clampf(press_t, 0.0, 1.0) * float(fy - y0 - 11))
 	pl(Vector2(px + 2.5, y0 + 3), Vector2(px + 2.5, ty), RP_IRON[4])
-	box(Rect2i(px, ty, 5, 3), RP_IRON[2], RP_IRON[4], RP_IRON[0])
+	_rp_box(Rect2i(px, ty, 5, 3), RP_IRON[2], RP_IRON[4], RP_IRON[1])
 	var stack := posmod(patches, PATCH_STACK)
 	for s2 in stack:
 		var sy := fy - 1 - s2 * 2
 		pr(Rect2i(px, sy, 5, 1), RP_PLATE[2] if s2 % 2 == 0 else RP_PLATE[1])
-		pr(Rect2i(px, sy + 1, 5, 1), OUT)
+		pr(Rect2i(px, sy + 1, 5, 1), RP_EDGE)
 	# the lamp
 	if on:
 		p(x0 + 40, y0 + 3, Color(1.0, 0.92, 0.8))
@@ -471,7 +486,39 @@ func repair_bay(rr: Rect2, revs: float, slot: int, on: bool, press_t: float, pat
 		p(x0 + 40, y0 + 3, RP_IRON[2])
 
 
-## The Repairs chain: dark oily links, every fourth catching the lamp, so it travels without beading.
+## A box in the room's light: dark copper round it, a lit top, no black line.
+func _rp_box(r: Rect2i, c: Color, hi: Color, lo: Color) -> void:
+	pr(r, RP_EDGE)
+	var inner := r.grow(-1)
+	pr(inner, c)
+	pr(Rect2i(inner.position.x, inner.position.y, inner.size.x, 1), hi)
+	pr(Rect2i(inner.end.x - 1, inner.position.y + 1, 1, inner.size.y - 1), lo)
+	pr(Rect2i(inner.position.x, inner.end.y - 1, inner.size.x, 1), lo)
+
+
+## The flywheel: an open wheel the wall shows through, its rim lit on the side towards the lamp and dark copper on
+## the other, four spokes that turn with the crank, a hub with a bore.
+func _rp_flywheel(c: Vector2, r: float, ang: float, lamp: Vector2) -> void:
+	var to_lamp := (lamp - c).normalized()
+	for y in range(floori(c.y - r) - 1, ceili(c.y + r) + 1):
+		for x in range(floori(c.x - r) - 1, ceili(c.x + r) + 1):
+			var d := Vector2(x + 0.5, y + 0.5) - c
+			var rho := d.length()
+			if rho > r + 0.5:
+				continue
+			var lit := d.dot(to_lamp) / maxf(rho, 0.01)
+			if rho > r - 0.3:
+				p(x, y, RP_IRON[3] if lit > 0.3 else RP_EDGE)
+			elif rho > r - 1.8:
+				p(x, y, RP_IRON[4] if lit > 0.35 else (RP_IRON[3] if lit > -0.35 else RP_IRON[2]))
+			else:
+				var phi := fposmod(atan2(d.y, d.x) - ang, TAU / 4.0)
+				if minf(phi, TAU / 4.0 - phi) * rho < 0.75:
+					p(x, y, RP_IRON[3] if lit > 0.0 else RP_IRON[2])
+
+
+## The Repairs chain: oily links a step over the wall, every fourth catching the lamp, so it travels without
+## beading.
 func _rp_chain(a: Vector2, b: Vector2, ra: float, rb: float, phase: float) -> void:
 	var d := (b - a).normalized()
 	var n := Vector2(-d.y, d.x)
@@ -485,25 +532,45 @@ func _rp_chain(a: Vector2, b: Vector2, ra: float, rb: float, phase: float) -> vo
 			p(
 				floori(q.x),
 				floori(q.y),
-				RP_CHAIN[2] if s < 1.0 else RP_CHAIN[0] if s < 2.0 else RP_CHAIN[1]
+				RP_CHAIN[2] if s < 1.0 else RP_CHAIN[0] if s >= 3.0 else RP_CHAIN[1]
 			)
 
 
-## The forged hammer head hung on the helve's end at `end`: a poll, a broad cheek, a narrower face below.
-func _rp_hammer(end: Vector2) -> void:
+## The forged hammer head hung on the helve's end at `end`: a square poll, a broad cheek, a neck, a flared face, all
+## straight edges. Its form is the lamp's falloff, the side towards the lamp lit and the far side dark copper; no
+## outline round it.
+func _rp_hammer(end: Vector2, lamp: Vector2) -> void:
 	var x := floori(end.x)
 	var y := floori(end.y)
-	# the outline, then the shaded forging
-	pr(Rect2i(x - 5, y - 3, 11, 9), OUT)
-	pr(Rect2i(x - 3, y + 6, 7, 2), OUT)
-	pr(Rect2i(x - 4, y - 2, 9, 7), RP_HEAD[2])
-	pr(Rect2i(x - 4, y - 2, 9, 1), RP_HEAD[4])
-	pr(Rect2i(x - 4, y - 1, 1, 6), RP_HEAD[3])
-	pr(Rect2i(x + 4, y - 1, 1, 6), RP_HEAD[1])
-	pr(Rect2i(x - 3, y + 4, 8, 1), RP_HEAD[1])
-	pr(Rect2i(x - 2, y + 5, 5, 2), RP_HEAD[2])
-	pr(Rect2i(x - 2, y + 6, 5, 1), RP_HEAD[3])
-	pr(Rect2i(x - 3, y + 2, 7, 1), RP_HEAD[1])
+	# per row: dy, half width
+	var rows: Array[Vector2i] = [
+		Vector2i(-2, 3),
+		Vector2i(-1, 3),
+		Vector2i(0, 4),
+		Vector2i(1, 4),
+		Vector2i(2, 4),
+		Vector2i(3, 3),
+		Vector2i(4, 2),
+		Vector2i(5, 4),
+		Vector2i(6, 4),
+	]
+	for i in rows.size():
+		var dy := rows[i].x
+		var half := rows[i].y
+		for dx in range(-half, half + 1):
+			var q := Vector2(x + dx, y + dy)
+			var t := 1.0 - q.distance_to(lamp) / 18.0 - float(dx) * 0.07
+			var col: Color = RP_HEAD[clampi(roundi(t * 4.0), 1, 3)]
+			if dx == half or i == rows.size() - 1:
+				col = RP_HEAD[0]
+			elif dx == -half or i == 0 or i == 2 or i == 7:
+				col = RP_HEAD[clampi(roundi(t * 4.0) + 1, 2, 4)]
+			p(x + dx, y + dy, col)
+	# the band under the cheek, and the iron strap the helve enters by
+	for dx2 in range(-3, 4):
+		p(x + dx2, y + 3, RP_HEAD[1])
+	for dx3 in range(-4, 0):
+		p(x + dx3, y - 2, RP_IRON[3])
 
 
 ## The room's backing: the base's picture sunk into the room's own colour (so the machine reads) and fading
@@ -560,16 +627,16 @@ func _rp_wall_at(x: int, y: int, size: Vector2i) -> Color:
 func _rp_clutter(w: Image, size: Vector2i) -> void:
 	# the pipe
 	for x in size.x:
-		w.set_pixel(x, 1, RP_PLATE[1])
-		w.set_pixel(x, 2, RP_PLATE[0])
+		w.set_pixel(x, 1, RP_IRON[2])
+		w.set_pixel(x, 2, RP_IRON[1])
 		if x % 17 == 8:
 			for y in range(0, 4):
 				w.set_pixel(x, y, RP_IRON[3] if y == 0 else RP_IRON[2])
 	# a drop off the pipe, to a valve
-	for y2 in range(3, 7):
-		w.set_pixel(27, y2, RP_PLATE[1])
-	w.set_pixel(26, 6, RP_IRON[3])
-	w.set_pixel(28, 6, RP_IRON[3])
+	for y2 in range(3, 6):
+		w.set_pixel(27, y2, RP_IRON[2])
+	w.set_pixel(26, 5, RP_IRON[3])
+	w.set_pixel(28, 5, RP_IRON[3])
 	# the shelf, its brackets and what is on it
 	for x2 in range(31, 45):
 		w.set_pixel(x2, 11, RP_HAFT[1])
@@ -601,7 +668,7 @@ func _rp_block(w: Image, r: Rect2i, c: Color, lo: Color) -> void:
 		for x in range(r.position.x, r.end.x):
 			w.set_pixel(x, y, lo if x == r.end.x - 1 or y == r.end.y - 1 else c)
 	for x2 in range(r.position.x, r.end.x):
-		w.set_pixel(x2, r.end.y, OUT)
+		w.set_pixel(x2, r.end.y, RP_EDGE)
 
 
 # --- The pedal station ------------------------------------------------------------------------------------

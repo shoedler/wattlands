@@ -36,33 +36,35 @@ static func all() -> Dictionary:
 	}
 
 
-# --- tankette: a low riveted box above its track, a tall little drum on it, faces right ------------------
+# --- tankette: a square riveted box, a short stepped nose under the MG, a tall drum, faces right -----------
+# The box's lower corners stand clear of the belt's curve and the MG runs out over the nose, past the whole hull.
 
 
 static func tankette() -> Dictionary:
 	return {
 		"name": "tankette", "enemy": true, "size": Vector2i(56, 26), "ground": 23.0, "faces": 1, "pitch": 4.0,
 		"parts": [
-			{"poly": P([4, 11, 4, 7, 7, 4, 42, 4, 48, 6, 53, 10, 52, 11]), "seams_x": [34], "seams_y": [6], "split": false, "seed": 71, "rivet": 7},
+			{"poly": P([2, 11, 2, 5, 40, 5, 40, 11]), "seams_x": [9, 38], "seams_y": [6], "split": false, "seed": 71, "rivet": 7},
+			{"poly": P([40, 11, 40, 7, 48, 7, 48, 11]), "split": false, "seed": 73, "tone": 0.1, "rivet": 7},
 		],
 		"details": [
-			{"kind": "louvre", "rect": Rect2i(7, 6, 4, 2)},
+			{"kind": "louvre", "rect": Rect2i(4, 7, 4, 2)},
 		],
 		"turret_parts": [
-			{"poly": P([18, 7, 18, 2, 20, 0, 31, 0, 33, 2, 33, 7]), "seams_y": [2], "cast": true, "seed": 72, "tone": 0.14, "rivet": 7},
+			{"poly": P([21, 7, 21, 2, 23, 0, 34, 0, 36, 2, 36, 7]), "seams_y": [2], "cast": true, "seed": 72, "tone": 0.14, "rivet": 7},
 		],
 		"turret_details": [],
-		"pivot_x": 25.0,
-		"slits": [[43, 6, 3, 0], [25, 2, 3, 1]],
+		"pivot_x": 28.0,
+		"slits": [[43, 9, 3, 0]],
 		"lamps": [],
-		"gun": {"trunnion": Vector2(31.0, 3.5), "len": 14.0, "style": "mg"},
-		"exhaust": Vector2(3, 8),
+		"gun": {"trunnion": Vector2(36.0, 3.5), "len": 14.0, "style": "mg"},
+		"exhaust": Vector2(2, 8),
 		"hit_centre": Vector2(28, 10),
-		"fires": [[25, 7]],
+		"fires": [[28, 7]],
 		"gear": {
 			"T": 2.0, "up": 2.0, "droop": 1.5,
 			"idler": {"c": Vector2(7, 17), "r": 3.5},
-			"sprocket": {"c": Vector2(45, 16.5), "r": 4.5},
+			"sprocket": {"c": Vector2(45, 17.5), "r": 4.5},
 			"rollers": [],
 			"wheels": wheels(3, 16.0, 8.5, 17.0, 4.0),
 		},
@@ -101,7 +103,7 @@ static func recon() -> Dictionary:
 		"turret_details": [],
 		"pivot_x": 44.0,
 		"fires": [[44, 9]],
-		"slits": [[66, 17, 4, 0], [56, 13, 3, 0], [41, 3, 4, 1]],
+		"slits": [[66, 17, 4, 0], [41, 3, 4, 1]],
 		"lamps": [[74, 21]],
 		"gun": {"trunnion": Vector2(52.0, 6.0), "len": 22.0, "style": "cannon"},
 		"exhaust": Vector2(3, 18),
@@ -117,7 +119,7 @@ static func light() -> Dictionary:
 	return {
 		"name": "light", "enemy": true, "size": Vector2i(96, 44), "ground": 41.0, "faces": -1, "pitch": 4.0, "night_low": 32,
 		"parts": [
-			{"poly": P([5, 21, 18, 10, 56, 10, 60, 14, 80, 14, 90, 19, 91, 22, 7, 22]), "seams_x": [24, 44, 62, 76], "seams_y": [15], "split": false, "seed": 11, "rivet": 7},
+			{"poly": P([5, 21, 18, 10, 56, 10, 60, 14, 80, 14, 90, 19, 91, 22, 7, 22]), "seams_x": [24, 44, 62, 76], "seams_y": [15], "split": false, "seed": 19, "rivet": 7},
 		],
 		"details": [
 			{"kind": "hatch", "rect": Rect2i(58, 15, 8, 5)},
@@ -130,7 +132,7 @@ static func light() -> Dictionary:
 		],
 		"turret_details": [],
 		"pivot_x": 43.0,
-		"slits": [[11, 18, 4, 0], [38, 2, 4, 1]],
+		"slits": [[13, 16, 4, 0], [38, 2, 4, 1]],
 		"lamps": [],
 		"gun": {"trunnion": Vector2(30.0, 5.0), "len": 34.0, "style": "cannon"},
 		"exhaust": Vector2(90, 16),
@@ -180,7 +182,7 @@ static func medium() -> Dictionary:
 			{"kind": "rail", "a": Vector2i(96, 5), "b": Vector2i(107, 5)},
 		],
 		"pivot_x": 66.0,
-		"slits": [[12, 32, 5, 0], [44, 8, 5, 1]],
+		"slits": [[13, 25, 5, 0], [72, 25, 5, 0], [44, 8, 5, 1]],
 		"lamps": [],
 		"gun": {"trunnion": Vector2(33.0, 13.0), "len": 46.0, "style": "cannon"},
 		"exhaust": Vector2(122, 28),
@@ -216,7 +218,7 @@ static func heavy() -> Dictionary:
 		],
 		"front_parts": [
 			{"poly": P([24, 37, 56, 37, 56, 52, 24, 52]), "seed": 33, "tone": 0.0, "split": false, "seams_x": [40], "rivet": 8, "front": true},
-			{"poly": P([58, 37, 92, 37, 92, 52, 58, 52]), "seed": 34, "tone": 0.04, "split": false, "seams_x": [75], "rivet": 8, "front": true},
+			{"poly": P([58, 37, 92, 37, 92, 52, 58, 52]), "seed": 44, "tone": 0.04, "split": false, "seams_x": [75], "rivet": 8, "front": true},
 			{"poly": P([94, 37, 126, 37, 126, 52, 94, 52]), "seed": 35, "tone": -0.04, "split": false, "seams_x": [110], "rivet": 8, "front": true},
 			{"poly": P([128, 37, 150, 37, 150, 52, 128, 52]), "seed": 36, "tone": 0.02, "split": false, "rivet": 8, "front": true},
 		],
@@ -228,7 +230,7 @@ static func heavy() -> Dictionary:
 		],
 		"turret_details": [{"kind": "vent", "at": Vector2i(112, 11)}],
 		"pivot_x": 96.0,
-		"slits": [[13, 44, 6, 0], [42, 30, 5, 0], [78, 8, 6, 1], [100, 2, 5, 1]],
+		"slits": [[31, 33, 6, 0], [104, 31, 5, 0], [78, 8, 6, 1], [100, 2, 5, 1]],
 		"lamps": [],
 		"gun": {"trunnion": Vector2(52.0, 15.0), "len": 66.0, "style": "big"},
 		"exhaust": Vector2(156, 13),
@@ -362,7 +364,7 @@ static func behemoth() -> Dictionary:
 		"secondary": {"pivot": Vector2(14.0, 89.0), "len": 24.0},
 		"exhaust": Vector2(240, 12),
 		"hit_centre": Vector2(150, 80),
-		"fires": [[165, 32], [60, 16], [250, 20]],
+		"fires": [[165, 32], [38, 16], [250, 20]],
 		"gear": {"T": 4.0, "up": 3.0, "droop": 2.5, "rollers": [], "wheels": wheels_all},
 		"bogies": bogies,
 	}

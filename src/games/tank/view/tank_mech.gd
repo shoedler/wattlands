@@ -1833,9 +1833,14 @@ static func _repair(cv: Cv, ph: float, pw: float, t: float, slot: Color, rate: f
 	cv.e(roundi(ride.x), roundi(ride.y), Color(1.0, 0.45, 0.28), 0.5)
 	# the flywheel, its chain to the cam's sprocket (1:1)
 	_spokes(cv, R_FW, R_FR - 2.6, 5, th, STEEL, clampf((rate - 1.7) / 1.3, 0.0, 1.0))
-	cv.disc_f(R_FW, R_HUB, BRASS[1])
+	# the hub: a drawn boss, its highlight, a dark bore; the crank pin a small stud
+	cv.disc_f(R_FW, R_HUB, IRON[0])
+	cv.disc_f(R_FW + Vector2(-0.4, -0.4), R_HUB - 0.9, BRASS[2])
+	cv.disc_f(R_FW + Vector2(-1.3, -1.3), 0.9, BRASS[4])
+	cv.disc_f(R_FW, 1.1, IRON[0])
 	var pin := R_FW + _dir(th) * (R_FR - 5.0)
-	cv.rect(roundi(pin.x) - 1, roundi(pin.y) - 1, 3, 3, BRASS[3])
+	cv.disc_f(pin, 1.5, IRON[0])
+	cv.p(roundi(pin.x) - 1, roundi(pin.y) - 1, BRASS[3])
 	_chain(cv, R_FW, R_HUB + 0.4, R_CAM, R_HUB + 0.4, ph, 11, 3.0)
 	cv.teeth(R_CAM, R_HUB + 0.6, 8, th, BRASS[2])
 	# the small cam: a snail with a shaded rim on its shaft; its radius is the hammer's lift round the turn
@@ -1851,8 +1856,9 @@ static func _repair(cv: Cv, ph: float, pw: float, t: float, slot: Color, rate: f
 				continue
 			var lit := (-0.6 * v.x - 0.8 * v.y) / maxf(rho, 0.01)
 			var c: Color = STEEL[clampi(1 + roundi(lit * 1.2), 0, 3)]
-			if rho > rim - 0.8:
-				c = STEEL[0] if lit < 0.2 else STEEL[3]
+			if rho > rim - 0.9:
+				# a 1 px rim that takes the light, dark on its far side
+				c = STEEL[4] if lit > -0.1 else STEEL[0]
 			cv.p(x2, y, c)
 	cv.disc_f(R_CAM, 1.8, IRON[0])
 	cv.disc_f(R_CAM + Vector2(-0.4, -0.4), 1.0, BRASS[3])

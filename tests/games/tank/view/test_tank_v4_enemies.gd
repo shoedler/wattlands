@@ -76,6 +76,50 @@ func test_the_haze_steps_widen_across_the_field() -> void:
 	assert_eq(TankEnemyDraw._veil({"flash": 1.0}).a, 1.0, "a full flash lights the whole shape")
 
 
+## At full flash the whole shape is the flash: no slit or vent stays as a box on it.
+func test_a_flash_takes_the_lights_with_it() -> void:
+	assert_eq(TankEnemyDraw.light_k({"flash": 1.0}), 0.0)
+	assert_eq(TankEnemyDraw.light_k({}), 1.0)
+	assert_almost_eq(TankEnemyDraw.light_k({"haze": 1.0}), 0.5, 0.001)
+	assert_lt(TankEnemyDraw.light_k({"dim": 0.5, "flash": 0.5}), 0.3)
+
+
+## A small kind's fire is one tongue, a large kind's up to three of unequal height.
+func test_a_fire_has_tongues_to_its_size() -> void:
+	assert_eq(TankEnemyDraw.tongues_of(7.0), 1, "the tankette's")
+	assert_eq(TankEnemyDraw.tongues_of(16.0), 2)
+	assert_eq(TankEnemyDraw.tongues_of(32.0), 3, "the Behemoth's")
+
+
+## Each tooth near the top of a sprocket stands in a gap of the belt, at rest and on the move: the sprocket turns
+## with the belt, on its pitch circle.
+func test_a_sprocket_tooth_sits_in_a_shoes_gap() -> void:
+	for k: String in ["light", "medium", "heavy", "destroyer", "tankette"]:
+		var row := _kit().kind(k)
+		var g: Dictionary = row["gear"]
+		var rest: Array[Vector3] = g["wheels"]
+		var wheels: Array = []
+		for w in rest:
+			wheels.append(Vector2(w.x, w.y))
+		var belt := TankBody.belt_of(TankEnemyDraw.belt_circles(g, wheels), TankBody.ARC_DS)
+		var sp: Vector3 = g["sprocket"]
+		var teeth := int(row["sheets"]["sprocket"]["teeth"])
+		var total := float(belt["len"])
+		var count := maxi(roundi(total / float(row["track"]["pitch"])), 3)
+		var pitch := total / count
+		for travel: float in [0.0, 3.3, 11.7, -5.2]:
+			var a := TankEnemyDraw.sprocket_angle(belt, sp, travel)
+			# the tooth nearest the top of the drum
+			var arc := TAU / float(teeth)
+			var near := a + roundf((-PI * 0.5 - a) / arc) * arc
+			var q := Vector2(sp.x, sp.y) + Vector2.from_angle(near) * (sp.z + 0.5)
+			var best := INF
+			for n in count:
+				var joint: Array = TankEnemyDraw.along(belt["pts"], total, travel + pitch * n, 0)
+				best = minf(best, (joint[0] as Vector2).distance_to(q))
+			assert_lt(best, 1.6, "%s at %.1f: tooth %.1f px from a gap" % [k, travel, best])
+
+
 func test_the_foot_is_the_ground_centre_of_the_sprite() -> void:
 	for k: String in TankEnemyKit.SIZES:
 		var row := _kit().kind(k)

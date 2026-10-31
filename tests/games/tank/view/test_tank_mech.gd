@@ -244,6 +244,45 @@ func test_the_rooms_machine_takes_the_lamp() -> void:
 			assert_gt(c.r, c.b, "%s leans to the lamp" % c.to_html(false))
 
 
+## Form by the lamp's falloff, as the rooms round it: no black outline on the machine.
+func test_the_room_has_no_black_outline() -> void:
+	var room := _room(5.6, 1, true)
+	var out := 0
+	for y in room.get_height():
+		for x in room.get_width():
+			out += int(room.get_pixel(x, y).is_equal_approx(TankInterior.OUT))
+	var share := float(out) / float(room.get_width() * room.get_height())
+	assert_lt(share, 0.01, "outline colour on %.1f %% of the room" % (share * 100.0))
+
+
+## The flywheel is open: round its web the spokes and the wall alternate, and a spoke moves with the crank.
+func test_the_flywheel_has_open_spokes() -> void:
+	var r := Rect2i(TankRig.shared().rooms["turret_drive"])
+	var c := Vector2(0.0, float(r.size.y - 2)) + TankInterior.RP_FLYWHEEL
+	var room := _room(5.6, 1, true)
+	var cols: Array[Color] = []
+	for k in 48:
+		var q := c + Vector2.from_angle(TAU * k / 48.0) * (TankInterior.RP_FLY_R - 3.0)
+		cols.append(room.get_pixelv(Vector2i(q)))
+	var iron := 0
+	for col in cols:
+		for ramp: Color in TankInterior.RP_IRON:
+			if col.is_equal_approx(ramp):
+				iron += 1
+				break
+	assert_between(iron, 4, 34, "%d of 48 samples on a spoke: neither a disc nor nothing" % iron)
+
+
+## The chain reads against the wall, and the helve has a lit top over a dark underside.
+func test_the_chain_and_the_helve_stand_off_the_wall() -> void:
+	var wall := TankInterior.REPAIR_WALL
+	assert_gt(TankInterior.RP_CHAIN[0].get_luminance(), wall.get_luminance())
+	assert_gt(TankInterior.RP_CHAIN[1].get_luminance(), wall.get_luminance() * 2.0)
+	assert_gt(
+		TankInterior.RP_HAFT[3].get_luminance(), TankInterior.RP_HAFT[0].get_luminance() * 3.0
+	)
+
+
 func test_the_room_key_repaints_on_press_and_patches() -> void:
 	var it := TankInterior.new(TankRig.shared())
 	var rp := {"slot": 1, "revs": 2.0, "on": true, "press_t": 0.1, "patches": 0}

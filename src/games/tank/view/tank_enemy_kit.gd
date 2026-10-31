@@ -23,7 +23,7 @@ const SIZES := {
 	"behemoth": [300, 148, -1],
 }
 ## The row's keys that are rects and points in the manifest's plain arrays.
-const RECT_KEYS: Array[String] = ["base", "front", "sil", "wreck", "wreck_sil", "shadow"]
+const RECT_KEYS: Array[String] = ["base", "front", "sil", "wreck", "wreck_sil", "shadow", "glow"]
 const POINT_KEYS: Array[String] = [
 	"muzzle_at_0", "exhaust", "hit_centre", "wreck_fire", "secondary_muzzle", "shadow_at"
 ]

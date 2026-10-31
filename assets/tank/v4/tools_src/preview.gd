@@ -40,10 +40,18 @@ class Stage:
 				draw_rect(b[1], b[0])
 		for c: Array in calls:
 			TankEnemyDraw.draw(self, kit, str(c[0]), c[1], c[2])
-		for c2: Array in calls:
-			TankEnemyDraw.draw_light(self, kit, str(c2[0]), c2[1], c2[2])
 		for t2: Array in text:
 			draw_string(ThemeDB.fallback_font, t2[0], str(t2[1]), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.7, 0.75, 0.72))
+
+
+## The lights on an additive layer, linear, as tank_view's and the far panel's Light layers.
+class LightLayer:
+	extends Node2D
+	var stage: Stage
+
+	func _draw() -> void:
+		for c: Array in stage.calls:
+			TankEnemyDraw.draw_light(self, stage.kit, str(c[0]), c[1], c[2])
 
 
 func _init() -> void:
@@ -81,6 +89,13 @@ func _sheet(name: String, size: Vector2i, scale: int, fill: Callable) -> void:
 	st.kit = _kit
 	fill.call(st, vp)
 	vp.add_child(st)
+	var li := LightLayer.new()
+	li.stage = st
+	var add := CanvasItemMaterial.new()
+	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	li.material = add
+	li.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	vp.add_child(li)
 	_sheets.append([vp, name, scale])
 
 
