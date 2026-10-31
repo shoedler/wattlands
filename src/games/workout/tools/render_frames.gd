@@ -26,6 +26,25 @@ const STRIP_FRAMES: Array[int] = [0, 4, 8, 12, 16, 20]
 const STRIP_CROP := Vector2i(96, 96)
 const STRIP_SCALE := 4
 const IN_BAND := WorkoutSnapshot.F_IN_BAND
+## What the HUD is shown per scenario, so each frame is a state a rider can really be in: `wbal` the
+## share of W' left, `off` the local rider's watts against the plan (under, in band, over).
+const HUD_STATE := {
+	"dawn_solo": {"wbal": 1.0, "off": 1.0},
+	"sunrise_4": {"wbal": 0.96, "off": 1.0},
+	"golden_8": {"wbal": 0.64, "off": 0.8},
+	"day_8_gaps": {"wbal": 0.17, "off": 1.14},
+	"climb_4": {"wbal": 0.72, "off": 1.0},
+	"descent_4": {"wbal": 0.9, "off": 1.0},
+	"sprint_4": {"wbal": 0.38, "off": 1.0},
+	"states_8": {"wbal": 0.7, "off": 1.0},
+	"cooldown": {"wbal": 0.85, "off": 1.0},
+	"flex_853x480": {"wbal": 0.64, "off": 1.0},
+	"flex_1280x720": {"wbal": 0.64, "off": 1.0},
+	"crank_strip": {"wbal": 1.0, "off": 1.0},
+}
+## In the course's band, from the middle of it.
+const COURSE_SHARE := 0.92
+const SPEED_MPS := 9.0
 
 const SCENARIOS: Array[Dictionary] = [
 	{"id": "dawn_solo", "content": "easy_30", "t": 20.0, "riders": 1},
@@ -106,7 +125,7 @@ func _scene(sc: Dictionary) -> void:
 		for i in FRAMES_PER_SNAPSHOT:
 			view.advance(FRAME)
 		t += FRAME * float(FRAMES_PER_SNAPSHOT)
-	_add_hud(game, hud, canvas, ride)
+	_add_hud(game, hud, canvas, ride, sc)
 	if str(sc["id"]) == "crank_strip":
 		await _crank_strip(game, view, art, sc)
 	else:
@@ -170,9 +189,11 @@ func _viewport(size: Vector2i, transparent: bool) -> SubViewport:
 
 
 ## The game's own HUD Controls, each at its anchored rect, as a real HudLayer places them.
-func _add_hud(game: WorkoutGame, hud: SubViewport, canvas: Vector2i, ride: Array) -> void:
+func _add_hud(
+	game: WorkoutGame, hud: SubViewport, canvas: Vector2i, ride: Array, sc: Dictionary
+) -> void:
 	var spec := WorkoutHud.spec(game)
-	var tm := _telemetry(ride[0])
+	var tm := _telemetry(game, ride[0], sc)
 	for c: Dictionary in spec.controls:
 		var control := c["control"] as Control
 		var at: Variant = c["at"]
@@ -186,16 +207,43 @@ func _add_hud(game: WorkoutGame, hud: SubViewport, canvas: Vector2i, ride: Array
 			control.call("set_telemetry", tm)
 
 
-func _telemetry(rider: Dictionary) -> Telemetry:
+## The local rider's telemetry at the frame's t, as the trainer would report it: the plan's target and
+## mode, the course's grade under the wheels, W' and the watts the scenario says.
+func _telemetry(game: WorkoutGame, rider: Dictionary, sc: Dictionary) -> Telemetry:
+	var state := game.state
+	var index := _phase_at(state, float(sc["t"]))
+	var p := state.phase(index)
 	var t := Telemetry.new()
 	t.peer_id = int(rider["peer"])
 	t.power_w = float(rider["w"])
 	t.cadence_rpm = float(rider["rpm"])
+	t.speed_kmh = float(rider["v"]) * 3.6
 	t.ftp_pct = t.power_w / FTP * 100.0
-	t.mode = Wl.ERG
-	t.applied_target_w = roundi(t.power_w)
+	t.mode = p.mode
+	t.coasting = t.cadence_rpm <= 0.0
+	t.wbal_j = HudRiderNumbers.wprime_j() * float(_hud_state(sc)["wbal"])
 	t.connected = true
+	if p.mode == Wl.ERG:
+		t.applied_target_w = roundi(_plan_w(state, index, float(sc["t"])))
+	if state.is_course_phase(index):
+		t.applied_grade_pct = state.course.grade_at(float(rider["cd"]))
 	return t
+
+
+func _hud_state(sc: Dictionary) -> Dictionary:
+	return HUD_STATE[str(sc["id"])]
+
+
+## The plan's watts at time `t` (0 in a phase with no ERG target).
+func _plan_w(state: WorkoutState, index: int, t: float) -> float:
+	var p := state.phase(index)
+	if p == null or p.mode != Wl.ERG:
+		return 0.0
+	var pct := p.target_pct
+	if p.has_ramp() and p.duration_s > 0.0:
+		var f := clampf((t - state.phase_start_s(index)) / p.duration_s, 0.0, 1.0)
+		pct = lerpf(p.target_pct, p.ramp_to_pct, f)
+	return pct / 100.0 * FTP
 
 
 func _game(sc: Dictionary) -> WorkoutGame:
@@ -234,54 +282,90 @@ func _game(sc: Dictionary) -> WorkoutGame:
 
 
 ## One entry per rider, in state order: {peer, gap (m ahead of the local rider), rpm, w, v, flags,
-## cd (course distance at the frame's t, for the local rider's stretch)}.
+## cd (course distance at the frame's t, for the local rider's stretch)}. Everybody rides the plan a
+## little differently, and the in-band flag says what the watts say.
 func _ride(sc: Dictionary, game: WorkoutGame) -> Array:
 	var out: Array = []
 	var id := str(sc["id"])
 	var cd := _scan_course(game, float(sc.get("scan", 0.0)))
-	for i in game.state.order.size():
+	var state := game.state
+	var index := _phase_at(state, float(sc["t"]))
+	var planned := _plan_w(state, index, float(sc["t"]))
+	if planned <= 0.0:
+		planned = COURSE_SHARE * FTP
+	for i in state.order.size():
 		var e := {
-			"peer": game.state.order[i],
+			"peer": state.order[i],
 			"gap": float(i) * 6.0 - 12.0 if i > 0 else 0.0,
-			"rpm": 90.0,
-			"w": 160.0,
-			"v": 9.0,
-			"flags": IN_BAND,
+			"rpm": 78.0 + float((i * 7) % 24),
+			"w": planned * (1.0 + float((i * 37) % 9 - 4) * 0.008 if i > 0 else 1.0),
+			"v": SPEED_MPS,
+			"flags": 0,
 			"cd": cd,
+			"tib": 985 - i * 22,
+			"block": 960 - i * 15,
 			"end_t": float(sc["t"]),
 		}
-		_tune(id, i, e)
+		_tune(id, i, e, planned)
+		var off := float(_hud_state(sc)["off"])
+		if i == 0 and off != 1.0:
+			e["w"] = float(e["w"]) * off
+			e["tib"] = 780
+			e["block"] = 640
+		if state.riders.has(e["peer"]):
+			_flag_band(e, state, index, planned)
 		out.append(e)
 	return out
 
 
-func _tune(id: String, i: int, e: Dictionary) -> void:
+func _tune(id: String, i: int, e: Dictionary, planned: float) -> void:
 	match id:
 		"dawn_solo":
-			e["w"] = 110.0
+			e["rpm"] = 90.0
 			e["v"] = 7.0
 		"sunrise_4":
 			e["rpm"] = 80.0 + float(i) * 20.0 / 3.0
+			if i == 2:
+				e["w"] = planned * 1.16
 		"golden_8", "flex_853x480", "flex_1280x720":
 			e["rpm"] = 70.0 + float(i) * 5.0
+			if i == 5:
+				e["w"] = planned * 0.82
 		"day_8_gaps":
 			var gaps: Array[float] = [0.0, 10.0, -20.0, 40.0, 80.0, 150.0, -700.0, 1400.0]
 			e["gap"] = gaps[i]
 			e["v"] = 11.0 if i % 2 == 0 else 9.0
+			e["rpm"] = 82.0 + float(i) * 3.0
 		"climb_4":
-			e["w"] = 200.0
-			e["rpm"] = 70.0
+			e["w"] = 200.0 - float(i) * 8.0
+			e["rpm"] = 62.0 + float(i) * 6.0
 			e["v"] = 5.0
 		"descent_4":
-			e["rpm"] = 0.0 if i < 2 else 90.0
+			e["rpm"] = 0.0 if i < 2 else 90.0 + float(i) * 3.0
 			e["w"] = 0.0 if i < 2 else 120.0
 			e["v"] = 16.0
 		"sprint_4":
-			e["w"] = 340.0
-			e["rpm"] = 105.0
+			e["w"] = 340.0 - float(i) * 12.0
+			e["rpm"] = 105.0 + float(i) * 2.0
 			e["v"] = 14.0
 		"states_8":
 			_tune_state(i, e)
+
+
+## A rider's in-band flag from its watts: the plan's tolerance, or the published band of a SIM phase
+## (none: nothing to be out of). A state's own flags stay.
+func _flag_band(e: Dictionary, state: WorkoutState, index: int, planned: float) -> void:
+	if int(e["flags"]) != 0:
+		return
+	var w := float(e["w"])
+	var lo := planned * (1.0 - WorkoutRules.ERG_TOLERANCE)
+	var hi := planned * (1.0 + WorkoutRules.ERG_TOLERANCE)
+	if state.phase(index).mode != Wl.ERG:
+		var band := WorkoutHud.band_for(state, index, state.rider(int(e["peer"])))
+		lo = float(band[0]) if not band.is_empty() else -INF
+		hi = float(band[1]) if not band.is_empty() else INF
+	if w >= lo and w <= hi:
+		e["flags"] = IN_BAND
 
 
 ## rescue, AFK moving, AFK stopped, disconnected, (bot and in band ride on).
@@ -339,10 +423,10 @@ func _snapshot(game: WorkoutGame, ride: Array, t: float) -> Dictionary:
 					roundi(maxf(cd + float(e["gap"]), 0.0) * 10.0),
 					roundi(float(e["v"]) * 100.0),
 					int(e["flags"]),
-					940,
+					int(e["tib"]),
 					roundi(float(e["w"])),
 					roundi(float(e["rpm"])),
-					960,
+					int(e["block"]),
 				]
 			)
 		)

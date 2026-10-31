@@ -172,6 +172,65 @@ func test_the_foreground_stays_under_the_lowest_wheel() -> void:
 # --- props and spots -----------------------------------------------------------------
 
 
+func test_the_bank_tile_is_the_same_every_time_and_painted() -> void:
+	var px := WorkoutBankTile.indices()
+	assert_eq(px, WorkoutBankTile.indices(), "deterministic")
+	assert_eq(px.size(), WorkoutBankTile.W * WorkoutBankTile.H)
+	var tones := {}
+	for y in WorkoutBankTile.GROUND_H:
+		for x in range(0, WorkoutBankTile.W, 3):
+			tones[px[y * WorkoutBankTile.W + x] / WorkoutBankTile.INDEX_SCALE] = true
+	assert_false(tones.has(WorkoutBankTile.NOTHING), "the ground has no holes")
+	for tone: int in [
+		WorkoutBankTile.SHADE,
+		WorkoutBankTile.BASE,
+		WorkoutBankTile.LIGHT,
+		WorkoutBankTile.EARTH,
+		WorkoutBankTile.EARTH_DARK,
+		WorkoutBankTile.STONE,
+	]:
+		assert_true(tones.has(tone), "tone %d is on the ground" % tone)
+
+
+func test_the_bank_tile_covers_the_highest_road_and_its_stamps_fit() -> void:
+	var top := roundi(WorkoutRideView.ROAD_MIN_Y) + WorkoutBankLayer.TOP_BELOW_CONTACT
+	assert_true(WorkoutBankLayer.BOTTOM - top <= WorkoutBankTile.GROUND_H)
+	var cell := WorkoutBankTile.STAMP_CELL
+	assert_true(WorkoutBankTile.stamp_count() * cell.x <= WorkoutBankTile.W)
+	for rows: Array in WorkoutBankTile.STAMPS:
+		assert_true(rows.size() <= cell.y)
+		for row: String in rows:
+			assert_true(row.length() <= cell.x, row)
+
+
+func test_the_bank_ramp_follows_the_morning() -> void:
+	var view := _view("easy_30")
+	var kit := view.kit
+	var dawn := WorkoutBankTile.ramp(
+		kit.tod_color(0, "bank"), kit.tod_color(0, "bank_hi"), kit.tod_color(0, "rider_tint")
+	)
+	var day := WorkoutBankTile.ramp(
+		kit.tod_color(31, "bank"), kit.tod_color(31, "bank_hi"), kit.tod_color(31, "rider_tint")
+	)
+	assert_eq(dawn.size(), WorkoutBankTile.NOTHING, "one entry per index")
+	var bank := kit.tod_color(31, "bank")
+	assert_almost_eq(day[WorkoutBankTile.BASE].y, bank.g, 0.001, "base is the row's bank")
+	assert_true(day[WorkoutBankTile.DEEP].y < day[WorkoutBankTile.BASE].y)
+	assert_true(day[WorkoutBankTile.PALE].y > day[WorkoutBankTile.BASE].y)
+	assert_true(dawn[WorkoutBankTile.EARTH].x < day[WorkoutBankTile.EARTH].x, "earth dims at dawn")
+
+
+func test_interval_blocks_are_muted_toward_the_ground_and_keep_their_zone_colour() -> void:
+	var view := _view("threshold")
+	view.refresh()
+	var block: Dictionary = (view.model["blocks"] as Array)[0]
+	assert_true(WorkoutArt.ZONE_THRESHOLD != Color.BLACK)
+	var zone: Color = block["color"]
+	var fill := WorkoutTrackLayer.muted(zone, view.track.ground)
+	assert_true(fill.a < 1.0, "the ground shows through")
+	assert_true(fill.s < zone.s or fill.v < zone.v, "quieter than the zone's colour")
+
+
 func test_a_bucket_hash_has_no_visible_repeat() -> void:
 	var picks: Array = []
 	for k in 256:
