@@ -1,6 +1,10 @@
 // Read-only: per "# ---" section of a GDScript file: its size and which other sections its code names.
 import { readFileSync } from 'node:fs';
 const file = process.argv[2];
+if (!file) {
+  console.error('usage: node tools/qa/scan/sections.mjs <file.gd>');
+  process.exit(2);
+}
 const lines = readFileSync(file, 'utf8').split(/\r?\n/);
 const secs = [{ name: 'HEAD', start: 0, names: new Set(), text: [] }];
 const owner = new Map();
