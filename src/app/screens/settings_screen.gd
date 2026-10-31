@@ -813,6 +813,10 @@ func audio_fields() -> Array:
 			"get": current_volume_db,
 			"set": set_volume
 		},
+		_bus_field("vol_machines", "APP_SET_VOL_MACHINES", AudioBuses.MACHINES),
+		_bus_field("vol_ambience", "APP_SET_VOL_AMBIENCE", AudioBuses.AMBIENCE),
+		_bus_field("vol_sfx", "APP_SET_VOL_SFX", AudioBuses.SFX),
+		_bus_field("vol_ui", "APP_SET_VOL_UI", AudioBuses.UI),
 		{
 			"id": "metronome",
 			"label": t("APP_SET_METRONOME"),
@@ -828,6 +832,31 @@ func audio_fields() -> Array:
 			"set": set_fullscreen
 		},
 	]
+
+
+func _bus_field(id: String, label_key: String, bus: String) -> Dictionary:
+	return {
+		"id": id,
+		"label": t(label_key),
+		"type": "stepper",
+		"min": -30.0,
+		"max": 0.0,
+		"step": 3.0,
+		"unit": "dB",
+		"get": _bus_db.bind(bus),
+		"set": _set_bus_db.bind(bus)
+	}
+
+
+func _bus_db(bus: String) -> float:
+	return AudioBuses.user_db(bus)
+
+
+## The Settings key of a bus level, applied at once.
+func _set_bus_db(v: Variant, bus: String) -> void:
+	var db := float(v)
+	set_setting(AudioBuses.SETTING_KEYS[bus], db)
+	AudioBuses.set_user_db(bus, db)
 
 
 func fullscreen_on() -> bool:

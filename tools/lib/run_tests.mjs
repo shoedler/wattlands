@@ -22,7 +22,7 @@ const REPO = path.dirname(TOOLS);
 
 const STEP_NAMES = ['import', 'gut', 'scaffold', 'static', 'sim', 'fit', 'node', 'e2e'];
 const LINT_DIRS = ['addons/wattlands', 'src', 'tests', 'tools'];
-const NODE_SUITES = ['tools/tests', 'server/relay', 'server/mock_strava', 'tools/art', 'tools/fit_check', 'tools/e2e'];
+const NODE_SUITES = ['tools/tests', 'server/relay', 'server/mock_strava', 'tools/art', 'tools/audio', 'tools/fit_check', 'tools/e2e'];
 // Suites with a package-lock.json get `npm ci` first when their node_modules is missing; a failed
 // install is reported and the suite runs anyway (the relay and fit_check have zero-dependency
 // fallbacks, BRIEF 5.3, 3.8).
