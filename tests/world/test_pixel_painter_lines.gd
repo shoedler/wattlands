@@ -44,7 +44,11 @@ func test_every_octant_stays_unbroken_and_lands_on_its_end() -> void:
 			assert_true(absi(d.x) <= 1 and absi(d.y) <= 1, "one pixel at a time, to %s" % b)
 
 
-func test_the_help_overlay_draws_the_same_line() -> void:
+func test_a_line_and_its_reverse_span_the_same_length() -> void:
 	var a := Vector2i(-4, 9)
 	var b := Vector2i(21, -6)
-	assert_eq(HudHelp.line_pixels(a, b), PixelPainter.line_pixels(a, b))
+	var there := PixelPainter.line_pixels(a, b)
+	var back := PixelPainter.line_pixels(b, a)
+	assert_eq(there.size(), back.size())
+	assert_eq(back[0], b)
+	assert_eq(back[-1], a)

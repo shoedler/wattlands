@@ -208,7 +208,7 @@ func arrow_pixels(i: int) -> Array[Vector2i]:
 		return out
 	var from := Vector2i(_pv.screen_to_art(a[0]).floor())
 	var to := Vector2i(art_point(_entries[i]["arrow_to"] as Vector2).floor())
-	out = line_pixels(from, to)
+	out = PixelPainter.line_pixels(from, to)
 	var d := Vector2(to - from)
 	if d.length() < 1e-6:
 		return out
@@ -223,11 +223,6 @@ func arrow_pixels(i: int) -> Array[Vector2i]:
 				if not out.has(px):
 					out.append(px)
 	return out
-
-
-## The pixels of a line from `a` to `b` (Bresenham, both ends included).
-static func line_pixels(a: Vector2i, b: Vector2i) -> Array[Vector2i]:
-	return PixelPainter.line_pixels(a, b)
 
 
 func _draw() -> void:
