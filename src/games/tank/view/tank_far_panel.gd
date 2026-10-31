@@ -2,13 +2,12 @@ class_name TankFarPanel
 extends SubViewport
 ## v4: the far panel (SPEC_TANK 4.2, 4.3): a long-lens view of the enemy, in its own SubViewport so it never
 ## runs the depth of field. `Back` is the night sky and ridge at a third of the near panel's parallax and lower
-## (a long lens sees less sky), a glow of moonlit air on the horizon, three walls of firs with mist at their feet
-## and the ground band over them; `Base` a stage's little base (TankForest.far_base) and `BaseLight` its lamps, behind
-## every enemy; `World` the wrecks, the far enemies by lane back to front and the Behemoth; `Light` (additive) slit
-## glows, the moon on each enemy, telegraph pulses, the searchlight's cold pool on the target, fires, shells and
-## impact flashes from
-## the panel's own TankFx; `Veil` the black a tow fades it to, with rows of noise. TankView draws its texture over
-## the near stage.
+## (a long lens sees less sky, and few stars), a glow of moonlit air on the horizon, three walls of firs with mist at
+## their feet and the ground band over them; `Base` a stage's little base far off at the treeline's foot
+## (TankForest.far_base), the scrub along that foot, and `BaseLight` the base's lamps, behind every enemy; `World` the wrecks, the far enemies by lane back to front and the Behemoth; `Light` (additive) slit
+## glows, the moon on each enemy, the firing mark (a hot line along a shooter's bore), the searchlight's cold pool on
+## the target, fires, shells and impact flashes from the panel's own TankFx; `Veil` the dark a tow fades it to, the
+## forest's silhouette still under it. TankView draws its texture over the near stage.
 ##
 ## Frames: "panel" px have x from the near-side edge (TankFarMap.range_x) and y on the stage (the road line at
 ## TankView.GROUND); World and Light mirror about the panel when the tank drives west, Back never does.
@@ -26,18 +25,34 @@ const SHADE_TOP := Color(0, 0, 0, 0.22)
 const SHADE_BOTTOM := Color(0, 0, 0, 0.4)
 const SHADE_TOP_END := 150.0
 const SHADE_BOTTOM_START := 440.0
+## The sky, its own grade as the near panel's: darker at the top. A long lens sees few stars: dim single pixels.
+const SKY_TOP := Color(0.03, 0.078, 0.092)
+const SKY_LOW := Color(0.05, 0.125, 0.145)
+const SKY_LOW_Y := 280.0
+const STARS := 26
+const STAR_TILE := 420.0
+const STAR_TOP := 8.0
+const STAR_ROWS := 190.0
+const STAR := Color(0.62, 0.78, 0.84)
+const STAR_A := Vector2(0.1, 0.34)
 ## The moonlit air the treeline stands against: from clear at its top to this at the horizon.
-const HORIZON_GLOW := Color(0.2, 0.34, 0.38, 0.5)
+const HORIZON_GLOW := Color(0.14, 0.26, 0.3, 0.34)
 const HORIZON_TOP := 150.0
 const HORIZON_END := 300.0
 ## The firs, far to near (TankEnemyKit.far_forest_rects): the stage y of each wall's foot, how fast it slides against
 ## the near panel's road. Each wall's foot row is stretched down to the next, so no sky shows under a wall.
 const FOREST_FOOT: Array[float] = [270.0, 296.0, 334.0]
 const FOREST_SLIDE: Array[float] = [0.18, 0.34, 0.6]
-## The mist at a wall's foot: its rows up from the foot, its colour at the foot, by steps as the art's.
-const MIST := Color(0.3, 0.45, 0.48, 0.34)
-const MIST_ROWS := 20.0
-const MIST_STEP := 4.0
+## The mist at a wall's foot: its rows up from the foot, its colour at the foot, one soft rise: no band's edge.
+const MIST := Color(0.2, 0.33, 0.36, 0.3)
+const MIST_ROWS := 26.0
+const MIST_BELOW := 18.0
+## A stage's base stands far off at the treeline's foot, in the air, never under an enemy's tracks.
+const BASE_FOOT := 345.0
+const BASE_AIR := Color(0.6, 0.7, 0.74)
+## The scrub along the treeline's foot (TankEnemyKit.far_scrub_rect), its foot and slide.
+const SCRUB_FOOT := 346.0
+const SCRUB_SLIDE := 0.7
 ## Dim moonlight on an enemy: a cold wash over its top, its pool on the ground.
 const MOON := Color(0.5, 0.68, 0.82)
 const MOON_WASH := 0.06
@@ -47,8 +62,12 @@ const OVERDRAW := 4.0
 const HAZE_NEAR := 0.12
 const HAZE_SPAN := 0.38
 const ENTER_S := 10.0
-## How far back each lane dims.
-const LANE_DIM := 0.08
+## How much the far end of the field dims: by range, so farther is always darker, whatever the lane.
+const RANGE_DIM := 0.1
+## How fast a sprite slides to its new place (px/s) when another one's range pushes it.
+const PLACE_PX_S := 24.0
+## The Behemoth is wider than some panels: its bow and gun stay whole this far off the near-side edge, its stern may go.
+const BOSS_EDGE := 6.0
 ## Tracks: art px per metre of range change, and per metre the hull drives (they pace us).
 const TRAVEL_PER_M := 1.0
 const TRAVEL_PACE := 6.0
@@ -68,18 +87,29 @@ const SHELL_OURS := Color(1.0, 0.75, 0.35)
 const SHELL_THEIRS := Color(1.0, 0.35, 0.2)
 ## A shell's drop: the corner it starts from sits this high above its landing; theirs rises to the edge.
 const THEIRS_RISE := 70.0
+## A shell of ours landing this near the target's range comes down on the sprite (its place may be pushed).
+const LAND_ON_TARGET_M := 90.0
 const SHAKE_DECAY := 3.0
 const SHAKE_PX := 2.0
 const SEARCH_POOL_R := 40.0
 const BOGIE_U: Array[float] = [0.2, 0.5, 0.8]
 const BOGIE_V := 0.85
 const TURRET_AT := Vector2(0.55, 0.3)
-## The tow's black: its fade in (s), the noise rows, their refresh (Hz) and their strongest alpha.
+## The tow's dark: its fade in (s), how black at its deepest (the forest's silhouette stays under it, so it reads as
+## a fade, never a crash), the noise rows, their refresh (Hz) and their strongest alpha.
 const VEIL_IN_S := 1.0
-const VEIL_ROWS := 16
+const VEIL_DEEP := 0.8
+const VEIL_ROWS := 5
 const VEIL_NOISE_HZ := 12.0
 const VEIL_NOISE := Color(0.32, 0.36, 0.34)
-const VEIL_NOISE_A := 0.16
+const VEIL_NOISE_A := 0.05
+## The firing mark: a hot line down the bore and a flare off the muzzle, in a colour and a shape no idle cue uses (the
+## exhausts and vents are round warm orange, the slits cold).
+const SIGNAL := Color(1.0, 0.1, 0.26)
+const SIGNAL_CORE := Color(1.0, 0.86, 0.8)
+const SIGNAL_HZ := 7.0
+const SIGNAL_FLARE := 11.0
+const SIGNAL_CROSS := 4.0
 
 var v: TankView = null
 var kit: TankEnemyKit = TankEnemyKit.shared()
@@ -178,6 +208,12 @@ static func foot_x(range_m: float, half_w: float, panel_w: float) -> float:
 	return roundf(clampf(x, half_w + 1.0, panel_w - half_w - 1.0))
 
 
+## The Behemoth's foot x: as foot_x, its bow and gun whole BOSS_EDGE off the near-side edge on every canvas.
+static func boss_foot_x(range_m: float, half_w: float, panel_w: float) -> float:
+	var x := TankFarMap.range_x(range_m, panel_w)
+	return roundf(maxf(minf(x, panel_w - half_w - 1.0), half_w + BOSS_EDGE))
+
+
 static func haze_at(range_m: float) -> float:
 	var k := (
 		(range_m - TankFarMap.RANGE_NEAR_M) / (TankFarMap.RANGE_FAR_M - TankFarMap.RANGE_NEAR_M)
@@ -248,24 +284,37 @@ func _track(state: TankState, dt: float) -> void:
 	rects.clear()
 	feet.clear()
 	var alive := {}
+	var rows: Array = []
+	var fresh: Array[int] = []
 	for e in state.enemies:
 		if e.is_near() or e.mode == TankIds.EM_DEAD:
 			continue
 		alive[e.id] = true
 		var rng := v.far_range_of(e)
 		var kind := TankIds.enemy_of(e.code)
-		var fresh := not _seen.has(e.id)
+		if not _seen.has(e.id):
+			fresh.append(e.id)
 		var rec := _record(e.id, kind, e.lane, rng, state)
 		_advance_rec(rec, rng, state, dt)
 		var half := float(kit.kind(kind)["size"].x) * 0.5
-		var foot := Vector2(foot_x(rng, half, far_w), TankFarMap.foot_y(rng, e.lane))
-		feet[e.id] = foot
-		rects[e.id] = _rect_of(kind, foot)
-		if fresh and e.mode == TankIds.EM_ENTER:
-			_dust(foot, half)
-	for id: int in _seen.keys():
-		if not alive.has(id):
-			_seen.erase(id)
+		rows.append({"id": e.id, "range_m": rng, "lane": e.lane, "half_w": half})
+	var placed := TankFarMap.place(rows, far_w)
+	for row: Dictionary in rows:
+		var id: int = row["id"]
+		var rec2: Dictionary = _seen[id]
+		var goal: Vector2 = placed[id]
+		var foot: Vector2 = rec2.get("foot", goal)
+		foot = foot.move_toward(goal, PLACE_PX_S * dt)
+		rec2["foot"] = foot
+		foot = foot.round()
+		feet[id] = foot
+		rects[id] = _rect_of(str(rec2["kind"]), foot)
+		var e2 := state.enemy(id)
+		if fresh.has(id) and e2 != null and e2.mode == TankIds.EM_ENTER:
+			_dust(foot, float(row["half_w"]))
+	for id2: int in _seen.keys():
+		if not alive.has(id2):
+			_seen.erase(id2)
 
 
 func _track_boss(state: TankState, dt: float) -> void:
@@ -278,7 +327,7 @@ func _track_boss(state: TankState, dt: float) -> void:
 		_boss = {"t0": state.t, "travel": 0.0, "recoil": 0.0, "last": rng}
 	_advance_rec(_boss, rng, state, dt)
 	var half := float(kit.kind(TankIds.BOSS_ID)["size"].x) * 0.5
-	boss_foot = Vector2(foot_x(rng, half, far_w), TankFarMap.foot_y(rng, 0))
+	boss_foot = Vector2(boss_foot_x(rng, half, far_w), TankFarMap.foot_y(rng, 0))
 	boss_box = _rect_of(TankIds.BOSS_ID, boss_foot)
 
 
@@ -302,7 +351,7 @@ func pose_of(e: TankEnemyState, foot: Vector2) -> Dictionary:
 		float(rec.get("travel", 0.0)),
 		float(rec.get("recoil", 0.0)),
 		haze,
-		LANE_DIM * float(clampi(e.lane, 0, 3)),
+		_range_dim(rng),
 		_pulse(e.telegraph_s)
 	)
 
@@ -344,6 +393,13 @@ func _pose(
 		"flip": false,
 		"time": v.time,
 	}
+
+
+static func _range_dim(range_m: float) -> float:
+	var k := (
+		(range_m - TankFarMap.RANGE_NEAR_M) / (TankFarMap.RANGE_FAR_M - TankFarMap.RANGE_NEAR_M)
+	)
+	return RANGE_DIM * clampf(k, 0.0, 1.0)
 
 
 func _pulse(telegraph_s: float) -> float:
@@ -548,8 +604,7 @@ func shells_drawn(state: TankState) -> Array[Dictionary]:
 			if k < 0.0:
 				continue
 			var land := TankShellPath.landing_m(s.x, s.vx, s.left_s)
-			var lane := _target_lane(state)
-			var to := Vector2(TankFarMap.range_x(land, far_w), TankFarMap.foot_y(land, lane) - 6.0)
+			var to := _landing(state, land)
 			var top := Vector2(0.0, -_y_off)
 			out.append(_shell_row(top.lerp(to, k), top, true))
 			continue
@@ -571,9 +626,13 @@ func _shell_row(at: Vector2, start: Vector2, friendly: bool) -> Dictionary:
 	return {"at": at, "from": tail, "friendly": friendly}
 
 
-func _target_lane(state: TankState) -> int:
+## Where a shell of ours landing `land` m out comes down: on the target where it stands, when it lands by it.
+func _landing(state: TankState, land: float) -> Vector2:
 	var e := state.enemy(state.hull.target_id)
-	return e.lane if e != null else 0
+	if e != null and feet.has(e.id) and absf(v.far_range_of(e) - land) < LAND_ON_TARGET_M:
+		return (feet[e.id] as Vector2) - Vector2(0, 6)
+	var lane := e.lane if e != null else 0
+	return Vector2(TankFarMap.range_x(land, far_w), TankFarMap.foot_y(land, lane) - 6.0)
 
 
 ## Where a shell of theirs left from: the source's muzzle, the enemy standing nearest the range it left
@@ -604,17 +663,34 @@ func _draw_back() -> void:
 	var top := -_y_off - OVERDRAW
 	var w := far_w + OVERDRAW * 2.0
 	var bottom := float(size.y) - _y_off + OVERDRAW
-	ci.draw_rect(Rect2(-OVERDRAW, top, w, bottom - top), TankForest.SKY)
+	ci.draw_rect(Rect2(-OVERDRAW, top, w, bottom - top), SKY_LOW)
+	_band(ci, top, SKY_LOW_Y, SKY_TOP, SKY_LOW)
+	_stars(ci)
 	var tint := TankForest.forest_tint(v, v.game.state)
 	for p in v.rig.planes:
-		if str(p["layer"]) == "back" and str(p["name"]) != "forest":
-			_plane(ci, p, tint if str(p["name"]) == "ridge" else Color.WHITE)
+		if str(p["layer"]) == "back" and str(p["name"]) == "ridge":
+			_plane(ci, p, tint)
 	_band(ci, HORIZON_TOP, HORIZON_END, Color(HORIZON_GLOW, 0.0), HORIZON_GLOW)
 	_forest(ci, tint)
 	_ground(ci, bottom)
 	var clear := Color(0, 0, 0, 0)
 	_band(ci, top, SHADE_TOP_END, SHADE_TOP, clear)
 	_band(ci, SHADE_BOTTOM_START, bottom, clear, SHADE_BOTTOM)
+
+
+## A few dim stars, scattered by hash: never a lattice, never louder than the near panel's sky.
+func _stars(ci: CanvasItem) -> void:
+	var slide := v.plane_x * TankView.S * PLANE_PARALLAX * 0.05
+	for i in STARS:
+		var hx := TankDraw.hash01(float(i) * 1.37 + 2.0)
+		var hy := TankDraw.hash01(float(i) * 2.71 + 9.0)
+		var ha := TankDraw.hash01(float(i) * 4.13 + 5.0)
+		var x := fposmod(hx * STAR_TILE - slide, STAR_TILE)
+		if x > far_w:
+			continue
+		var y := STAR_TOP + hy * hy * STAR_ROWS
+		var c := Color(STAR, lerpf(STAR_A.x, STAR_A.y, ha * ha))
+		ci.draw_rect(Rect2(roundf(x), roundf(y), 1, 1), c)
 
 
 func _ready_to_draw() -> bool:
@@ -646,12 +722,8 @@ func _forest(ci: CanvasItem, tint: Color) -> void:
 
 
 func _mist(ci: CanvasItem, foot: float) -> void:
-	var y := 0.0
-	while y < MIST_ROWS:
-		var k := 1.0 - y / MIST_ROWS
-		var row := Rect2(-OVERDRAW, foot - y - MIST_STEP, far_w + OVERDRAW * 2.0, MIST_STEP)
-		ci.draw_rect(row, Color(MIST, MIST.a * k * k))
-		y += MIST_STEP
+	_band(ci, foot - MIST_ROWS, foot, Color(MIST, 0.0), MIST)
+	_band(ci, foot, foot + MIST_BELOW, MIST, Color(MIST, 0.0))
 
 
 func _plane(ci: CanvasItem, p: Dictionary, mod: Color) -> void:
@@ -711,7 +783,25 @@ func _draw_base() -> void:
 		return
 	var bx := TankForest.far_base(v, v.game.state)
 	if not is_nan(bx):
-		TankForest.draw_base(_base, v, bx)
+		TankForest.draw_base(_base, v, bx, BASE_FOOT)
+		var row := Rect2(-OVERDRAW, BASE_FOOT - 40.0, far_w + OVERDRAW * 2.0, 44.0)
+		_base.draw_rect(row, Color(BASE_AIR, 0.1))
+	_scrub()
+
+
+## The treeline's foot is no ruled line: scrub and low firs stand along it, over the ground's top.
+func _scrub() -> void:
+	var r := kit.far_scrub_rect()
+	var tex := kit.far_forest()
+	if tex == null or r.size == Vector2.ZERO:
+		return
+	var slide := v.plane_x * TankView.S * PLANE_PARALLAX * SCRUB_SLIDE
+	var x := -fposmod(slide, r.size.x) - r.size.x
+	var tint := TankForest.forest_tint(v, v.game.state)
+	while x < far_w + OVERDRAW:
+		var at := Rect2(Vector2(roundf(x), SCRUB_FOOT - r.size.y), r.size)
+		_base.draw_texture_rect_region(tex, at, r, tint)
+		x += r.size.x
 
 
 func _draw_base_light() -> void:
@@ -719,7 +809,7 @@ func _draw_base_light() -> void:
 		return
 	var bx := TankForest.far_base(v, v.game.state)
 	if not is_nan(bx):
-		TankForest.draw_base_light(_base_light, v, bx)
+		TankForest.draw_base_light(_base_light, v, bx, BASE_FOOT)
 
 
 func _draw_world() -> void:
@@ -729,15 +819,29 @@ func _draw_world() -> void:
 	var ci := _world
 	if boss_box.size != Vector2.ZERO:
 		TankEnemyDraw.draw(ci, kit, TankIds.BOSS_ID, boss_foot, boss_pose(state))
-	for lane in [3, 2, 1, 0]:
-		for w in wrecks:
-			if clampi(int(w["lane"]), 0, 3) == lane:
-				_wreck(ci, w)
-		for e in state.enemies:
-			if feet.has(e.id) and clampi(e.lane, 0, 3) == lane:
-				_enemy(ci, e)
+	for row: Dictionary in _depth_order(state):
+		if row.has("wreck"):
+			_wreck(ci, row["wreck"])
+		else:
+			_enemy(ci, row["enemy"])
 	fx.draw_solid(ci)
 	fx.draw_smoke(ci)
+
+
+## The wrecks and the far enemies back to front: by their feet, the highest (the farthest) first.
+func _depth_order(state: TankState) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for w in wrecks:
+		out.append({"y": _wreck_foot(w).y, "wreck": w})
+	for e in state.enemies:
+		if feet.has(e.id):
+			out.append({"y": (feet[e.id] as Vector2).y, "enemy": e})
+	out.sort_custom(_higher)
+	return out
+
+
+static func _higher(a: Dictionary, b: Dictionary) -> bool:
+	return float(a["y"]) < float(b["y"])
 
 
 func _enemy(ci: CanvasItem, e: TankEnemyState) -> void:
@@ -789,7 +893,7 @@ func _draw_light() -> void:
 		_moonlight(ci, rects[e.id])
 		TankEnemyDraw.draw_light(ci, kit, TankIds.enemy_of(e.code), foot, pose)
 		if e.telegraph_s > 0.0:
-			_telegraph(ci, muzzle_of(e), 12.0)
+			_telegraph(ci, TankEnemyDraw.bore(kit, TankIds.enemy_of(e.code), foot, pose), 1.0)
 	_boss_light(ci, state)
 	for w in wrecks:
 		_wreck_fire(ci, w, state.t)
@@ -808,9 +912,29 @@ func _moonlight(ci: CanvasItem, r: Rect2) -> void:
 	TankLightDraw.ground_glow(ci, pool, r.size.x * 0.6, Color(MOON, MOON_POOL))
 
 
-func _telegraph(ci: CanvasItem, at: Vector2, r: float) -> void:
-	TankDraw.glow_at(ci, at, r, Color(1.0, 0.4, 0.15, 0.6))
-	TankDraw.glow_at(ci, at, r * 0.3, Color(1.0, 0.8, 0.5, 0.8))
+## The firing mark, above every nearer tank (the Light layer): the barrel burns along its bore from breech to muzzle,
+## its hot line runs on past the muzzle, a hard cross stands on the tip, all blinking fast. No orb: the warm orbs are
+## the exhausts' and the vents'.
+func _telegraph(ci: CanvasItem, bore: Array[Vector2], size_k: float) -> void:
+	var from := bore[0]
+	var tip := bore[1]
+	var d := (tip - from).normalized()
+	var beat := 0.65 + 0.35 * signf(sin(v.time * TAU * SIGNAL_HZ))
+	var n := maxi(ceili(from.distance_to(tip)), 1)
+	for i in n + 1:
+		var u := float(i) / float(n)
+		var p := from.lerp(tip, u).floor()
+		ci.draw_rect(Rect2(p, Vector2.ONE), Color(SIGNAL, (0.3 + 0.7 * u) * beat))
+		ci.draw_rect(Rect2(p + Vector2(0, -1), Vector2.ONE), Color(SIGNAL, 0.32 * u * beat))
+	var flare := int(SIGNAL_FLARE * size_k * (0.7 + 0.3 * beat))
+	for j in flare:
+		var q := (tip + d * float(j)).floor()
+		ci.draw_rect(Rect2(q, Vector2.ONE), Color(SIGNAL, beat * (1.0 - float(j) / float(flare))))
+	var at := tip.floor()
+	var arm := int(SIGNAL_CROSS * size_k)
+	ci.draw_rect(Rect2(at + Vector2(0, -arm), Vector2(1, arm * 2 + 1)), Color(SIGNAL, 0.8 * beat))
+	ci.draw_rect(Rect2(at + Vector2(-arm, 0), Vector2(arm * 2 + 1, 1)), Color(SIGNAL, 0.8 * beat))
+	ci.draw_rect(Rect2(at + Vector2(-1, -1), Vector2(3, 3)), Color(SIGNAL_CORE, beat))
 
 
 ## The searchlight's cold pool on the target's front edge while the Lights seat is powered.
@@ -845,7 +969,7 @@ func _boss_light(ci: CanvasItem, state: TankState) -> void:
 		TankDraw.glow_at(ci, at, 22.0, Color(FIRE, 0.5 * fl))
 		TankDraw.glow_at(ci, at + Vector2(0, -4), 7.0, Color(FIRE_CORE, 0.8 * fl))
 	if b.telegraph_s > 0.0:
-		_telegraph(ci, boss_muzzle(state), 22.0)
+		_telegraph(ci, TankEnemyDraw.bore(kit, TankIds.BOSS_ID, boss_foot, pose), 1.6)
 
 
 func _wreck_fire(ci: CanvasItem, w: Dictionary, t: float) -> void:
@@ -874,7 +998,7 @@ func _draw_veil() -> void:
 	var top := -_y_off - OVERDRAW
 	var h := float(size.y) + OVERDRAW * 2.0
 	var ci := _veil
-	ci.draw_rect(Rect2(-OVERDRAW, top, far_w + OVERDRAW * 2.0, h), Color(0, 0, 0, veil))
+	ci.draw_rect(Rect2(-OVERDRAW, top, far_w + OVERDRAW * 2.0, h), Color(0, 0, 0, veil * VEIL_DEEP))
 	var frame_n := floorf(v.time * VEIL_NOISE_HZ)
 	for i in VEIL_ROWS:
 		var a := TankDraw.hash01(frame_n * 0.37 + float(i) * 2.1)

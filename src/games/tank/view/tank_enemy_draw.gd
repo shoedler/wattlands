@@ -15,11 +15,11 @@ extends RefCounted
 ## The night's haze: the far air of the game's own frame (sky #081519, ridges #0e2429, hue about 192), so far kinds
 ## fade into what is behind them. Dark, so a far kind sinks into the night and keeps its blacks: hull, turret and
 ## running gear still part by value at the far panel's scale, never a pale ghost.
-const HAZE := Color(0.06, 0.105, 0.118)
+const HAZE := Color(0.04, 0.072, 0.082)
 ## The veil's alpha for a pose's haze: nothing up close, steady across the field's 0.12..0.5. It stops at half, so the
 ## farthest kind keeps its plate seams.
 const HAZE_FROM := 0.08
-const HAZE_SLOPE := 1.2
+const HAZE_SLOPE := 1.1
 const HAZE_MAX := 0.5
 const FLASH := Color(1.0, 1.0, 0.9)
 const SLIT := Color(0.5, 0.88, 0.82)
@@ -245,6 +245,18 @@ static func muzzle(kit: TankEnemyKit, kind: String, foot: Vector2, pose: Diction
 	var txf := turret_xf(row, pose)
 	var gxf := _gun_xf(row, pose, txf)
 	return (hull["stage"] as Transform2D) * (gxf * Vector2(float(g["len"]), 0.0))
+
+
+## The gun's bore as drawn: [breech, muzzle] on the stage (the far panel's firing mark runs along it).
+static func bore(
+	kit: TankEnemyKit, kind: String, foot: Vector2, pose: Dictionary
+) -> Array[Vector2]:
+	var row := kit.kind(kind)
+	var mz := muzzle(kit, kind, foot, pose)
+	if not row.has("gun"):
+		return [mz + Vector2(10, 0), mz]
+	var stage: Transform2D = hull_pose(row, foot, pose)["stage"]
+	return [stage * _gun_xf(row, pose, turret_xf(row, pose)) * Vector2.ZERO, mz]
 
 
 ## A sprite point of the kind's hull on the stage: V's exhaust anchor (row "exhaust"), the Behemoth's bow

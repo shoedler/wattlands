@@ -32,6 +32,8 @@ const WIRE := Color(0.42, 0.42, 0.4)
 const TURN_BARRIER_M := 15.0
 const TURN_LOOP_M := 70.0
 const GRAVEL := Color(0.2, 0.18, 0.15)
+## How high the dark under a near threat's hull reaches.
+const BELLY_H := 11.0
 const GRAVEL_DK := Color(0.12, 0.11, 0.09)
 
 
@@ -45,11 +47,17 @@ static func draw_world(ci: CanvasItem, v: TankView, state: TankState) -> void:
 	_halt_line(ci, v, state)
 	for ob in state.obstacles:
 		_obstacle(ci, v, ob)
-	# The back lane first, each lane's wrecks before its live near threats.
+	# The back lane first. The live near threats are drawn on the tank's layer (draw_near_threats).
 	for want in [1, 0]:
 		for w in v.wrecks:
 			if clampi(int(w.get("lane", 0)), 0, TankView.LANES - 1) == want:
 				_wreck(ci, v, w)
+
+
+## The live near threats, the back lane first, over the world's lights (the tank's layer, before the tank): the road's
+## warm pools lie under their wheels, never over their plates.
+static func draw_near_threats(ci: CanvasItem, v: TankView, state: TankState) -> void:
+	for want in [1, 0]:
 		for e in state.enemies:
 			if v.lanes.has(e.id) and int(v.lanes[e.id]) == want:
 				_enemy(ci, v, e)
@@ -127,6 +135,9 @@ static func _enemy(ci: CanvasItem, v: TankView, e: TankEnemyState) -> void:
 	var r: Rect2 = v.enemy_rects[e.id]
 	var foot: Vector2 = v.enemy_feet[e.id]
 	contact_shadow(ci, Vector2(r.position.x + 3.0, foot.y), r.size.x - 6.0)
+	# the dark under a hull that rides high on its tyres: the road's warm pool never shows through as a pale plate
+	var under := Rect2(r.position.x + 6.0, foot.y - BELLY_H, r.size.x - 12.0, BELLY_H)
+	ci.draw_rect(under, Color(0.015, 0.015, 0.012, 0.82))
 	TankEnemyDraw.draw(ci, v.enemy_kit, v.enemy_kind(e), foot, v.near_pose(e))
 	if e.hp_max > 0.0 and e.hp < e.hp_max:
 		var bw := roundf(r.size.x * 0.4)

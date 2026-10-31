@@ -79,10 +79,18 @@ const NEAR_ELEV_MAX := 14.0
 const NEAR_RECOIL_PX := 2.0
 const NEAR_RECOIL_DECAY := 6.0
 ## Its exhaust puffs per second, and a leaf burst's particles and colour when it bursts from the bushes.
-const NEAR_EXHAUST_S := 2.5
+const NEAR_EXHAUST_S := 7.0
+const NEAR_EXHAUST := Color(0.44, 0.45, 0.45)
+## Dust kicked up behind a running near threat, per second; a paused one's settles at this share.
+const NEAR_DUST_S := 12.0
+const NEAR_DUST_PAUSED := 0.25
+const NEAR_DUST := Color(0.5, 0.43, 0.33)
 const LEAF_BURST := 14
 const LEAF := Color(0.3, 0.3, 0.14)
 const LEAF_SPEED := 70.0
+## The leaves still drifting down after the burst.
+const LEAF_DRIFT := 16
+const LEAF_DRIFT_S := 2.8
 ## A tank lost: the creep back (art px/s) and how far it goes, the dim's length and depth, the heavy smoke
 ## per second, the fade from black at the restart.
 const TOW_PX_S := 12.0
@@ -105,7 +113,7 @@ const SPRING_K := 90.0
 const SPRING_D := 9.0
 ## The bow guns' tilt: rest, limits (degrees up) and slew (degrees/s).
 const BOW_REST_DEG := 2.0
-const BOW_MIN_DEG := -6.0
+const BOW_MIN_DEG := -12.0
 const BOW_MAX_DEG := 12.0
 const BOW_SLEW := 24.0
 ## The bow guns' kick (px) and how long it lasts (s).
@@ -218,6 +226,7 @@ var _seen: Dictionary = {}
 ## A near enemy's id -> {travel, recoil, last}: its tracks and gun, kept between frames.
 var _near: Dictionary = {}
 var _near_smoke_acc: float = 0.0
+var _near_dust_acc: float = 0.0
 var _tow_smoke_acc: float = 0.0
 var _shell_seen: Dictionary = {}
 var _cues: Array[Dictionary] = []
@@ -1001,11 +1010,11 @@ func fire(kind: String, gun: int = -1) -> void:
 	if not _built:
 		return
 	if kind == "bow":
-		var k := firing.bow_round(gun)
-		var m := bow_muzzle(k)
-		var tgt := bow_target if bow_target != Vector2.ZERO else m + Vector2(260, 14)
+		firing.bow_round(gun)
 		if bow_target != Vector2.ZERO:
-			fx.spark_burst(tgt, 2, Color(1.0, 0.8, 0.4), 40.0)
+			var hit := bow_target + Vector2(fx.rng.randf_range(-8, 8), fx.rng.randf_range(-5, 3))
+			fx.spark_burst(hit, 3, Color(1.0, 0.8, 0.4), 46.0)
+			fx.flash(hit, 5.0, 0.08, Color(1.0, 0.82, 0.5))
 		return
 	var mz := muzzle()
 	firing.fire_main(mz, barrel_vector().angle())
@@ -1112,7 +1121,29 @@ func _cue_ambush(state: TankState, id: int) -> void:
 	var e := state.enemy(id)
 	if e == null or not e.is_near():
 		return
-	fx.spark_burst(near_foot(e) + Vector2(0, -8), LEAF_BURST, LEAF, LEAF_SPEED, 0.0)
+	var at := near_foot(e) + Vector2(0, -8)
+	fx.spark_burst(at, LEAF_BURST, LEAF, LEAF_SPEED, 0.0)
+	for i in LEAF_DRIFT:
+		var j := fx.rng.randf()
+		fx.puff(
+			at + Vector2(fx.rng.randf_range(-22, 22), fx.rng.randf_range(-16, 2)),
+			Vector2(fx.rng.randf_range(-22, 4), fx.rng.randf_range(-16, 4)),
+			LEAF_DRIFT_S * (0.5 + j * 0.5),
+			Vector2(0.9, 1.4),
+			0.85,
+			LEAF.lightened(0.25 * j),
+			1.0
+		)
+	for k in 6:
+		fx.puff(
+			at + Vector2(fx.rng.randf_range(-16, 16), 6.0),
+			Vector2(fx.rng.randf_range(-24, 4), fx.rng.randf_range(-12, -3)),
+			1.6,
+			Vector2(3.0, 15.0),
+			0.3,
+			NEAR_DUST,
+			1.0
+		)
 
 
 ## The tank is lost: a boom in its hull, the scene dims for a moment. Its tow runs from hull.tow_s.
@@ -1373,6 +1404,13 @@ func bow_vector(k: int) -> Vector2:
 # --- Emitters (view-only) --------------------------------------------------------------------------------
 
 
+## A bow round's way (a unit vector): to the near threat they fire at, the barrel's tilt aside; else along the bore.
+func bow_shot(k: int) -> Vector2:
+	if bow_target == Vector2.ZERO:
+		return bow_vector(k)
+	return bow_muzzle(k).direction_to(bow_target)
+
+
 func _emit(state: TankState, feed: Dictionary, step_dt: float) -> void:
 	var hull := state.hull
 	var rd := rider_on("drive")
@@ -1487,30 +1525,59 @@ func _emit(state: TankState, feed: Dictionary, step_dt: float) -> void:
 			fx.spark_burst(at_sprite(dr.get_center()), 4, Color(1, 0.7, 0.3), 40.0, 0.0)
 
 
-## The near threats' exhaust: a thin dark puff from each now and then.
+## The near threats running: smoke streaming back from the exhaust toward us, dust kicked up behind the wheels.
 func _emit_near(state: TankState, step_dt: float) -> void:
 	_near_smoke_acc += step_dt * NEAR_EXHAUST_S * float(enemy_feet.size())
+	_near_dust_acc += step_dt * NEAR_DUST_S * float(enemy_feet.size())
+	if enemy_feet.is_empty():
+		_near_smoke_acc = 0.0
+		_near_dust_acc = 0.0
+		return
+	var ids: Array = enemy_feet.keys()
 	while _near_smoke_acc >= 1.0:
 		_near_smoke_acc -= 1.0
-		if enemy_feet.is_empty():
-			continue
-		var ids: Array = enemy_feet.keys()
-		var id: int = ids[fx.rng.randi_range(0, ids.size() - 1)]
-		var e := state.enemy(id)
-		if e == null:
-			continue
-		var row := enemy_kit.kind(enemy_kind(e))
-		var sz: Vector2 = row["size"]
-		var at: Vector2 = row.get("exhaust", sz * Vector2(0.12, 0.45))
-		fx.puff(
-			(enemy_feet[id] as Vector2) - Vector2(sz.x * 0.5, float(row["ground"])) + at,
-			Vector2(fx.rng.randf_range(-14, -6), fx.rng.randf_range(-10, -5)),
-			1.8,
-			Vector2(1.5, 8.0),
-			0.16,
-			Color(0.2, 0.2, 0.2),
-			1.0
-		)
+		_near_exhaust(state, ids[fx.rng.randi_range(0, ids.size() - 1)])
+	while _near_dust_acc >= 1.0:
+		_near_dust_acc -= 1.0
+		_near_dust(state, ids[fx.rng.randi_range(0, ids.size() - 1)])
+
+
+func _near_exhaust(state: TankState, id: int) -> void:
+	var e := state.enemy(id)
+	if e == null:
+		return
+	var row := enemy_kit.kind(enemy_kind(e))
+	var sz: Vector2 = row["size"]
+	var at: Vector2 = row.get("exhaust", sz * Vector2(0.12, 0.45))
+	var j := fx.rng.randf()
+	fx.puff(
+		(enemy_feet[id] as Vector2) - Vector2(sz.x * 0.5, float(row["ground"])) + at,
+		Vector2(-30.0 - j * 16.0, -7.0 - j * 5.0),
+		1.5 + j * 0.6,
+		Vector2(3.0, 15.0 + j * 5.0),
+		0.46,
+		NEAR_EXHAUST,
+		0.45
+	)
+
+
+func _near_dust(state: TankState, id: int) -> void:
+	var e := state.enemy(id)
+	if e == null:
+		return
+	if e.mode == TankIds.EM_PAUSE and fx.rng.randf() > NEAR_DUST_PAUSED:
+		return
+	var sz: Vector2 = enemy_kit.kind(enemy_kind(e))["size"]
+	var foot: Vector2 = enemy_feet[id]
+	fx.puff(
+		foot + Vector2(-sz.x * 0.5 + fx.rng.randf_range(0.0, sz.x * 0.45), -2.0),
+		Vector2(fx.rng.randf_range(-34, -12), fx.rng.randf_range(-13, -4)),
+		1.0,
+		Vector2(3.0, 13.0),
+		0.5,
+		NEAR_DUST,
+		0.6
+	)
 
 
 ## Shells on the near stage this frame: [{at, dir, friendly, type}]. A near shell eases from the art
@@ -1699,6 +1766,14 @@ func hud_enemy_rect(id: int) -> Rect2:
 	return Rect2(r.position + Vector2(0, y_off), r.size)
 
 
+## Where a far enemy's gun ends on the canvas; Vector2.ZERO when it is not drawn in the far panel.
+func hud_enemy_muzzle(id: int) -> Vector2:
+	if far == null or not far.feet.has(id) or game == null or game.state == null:
+		return Vector2.ZERO
+	var e := game.state.enemy(id)
+	return far.canvas_point(far.muzzle_of(e), far_panel_x()) if e != null else Vector2.ZERO
+
+
 func hud_boss_rect() -> Rect2:
 	if game == null or game.state == null or far == null or not boss_visible(game.state):
 		return Rect2()
@@ -1729,12 +1804,13 @@ func _draw_world_light() -> void:
 		TankLightDraw.draw_world(layer("WorldLight"), self, game.state)
 
 
-## The tank: its sprite (TankBody) rotated as a whole, nearest; the turn's dust; the blast and the
-## bow guns' rounds.
+## The near threats, over the world's lights; the tank: its sprite (TankBody) rotated as a whole, nearest; the turn's
+## dust; the blast and the bow guns' rounds.
 func _draw_tank() -> void:
 	if not _built or game.state == null:
 		return
 	var ci := layer("Tank")
+	TankWorldDraw.draw_near_threats(ci, self, game.state)
 	ci.draw_set_transform_matrix(xf)
 	ci.draw_texture(body.get_texture(), -Vector2(TankBody.PAD, TankBody.PAD))
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)

@@ -120,7 +120,7 @@ func test_the_panels_match_the_layout_table() -> void:
 			Rect2(0, 0, 622, 540),
 			Rect2(622, 0, 8, 540),
 			Rect2(630, 0, 330, 540),
-			Rect2(707, 150, 176, 52)
+			Rect2(630, 150, 176, 52)
 		]
 	)
 	assert_eq(
@@ -129,7 +129,7 @@ func test_the_panels_match_the_layout_table() -> void:
 			Rect2(0, 0, 558, 480),
 			Rect2(558, 0, 8, 480),
 			Rect2(566, 0, 286, 480),
-			Rect2(621, 150, 176, 52)
+			Rect2(566, 150, 176, 52)
 		]
 	)
 	assert_eq(
@@ -138,7 +138,7 @@ func test_the_panels_match_the_layout_table() -> void:
 			Rect2(0, 0, 852, 680),
 			Rect2(852, 0, 8, 680),
 			Rect2(860, 0, 420, 680),
-			Rect2(982, 150, 176, 52)
+			Rect2(860, 150, 176, 52)
 		]
 	)
 	assert_eq(
@@ -147,7 +147,7 @@ func test_the_panels_match_the_layout_table() -> void:
 			Rect2(338, 0, 622, 540),
 			Rect2(330, 0, 8, 540),
 			Rect2(0, 0, 330, 540),
-			Rect2(77, 150, 176, 52)
+			Rect2(154, 150, 176, 52)
 		]
 	)
 
@@ -158,9 +158,59 @@ func test_the_range_mapping() -> void:
 	assert_almost_eq(TankFarMap.range_x(700.0, 330.0), 30.0, 0.001)
 	assert_almost_eq(TankFarMap.range_x(2600.0, 330.0), 300.0, 0.001)
 	assert_almost_eq(TankFarMap.range_x(100.0, 330.0), 30.0, 0.001, "clamped")
-	assert_eq(TankFarMap.foot_y(700.0, 0), 392.0)
-	assert_eq(TankFarMap.foot_y(2600.0, 3), 392.0 - 36.0 - 18.0)
-	assert_eq(TankFarMap.foot_y(700.0, 9), 392.0 - 36.0, "lanes 0..3")
+	assert_eq(TankFarMap.foot_y(700.0, 0), 408.0)
+	assert_eq(TankFarMap.foot_y(2600.0, 3), 408.0 - 6.0 - 64.0)
+	assert_eq(TankFarMap.foot_y(700.0, 9), 408.0 - 6.0, "lanes 0..3")
+
+
+## far_duel's own failure: a heavy at 1640 m in lane 0 stood lower than a medium at 1150 m in lane 1.
+func test_a_farther_sprite_is_always_higher_whatever_its_lane() -> void:
+	assert_lt(TankFarMap.foot_y(1640.0, 0), TankFarMap.foot_y(1150.0, 1))
+	for fw: float in [286.0, 330.0, 420.0]:
+		var at := (
+			TankFarMap
+			. place(
+				[
+					{"id": 21, "range_m": 1640.0, "lane": 0, "half_w": 84.0},
+					{"id": 22, "range_m": 1150.0, "lane": 1, "half_w": 64.0},
+					{"id": 23, "range_m": 1450.0, "lane": 2, "half_w": 64.0},
+				],
+				fw
+			)
+		)
+		var near: Vector2 = at[22]
+		var mid: Vector2 = at[23]
+		var back: Vector2 = at[21]
+		assert_gte(
+			near.y - mid.y, TankFarMap.FOOT_STEP - 1.0, "%d: each one back stands higher" % fw
+		)
+		assert_gte(mid.y - back.y, TankFarMap.FOOT_STEP - 1.0, "%d: and the heavy highest" % fw)
+		assert_gt(mid.x, near.x, "%d: range still runs away from the seam" % fw)
+		assert_gt(back.x, mid.x, "%d" % fw)
+		assert_gte(back.x - mid.x, 60.0, "%d: 60 px apart: a turret and a gun of its own" % fw)
+		assert_gte(mid.x - near.x, 60.0, "%d" % fw)
+		assert_gte(back.x - 84.0, 0.0, "%d: whole in the panel" % fw)
+		assert_lte(back.x + 84.0, fw, "%d" % fw)
+
+
+func test_a_lone_far_sprite_stands_where_the_map_says() -> void:
+	var at := TankFarMap.place([{"id": 7, "range_m": 1220.0, "lane": 0, "half_w": 64.0}], 330.0)
+	var x := roundf(TankFarMap.range_x(1220.0, 330.0))
+	assert_eq(at[7], Vector2(x, TankFarMap.foot_y(1220.0, 0)))
+
+
+func test_a_full_far_field_stays_ordered_and_in_the_panel() -> void:
+	var rows: Array = []
+	for i in 8:
+		rows.append({"id": i, "range_m": 900.0 + 180.0 * i, "lane": i % 3, "half_w": 64.0})
+	var at := TankFarMap.place(rows, 286.0)
+	for i2 in 8:
+		var p: Vector2 = at[i2]
+		assert_gte(p.x, 64.0, "whole in the panel")
+		assert_lte(p.x, 222.0)
+		assert_gte(p.y, TankFarMap.FOOT_TOP - 1.0, "never above the treeline's foot")
+		if i2 > 0:
+			assert_lt(p.y, (at[i2 - 1] as Vector2).y, "%d stands behind %d" % [i2, i2 - 1])
 
 
 func test_the_near_span_and_the_far_field_constants() -> void:

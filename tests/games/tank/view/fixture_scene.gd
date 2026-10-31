@@ -63,6 +63,9 @@ func _ready() -> void:
 		_v4 = kind_opt.trim_prefix("v4:")
 		_v4_cues_due = true
 		state = TankFixturesV4.make(_v4, crew)
+		# the cap fixture fills every field for the snapshot's size: its frame is the crowded field, not a tow
+		if _v4 == "cap_v4":
+			state.hull.tow_s = 0.0
 		content = TankFixturesV4.content_id(_v4)
 		crew = state.riders.size()
 		for r in state.riders:

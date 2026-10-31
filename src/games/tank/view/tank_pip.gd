@@ -1,22 +1,18 @@
 class_name TankPip
 extends Node2D
-## v4: the shell screen (SPEC_TANK 4.5): a little riveted screen in the far panel's sky that shows how a
-## shell travels, in side profile, distance-compressed. The hull at range 0 and a mark per far enemy on the
-## ground line, the target's bright, a shooter's red; the gun's arc to the target, faint, while nothing of
-## ours flies. A shell is a tracer on its predicted arc with a fading trail, ours amber, theirs red and
-## blinking while Surge can still make it miss; a flash where it leaves, a puff where it lands. The seconds
-## the newest shell has left on the top near-side corner, the target's range on the other. A slow sweep keeps
-## the screen alive. Mirrored with the far panel (free roam, west); its text never mirrors. Pure view: it
-## reads the snapshot's fields and never writes them.
+## v4: the shell screen (SPEC_TANK 4.5): a little instrument docked on the seam that shows how a shell travels, in
+## side profile, distance-compressed and height-stretched so an arc fills its box. The hull at range 0 and a mark per
+## far enemy on the ground line, the target's bright, a shooter's red; the gun's arc to the target, faint, while
+## nothing flies. A shell is a hot tracer with a bright trail: ours amber, with one predicted arc for the newest; theirs
+## red, trail only, blinking while Surge can still make it miss; a flash where it leaves, a puff where it lands.
+## The seconds the newest shell has left on the top near-side corner, the target's range on the other. With nothing
+## to show it folds to a small dim tab; during a tow it is gone. Mirrored with the far panel (free roam, west); its text
+## never mirrors. Pure view: it reads the snapshot's fields and never writes them.
 
 const BEZEL := Color("#17140f")
 const FRAME := Color("#6b5230")
 const SCREEN := Color("#0a1412")
-const SCAN := Color(0, 0, 0, 0.22)
-const SWEEP := Color(0.5, 0.85, 0.75)
-const SWEEP_A := 0.05
-const SWEEP_S := 5.0
-const SWEEP_TAIL := 7
+const SCAN := Color(0, 0, 0, 0.14)
 const GROUND := Color("#35554c")
 const GROUND_TICK := Color("#27403a")
 const GROUND_TICK_M := 500.0
@@ -32,16 +28,23 @@ const LABEL := Color("#a9c2b0")
 const END_PAD := 10.0
 const GROUND_ABOVE := 7.0
 const FLOOR_ABOVE := 9.0
-const PX_PER_M_UP := 0.2
+## Height: a square root's stretch, so 42 m at 1220 m uses 15 px of the box and 174 m at 2400 m stays inside it.
+const UP_K := 2.35
+## The folded tab with nothing to show, how fast it unfolds (s), how dim it sits.
+const TAB := Vector2(52, 13)
+const FOLD_S := 0.25
+const TAB_ALPHA := 0.62
 const DASH_EVERY := 6.0
 const AIM_EVERY := 8.0
 const BLINK_HZ := 5.0
 const UNIT := "M"
 const SECONDS := "S"
 ## The tracer's trail: samples back along the arc, a step (m) between them, how bright it starts.
-const TRAIL_N := 9
+const TRAIL_N := 16
 const TRAIL_STEP_M := 22.0
-const TRAIL_A := 0.7
+const TRAIL_A := 1.0
+## This many samples behind the head the trail is 2 px thick.
+const TRAIL_THICK := 6
 ## The flash where a shell leaves the gun (s).
 const FLASH_S := 0.22
 ## A landing's puff: how long it lasts (s), how far it grows, its motes.
@@ -57,6 +60,8 @@ var rect: Rect2 = Rect2()
 var puffs: Array[Dictionary] = []
 ## Shell id -> {land (m), left (s), friendly}: what each far shell was doing last frame.
 var _flying: Dictionary = {}
+## 0 folded to its tab .. 1 open.
+var open: float = 1.0
 
 
 func _init(view: TankView) -> void:
@@ -79,7 +84,7 @@ static func to_px(r: float, hm: float, size: Vector2, mirrored: bool) -> Vector2
 	var x := END_PAD + r / TankFarMap.RANGE_FAR_M * (size.x - 2.0 * END_PAD)
 	if mirrored:
 		x = size.x - x
-	return Vector2(roundf(x), roundf(size.y - FLOOR_ABOVE - hm * PX_PER_M_UP))
+	return Vector2(roundf(x), roundf(size.y - FLOOR_ABOVE - UP_K * sqrt(maxf(hm, 0.0))))
 
 
 ## The far shells as tracers: [{p, trail (head first), friendly, evadable, arc (dashes), launch (px), age, left}].
@@ -158,8 +163,22 @@ func aim_arc(range_m: float) -> PackedVector2Array:
 	return out
 
 
+## True when there is something to show: a far shell, a far enemy, a target.
+func busy(state: TankState) -> bool:
+	if v.target_range_m(state) > 0.0 or v.boss_visible(state):
+		return true
+	for s in state.shells:
+		if s.far:
+			return true
+	for e in state.enemies:
+		if not e.is_near() and e.mode != TankIds.EM_DEAD:
+			return true
+	return false
+
+
 ## One frame: a far shell gone since the last one, near its end, leaves a puff where it landed.
 func frame(state: TankState, dt: float) -> void:
+	open = move_toward(open, 1.0 if busy(state) else 0.0, dt / FOLD_S)
 	for i in range(puffs.size() - 1, -1, -1):
 		puffs[i]["t"] = float(puffs[i]["t"]) + dt
 		if float(puffs[i]["t"]) >= PUFF_S:
@@ -183,15 +202,21 @@ func _draw() -> void:
 	if v == null or v.game == null or v.game.state == null:
 		return
 	var state := v.game.state
+	if state.hull.tow_s > 0.0:
+		return
+	if open < 1.0:
+		_tab(state)
+		return
 	var size := rect.size
 	_screen(size)
 	var ground := size.y - GROUND_ABOVE
 	_ground(size, ground)
 	var shown := dots(state)
 	var target := v.target_range_m(state)
-	if not _has_ours(shown):
+	if shown.is_empty():
 		for q in aim_arc(target):
 			draw_rect(Rect2(q, Vector2.ONE), AIM)
+	_newest_arc(shown)
 	_hull(size, ground)
 	_marks(state, size, ground)
 	for p in puffs:
@@ -201,14 +226,37 @@ func _draw() -> void:
 	_labels(size, shown, target)
 
 
-func _has_ours(shown: Array[Dictionary]) -> bool:
+## The plate folded (or folding) to its dim tab on the seam: the hull's icon and what the range plate says.
+func _tab(state: TankState) -> void:
+	var tab := TAB.lerp(rect.size, open)
+	var at := Vector2(rect.size.x - tab.x, 0.0) if v.mirrored else Vector2.ZERO
+	var a := lerpf(TAB_ALPHA, 1.0, open)
+	draw_rect(Rect2(at, tab), Color(BEZEL, a))
+	TankHudDraw.frame(self, Rect2(at, tab), Color(FRAME, a))
+	var x := at.x + (tab.x - 13.0 if v.mirrored else 4.0)
+	draw_rect(Rect2(Vector2(x, at.y + 6.0), Vector2(9, 3)), Color(HULL, a * 0.7))
+	draw_rect(Rect2(Vector2(x + 3.0, at.y + 4.0), Vector2(3, 2)), Color(HULL, a * 0.7))
+	var label := range_label(v.target_range_m(state))
+	if v.mirrored:
+		TankHudDraw.text(self, at.x + 4.0, at.y + 3.0, label, Color(LABEL, a))
+	else:
+		TankHudDraw.text_r(self, at.x + tab.x - 4.0, at.y + 3.0, label, Color(LABEL, a))
+
+
+## The newest of our shells has its predicted arc; theirs and our older ones only their trails.
+func _newest_arc(shown: Array[Dictionary]) -> void:
+	var newest := {}
 	for d in shown:
-		if bool(d["friendly"]):
-			return true
-	return false
+		if bool(d["friendly"]) and (newest.is_empty() or float(d["age"]) < float(newest["age"])):
+			newest = d
+	if newest.is_empty():
+		return
+	var arc: PackedVector2Array = newest["arc"]
+	for q in arc:
+		draw_rect(Rect2(q, Vector2.ONE), Color(OURS, 0.6))
 
 
-## The bezel, the dark glass, its scan rows and the slow sweep from the hull out.
+## The bezel, the dark glass and its scan rows.
 func _screen(size: Vector2) -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), BEZEL)
 	TankHudDraw.frame(self, Rect2(Vector2.ZERO, size), FRAME)
@@ -218,14 +266,6 @@ func _screen(size: Vector2) -> void:
 	while y < glass.end.y:
 		draw_rect(Rect2(glass.position.x, y, glass.size.x, 1.0), SCAN)
 		y += 2.0
-	var u := fposmod(v.time / SWEEP_S, 1.0)
-	var at := lerpf(glass.position.x, glass.end.x - 1.0, 1.0 - u if v.mirrored else u)
-	var back := 1.0 if v.mirrored else -1.0
-	for i in SWEEP_TAIL:
-		var x := roundf(at + back * float(i))
-		if x >= glass.position.x and x < glass.end.x:
-			var a := SWEEP_A * (1.0 - float(i) / float(SWEEP_TAIL))
-			draw_rect(Rect2(x, glass.position.y, 1.0, glass.size.y), Color(SWEEP, a))
 
 
 ## The ground line and a tick every 500 m.
@@ -276,14 +316,10 @@ func _mark(x: float, ground: float, half: float, target: bool, shooting: bool) -
 		draw_rect(Rect2(Vector2(x - 1.0, ground - h - 4.0), Vector2(3, 1)), col)
 
 
-## The tracer on its dashes: a flash where it left, a trail that fades, a hot head with a soft halo.
+## The tracer: a flash where it left, a bright trail that fades, thick behind the head, a hot head with a halo.
 func _tracer(d: Dictionary) -> void:
 	var friendly := bool(d["friendly"])
 	var col := OURS if friendly else THEIRS
-	var arc: PackedVector2Array = d["arc"]
-	var dash := Color(col, 0.55)
-	for q in arc:
-		draw_rect(Rect2(q, Vector2.ONE), dash)
 	var age := float(d["age"])
 	if age < FLASH_S:
 		_burst(d["launch"], col, 1.0 - age / FLASH_S)
@@ -293,10 +329,11 @@ func _tracer(d: Dictionary) -> void:
 	var trail: PackedVector2Array = d["trail"]
 	for i in trail.size():
 		var a := TRAIL_A * (1.0 - float(i) / float(TRAIL_N))
-		draw_rect(Rect2(trail[i], Vector2.ONE), Color(col, a))
-	draw_rect(Rect2(p - Vector2(2, 2), Vector2(4, 4)), Color(col, 0.28))
-	draw_rect(Rect2(p - Vector2.ONE, Vector2(2, 2)), col)
-	draw_rect(Rect2(p, Vector2.ONE), CORE)
+		var thick := Vector2(1, 2) if i < TRAIL_THICK else Vector2.ONE
+		draw_rect(Rect2(trail[i], thick), Color(col, a))
+	draw_rect(Rect2(p - Vector2(3, 3), Vector2(6, 6)), Color(col, 0.3))
+	draw_rect(Rect2(p - Vector2(2, 2), Vector2(4, 4)), col)
+	draw_rect(Rect2(p - Vector2.ONE, Vector2(2, 2)), CORE)
 
 
 func _burst(at: Vector2, col: Color, k: float) -> void:

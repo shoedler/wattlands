@@ -295,10 +295,12 @@ static func base_ground(v: TankView, x0: float) -> float:
 ## A little base at stage x `x0`: a cleared earth bank, a fence of posts and wire with a gate, a
 ## sodded concrete bunker (formwork joints, a vent grille, a periscope pipe, rust under the slit's
 ## frame) with a dark firing slit behind sandbags, a hooded lamp on a post, crates
-## under a tarp, fuel drums, the gate's red and white barrier raised.
-static func draw_base(ci: CanvasItem, v: TankView, x0: float) -> void:
-	var g := base_ground(v, x0)
-	_bank(ci, x0, g)
+## under a tarp, fuel drums, the gate's red and white barrier raised. `at_g` stands it on that row instead of the road
+## (the far panel: at the treeline's foot, with no earth bank: nothing under an enemy's tracks).
+static func draw_base(ci: CanvasItem, v: TankView, x0: float, at_g: float = NAN) -> void:
+	var g := base_ground(v, x0) if is_nan(at_g) else at_g
+	if is_nan(at_g):
+		_bank(ci, x0, g)
 	_fence(ci, x0, g, true)
 	_bunker(ci, x0 + 26.0, g)
 	_drums(ci, x0 + 98.0, g)
@@ -309,8 +311,8 @@ static func draw_base(ci: CanvasItem, v: TankView, x0: float) -> void:
 
 
 ## The base's lights (stage px): the lamp and the bunker's slit.
-static func base_lights(v: TankView, x0: float) -> Array[Dictionary]:
-	var g := base_ground(v, x0)
+static func base_lights(v: TankView, x0: float, at_g: float = NAN) -> Array[Dictionary]:
+	var g := base_ground(v, x0) if is_nan(at_g) else at_g
 	return [
 		{"p": Vector2(x0 + 121.0, g - 45.0), "kind": "lamp", "g": g},
 		{"p": Vector2(x0 + 58.0, g - 15.0), "kind": "slit", "g": g},
@@ -478,8 +480,8 @@ static func _barrier(ci: CanvasItem, x: float, g: float) -> void:
 
 ## The base's light on the world light layer (behind the tank): the lamp, its cone and pool, the
 ## slit's faint glow.
-static func draw_base_light(ci: CanvasItem, v: TankView, x0: float) -> void:
-	for l in base_lights(v, x0):
+static func draw_base_light(ci: CanvasItem, v: TankView, x0: float, at_g: float = NAN) -> void:
+	for l in base_lights(v, x0, at_g):
 		var p: Vector2 = l["p"]
 		if str(l["kind"]) == "slit":
 			TankDraw.glow_at(ci, p, 10.0, Color(1.0, 0.55, 0.25, 0.1))

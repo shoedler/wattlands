@@ -274,6 +274,10 @@ func _mean_l(r: Rect2, y0: int, y1: int) -> float:
 	return total / maxf(float(n), 1.0)
 
 
+## Two ramp steps of L.
+const TURRET_OVER_HULL := 12.0
+
+
 func test_the_enemies_sit_at_the_tanks_armour_value() -> void:
 	for k: String in TankEnemyKit.SIZES:
 		var row := _kit.kind(k)
@@ -283,10 +287,14 @@ func test_the_enemies_sit_at_the_tanks_armour_value() -> void:
 		)
 		if row.has("turret"):
 			var t: Rect2 = row["turret"]["rect"]
-			assert_lte(
-				_mean_l(t, 0, int(t.size.y)),
-				HERO_ARMOUR_L + 5.0,
-				"%s: the turret, nearer the moon" % k
+			# Art critic, on frames: at the far panel's scale turret and hull were one tone. The turret stands two ramp
+			# steps over the hull now, and the hero's upper hull (p95 102) still tops it.
+			var turret_l := _mean_l(t, 0, int(t.size.y))
+			assert_lte(turret_l, HERO_ARMOUR_L + 22.0, "%s: the turret, nearer the moon" % k)
+			assert_gte(
+				turret_l,
+				_mean_l(row["base"], 0, whole) + TURRET_OVER_HULL,
+				"%s: the turret parts from the hull by value" % k
 			)
 
 

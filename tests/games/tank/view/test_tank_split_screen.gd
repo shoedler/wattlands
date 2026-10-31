@@ -12,7 +12,7 @@ const LAYOUT := [
 		Rect2(0, 0, 622, 540),
 		Rect2(622, 0, 8, 540),
 		Rect2(630, 0, 330, 540),
-		Rect2(707, 150, 176, 52)
+		Rect2(630, 150, 176, 52)
 	],
 	[
 		Vector2(852, 480),
@@ -20,7 +20,7 @@ const LAYOUT := [
 		Rect2(0, 0, 558, 480),
 		Rect2(558, 0, 8, 480),
 		Rect2(566, 0, 286, 480),
-		Rect2(621, 150, 176, 52)
+		Rect2(566, 150, 176, 52)
 	],
 	[
 		Vector2(1280, 680),
@@ -28,7 +28,7 @@ const LAYOUT := [
 		Rect2(0, 0, 852, 680),
 		Rect2(852, 0, 8, 680),
 		Rect2(860, 0, 420, 680),
-		Rect2(982, 150, 176, 52)
+		Rect2(860, 150, 176, 52)
 	],
 	[
 		Vector2(960, 540),
@@ -36,7 +36,7 @@ const LAYOUT := [
 		Rect2(338, 0, 622, 540),
 		Rect2(330, 0, 8, 540),
 		Rect2(0, 0, 330, 540),
-		Rect2(77, 150, 176, 52)
+		Rect2(154, 150, 176, 52)
 	],
 ]
 const SIZES: Array[Vector2] = [Vector2(960, 540), Vector2(852, 480), Vector2(1280, 680)]
@@ -135,18 +135,26 @@ func test_far_enemies_stand_in_the_far_panel_and_near_ones_on_the_stage() -> voi
 	assert_eq(far_n, 8)
 
 
-func test_a_far_sprite_stands_where_range_and_lane_say_at_scale_one() -> void:
+func test_a_far_sprite_stands_where_range_says_at_scale_one() -> void:
 	var v := _view("far_duel")
 	var fw := float(v.far.far_w)
+	var rows: Array = []
+	for e0 in v.game.state.enemies:
+		var half: float = v.far.kit.kind(TankIds.enemy_of(e0.code))["size"].x * 0.5
+		rows.append({"id": e0.id, "range_m": e0.range_m, "lane": e0.lane, "half_w": half})
+	var placed := TankFarMap.place(rows, fw)
 	for e in v.game.state.enemies:
 		var r: Rect2 = v.far.rects[e.id]
 		var size: Vector2 = v.far.kit.kind(TankIds.enemy_of(e.code))["size"]
 		assert_eq(r.size, size, "no perspective scale")
 		var foot: Vector2 = v.far.feet[e.id]
-		assert_eq(foot.y, TankFarMap.foot_y(e.range_m, e.lane))
+		assert_eq(foot, placed[e.id], "where the map places the field")
 		var x := TankFarMap.range_x(e.range_m, fw)
-		assert_eq(foot.x, TankFarPanel.foot_x(e.range_m, size.x * 0.5, fw))
 		assert_almost_eq(foot.x, x, size.x, "%d near its range's x" % e.id)
+		for o in v.game.state.enemies:
+			if o.range_m > e.range_m:
+				var other: Vector2 = v.far.feet[o.id]
+				assert_lt(other.y, foot.y, "%d, farther than %d, stands higher" % [o.id, e.id])
 	var nearer: Rect2 = v.far.rects[22]
 	var further: Rect2 = v.far.rects[23]
 	assert_lt(nearer.get_center().x, further.get_center().x, "further is further from the seam")
@@ -253,7 +261,8 @@ func test_the_behemoth_stands_in_the_far_panel() -> void:
 		if panel.size.x >= box.size.x:
 			assert_true(panel.encloses(box), "%s: whole" % size)
 		else:
-			assert_almost_eq(box.get_center().x, panel.get_center().x, 1.0, "%s: centred" % size)
+			var bow := box.position.x - panel.position.x
+			assert_almost_eq(bow, TankFarPanel.BOSS_EDGE, 1.0, "%s: bow and gun whole" % size)
 		var mz := v.hud_boss_muzzle()
 		assert_true(box.grow(1.0).has_point(mz), "%s: the main gun on the sprite" % size)
 		for part in 4:
@@ -448,7 +457,12 @@ func test_the_pip_maps_range_and_height_as_the_spec_says() -> void:
 	assert_eq(TankPip.to_px(2600.0, 0.0, size, false), Vector2(308, 51))
 	assert_eq(TankPip.to_px(2600.0, 0.0, size, true), Vector2(10, 51), "mirrored")
 	assert_eq(TankPip.to_px(0.0, 0.0, size, true), Vector2(308, 51))
-	assert_eq(TankPip.to_px(1200.0, 174.0, size, false).y, 16.0, "174 m is 35 px up")
+	assert_eq(
+		TankPip.to_px(1200.0, 174.0, size, false).y, 20.0, "174 m is 31 px up: the top of its box"
+	)
+	assert_lte(
+		TankPip.to_px(1200.0, 42.0, size, false).y, 36.0, "a 1220 m arc's 42 m uses 15 px, not 8"
+	)
 
 
 func test_the_pip_shows_each_far_shell_on_its_arc() -> void:

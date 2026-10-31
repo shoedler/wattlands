@@ -6,7 +6,7 @@ extends RefCounted
 ## holds two top-level keys, for the art the near and far scenes draw (4.3, 4.7):
 ##   "bushes": {"atlas": "bushes.png", "rects": [[x, y, w, h], ...]}
 ##   "far_ground": "far_ground.png"
-##   "far_forest": {"atlas": "far_forest.png", "rects": [[x, y, w, h], ...]} (far to near)
+##   "far_forest": {"atlas": "far_forest.png", "rects": [[x, y, w, h], ...] (far to near), "scrub": [x, y, w, h]}
 ## Without the manifest (a broken bake) every kind still has its frozen size and the art is null, so a view
 ## guards on null and draws nothing.
 
@@ -40,6 +40,7 @@ var _bush_rects: Array[Rect2] = []
 var _ground: Texture2D = null
 var _forest: Texture2D = null
 var _forest_rects: Array[Rect2] = []
+var _scrub_rect: Rect2 = Rect2()
 
 
 static func shared() -> TankEnemyKit:
@@ -74,6 +75,8 @@ func load_all() -> void:
 		_forest = _load(str(forest_row.get("atlas", "far_forest.png")))
 		for r2: Array in forest_row.get("rects", []):
 			_forest_rects.append(rect_of(r2))
+		if forest_row.has("scrub"):
+			_scrub_rect = rect_of(forest_row["scrub"])
 
 
 static func _load(file: String) -> Texture2D:
@@ -232,6 +235,11 @@ func far_forest() -> Texture2D:
 
 func far_forest_rects() -> Array[Rect2]:
 	return _forest_rects
+
+
+## The scrub along the treeline's foot on the same sheet; empty without the bake.
+func far_scrub_rect() -> Rect2:
+	return _scrub_rect
 
 
 ## Every problem of manifest `m` (empty when sound): a kind missing or without a size, no bushes, no
