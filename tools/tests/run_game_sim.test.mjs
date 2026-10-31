@@ -90,6 +90,7 @@ describe('plan capture', () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'wattlands-run-game-sim-plan-'));
     temps.push(cwd);
     const plan = path.join(cwd, 'plan.txt').replaceAll('\\', '/');
+    fs.writeFileSync(plan, '');
     // GODOT points nowhere: a Godot start could only fail.
     const env = minimalEnv({ WATTLANDS_SIM_PLAN: plan, GODOT: path.join(cwd, 'no-godot') });
     const one = ['--game=tank', '--rider=erg+cadence_drop:rpm=0,at_s=900 x', '--options={"a":"b c"}', '--report=build/a.json'];
@@ -100,6 +101,17 @@ describe('plan capture', () => {
     assert.equal(r.stdout, '', 'nothing ran');
     const lines = fs.readFileSync(plan, 'utf8').split('\n').filter(Boolean).map((l) => l.split('\x1f').slice(0, -1));
     assert.deepEqual(lines, [one, two]);
+  });
+
+  test('a plan variable with no plan file fails instead of skipping the run', { skip: !BASH && 'no bash' }, async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'wattlands-run-game-sim-plan-'));
+    temps.push(cwd);
+    const plan = path.join(cwd, 'stale_plan.txt').replaceAll('\\', '/');
+    const env = minimalEnv({ WATTLANDS_SIM_PLAN: plan, GODOT: path.join(cwd, 'no-godot') });
+    const r = await runSim('bash', ['--game=tank', '--report=build/a.json'], { env, cwd });
+    assert.equal(r.code, 2, r.stdout + r.stderr);
+    assert.match(r.stderr, /WATTLANDS_SIM_PLAN names no plan file/);
+    assert.ok(!fs.existsSync(plan), 'it does not create one');
   });
 });
 

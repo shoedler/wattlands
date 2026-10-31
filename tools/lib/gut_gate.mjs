@@ -5,6 +5,8 @@
 // test count is above 0 and at least the required count (the previous green count, or --min-count),
 // the log contains none of FORBIDDEN, and no test is pending or risky (GUT exits 0 for both and counts
 // them in JUnit, so a regression that trips a pending() guard would otherwise stay green; W3 QT-3).
+// JUnit's failure count is read too: GUT exits non-zero on a failure, but exit 0 from a post-run hook or a
+// stray quit(0) after the summary must not read as green.
 // A narrow run (--gdir) may allow pending tests with allowPending.
 
 import fs from 'node:fs';
@@ -104,6 +106,7 @@ export function evaluateGut({ exitCode, log, junitXml, previousGreen = null, min
   if (!counts) reasons.push('no JUnit test count (missing or empty JUnit file)');
   else if (tests <= 0) reasons.push('JUnit reports 0 tests');
   else if (tests < required) reasons.push(`JUnit reports ${tests} tests, fewer than the required ${required}`);
+  if (counts && counts.failures > 0) reasons.push(`JUnit reports ${counts.failures} failed test${counts.failures === 1 ? '' : 's'}`);
   for (const bad of FORBIDDEN) {
     if (text.includes(bad)) reasons.push(`log contains "${bad}"`);
   }

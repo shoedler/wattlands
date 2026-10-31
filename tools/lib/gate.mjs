@@ -18,18 +18,28 @@ import {
   aggregateGut,
   checkAddedText,
   checkClassNames,
+  checkerEvidence,
   checkPaths,
+  checkPinContent,
+  checkPinCoverage,
   checkPins,
   checkSidecars,
   checkTestCounts,
   computePins,
+  fastNarrowing,
   inferWs,
+  isGutFile,
+  junitCoverage,
   laneVerdict,
   listGutFiles,
+  manifestPins,
   parseAddedLines,
   parsePlan,
   parseTestRemovals,
+  pinSpecOf,
   planShards,
+  globToRegExp,
+  quietRetryPlan,
   readWeights,
   touchedGames,
   weightsByGroup,
@@ -212,6 +222,14 @@ function childEnv(extra = {}) {
   return env;
 }
 
+/** Drops every <ID>_* variable: a game's sim script reads those to narrow or skip its matrix. */
+function withoutGameVars(env, upper) {
+  for (const key of Object.keys(env)) {
+    if (key.toUpperCase().startsWith(`${upper}_`)) delete env[key];
+  }
+  return env;
+}
+
 /** A shell script's own tools (dirname, mkdir) are beside its bash; a PowerShell caller's PATH may lack them. */
 function withBashPath(env, bash) {
   if (!path.isAbsolute(bash)) return env;
@@ -273,7 +291,7 @@ function readAt(cwd, rev, file) {
 }
 
 function gdSourcesAt(cwd, rev) {
-  const files = zList(git(cwd, ['ls-tree', '-r', '--name-only', '-z', rev, '--', 'tests'])).filter((f) => f.endsWith('.gd'));
+  const files = zList(git(cwd, ['ls-tree', '-r', '--name-only', '-z', rev, '--', 'tests'])).filter(isGutFile);
   const blobs = catBlobs(cwd, files.map((f) => `${rev}:${f}`));
   const srcs = {};
   for (const f of files) srcs[f] = blobs.get(`${rev}:${f}`)?.toString('utf8') ?? '';
@@ -368,11 +386,27 @@ function grepLines(project, pattern, pathspecs) {
   return r.stdout.toString('utf8').split('\n').map((l) => l.replace(/\r$/, '')).filter(Boolean);
 }
 
-function floorAt(project, rev) {
-  const text = readAt(project, rev, GREEN_FLOOR_FILE);
-  if (text === null) return null;
-  const n = Number.parseInt(text.trim(), 10);
+const globMatch = (glob, file) => globToRegExp(glob).test(file);
+
+const parseFloor = (text) => {
+  const n = Number.parseInt(String(text ?? '').trim(), 10);
   return Number.isInteger(n) ? n : null;
+};
+
+function floorAt(project, rev) {
+  return parseFloor(readAt(project, rev, GREEN_FLOOR_FILE));
+}
+
+/** The highest floor any commit in HEAD's history held, or null. The count never goes down, in steps or at once. */
+function highestFloor(project) {
+  const shas = git(project, ['log', '--format=%H', '--', GREEN_FLOOR_FILE]).split('\n').map((l) => l.trim()).filter(Boolean);
+  const blobs = catBlobs(project, shas.map((sha) => `${sha}:${GREEN_FLOOR_FILE}`));
+  let top = null;
+  for (const b of blobs.values()) {
+    const n = b ? parseFloor(b.toString('utf8')) : null;
+    if (n !== null && (top === null || n > top)) top = n;
+  }
+  return top;
 }
 
 /** tracked paths now: index plus untracked, without what the work tree deleted. */
@@ -406,6 +440,65 @@ function sizeNotes(project, added) {
   return notes;
 }
 
+function pinPaths(pins) {
+  const named = [...(pins.blocks ?? []), ...(pins.consts ?? []), ...(pins.lines ?? [])];
+  return [...new Set([...Object.keys(pins.files ?? {}), ...named.map((b) => b.file), ...named.map((b) => b.moved).filter(Boolean)])];
+}
+
+function pinProblems(o, manifest, uncommitted, notes) {
+  const project = o.project;
+  const pinsText = readAt(project, 'HEAD', PINS_FILE);
+  if (pinsText === null) {
+    // Deleted is a failure, whatever --allow says. Not pinned yet is the one window the note is for.
+    const ever = git(project, ['log', '-1', '--format=%H', '--', PINS_FILE]).trim();
+    if (ever) return [`safety pin: ${PINS_FILE} was deleted (it was in ${ever.slice(0, 9)})`];
+    if (manifestPins(manifest)) notes.push(`no ${PINS_FILE} at HEAD: not pinned yet, pin rules inactive until the lead runs tools/gate pin-safety`);
+    return [];
+  }
+  let pins;
+  try {
+    pins = JSON.parse(pinsText);
+  } catch (err) {
+    return [`safety pin: ${PINS_FILE} does not parse: ${err.message}`];
+  }
+  const out = [];
+  if (manifestPins(manifest)) out.push(...pinCoverage(project, pins, manifest));
+  const paths = pinPaths(pins);
+  const blobs = catBlobs(project, paths.map((f) => `HEAD:${f}`));
+  out.push(...checkPins({ pins, allowPins: o.allowPin, read: (f) => blobs.get(`HEAD:${f}`)?.toString('utf8') ?? null }));
+  const dirty = new Set(uncommitted.map((c) => c.path));
+  const dirtyFile = (e) => dirty.has(e.file) || (e.moved && dirty.has(e.moved));
+  const dirtyPins = {
+    files: Object.fromEntries(Object.entries(pins.files ?? {}).filter(([f]) => dirty.has(f))),
+    masked: pins.masked,
+    lines: (pins.lines ?? []).filter(dirtyFile),
+    blocks: (pins.blocks ?? []).filter(dirtyFile),
+    consts: (pins.consts ?? []).filter(dirtyFile),
+  };
+  const readWork = (f) => {
+    try {
+      return fs.readFileSync(path.join(project, f), 'utf8');
+    } catch {
+      return null;
+    }
+  };
+  return [...new Set([...out, ...checkPinContent({ pins: dirtyPins, allowPins: o.allowPin, read: readWork })])];
+}
+
+/** The pins against the manifest, at the commit they name: stops a hollowed or hand-edited file. */
+function pinCoverage(project, pins, manifest) {
+  const at = pins.pinned_at;
+  if (typeof at !== 'string' || gitRaw(project, ['merge-base', '--is-ancestor', at, 'HEAD']).status !== 0) {
+    return [`safety pin: ${PINS_FILE} names ${at ?? 'no'} pinned_at, which is not in this history (only tools/gate pin-safety writes it)`];
+  }
+  const tracked = zList(git(project, ['ls-tree', '-r', '--name-only', '-z', at]));
+  const spec = pinSpecOf(manifest);
+  const wanted = tracked.filter((f) => spec.globs.some((g) => globMatch(g, f)));
+  const named = [...Object.keys(spec.lines), ...Object.keys(spec.appendOnly), ...Object.keys(spec.tables), ...Object.values(spec.moves)];
+  const blobs = catBlobs(project, [...new Set([...wanted, ...named])].map((f) => `${at}:${f}`));
+  return checkPinCoverage({ pins, manifest, tracked, read: (f) => blobs.get(`${at}:${f}`)?.toString('utf8') ?? null });
+}
+
 /** Every rule of SPEC_GATES 6. Returns {problems, notes, ws, base, branch}. */
 export function runCheck(o, { base = o.base } = {}) {
   const project = o.project;
@@ -426,28 +519,7 @@ export function runCheck(o, { base = o.base } = {}) {
   problems.push(...checkPaths({ changes: [...committed, ...uncommitted], commits, manifest, ws, allow: o.allow, lead }));
 
   // 6.2, 6.3: pins as of HEAD, against HEAD, and against the work tree for what is uncommitted.
-  const pinsText = readAt(project, 'HEAD', PINS_FILE);
-  if (pinsText === null) {
-    notes.push(`no ${PINS_FILE} at HEAD: pins not checked`);
-  } else {
-    const pins = JSON.parse(pinsText);
-    const pinPaths = [...new Set([...Object.keys(pins.files ?? {}), ...(pins.blocks ?? []).map((b) => b.file)])];
-    const blobs = catBlobs(project, pinPaths.map((f) => `HEAD:${f}`));
-    const pinned = checkPins({ pins, allowPins: o.allowPin, read: (f) => blobs.get(`HEAD:${f}`)?.toString('utf8') ?? null });
-    const dirty = new Set(uncommitted.map((c) => c.path));
-    const dirtyPins = {
-      files: Object.fromEntries(Object.entries(pins.files ?? {}).filter(([f]) => dirty.has(f))),
-      blocks: (pins.blocks ?? []).filter((b) => dirty.has(b.file)),
-    };
-    const readWork = (f) => {
-      try {
-        return fs.readFileSync(path.join(project, f), 'utf8');
-      } catch {
-        return null;
-      }
-    };
-    problems.push(...new Set([...pinned, ...checkPins({ pins: dirtyPins, allowPins: o.allowPin, read: readWork })]));
-  }
+  problems.push(...pinProblems(o, manifest, uncommitted, notes));
 
   // 6.4: test counts at the merge base and at HEAD.
   const trailers = commits.flatMap((c) => parseTestRemovals(c.message));
@@ -469,9 +541,10 @@ export function runCheck(o, { base = o.base } = {}) {
   const lint = grepLines(project, 'gdlint:[[:space:]]*disable', LINT_DIRS.map((d) => `${d}*.gd`));
   for (const l of lint) problems.push(`lint: ${l.split(':').slice(0, 2).join(':')}: gdlint: disable (fix the finding in code)`);
 
-  const baseFloor = floorAt(project, mb);
+  // Against the highest floor in HEAD's history, not only the base: strict's range and a fall in two steps.
+  const topFloor = highestFloor(project);
   const headFloor = floorAt(project, 'HEAD');
-  if (baseFloor !== null && (headFloor === null || headFloor < baseFloor)) problems.push(`floor: ${GREEN_FLOOR_FILE} fell ${baseFloor} -> ${headFloor}`);
+  if (topFloor !== null && (headFloor === null || headFloor < topFloor)) problems.push(`floor: ${GREEN_FLOOR_FILE} fell ${topFloor} -> ${headFloor}`);
 
   const now = currentFiles(project);
   const allChanges = [...committed, ...uncommitted];
@@ -676,8 +749,15 @@ function currentGreenFloor(o) {
 
 // ---------------------------------------------------------------- fast (SPEC_GATES 2.5)
 
-function changedSince(o, base) {
-  const committed = git(o.project, ['diff', '--name-only', '-z', `${base}...HEAD`]);
+/** The commit of a rev, or null when it does not exist. */
+function revOf(o, rev) {
+  const r = gitRaw(o.project, ['rev-parse', '--verify', '--quiet', `${rev}^{commit}`]);
+  return r.status === 0 ? r.stdout.toString('utf8').trim() : null;
+}
+
+export function changedSince(o, base) {
+  // --no-renames: moving a platform file into src/games/<id>/ must select "platform", which only its old path says.
+  const committed = git(o.project, ['diff', '--name-only', '--no-renames', '-z', `${base}...HEAD`]);
   return [...new Set([...zList(committed), ...uncommittedChanges(o.project).map((c) => c.path)])];
 }
 
@@ -725,9 +805,22 @@ async function gutLane(g, name, files, subdir, { extraEnv = {}, pendingAllowlist
 async function quietLane(g, files, pendingAllowlist) {
   const first = await gutLane(g, 'gut:quiet', files, 'quiet', { pendingAllowlist });
   if (first.pass) return { verdict: first, retried: false };
-  // A budget is a claim about an unloaded machine: one rerun with the whole machine to itself, and
-  // the second verdict stands (SPEC_GATES 2.4).
-  out('gate: gut:quiet failed; once more inside a whole-machine lease');
+  // A budget is a claim about an unloaded machine: one rerun with the whole machine to itself, and the
+  // second verdict stands (SPEC_GATES 2.4). Budgets only: a real failure, a SCRIPT ERROR or a crash in
+  // these files keeps its first verdict, so a flaky determinism failure can't read as green.
+  const read = (f) => {
+    try {
+      return fs.readFileSync(path.join(g.o.project, f), 'utf8');
+    } catch {
+      return null;
+    }
+  };
+  const plan = quietRetryPlan({ reasons: first.reasons, junitXml: first.junitXml, read });
+  if (!plan.allowed) {
+    out(`gate: gut:quiet failed and does not rerun: ${plan.why}`);
+    return { verdict: first, retried: false, tests: plan.tests };
+  }
+  out(`gate: gut:quiet failed on budget tests (${plan.tests.join(', ')}); once more inside a whole-machine lease`);
   g.tails = g.tails.filter((t) => t.name !== 'gut:quiet');
   let lease;
   try {
@@ -735,11 +828,11 @@ async function quietLane(g, files, pendingAllowlist) {
   } catch (err) {
     if (err.code !== 'ELOCKTIMEOUT') throw err;
     g.lockTimeout = true;
-    return { verdict: first, retried: false };
+    return { verdict: first, retried: false, tests: plan.tests };
   }
   try {
     const second = await gutLane(g, 'gut:quiet', files, 'quiet_retry', { extraEnv: { [LEASE_TOKEN_ENV]: lease.token }, pendingAllowlist });
-    return { verdict: second, retried: true };
+    return { verdict: second, retried: true, tests: plan.tests };
   } finally {
     lease.release();
   }
@@ -750,8 +843,8 @@ async function cmdFast(o) {
   ensureBuildDir(o.project);
   const start = stampBase(o, 'fast');
   const g = new Run(o, 'fast');
-  const partial = o.lanes !== null;
-  const want = (name) => !partial || o.lanes.includes(name) || o.lanes.includes(name.split(':')[0]);
+  const someLanes = o.lanes !== null;
+  const want = (name) => !someLanes || o.lanes.includes(name) || o.lanes.includes(name.split(':')[0]);
   checkLane(g, o, o.base);
   await installNode(o);
   await g.runTests('import', ['import']);
@@ -790,31 +883,51 @@ async function cmdFast(o) {
   await Promise.all(tasks);
 
   let quietRetried = false;
+  let quietTests = [];
   if (plan.quiet.length > 0 && want('gut:quiet')) {
     const q = await quietLane(g, plan.quiet, pendingAllowlist);
     gutResults.push(q.verdict);
     gutFiles.push(...plan.quiet);
     quietRetried = q.retried;
+    quietTests = q.retried ? q.tests : [];
   }
   if (want('fit')) await g.runTests('fit', ['fit']);
 
   const floor = currentGreenFloor(o);
   let gutTotal = null;
-  if (gutResults.length > 0) {
+  // Without --lanes the verdict always runs: no shard at all means no test ran, never a pass.
+  if (!someLanes || gutResults.length > 0) {
     const everyShard = gutFiles.length === files.length;
     const v = aggregateGut(gutResults, { floor: everyShard ? floor : null, expectedFiles: gutFiles });
     gutTotal = v.total;
     g.row('gut:total', v.pass ? 'PASS' : 'FAIL', 0, `${v.total} tests, floor ${everyShard ? (floor ?? 'none') : 'partial'}`, v.reasons.join('\n'));
   }
   const end = endState(o, start);
+  const ids = registered.map((r) => r.id);
+  const partialReasons = fastNarrowing({
+    lanes: o.lanes,
+    base: o.base,
+    baseSha: revOf(o, o.base),
+    mainSha: revOf(o, 'main'),
+    ws: o.ws,
+    inferredWs: inferWs(gitLine(o.project, ['rev-parse', '--abbrev-ref', 'HEAD']), manifest),
+    allow: o.allow,
+    allowPin: o.allowPin,
+    games,
+    requiredGames: revOf(o, 'main') ? touchedGames(changedSince(o, 'main'), ids).games : ids,
+  });
   const stamp = g.finish({
     ...start,
     ...end,
-    partial,
+    partial: partialReasons.length > 0,
+    partial_reasons: partialReasons,
+    base: o.base,
+    ws: o.ws,
     games,
     gut_total: gutTotal,
     floor,
     quiet_retried: quietRetried,
+    quiet_retried_tests: quietTests,
     allow: [...o.allow, ...o.allowPin],
   });
   writeStamp(o, 'fast', stamp);
@@ -823,8 +936,14 @@ async function cmdFast(o) {
 
 // ---------------------------------------------------------------- strict (SPEC_GATES 2.6)
 
-function lastFloorCommit(o) {
-  return gitLine(o.project, ['log', '-1', '--format=%H', '--', GREEN_FLOOR_FILE]) || 'HEAD';
+/**
+ * strict's check range starts just before the last commit that touched the floor file, so that commit is in
+ * the range: from the commit itself, a commit that lowered the floor and deleted tests would compare clean.
+ */
+export function strictBase(o) {
+  const floorCommit = gitLine(o.project, ['log', '-1', '--format=%H', '--', GREEN_FLOOR_FILE]);
+  if (!floorCommit) return 'HEAD';
+  return revOf(o, `${floorCommit}^`) ?? floorCommit;
 }
 
 async function cmdStrict(o) {
@@ -834,7 +953,7 @@ async function cmdStrict(o) {
   if (dirtyNow.length) throw new Exit(3, `gate: strict needs a clean tree:\n${dirtyNow.slice(0, 20).join('\n')}`);
   const start = stampBase(o, 'strict');
   const g = new Run(o, 'strict');
-  checkLane(g, o, lastFloorCommit(o));
+  checkLane(g, o, strictBase(o));
   await installNode(o);
   await g.runTests('import', ['import']);
 
@@ -869,7 +988,11 @@ async function cmdStrict(o) {
   } else g.row('tree', 'PASS', 0, 'still clean');
 
   const junit = path.join(o.project, 'build', 'junit.xml');
-  const counts = fs.existsSync(junit) ? junitCounts(fs.readFileSync(junit, 'utf8')) : null;
+  const junitXml = fs.existsSync(junit) ? fs.readFileSync(junit, 'utf8') : '';
+  const counts = junitXml ? junitCounts(junitXml) : null;
+  // The monolith must have run every file the shards would: a file GUT dropped is no failing test.
+  const uncovered = junitCoverage(junitXml, listGutFiles(o.project));
+  g.row('gut:files', uncovered.length ? 'FAIL' : 'PASS', 0, uncovered.length ? `${uncovered.length} files GUT did not run` : 'every test file is in the JUnit', uncovered.slice(0, 40).join('\n'));
   const stamp = g.finish({
     ...start,
     ...endState(o, start),
@@ -905,11 +1028,11 @@ async function cmdMatrix(o) {
   const g = new Run(o, name);
   const bash = findBash();
   const upper = id.toUpperCase();
+  // Nothing in the shell may narrow or skip a matrix: <ID>_SKIP_CHECK, <ID>_SEEDS, <ID>_SIMS, <ID>_FIT, ...
   const planEnv = (planFile, extra = {}) => {
-    const env = withBashPath(childEnv({ WATTLANDS_BASH: bash, ...extra }), bash);
+    const env = withBashPath(withoutGameVars(childEnv({ WATTLANDS_BASH: bash }), upper), bash);
     env.WATTLANDS_SIM_PLAN = planFile;
-    delete env[`${upper}_SIMS_OUT`];
-    return env;
+    return { ...env, ...extra };
   };
   const scriptRun = (logName, env) => run(bash, [script, ...o.scenarios], {
     cwd: o.project,
@@ -926,8 +1049,11 @@ async function cmdMatrix(o) {
   // Phase 1: the script's real logic decides the runs; tools/run_game_sim only records them.
   const planFile = path.join(g.dir, 'plan.txt').replaceAll('\\', '/');
   const t0 = Date.now();
+  fs.writeFileSync(planFile, '');
   const planned = await scriptRun('plan', planEnv(planFile, { [`${upper}_SKIP_CHECK`]: '1' }));
-  const lines = fs.existsSync(planFile) ? parsePlan(fs.readFileSync(planFile, 'utf8')) : [];
+  const lines = parsePlan(fs.readFileSync(planFile, 'utf8'));
+  // tools/run_game_sim refuses a plan variable with no file, so a value left in a shell can't skip real runs.
+  fs.renameSync(planFile, path.join(g.dir, 'plan_used.txt'));
   const planOk = planned.code === 0 && lines.length > 0;
   g.row('plan', planOk ? 'PASS' : 'FAIL', Date.now() - t0, `${g.dirRel}/plan.log`, `exit ${planned.code}, ${lines.length} runs\n${planned.text.split(/\r?\n/).slice(-40).join('\n')}`);
 
@@ -938,7 +1064,7 @@ async function cmdMatrix(o) {
   const logDir = path.join(g.dir, 'runs');
   fs.mkdirSync(logDir, { recursive: true });
   const worker = async (k) => {
-    const env = withBashPath(childEnv({ WATTLANDS_BASH: bash, WATTLANDS_USERDATA_DIR: path.join(g.dir, `w${k}`, 'userdata') }), bash);
+    const env = withBashPath(withoutGameVars(childEnv({ WATTLANDS_BASH: bash, WATTLANDS_USERDATA_DIR: path.join(g.dir, `w${k}`, 'userdata') }), upper), bash);
     while (next < lines.length) {
       const i = next;
       next += 1;
@@ -967,44 +1093,67 @@ async function cmdMatrix(o) {
 
   // Phase 3: the same script again, still recording only, now with its checker over the reports.
   const t2 = Date.now();
-  const checked = await scriptRun('check', planEnv(path.join(g.dir, 'plan_check.txt').replaceAll('\\', '/')));
-  g.row('check_sims', checked.code === 0 ? 'PASS' : 'FAIL', Date.now() - t2, `${g.dirRel}/check.log`, checked.text.split(/\r?\n/).slice(-40).join('\n'));
+  const planCheck = path.join(g.dir, 'plan_check.txt').replaceAll('\\', '/');
+  fs.writeFileSync(planCheck, '');
+  const checked = await scriptRun('check', planEnv(planCheck));
+  fs.rmSync(planCheck, { force: true });
+  const partial = o.scenarios.length > 0;
+  // Exit 0 is no evidence: the checker's own rows must be in its output.
+  const evidence = checkerEvidence({ code: checked.code, text: checked.text, partial, required: loadManifest(o.project).matrix_required_rows?.[id] ?? [] });
+  g.row('check_sims', evidence.pass ? 'PASS' : 'FAIL', Date.now() - t2, `${g.dirRel}/check.log`, [...evidence.reasons, ...checked.text.split(/\r?\n/).slice(-40)].join('\n'));
 
-  const stamp = g.finish({ ...start, ...endState(o, start), game: id, partial: o.scenarios.length > 0, runs: lines.length, failed_runs: failed });
+  const stamp = g.finish({ ...start, ...endState(o, start), game: id, partial, runs: lines.length, failed_runs: failed, checker_rows: evidence.rows });
   writeStamp(o, name, stamp);
   return g.exitCode();
 }
 
-// ---------------------------------------------------------------- stamp-ok, floor
+// ---------------------------------------------------------------- stamp-ok
+
+function stampRefusal(stamp, matrix, tree) {
+  if (!stamp) return 'no stamp';
+  if (stamp.pass !== true) return 'it did not pass';
+  if (stamp.partial !== false) return `it is partial${stamp.partial_reasons?.length ? ` (${stamp.partial_reasons.join('; ')})` : ''}`;
+  if (stamp.dirty !== false) return 'it was dirty';
+  if (stamp.tree !== tree) return `tree ${stamp.tree} is not ${tree}`;
+  if (matrix) {
+    if (!(stamp.runs > 0)) return 'it ran no sims';
+    if (!(stamp.checker_rows > 0)) return 'it holds no evidence that the checker ran';
+    return null;
+  }
+  if (!Number.isInteger(stamp.gut_total) || stamp.gut_total <= 0) return `it counted ${stamp.gut_total ?? 'no'} GUT tests`;
+  if ((stamp.allow ?? []).length > 0) return `it ran with ${stamp.allow.join(', ')}`;
+  return null;
+}
 
 function cmdStampOk(o) {
   const worktree = path.resolve(o.positional[0]);
   const name = o.matrix ? `matrix_${o.matrix}` : 'fast';
   const stamp = loadJson(path.join(worktree, 'build', 'gate', `${name}.json`));
-  const tree = treeOf(o.project);
-  const why = !stamp
-    ? 'no stamp'
-    : !stamp.pass
-      ? 'it did not pass'
-      : stamp.partial
-        ? 'it is partial'
-        : stamp.dirty
-          ? 'it was dirty'
-          : stamp.tree !== tree
-            ? `tree ${stamp.tree} is not ${tree}`
-            : null;
+  const dirtyHere = statusLines(o.project);
+  if (dirtyHere.length > 0) {
+    out(`gate stamp-ok: ${name} in ${worktree}: refused: this checkout is dirty (${dirtyHere.length} paths), so its tree is not HEAD's`);
+    return 1;
+  }
+  const why = stampRefusal(stamp, o.matrix !== null, treeOf(o.project));
   if (why) {
     out(`gate stamp-ok: ${name} in ${worktree}: refused: ${why}`);
     return 1;
   }
+  if (stamp.quiet_retried) out(`note: gut:quiet passed only on its rerun under a whole-machine lease: ${(stamp.quiet_retried_tests ?? []).join(', ') || 'budget tests'}`);
   out(`gate stamp-ok: ${name} in ${worktree} stands for this tree`);
   return 0;
 }
+
+// ---------------------------------------------------------------- floor
 
 function cmdFloor(o) {
   takeMutex(o);
   const dirty = statusLines(o.project);
   if (dirty.length) throw new Exit(3, `gate floor: the tree is dirty:\n${dirty.slice(0, 20).join('\n')}`);
+  if (manifestPins(loadManifest(o.project)) && readAt(o.project, 'HEAD', PINS_FILE) === null) {
+    out(`gate floor: refused: no ${PINS_FILE} at HEAD, so the strict gate checked no pin: run tools/gate pin-safety first`);
+    return 1;
+  }
   const stamp = loadJson(path.join(o.project, 'build', 'gate', 'strict.json'));
   const head = gitLine(o.project, ['rev-parse', 'HEAD']);
   const floorFile = path.join(o.project, GREEN_FLOOR_FILE);
@@ -1111,14 +1260,14 @@ function cmdPinSafety(o) {
   };
   let pins;
   try {
-    pins = computePins({ globs: manifest.safety_pin_globs ?? [], appendOnly: manifest.append_only_pins ?? {}, tracked, read });
+    pins = computePins({ ...pinSpecOf(manifest), tracked, read });
   } catch (err) {
     out(`gate pin-safety: refused: ${err.message}`);
     return 1;
   }
   const doc = { reason: o.reason, pinned_at: gitLine(o.project, ['rev-parse', 'HEAD']), date: new Date().toISOString().slice(0, 10), ...pins };
   fs.writeFileSync(path.join(o.project, PINS_FILE), `${JSON.stringify(doc, null, 1)}\n`);
-  out(`gate pin-safety: ${Object.keys(pins.files).length} files, ${pins.blocks.length} append-only blocks in ${PINS_FILE}. Commit it alone, with an ADR.`);
+  out(`gate pin-safety: ${Object.keys(pins.files).length} files, ${pins.blocks.length} append-only functions, ${(pins.consts ?? []).length} consts in ${PINS_FILE}. Commit it alone, with an ADR.`);
   return 0;
 }
 

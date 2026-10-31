@@ -5,40 +5,57 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { evaluateGut } from '../lib/gut_gate.mjs';
 import {
   aggregateGut,
   checkAddedText,
   checkAppendOnly,
   checkClassNames,
+  checkerEvidence,
   checkPaths,
+  checkPinCoverage,
+  checkPinnedBody,
+  checkPinnedConst,
   checkPins,
   checkSidecars,
   checkTestCounts,
   computePins,
   countAsserts,
   countTests,
+  extractConst,
   extractFunction,
+  failingCases,
+  fastNarrowing,
   globToRegExp,
   groupKey,
   inferWs,
+  isBudgetTest,
+  isGutFile,
+  junitCoverage,
   LANE_PASS_LINE,
   LANE_SKIP_STRINGS,
   laneVerdict,
   listGutFiles,
+  maskConsts,
   parseAddedLines,
   parsePlan,
   parseTestRemovals,
+  pinClosure,
+  pinSpecOf,
   planShards,
+  quietRetryPlan,
   readWeights,
   sha256Lf,
   touchedGames,
   weightsByGroup,
   wsPaths,
 } from '../lib/gate_core.mjs';
-import { REPO, rmQuiet } from './helpers.mjs';
+import { GIT, REPO, rmQuiet } from './helpers.mjs';
 
 const manifest = JSON.parse(fs.readFileSync(path.join(REPO, 'tools', 'lib', 'gate_manifest.json'), 'utf8'));
+
+const matchesLeadOnly = (f) => manifest.lead_only.some((g) => globToRegExp(g).test(f));
 
 describe('globs', () => {
   test('** crosses /, * does not, {a,b} chooses', () => {
@@ -70,6 +87,22 @@ describe('listGutFiles and groupKey', () => {
       put('tests/a/helper.gd', 'func test_z():\n\tpass\n');
       put('tests/.hidden/test_h.gd', 'func test_x():\n\tpass\n');
       assert.deepEqual(listGutFiles(dir), ['tests/a/test_a.gd', 'tests/b/test_b.gd']);
+    } finally {
+      rmQuiet(dir);
+    }
+  });
+
+  test('isGutFile: what GUT collects, and nothing a rename can hide in', () => {
+    for (const f of ['tests/a/test_a.gd', 'tests/test_a.gd', 'tests/games/tank/rules/test_x.gd']) assert.ok(isGutFile(f), f);
+    for (const f of ['tests/a/a_checks.gd', 'tests/a/test_a.txt', 'tests/.hidden/test_a.gd', 'src/test_a.gd', 'tests/a/test_a.gd.uid']) assert.ok(!isGutFile(f), f);
+  });
+
+  test('no tests/ is an empty list, not an error', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wgate-list-'));
+    try {
+      assert.deepEqual(listGutFiles(dir), []);
+      assert.deepEqual(planShards([], {}, { shards: 8 }), { shards: [], quiet: [] });
+      assert.match(aggregateGut([], { expectedFiles: [] }).reasons[0], /no GUT process ran/);
     } finally {
       rmQuiet(dir);
     }
@@ -270,6 +303,154 @@ describe('aggregateGut', () => {
   });
 });
 
+describe('JUnit reads', () => {
+  const xml = '<testsuites failures="2" tests="4"><testsuite name="tests/a/test_a.gd" tests="4" failures="2">'
+    + '<testcase name="test_ok" assertions="1" status="pass" classname="tests/a/test_a.gd" time="0.1" ></testcase>'
+    + '<testcase name="test_bad" assertions="1" status="fail" classname="tests/a/test_a.gd" time="0.1" ><failure message="failed"><![CDATA[x]]></failure></testcase>'
+    + '<testcase name="test_also" assertions="1" status="fail" classname="tests/b/test_b.gd" time="0.1" ></testcase>'
+    + '</testsuite></testsuites>';
+
+  test('failingCases finds what failed, by status or by a failure child', () => {
+    assert.deepEqual(failingCases(xml), [{ file: 'tests/a/test_a.gd', name: 'test_bad' }, { file: 'tests/b/test_b.gd', name: 'test_also' }]);
+    assert.deepEqual(failingCases(''), []);
+  });
+
+  test('junitCoverage names the files GUT did not run', () => {
+    assert.deepEqual(junitCoverage(xml, ['tests/a/test_a.gd']), []);
+    assert.deepEqual(junitCoverage(xml, ['tests/a/test_a.gd', 'tests/b/test_c.gd']), ['tests/b/test_c.gd is in no JUnit suite']);
+    assert.equal(junitCoverage('', ['tests/a/test_a.gd']).length, 1);
+  });
+
+  test('evaluateGut reads the failure count: exit 0 and a summary do not excuse it', () => {
+    const v = evaluateGut({ exitCode: 0, log: '= Run Summary\n', junitXml: '<testsuites failures="3" tests="5"></testsuites>', narrow: true });
+    assert.equal(v.pass, false);
+    assert.deepEqual(v.reasons, ['JUnit reports 3 failed tests']);
+    assert.equal(evaluateGut({ exitCode: 0, log: '= Run Summary\n', junitXml: '<testsuites failures="0" tests="5"></testsuites>', narrow: true }).pass, true);
+  });
+});
+
+describe('the quiet rerun is for budgets only', () => {
+  const src = [
+    'extends GutTest',
+    '',
+    'const LIMIT := 3',
+    '',
+    'func _mean_us() -> float:',
+    '\tvar t0 := Time.get_ticks_usec()',
+    '\treturn float(Time.get_ticks_usec() - t0)',
+    '',
+    'func _other() -> int:',
+    '\treturn 1',
+    '',
+    'func test_direct() -> void:',
+    '\tvar t0 := Time.get_ticks_usec()',
+    '\tassert_lt(t0, 9)',
+    '',
+    'func test_through_a_helper() -> void:',
+    '\tassert_lt(_mean_us(), 9.0)',
+    '',
+    'func test_determinism() -> void:',
+    '\tassert_eq(_other(), 1)',
+    '',
+  ].join('\n');
+  const failing = (...names) => `<testsuites failures="${names.length}" tests="9">${names.map((n) => `<testcase name="${n}" status="fail" classname="f.gd" ><failure/></testcase>`).join('')}</testsuites>`;
+  const plan = (reasons, ...names) => quietRetryPlan({ reasons, junitXml: failing(...names), read: () => src });
+
+  test('isBudgetTest sees wall time in the test and through its helpers', () => {
+    assert.equal(isBudgetTest(src, 'test_direct'), true);
+    assert.equal(isBudgetTest(src, 'test_through_a_helper'), true);
+    assert.equal(isBudgetTest(src, 'test_determinism'), false);
+    assert.equal(isBudgetTest(src, 'test_gone'), false);
+  });
+
+  test('budget tests alone may rerun', () => {
+    const p = plan(['GUT exit code 1', 'JUnit reports 2 failed tests'], 'test_direct', 'test_through_a_helper');
+    assert.equal(p.allowed, true);
+    assert.deepEqual(p.tests, ['f.gd::test_direct', 'f.gd::test_through_a_helper']);
+  });
+
+  test('one test in the failure that is no budget keeps the first verdict', () => {
+    const p = plan(['GUT exit code 1'], 'test_direct', 'test_determinism');
+    assert.equal(p.allowed, false);
+    assert.match(p.why, /not a budget test: f\.gd::test_determinism/);
+  });
+
+  test('a FORBIDDEN string, a crash or no summary never reruns, even on a budget test', () => {
+    for (const reason of ['log contains "SCRIPT ERROR"', 'log contains "Parse Error"', 'log has no "Run Summary"', 'no JUnit test count (missing or empty JUnit file)', '1 pending or risky test(s)']) {
+      assert.equal(plan(['GUT exit code 1', reason], 'test_direct').allowed, false, reason);
+    }
+  });
+
+  test('a non-zero exit with no failed testcase is a crash', () => {
+    assert.equal(plan(['GUT exit code 139']).allowed, false);
+  });
+
+  test('every real budget test file holds at least one budget test, and determinism is not all budget', () => {
+    const real = fs.readFileSync(path.join(REPO, 'tests/games/tank/rules/test_tank_determinism.gd'), 'utf8');
+    const names = [...real.matchAll(/^func (test_\w+)/gm)].map((m) => m[1]);
+    const budget = names.filter((n) => isBudgetTest(real, n));
+    assert.ok(budget.length >= 1, 'it has a timing block');
+    assert.ok(budget.length < names.length, 'and tests that are no budget');
+  });
+});
+
+describe('checkerEvidence', () => {
+  const ev = (text, over = {}) => checkerEvidence({ code: 0, text, ...over });
+
+  test('real rows of the three checkers pass', () => {
+    assert.equal(ev('PASS S4 every content\nPASS S5 rescue\ncheck_sims: 2 checks, 0 failed\n', { required: ['S4', 'S5'] }).pass, true);
+    assert.equal(ev('PASS S4  short\n    - detail\ncheck_sims: 1 passed\n').rows, 1);
+    assert.equal(ev('PASS ALL  every run\nPASS R1   x\n', { required: ['ALL'] }).pass, true);
+  });
+
+  test('exit 0 with no rows is no evidence', () => {
+    const v = ev('');
+    assert.equal(v.pass, false);
+    assert.match(v.reasons.join(), /did not run/);
+    assert.equal(ev('run_sims: all runs recorded\n').pass, false);
+  });
+
+  test('a FAIL row, a non-zero exit and a missing or skipped safety row fail', () => {
+    assert.match(ev('PASS S1 a\nFAIL S4 b\n').reasons.join(), /FAIL rows: S4/);
+    assert.match(checkerEvidence({ code: 1, text: 'PASS S1 a\n' }).reasons.join(), /exited 1/);
+    assert.match(ev('PASS S1 a\n', { required: ['S4'] }).reasons.join(), /safety row S4 is missing/);
+    assert.match(ev('PASS S1 a\nSKIP S4 b\n', { required: ['S4'] }).reasons.join(), /safety row S4 is SKIP/);
+  });
+
+  test('a SKIP row fails a full matrix, and only a full one', () => {
+    assert.match(ev('PASS S1 a\nSKIP S2 no reports\n').reasons.join(), /SKIP rows in a full matrix: S2/);
+    assert.equal(ev('PASS S1 a\nSKIP S2 no reports\n', { partial: true, required: ['S4'] }).pass, true);
+  });
+});
+
+describe('fastNarrowing', () => {
+  const clean = { baseSha: 'a', mainSha: 'a', ws: null, inferredWs: 'tank', games: ['tank'], requiredGames: ['tank'] };
+
+  test('the default run, and a wider one, narrow nothing', () => {
+    assert.deepEqual(fastNarrowing(clean), []);
+    assert.deepEqual(fastNarrowing({ ...clean, games: ['fishing', 'siege', 'tank'] }), [], '--games=all');
+    assert.deepEqual(fastNarrowing({ ...clean, ws: 'tank' }), [], 'the branch ws said out loud');
+    assert.deepEqual(fastNarrowing({ ...clean, base: 'origin/main', baseSha: 'a' }), [], 'another name for main');
+    assert.deepEqual(fastNarrowing({ ...clean, games: [], requiredGames: [] }), [], 'a docs-only branch');
+  });
+
+  test('each way to narrow a fast is named', () => {
+    const one = (over, re) => {
+      const v = fastNarrowing({ ...clean, ...over });
+      assert.equal(v.length, 1, JSON.stringify(v));
+      assert.match(v[0], re);
+    };
+    one({ lanes: ['gut'] }, /--lanes=gut/);
+    one({ base: 'HEAD', baseSha: 'b' }, /--base=HEAD is not main/);
+    one({ mainSha: null }, /is not main/);
+    one({ ws: 'cleanup' }, /--ws=cleanup is not the branch's workstream \(tank\)/);
+    one({ ws: 'audio', inferredWs: null }, /--ws=audio/);
+    one({ allow: ['**'] }, /--allow=\*\*/);
+    one({ allowPin: ['a.mjs:f'] }, /--allow-pin=a\.mjs:f/);
+    one({ games: ['fishing'], requiredGames: ['fishing', 'siege', 'tank'] }, /--games leaves out siege,tank/);
+  });
+});
+
 describe('laneVerdict', () => {
   const summary = (rows, end = LANE_PASS_LINE) => `\nrun_tests summary\n  step  result  time     note\n${rows.map(([n, s]) => `  ${n}  ${s}    1.0s     note\n`).join('')}${end}\n`;
 
@@ -325,6 +506,42 @@ describe('source scans', () => {
     assert.equal(extractFunction(src, 'two'), 'function two() {\n  return 2;\n}');
     assert.equal(extractFunction(src, 'three'), null);
     assert.equal(extractFunction('function on(x) {\n}\n', 'one'), null);
+  });
+
+  test('extractConst: one line, several lines, absent', () => {
+    const src = 'const A = 1;\nexport const B = {\n  x: 1,\n};\nconst ABC = 2;\n';
+    assert.equal(extractConst(src, 'A'), 'const A = 1;');
+    assert.equal(extractConst(src, 'B'), 'export const B = {\n  x: 1,\n};');
+    assert.equal(extractConst(src, 'C'), null);
+    assert.equal(extractConst(src, 'ABC'), 'const ABC = 2;');
+  });
+
+  test('pinClosure follows functions and arrows, not tables', () => {
+    const src = [
+      'const LIMIT = 5;',
+      'const UNUSED = 6;',
+      'const num = (v) => Number(v) + BASE;',
+      'const BASE = 0;',
+      'function helper(x) {',
+      '  return num(x) < LIMIT;',
+      '}',
+      'function other() {',
+      '  return UNUSED;',
+      '}',
+      'export function root() {',
+      '  return helper(1) && TABLE.a;',
+      '}',
+      'export const TABLE = { a: other };',
+      '',
+    ].join('\n');
+    assert.deepEqual(pinClosure(src, ['root']), { functions: ['helper', 'root'], consts: ['LIMIT', 'num', 'BASE', 'TABLE'] });
+  });
+
+  test('maskConsts removes the statement and nothing else', () => {
+    const a = "const S = ['a'];\nconst K = 1;\n";
+    assert.equal(maskConsts(a, ['S']), '\nconst K = 1;\n');
+    assert.equal(maskConsts(a), a);
+    assert.equal(sha256Lf(maskConsts("const S = ['a', 'b'];\nconst K = 1;\n", ['S'])), sha256Lf(maskConsts(a, ['S'])));
   });
 
   test('checkAppendOnly: adding passes; deleting, altering or reordering fails', () => {
@@ -442,19 +659,52 @@ describe('checkPins', () => {
     assert.match(checkPins({ pins: pins({ globs: ['nope/**'] }), read: read(tree) })[0], /nope\/\*\* matches nothing/);
   });
 
+  test('a pins file that pins nothing is a problem', () => {
+    assert.match(checkPins({ pins: {} })[0], /pins nothing/);
+    assert.match(checkPins({ pins: { files: {}, blocks: [] }, read: read(tree) })[0], /pins nothing/);
+  });
+
+  test('a masked const may change, the rest of its file may not', () => {
+    const text = "const S = ['a'];\nconst K = 1;\n";
+    const p = { files: { 'r.mjs': sha256Lf(maskConsts(text, ['S'])) }, masked: { 'r.mjs': ['S'] } };
+    assert.deepEqual(checkPins({ pins: p, read: read({ 'r.mjs': "const S = ['a', 'b'];\nconst K = 1;\n" }) }), []);
+    assert.match(checkPins({ pins: p, read: read({ 'r.mjs': "const S = ['a'];\nconst K = 2;\n" }) })[0], /r\.mjs changed/);
+  });
+
+  test('line pins: the lines stay, the file around them may grow', () => {
+    const p = { files: { 'x.gd': sha256Lf('x') }, lines: [{ file: 's.gd', lines: ['\t"grade_max_pct": [0.0, 16.0],'] }] };
+    const t = (body) => ({ 'x.gd': 'x', 's.gd': body });
+    assert.deepEqual(checkPins({ pins: p, read: read(t('const A := {\n\t"bus_ui_db": 0.0,\n\t"grade_max_pct": [0.0, 16.0],\n}\n')) }), []);
+    assert.match(checkPins({ pins: p, read: read(t('\t"grade_max_pct": [0.0, 40.0],\n')) })[0], /line pin: s\.gd: .*grade_max_pct/);
+    assert.match(checkPins({ pins: p, read: read({ 'x.gd': 'x' }) })[0], /line pin: s\.gd is gone/);
+  });
+
   const check = 'export function checkS4(r) {\n  const a = 1;\n\n  if (r < 55) bad();\n}\n';
   const blocks = [{ file: 'c.mjs', function: 'checkS4', lines: ['export function checkS4(r) {', '  const a = 1;', '  if (r < 55) bad();', '}'] }];
 
   test('blocks: adding passes, altering a threshold fails, --allow-pin excuses that one', () => {
     const p = { blocks };
     assert.deepEqual(checkPins({ pins: p, read: read({ 'c.mjs': check }) }), []);
-    const more = check.replace('  const a = 1;', '  const a = 1;\n  if (kind === 2) return;');
+    const more = check.replace('  if (r < 55) bad();', '  if (r < 55) bad();\n  more();');
     assert.deepEqual(checkPins({ pins: p, read: read({ 'c.mjs': more }) }), []);
+    const early = check.replace('  const a = 1;', '  const a = 1;\n  if (kind === 2) return;');
+    assert.match(checkPins({ pins: p, read: read({ 'c.mjs': early }) })[0], /added above pinned line/);
     const weak = check.replace('55', '40');
     assert.match(checkPins({ pins: p, read: read({ 'c.mjs': weak }) })[0], /checkS4.*r < 55/);
     assert.deepEqual(checkPins({ pins: p, read: read({ 'c.mjs': weak }), allowPins: ['c.mjs:checkS4'] }), []);
     assert.match(checkPins({ pins: p, read: read({ 'c.mjs': 'export function other() {\n}\n' }) })[0], /checkS4 is gone/);
     assert.match(checkPins({ pins: p, read: read({}) })[0], /c\.mjs is gone/);
+  });
+
+  test('a moved helper is followed through its import, and only then', () => {
+    const fn = 'function result(a) {\n  return a;\n}';
+    const p = { blocks: [{ file: 'c.mjs', function: 'result', lines: fn.split('\n'), moved: 'lib/sim_report.mjs' }] };
+    const home = `export ${fn}\n`;
+    const imported = "import { pick, result } from '../../../../tools/lib/sim_report.mjs';\n";
+    assert.deepEqual(checkPins({ pins: p, read: read({ 'c.mjs': `${fn}\n` }) }), [], 'still at home');
+    assert.deepEqual(checkPins({ pins: p, read: read({ 'c.mjs': imported, 'lib/sim_report.mjs': home }) }), [], 'moved byte for byte');
+    assert.match(checkPins({ pins: p, read: read({ 'c.mjs': imported, 'lib/sim_report.mjs': home.replace('return a', 'return 1') }) })[0], /deleted, altered or moved/);
+    assert.match(checkPins({ pins: p, read: read({ 'c.mjs': 'const result = () => 1;\n', 'lib/sim_report.mjs': home }) })[0], /function result is gone/, 'no import, a local stand-in');
   });
 
   test('computePins expands the globs and refuses what finds nothing', () => {
@@ -473,9 +723,251 @@ describe('checkPins', () => {
       assert.ok(manifest.safety_pin_globs.includes(glob), glob);
     }
     assert.ok(globToRegExp(manifest.safety_pin_globs[0]).test('addons/wattlands/trainer/control/governor_clamps.gd'));
-    assert.deepEqual(manifest.append_only_pins['tests/games/fishing/sim/check_sims.mjs'], ['checkAll']);
+    assert.ok(manifest.append_only_pins['tests/games/fishing/sim/check_sims.mjs'].includes('checkAll'));
     assert.ok(manifest.append_only_pins['tests/games/tank/sim/check_sims.mjs'].includes('checkS4'));
     assert.ok(manifest.append_only_pins['tests/games/siege/sim/check_sims.mjs'].includes('checkS6'));
+  });
+});
+
+describe('checkPinnedBody', () => {
+  const pinned = [
+    'export function checkS4(reports) {',
+    '  const probs = [];',
+    '  for (const r of reports) {',
+    "    if (r.kind === 'bank') {",
+    '      probs.push(...bank(r));',
+    '      continue;',
+    '    }',
+    '    probs.push(...other(r));',
+    '  }',
+    "  return result('S4', probs);",
+    '}',
+  ];
+  const withLines = (after, ...added) => {
+    const at = pinned.findIndex((l) => l.trim() === after);
+    return [...pinned.slice(0, at + 1), ...added, ...pinned.slice(at + 1)];
+  };
+  const body = (cur, opts) => checkPinnedBody(pinned, cur, opts);
+
+  test('unchanged passes; export may come and go on the first line only', () => {
+    assert.deepEqual(body(pinned), []);
+    assert.deepEqual(body(['function checkS4(reports) {', ...pinned.slice(1)]), []);
+    assert.equal(body(pinned.map((l, i) => (i === 1 ? `export ${l}` : l))).length, 1);
+  });
+
+  test('the critic\'s probe: a return as the first line is refused', () => {
+    const cur = withLines('export function checkS4(reports) {', '  return { status: "PASS", details: [] };');
+    assert.match(body(cur)[0], /added above pinned line/);
+  });
+
+  test('any statement between pinned lines is refused', () => {
+    assert.match(body(withLines('const probs = [];', '  const x = 1;'))[0], /added above/);
+    assert.match(body(withLines('for (const r of reports) {', '    continue;'))[0], /added above/);
+    assert.match(body(withLines("if (r.kind === 'bank') {", '      break;'))[0], /added above/);
+  });
+
+  test('after the last pinned line, before the final return: more checks pass', () => {
+    const tail = [...pinned.slice(0, -2), '  const late = pick(reports);', '  for (const r of late) {', '    if (!r) continue;', '    probs.push(...third(r));', '  }', ...pinned.slice(-2)];
+    assert.deepEqual(body(tail), []);
+  });
+
+  const tailAdd = (...added) => [...pinned.slice(0, -2), ...added, ...pinned.slice(-2)];
+
+  test('the tail may not leave the function or empty what it collected', () => {
+    for (const line of ['  return ok();', '  if (x) return ok();', '  throw new Error("x");', '  process.exit(0);', '  probs.length = 0;', '  probs.splice(0);', '  probs.pop();', '  while (probs.length) probs.shift();']) {
+      assert.match(body(tailAdd(line))[0] ?? '', /may not leave the function or empty/, line);
+    }
+    assert.match(body(tailAdd('  for (const r of reports) {', '    return ok();', '  }'))[0] ?? '', /may not leave/);
+  });
+
+  test('a branch guarded by a new string may leave; a string the pinned lines name may not', () => {
+    assert.deepEqual(body(tailAdd("  if (reports.kind === 'repair') return ok();")), []);
+    assert.deepEqual(body(tailAdd("  if (reports.kind === 'repair') {", '    return ok();', '  }')), []);
+    assert.match(body(tailAdd("  if (reports.kind === 'bank') return ok();"))[0], /may not leave/);
+  });
+
+  test('lines after the closing line are refused, and so are deleted or altered lines', () => {
+    assert.match(body([...pinned, 'more();'])[0], /after the closing line/);
+    assert.match(body(pinned.filter((l) => !l.includes('other(r)')))[0], /deleted, altered or moved: probs\.push\(\.\.\.other\(r\)\)/);
+    assert.equal(body(pinned.map((l) => l.replace('other(r)', 'other(0)'))).length, 1);
+    assert.match(body(pinned.slice(0, -2).concat(['}']))[0], /deleted, altered or moved: return result/);
+  });
+
+  test('comments may go anywhere; a plain probs.push may go anywhere; nothing else comes with it', () => {
+    assert.deepEqual(body(withLines('const probs = [];', '  // why this is safe')), []);
+    assert.deepEqual(body(withLines('probs.push(...other(r));', "    probs.push(...lossesInSpans(r, 'rescue'));")), []);
+    assert.deepEqual(body(withLines('probs.push(...other(r));', "    if (r.a) probs.push(`${r} = x`);")), []);
+    for (const line of ['    probs.push(...(i = 9, []));', '    probs.push(...(probs.length = 0, []));', '    probs.push(process.exit(0));', '    if (r.a) { probs.push(1); return; }', '    probs.push(1), probs.pop();']) {
+      assert.equal(body(withLines('probs.push(...other(r));', line)).length, 1, line);
+    }
+  });
+
+  test('an anchor takes a guarded branch with a new string, and nothing else', () => {
+    const anchors = ["if (r.kind === 'bank') {"];
+    const above = (...added) => withLines('for (const r of reports) {', ...added);
+    assert.deepEqual(body(above("    if (r.kind === 'repair') {", '      probs.push(...repair(r));', '      continue;', '    }'), { anchors }), []);
+    assert.deepEqual(body(above("    // the new seat", "    if (r.kind === 'repair') continue;"), { anchors }), []);
+    assert.match(body(above("    if (r.kind === 'repair') continue;"))[0], /added above/, 'not without the anchor');
+    assert.match(body(above("    if (r.kind === 'bank') continue;"), { anchors })[0], /guarded by a string/, 'a string the pinned lines name');
+    assert.match(body(above('    if (r.x) continue;'), { anchors })[0], /guarded by a string/);
+    assert.match(body(above('    const n = 1;'), { anchors })[0], /guarded by a string/);
+    assert.match(body(above("    if (r.kind === 'repair') continue;", '    return;'), { anchors })[0], /guarded by a string/, 'a line past the branch');
+  });
+});
+
+describe('checkPinnedConst', () => {
+  test('a scalar and an arrow stay as they are', () => {
+    assert.deepEqual(checkPinnedConst('const A = 16;', 'const A = 16;'), []);
+    assert.deepEqual(checkPinnedConst('export const A = 16;', 'const A = 16;'), []);
+    assert.match(checkPinnedConst('const A = 16;', 'const A = 40;')[0], /changed/);
+    assert.match(checkPinnedConst('const f = (a) => a;', 'const f = (a) => 0;')[0], /changed/);
+  });
+
+  test('an object table keeps its entries, wherever it gains others', () => {
+    const was = 'const T = { a: 12, b: 4 };';
+    assert.deepEqual(checkPinnedConst(was, 'const T = { a: 12, b: 4, c: 6 };'), []);
+    assert.deepEqual(checkPinnedConst(was, 'const T = { a: 12, c: 6, b: 4 };'), []);
+    assert.deepEqual(checkPinnedConst(was, 'const T = {\n  a: 12,\n  b: 4,\n  c: 6,\n};'), [], 'the layout may change');
+    assert.match(checkPinnedConst(was, 'const T = { a: 12 };')[0], /deleted or altered: b: 4/);
+    assert.match(checkPinnedConst(was, 'const T = { a: 12, b: 5 };')[0], /deleted or altered: b: 4/);
+    assert.match(checkPinnedConst(was, 'const T = { a: 12, b: 4, b: 5 };')[0], /replaces the pinned key b/);
+    assert.match(checkPinnedConst(was, "const T = { a: 12, b: 4, 'b': 5 };")[0], /replaces the pinned key b/);
+    assert.match(checkPinnedConst(was, 'const U = { a: 12, b: 4 };')[0], /changed/);
+  });
+
+  test('an array table keeps its entries in order, nested values whole', () => {
+    const was = "const S = [['S1', one], ['S2', two]];";
+    assert.deepEqual(checkPinnedConst(was, "const S = [['S1', one], ['S2', two], ['S3', three]];"), []);
+    assert.deepEqual(checkPinnedConst("const N = ['a', 'b'];", "const N = ['a', 'x', 'b'];"), []);
+    assert.deepEqual(checkPinnedConst(was, "const S = [\n  ['S1', one],\n  ['S2', two],\n];"), []);
+    assert.equal(checkPinnedConst(was, "const S = [['S2', two]];").length, 1);
+    assert.equal(checkPinnedConst(was, "const S = [['S2', two], ['S1', one]];").length, 1);
+    assert.equal(checkPinnedConst(was, "const S = [['S1', noop], ['S2', two]];").length, 1);
+  });
+
+  test('a table turned into something else fails', () => {
+    assert.equal(checkPinnedConst('const T = { a: 1 };', 'const T = make();').length, 1);
+  });
+});
+
+describe('the real checkers under the real manifest', () => {
+  const ls = spawnSync(GIT, ['-C', REPO, 'ls-files'], { encoding: 'utf8', maxBuffer: 2 ** 28 });
+  const tracked = ls.stdout.split('\n').filter(Boolean);
+  const readReal = (f) => {
+    try {
+      return fs.readFileSync(path.join(REPO, f), 'utf8');
+    } catch {
+      return null;
+    }
+  };
+  const pins = computePins({ ...pinSpecOf(manifest), tracked, read: readReal });
+  const TANK = 'tests/games/tank/sim/check_sims.mjs';
+  const SIEGE = 'tests/games/siege/sim/check_sims.mjs';
+  const FISHING = 'tests/games/fishing/sim/check_sims.mjs';
+  const withEdit = (file, edit) => (f) => (f === file ? edit(readReal(f)) : readReal(f));
+  const appendOnly = { blocks: pins.blocks, consts: pins.consts };
+  const edited = (file, edit) => checkPins({ pins: appendOnly, read: withEdit(file, edit) });
+  const swapOne = (a, b) => (text) => {
+    assert.ok(text.includes(a), a);
+    return text.replace(a, () => b);
+  };
+
+  test('the tree as it stands passes, and every BRIEF 4.6 and BRIEF 7 path is pinned', () => {
+    assert.deepEqual(checkPins({ pins, read: readReal }), []);
+    for (const f of [
+      'addons/wattlands/sim/gesture_recognizer.gd',
+      'addons/wattlands/core/ride_pause.gd',
+      'addons/wattlands/core/rider_profile.gd',
+      'addons/wattlands/core/local_rider.gd',
+      'addons/wattlands/core/trainer_service.gd',
+      'addons/wattlands/trainer/mock_trainer.gd',
+      'addons/wattlands/trainer/ble/gdble_transport.gd',
+      'addons/wattlands/contracts/effort_directive.gd',
+      'addons/wattlands/contracts/trainer_device.gd',
+      'tests/trainer/test_ftms_client.gd',
+      'tests/trainer/test_ftms_trainer.gd',
+      'tests/core/integration/test_safe_unlink.gd',
+      'tests/core/integration/test_trainer_stack.gd',
+      'tests/core/test_locks.gd',
+      'tests/app/test_session_safety.gd',
+      'tools/lib/run_tests.mjs',
+      'tools/run_tests',
+      'tools/run_tests.ps1',
+      'tools/check_scripts.gd',
+      'tests/pending_allowlist.txt',
+      'addons/gut/gut_cmdln.gd',
+    ]) {
+      assert.ok(pins.files[f], f);
+    }
+    assert.ok(pins.lines.some((l) => l.file === 'addons/wattlands/core/settings.gd'));
+    assert.ok(!pins.files['addons/wattlands/core/settings.gd'], "audio's kit adds its bus defaults to this file");
+    assert.ok(matchesLeadOnly('addons/gut/gut_cmdln.gd'));
+  });
+
+  test('settings.gd may gain a default; its grade range may not move', () => {
+    const p = { files: {}, globs: [], lines: pins.lines, blocks: [{ file: TANK, function: 'classify', lines: pins.blocks.find((b) => b.function === 'classify').lines }] };
+    const settings = 'addons/wattlands/core/settings.gd';
+    const grow = withEdit(settings, swapOne('const PROFILE_CHOICES: Dictionary = {', 'const BUS_DB := 0.0\nconst PROFILE_CHOICES: Dictionary = {'));
+    assert.deepEqual(checkPins({ pins: p, read: grow }), []);
+    assert.match(checkPins({ pins: p, read: withEdit(settings, swapOne('[0.0, 16.0]', '[0.0, 30.0]')) })[0], /line pin/);
+  });
+
+  test('run_tests.mjs: a new node suite passes; any other edit fails', () => {
+    const p = { files: { 'tools/lib/run_tests.mjs': pins.files['tools/lib/run_tests.mjs'] }, masked: pins.masked, consts: pins.consts.filter((c) => c.file === 'tools/lib/run_tests.mjs') };
+    const R = 'tools/lib/run_tests.mjs';
+    assert.deepEqual(checkPins({ pins: p, read: withEdit(R, swapOne("'tools/art', 'tools/fit_check', 'tools/e2e']", "'tools/art', 'tools/fit_check', 'tools/e2e', 'tools/audio']")) }), []);
+    assert.deepEqual(checkPins({ pins: p, read: withEdit(R, swapOne("'tools/art', 'tools/fit_check',", "'tools/art', 'tools/audio', 'tools/fit_check',")) }), []);
+    assert.match(checkPins({ pins: p, read: withEdit(R, swapOne("'tools/tests', 'server/relay',", "'server/relay',")) })[0], /NODE_SUITES/);
+    assert.match(checkPins({ pins: p, read: withEdit(R, swapOne('const SIM_TIMEOUT_S = 900;', 'const SIM_TIMEOUT_S = 901;')) })[0], /run_tests\.mjs changed/);
+  });
+
+  test("the critic's probes on every checker: a first-line return, an entry out of the table", () => {
+    assert.match(edited(TANK, swapOne('export function checkS4(reports, opts = {}) {\n', 'export function checkS4(reports, opts = {}) {\n  return { status: "PASS", details: [] };\n')).join(), /checkS4: a line was added above/);
+    assert.match(edited(TANK, swapOne(' S4: checkS4,', '')).join(), /CHECKS: a pinned entry was deleted or altered: S4: checkS4/);
+    assert.match(edited(FISHING, swapOne(' R1: checkR1,', '')).join(), /CHECKS: a pinned entry/);
+    assert.match(edited(FISHING, swapOne('ALL: checkAll, ', '')).join(), /CHECKS: a pinned entry/);
+    assert.match(edited(SIEGE, swapOne("  ['S5', checkS5],\n", '')).join(), /SCENARIOS: a pinned entry/);
+    assert.match(edited(TANK, swapOne('S13: checkS13 };', 'S13: checkS13, S4: () => ok };')).join(), /replaces the pinned key S4/);
+    assert.match(edited(TANK, swapOne('export function parseArgs(argv) {', 'delete CHECKS.S4;\nexport function parseArgs(argv) {')).join(), /CHECKS is changed at run time/);
+    assert.match(edited(SIEGE, swapOne('export function checkAll(reports, only = null, opts = {}) {\n', 'export function checkAll(reports, only = null, opts = {}) {\n  return [];\n')).join(), /checkAll: a line was added above/);
+  });
+
+  test('thresholds, helpers and callers are pinned, not only the named functions', () => {
+    assert.match(edited(TANK, swapOne('export const TOTAL_GRADE_MAX_PCT = 16;', 'export const TOTAL_GRADE_MAX_PCT = 99;')).join(), /TOTAL_GRADE_MAX_PCT: changed/);
+    assert.match(edited(TANK, swapOne('export const FIRST_ERG_MAX_PCT = 65;', 'export const FIRST_ERG_MAX_PCT = 100;')).join(), /FIRST_ERG_MAX_PCT: changed/);
+    assert.match(edited(TANK, swapOne('export const DEFAULT_SEEDS = [1, 2, 3];', 'export const DEFAULT_SEEDS = [1];')).join(), /DEFAULT_SEEDS: a pinned entry/);
+    assert.match(edited(SIEGE, swapOne('export const WARMUP_MAX_PCT = 65;', 'export const WARMUP_MAX_PCT = 100;')).join(), /WARMUP_MAX_PCT: changed/);
+    assert.ok(pins.blocks.some((b) => b.file === FISHING && b.function === 'runProblems'), "checkAll's own rules");
+    assert.ok(pins.blocks.some((b) => b.file === TANK && b.function === 'humanPeers'), 'an empty list here would switch off every rule');
+    assert.ok(pins.blocks.some((b) => b.file === TANK && b.function === 'runChecks'));
+    assert.ok(pins.consts.some((c) => c.file === TANK && c.name === 'traceOf'));
+  });
+
+  test("SPEC_TANK's additive recipe still passes", () => {
+    const recipe = (text) => [
+      swapOne("  if (reason === 'boiler' && q.mode === 'SIM' && q.mode_grade !== undefined) return 'boiler';", "  if (reason === 'repair' && q.mode === 'ERG' && q.target_pct !== undefined) return 'repair';\n  if (reason === 'boiler' && q.mode === 'SIM' && q.mode_grade !== undefined) return 'boiler';"),
+      swapOne("      if (kind === 'bank' || kind === 'arc') {", "      // the Repairs target\n      if (kind === 'repair') {\n        probs.push(...repairProblems(at, ph, q));\n        break;\n      }\n      if (kind === 'bank' || kind === 'arc') {"),
+      swapOne("  if (kind === 'bank' || kind === 'arc') over('ERG target %', got.target_pct, q.target_pct);", "  if (kind === 'repair') over('ERG target %', got.target_pct, q.target_pct);\n  if (kind === 'bank' || kind === 'arc') over('ERG target %', got.target_pct, q.target_pct);"),
+      swapOne("  return result('S4', title, probs, `${found.length} runs`);", "  const more = pick(reports, S14_NAMES);\n  for (const [name, r] of more.found) {\n    probs.push(...planProblems(name, r));\n  }\n  return result('S4', title, probs, `${found.length} runs`);"),
+      swapOne('S13: checkS13 };', 'S13: checkS13, S14: checkS14 };'),
+      swapOne('export const EXPECTED_LAPS = { ashfall_road: 12, drill: 4 };', 'export const EXPECTED_LAPS = { ashfall_road: 12, ambush_15: 6, drill: 4 };'),
+    ].reduce((t, f) => f(t), text);
+    assert.deepEqual(edited(TANK, recipe), []);
+  });
+
+  test('coverage: a hollowed or hand-edited pins file fails against the commit it names', () => {
+    const cover = (p) => checkPinCoverage({ pins: p, manifest, tracked, read: readReal });
+    assert.deepEqual(cover(pins), []);
+    assert.match(cover({ ...pins, files: {} }).join(), /lacks or altered the file pin/);
+    assert.match(cover({ ...pins, globs: pins.globs.slice(1) }).join(), /lacks or altered the manifest glob/);
+    const one = Object.keys(pins.files)[0];
+    assert.match(cover({ ...pins, files: { ...pins.files, [one]: sha256Lf('other') } }).join(), /lacks or altered the file pin/);
+    assert.match(cover({ ...pins, blocks: pins.blocks.slice(1) }).join(), /lacks or altered the block/);
+    assert.match(cover({ ...pins, blocks: pins.blocks.map((b) => ({ ...b, lines: b.lines.slice(0, 1) })) }).join(), /lacks or altered the block/);
+    assert.match(cover({ ...pins, consts: [] }).join(), /lacks or altered the const/);
+    assert.match(cover({ ...pins, lines: [] }).join(), /lacks or altered the line pin/);
+    assert.match(cover({ ...pins, masked: {} }).join(), /lacks or altered the mask/);
+    assert.match(checkPinCoverage({ pins, manifest, tracked: tracked.filter((f) => !f.startsWith('tools/env')), read: readReal }).join(), /the lead re-pins/);
   });
 });
 
@@ -511,6 +1003,16 @@ describe('checkTestCounts', () => {
     const r = checkTestCounts({ baseFiles: { 'tests/a/test_a.gd': t(1) }, headFiles: {}, revertOnly: true });
     assert.deepEqual(r.problems, []);
     assert.match(r.notes.join(), /merge revert/);
+  });
+
+  test('a rename out of test_*.gd loses the file\'s tests, as it does in GUT', () => {
+    const v = checkTestCounts({ baseFiles: { 'tests/a/test_a.gd': t(3) }, headFiles: { 'tests/a/a_checks.gd': t(3) } });
+    assert.match(v.problems.join(), /the total fell 3 -> 0/);
+    assert.match(v.notes.join(), /test_a\.gd lost tests: 3 -> 0/);
+    assert.deepEqual(checkTestCounts({ baseFiles: { 'tests/a/helper.gd': t(3) }, headFiles: {} }), { problems: [], notes: [] }, 'a file GUT never collected counts for nothing');
+    assert.deepEqual(checkTestCounts({ baseFiles: { 'tests/a/test_a.gd': t(1) }, headFiles: { 'tests/a/test_a.gd': t(1), 'tests/a/helper.gd': t(9) } }).problems, []);
+    const padded = checkTestCounts({ baseFiles: { 'tests/a/test_a.gd': t(3) }, headFiles: { 'tests/a/test_a.gd': t(1), 'tests/a/helper.gd': t(9) } });
+    assert.match(padded.problems.join(), /the total fell 3 -> 1/, 'a helper file does not pad the count');
   });
 
   test('asserts falling over 10 % is only a note', () => {

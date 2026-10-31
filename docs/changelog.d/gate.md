@@ -5,3 +5,4 @@
 - `tools/screenshot` now opens at most 4 windows at once on a machine; further runs wait for a free one.
 - Added `tools/gate` and `tools/gate.ps1`: `check` (ownership, safety pins, append-only checker pins, test counts, sidecars, class names, locks in added code), `fast` (all GUT in 8 shards, plus sim and e2e of the touched games), `strict` (every step, with one GUT process), `matrix` (a game's `run_sims.sh` in a pool), `stamp-ok`, `floor`, `fmt`, `wt-add`, `wt-gc` and `pin-safety`. `tools/run_tests` stays the literal serial gate.
 - Added `--games` and `--sim-outer-timeout` to `tools/run_tests`, and `WATTLANDS_SIM_PLAN` to `tools/run_game_sim` (records the arguments and starts nothing). With neither set, both behave as before.
+- A GUT run whose JUnit file reports a failed test now fails even when GUT exits 0.

@@ -1,6 +1,6 @@
 {
   "never_edit": ["docs/BRIEF.md", "docs/games/**", "docs/concept/**", "docs/research.md", ".gitattributes", ".claude/settings.json"],
-  "lead_only": ["README.md", "CHANGELOG.md", "CREDITS.md", "CLAUDE.md", "LICENSE", ".gitignore", "project.godot", "gdlintrc",
+  "lead_only": ["README.md", "CHANGELOG.md", "CREDITS.md", "CLAUDE.md", "LICENSE", ".gitignore", "project.godot", "gdlintrc", "addons/gut/**",
     "addons/wattlands/contracts/**", "tests/green_count_floor.txt", "tests/pending_allowlist.txt",
     "tools/lib/gut_gate.mjs", "tools/lib/run_tests.mjs", "tools/lib/gate*", "tools/lib/safety_pins.json"],
   "quiet_tests": ["tests/games/*/perf/**", "tests/games/siege/combat/test_siege_perf.gd", "tests/games/siege/view2/test_siege_view.gd",
@@ -23,19 +23,36 @@
     "gate":    { "paths": ["tools/**", "docs/decisions/gate.md", "docs/changelog.d/gate.md"], "also": ["tools/lib/**"], "deny": ["tools/lib/safety_pins.json"] }
   },
   "safety_pin_globs": [
-    "addons/wattlands/trainer/control/{safety_governor,governor_clamps,governor_warmup,trainer_controller,cadence_estimator,virtual_gears}.gd",
-    "addons/wattlands/trainer/{ftms_client,ftms_codec,ftms_trainer}.gd",
+    "addons/wattlands/trainer/**",
     "addons/wattlands/core/locks.gd",
+    "addons/wattlands/core/ride_pause.gd",
+    "addons/wattlands/core/rider_profile.gd",
+    "addons/wattlands/core/local_rider.gd",
+    "addons/wattlands/core/trainer_service.gd",
+    "addons/wattlands/sim/gesture_recognizer.gd",
     "addons/wattlands/sdk/{plan_validator,directive_router}.gd",
-    "addons/wattlands/contracts/directive_sink.gd",
+    "addons/wattlands/contracts/{directive_sink,effort_directive,trainer_device}.gd",
+    "addons/gut/**",
     "tests/governor/**",
     "tests/control/**",
     "tests/arch/test_no_bypass.gd",
     "tests/sdk/{test_conformance,test_plan_validator,test_directive_sink}.gd",
     "tests/scenarios/workout/**",
+    "tests/trainer/{test_ftms_client,test_ftms_trainer}.gd",
+    "tests/core/test_locks.gd",
+    "tests/core/integration/{test_safe_unlink,test_trainer_stack}.gd",
+    "tests/app/test_session_safety.gd",
+    "tests/pending_allowlist.txt",
     "tools/e2e/lib/checks.mjs",
     "tools/lib/gut_gate.mjs",
+    "tools/lib/run_tests.mjs",
     "tools/lib/godot_lock.mjs",
+    "tools/lib/gate.mjs",
+    "tools/lib/gate_core.mjs",
+    "tools/lib/gate_manifest.json",
+    "tools/run_tests",
+    "tools/run_tests.ps1",
+    "tools/check_scripts.gd",
     "tools/godot.sh",
     "tools/godot.ps1",
     "tools/run_game_sim",
@@ -44,9 +61,40 @@
     "tools/env.ps1",
     "gdlintrc"
   ],
+  "safety_pin_except": {
+    "tools/lib/run_tests.mjs": ["NODE_SUITES"]
+  },
+  "safety_pin_lines": {
+    "addons/wattlands/core/settings.gd": [
+      "\t\"difficulty_pct\": [0.0, 100.0],",
+      "\t\"haptic_intensity_pct\": [0.0, 100.0],",
+      "\t\"grade_min_pct\": [-10.0, 0.0],",
+      "\t\"grade_max_pct\": [0.0, 16.0],",
+      "\tvar gmin := float(out.get(\"grade_min_pct\", template[\"grade_min_pct\"]))",
+      "\tvar gmax := float(out.get(\"grade_max_pct\", template[\"grade_max_pct\"]))",
+      "\tif gmin > gmax:",
+      "\t\tout.erase(\"grade_min_pct\")",
+      "\t\tout.erase(\"grade_max_pct\")"
+    ]
+  },
   "append_only_pins": {
-    "tests/games/tank/sim/check_sims.mjs": ["checkS4", "checkS5", "directiveProblems", "appliedProblems", "directivesProblems", "planProblems", "traceProblems", "cleanProblems"],
-    "tests/games/siege/sim/check_sims.mjs": ["checkS5", "checkS6", "directiveProblems", "traceProblems", "planProblems"],
-    "tests/games/fishing/sim/check_sims.mjs": ["checkAll"]
-  }
+    "tests/games/tank/sim/check_sims.mjs": ["checkS4", "checkS5", "directiveProblems", "appliedProblems", "directivesProblems", "planProblems", "traceProblems", "cleanProblems", "classify", "runChecks", "main"],
+    "tests/games/siege/sim/check_sims.mjs": ["checkS5", "checkS6", "directiveProblems", "traceProblems", "planProblems", "checkAll", "main"],
+    "tests/games/fishing/sim/check_sims.mjs": ["checkAll", "main"]
+  },
+  "append_only_tables": {
+    "tests/games/tank/sim/check_sims.mjs": ["CHECKS"],
+    "tests/games/siege/sim/check_sims.mjs": ["SCENARIOS"],
+    "tests/games/fishing/sim/check_sims.mjs": ["CHECKS"],
+    "tools/lib/run_tests.mjs": ["NODE_SUITES"]
+  },
+  "append_only_anchors": {
+    "tests/games/tank/sim/check_sims.mjs": {
+      "directiveProblems": ["if (kind === 'bank' || kind === 'arc') {"],
+      "appliedProblems": ["if (kind === 'bank' || kind === 'arc') over('ERG target %', got.target_pct, q.target_pct);"],
+      "classify": ["if (reason === 'boiler' && q.mode === 'SIM' && q.mode_grade !== undefined) return 'boiler';"]
+    }
+  },
+  "append_only_moves": { "result": "tools/lib/sim_report.mjs", "pick": "tools/lib/sim_report.mjs" },
+  "matrix_required_rows": { "tank": ["S4", "S5"], "siege": ["S5", "S6"], "fishing": ["ALL"] }
 }

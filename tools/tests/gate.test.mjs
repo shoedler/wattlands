@@ -11,6 +11,8 @@ import { spawnSync } from 'node:child_process';
 import { BASH, GIT, TOOLS, REPO, IS_WIN, godotBin, makeScratchProject, powershellExe, rmQuiet, runProc } from './helpers.mjs';
 import { checkAddedText } from '../lib/gate_core.mjs';
 import { parseArgs } from '../lib/run_tests.mjs';
+import { changedSince, parseCli, runCheck, strictBase } from '../lib/gate.mjs';
+import { touchedGames } from '../lib/gate_core.mjs';
 
 const GATE = path.join(TOOLS, 'lib', 'gate.mjs');
 const REAL_MANIFEST = JSON.parse(fs.readFileSync(path.join(TOOLS, 'lib', 'gate_manifest.json'), 'utf8'));
@@ -186,8 +188,14 @@ describe('6.1 ownership, through git', { concurrency: 4 }, () => {
 const PIN_MANIFEST = {
   ...REAL_MANIFEST,
   safety_pin_globs: ['tests/governor/**', 'tools/godot.sh'],
+  safety_pin_except: {},
+  safety_pin_lines: {},
   append_only_pins: { 'tests/games/tank/sim/check_sims.mjs': ['checkS4'] },
+  append_only_tables: {},
+  append_only_anchors: {},
+  append_only_moves: {},
 };
+const NO_PINS_MANIFEST = { ...PIN_MANIFEST, safety_pin_globs: [], append_only_pins: {} };
 const CHECKER = 'export function checkS4(r) {\n  if (r.w < 55) return bad();\n  return ok();\n}\n';
 
 function pinnedRepo() {
@@ -271,6 +279,83 @@ describe('6.2 and 6.3 pins, through git', { concurrency: 4 }, () => {
     await assertCheck(dir, ['--allow-pin=tests/games/tank/sim/check_sims.mjs:checkS4'], 0);
   });
 
+  test('a first-line return in a pinned function fails, committed or not', async () => {
+    const dir = pinnedRepo();
+    await pin(dir);
+    const neutered = CHECKER.replace('{\n', '{\n  return ok();\n');
+    onBranch(dir, 'game/tank-x', { 'tests/games/tank/sim/check_sims.mjs': neutered });
+    await assertCheck(dir, [], 1, /append-only pin: .*checkS4: a line was added above/);
+    const work = pinnedRepo();
+    await pin(work);
+    sh(work, 'checkout', '-q', '-b', 'game/tank-x');
+    write(work, { 'tests/games/tank/sim/check_sims.mjs': neutered });
+    await assertCheck(work, [], 1, /checkS4: a line was added above/);
+  });
+
+  test('a deleted pins file fails, on a lead branch and with --allow too', async () => {
+    const dir = pinnedRepo();
+    await pin(dir);
+    onBranch(dir, 'queue', { 'tools/lib/safety_pins.json': null }, 'chore: gone');
+    await assertCheck(dir, [], 1, /safety_pins\.json was deleted/);
+    await assertCheck(dir, ['--allow=tools/lib/safety_pins.json', '--allow=**'], 1, /safety_pins\.json was deleted/);
+    const branch = pinnedRepo();
+    await pin(branch);
+    onBranch(branch, 'tooling/x', { 'tools/lib/safety_pins.json': null });
+    await assertCheck(branch, ['--allow=tools/lib/safety_pins.json'], 1, /safety_pins\.json was deleted/);
+  });
+
+  test('a branch behind the pinning commit still gets the note, since it never had them', async () => {
+    const dir = pinnedRepo();
+    sh(dir, 'branch', 'game/tank-old');
+    await pin(dir);
+    sh(dir, 'checkout', '-q', 'game/tank-old');
+    write(dir, { 'src/games/tank/a.txt': 'a\n' });
+    commit(dir, 'tank: x');
+    await assertCheck(dir, [], 0, /not pinned yet/);
+  });
+
+  test('a hollowed pins file fails on a lead branch: {} , no files, a rewritten hash', async () => {
+    for (const hollow of [
+      () => ({}),
+      (p) => ({ ...p, files: {} }),
+      (p) => ({ ...p, globs: [] }),
+      (p) => ({ ...p, blocks: [] }),
+      (p) => ({ ...p, files: { ...p.files, 'tools/godot.sh': 'f'.repeat(64) } }),
+      (p) => ({ ...p, pinned_at: 'f'.repeat(40) }),
+    ]) {
+      const dir = pinnedRepo();
+      await pin(dir);
+      const pins = JSON.parse(fs.readFileSync(path.join(dir, 'tools', 'lib', 'safety_pins.json'), 'utf8'));
+      onBranch(dir, 'queue', { 'tools/lib/safety_pins.json': JSON.stringify(hollow(pins)) }, 'chore: pins');
+      await assertCheck(dir, [], 1, /safety pin: /);
+    }
+  });
+
+  test('a pins file that does not parse fails', async () => {
+    const dir = pinnedRepo();
+    await pin(dir);
+    onBranch(dir, 'queue', { 'tools/lib/safety_pins.json': '{nope' }, 'chore: pins');
+    await assertCheck(dir, [], 1, /does not parse/);
+  });
+
+  test('a manifest that grew after the pin asks the lead to re-pin', async () => {
+    const dir = pinnedRepo();
+    await pin(dir);
+    onBranch(dir, 'queue', { 'tools/lib/gate_manifest.json': JSON.stringify({ ...PIN_MANIFEST, safety_pin_globs: [...PIN_MANIFEST.safety_pin_globs, 'src/new/**'] }), 'src/new/a.txt': 'a\n' }, 'chore: manifest');
+    await assertCheck(dir, [], 1, /the lead re-pins/);
+    await pin(dir);
+    await assertCheck(dir, [], 0);
+  });
+
+  test('a real re-pin by the lead passes', async () => {
+    const dir = pinnedRepo();
+    await pin(dir);
+    onBranch(dir, 'queue', { 'tools/godot.sh': 'stronger\n' }, 'platform: stronger');
+    await assertCheck(dir, [], 1, /tools\/godot\.sh changed/);
+    await pin(dir);
+    await assertCheck(dir, [], 0);
+  });
+
   test('the safety pins file itself is denied to tooling branches', async () => {
     const dir = pinnedRepo();
     await pin(dir);
@@ -289,6 +374,17 @@ describe('6.4 test counts, through git', { concurrency: 4 }, () => {
     const ok = repo({ 'tests/a/test_a.gd': tests(2), 'tests/a/test_a.gd.uid': 'uid\n' });
     onBranch(ok, 'game/tank-x', { 'tests/a/test_a.gd': tests(3) }, 'platform: more');
     await assertCheck(ok, [], 0);
+  });
+
+  test('renaming a test file out of test_*.gd fails, with no trailer', async () => {
+    const dir = repo({ 'tests/a/test_a.gd': tests(2), 'tests/a/test_a.gd.uid': 'u\n' });
+    sh(dir, 'checkout', '-q', '-b', 'feature/x');
+    sh(dir, 'mv', 'tests/a/test_a.gd', 'tests/a/a_checks.gd');
+    sh(dir, 'mv', 'tests/a/test_a.gd.uid', 'tests/a/a_checks.gd.uid');
+    commit(dir, 'rename');
+    const r = await assertCheck(dir, [], 1, /the total fell 2 -> 0/);
+    assert.match(r.stdout, /tests\/a fell 2 -> 0/);
+    assert.match(r.stdout, /tests\/a\/test_a\.gd lost tests: 2 -> 0/);
   });
 
   test('a falling area needs Test-Removal; the trailer passes it and is shown', async () => {
@@ -383,10 +479,62 @@ describe('6.5 other invariants, through git', { concurrency: 4 }, () => {
     await assertCheck(dir, [], 0);
     write(dir, { 'tests/green_count_floor.txt': '9\n' });
     commit(dir, 'chore: down');
-    await assertCheck(dir, [], 1, /green_count_floor\.txt fell 10 -> 9/);
+    await assertCheck(dir, [], 1, /green_count_floor\.txt fell 11 -> 9/);
     write(dir, { 'tests/green_count_floor.txt': null });
     commit(dir, 'chore: gone');
-    await assertCheck(dir, [], 1, /green_count_floor\.txt fell 10 -> null/);
+    await assertCheck(dir, [], 1, /green_count_floor\.txt fell 11 -> null/);
+  });
+
+  test('a floor down in two steps fails against the highest one, though the last step rises', async () => {
+    const dir = repo({ 'tests/green_count_floor.txt': '100\n' });
+    sh(dir, 'checkout', '-q', '-b', 'queue');
+    write(dir, { 'tests/green_count_floor.txt': '50\n' });
+    commit(dir, 'chore: down');
+    sh(dir, 'checkout', '-q', 'main');
+    sh(dir, 'merge', '-q', '--ff-only', 'queue');
+    write(dir, { 'tests/green_count_floor.txt': '60\n' });
+    commit(dir, 'chore: up a little');
+    await assertCheck(dir, [], 1, /fell 100 -> 60/);
+  });
+
+  test('strict: the commit that touched the floor is inside its check range', () => {
+    const files = { 'tests/green_count_floor.txt': '100\n', 'tests/a/test_a.gd': tests(3), 'tests/a/test_a.gd.uid': 'u\n', 'tests/a/test_b.gd': tests(2), 'tests/a/test_b.gd.uid': 'u\n' };
+    const dir = repo(files, NO_PINS_MANIFEST);
+    const before = sh(dir, 'rev-parse', 'HEAD');
+    sh(dir, 'checkout', '-q', '-b', 'queue');
+    write(dir, { 'tests/green_count_floor.txt': '1\n', 'tests/a/test_b.gd': null, 'tests/a/test_b.gd.uid': null });
+    commit(dir, 'chore: the floor falls');
+    const o = parseCli(['check', `--project=${dir}`]);
+    assert.equal(strictBase(o), before);
+    const c = runCheck(o, { base: strictBase(o) });
+    assert.match(c.problems.join('\n'), /the total fell 5 -> 3/);
+    assert.match(c.problems.join('\n'), /tests\/a fell 5 -> 3/);
+    assert.match(c.problems.join('\n'), /fell 100 -> 1/);
+  });
+
+  test('strict: a floor raised honestly passes its own check; no floor file starts at HEAD', () => {
+    const dir = repo({ 'tests/green_count_floor.txt': '10\n', 'tests/a/test_a.gd': tests(3), 'tests/a/test_a.gd.uid': 'u\n' }, NO_PINS_MANIFEST);
+    sh(dir, 'checkout', '-q', '-b', 'queue');
+    write(dir, { 'tests/green_count_floor.txt': '11\n' });
+    commit(dir, 'chore: up');
+    const o = parseCli(['check', `--project=${dir}`]);
+    assert.deepEqual(runCheck(o, { base: strictBase(o) }).problems, []);
+    const none = repo({}, NO_PINS_MANIFEST);
+    assert.equal(strictBase(parseCli(['check', `--project=${none}`])), 'HEAD');
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wgate-root-'));
+    temps.push(root);
+    initRepo(root, { 'tests/green_count_floor.txt': '10\n' }, NO_PINS_MANIFEST);
+    assert.equal(strictBase(parseCli(['check', `--project=${root}`])), sh(root, 'rev-parse', 'HEAD'), 'a root commit has no parent');
+  });
+
+  test('moving a platform file into a game selects the platform', () => {
+    const dir = repo({ 'addons/wattlands/core/x.gd': `${'a line of code\n'.repeat(20)}`, 'src/games/tank/game.json': '{}\n' });
+    sh(dir, 'checkout', '-q', '-b', 'game/tank-x');
+    sh(dir, 'mv', 'addons/wattlands/core/x.gd', 'src/games/tank/x.gd');
+    commit(dir, 'tank: moved');
+    const changed = changedSince(parseCli(['check', `--project=${dir}`]), 'main');
+    assert.ok(changed.includes('addons/wattlands/core/x.gd'), changed.join());
+    assert.equal(touchedGames(changed, ['siege', 'tank']).platform, true);
   });
 
   test('a duplicate class_name fails, though neither branch adds both; distinct names pass', async () => {
@@ -490,7 +638,7 @@ describe('stamp-ok', { concurrency: 4 }, () => {
   function stamped(extra = {}) {
     const dir = repo();
     const tree = sh(dir, 'rev-parse', 'HEAD^{tree}');
-    const stamp = { mode: 'fast', tree, pass: true, partial: false, dirty: false, ...extra };
+    const stamp = { mode: 'fast', tree, pass: true, partial: false, dirty: false, gut_total: 5, runs: 3, checker_rows: 2, allow: [], ...extra };
     write(dir, { 'build/gate/fast.json': JSON.stringify(stamp), 'build/gate/matrix_tank.json': JSON.stringify(stamp) });
     return dir;
   }
@@ -523,13 +671,47 @@ describe('stamp-ok', { concurrency: 4 }, () => {
     assert.equal((await gate(none, ['stamp-ok', none])).code, 1);
     assert.equal((await gate(none, ['stamp-ok', stamped(), '--matrix=siege'])).code, 1, 'that game has no stamp');
   });
+
+  test('a stamp short of evidence is refused, and a field missing counts as the bad value', async () => {
+    for (const [extra, args, why] of [
+      [{ gut_total: null }, [], /counted no GUT tests/],
+      [{ gut_total: 0 }, [], /counted 0 GUT tests/],
+      [{ allow: ['docs/games/**'] }, [], /ran with docs\/games/],
+      [{ partial: undefined }, [], /partial/],
+      [{ dirty: undefined }, [], /dirty/],
+      [{ pass: 'yes' }, [], /did not pass/],
+      [{ partial: true, partial_reasons: ['--base=HEAD is not main'] }, [], /--base=HEAD is not main/],
+      [{ runs: 0 }, ['--matrix=tank'], /ran no sims/],
+      [{ checker_rows: 0 }, ['--matrix=tank'], /no evidence that the checker ran/],
+    ]) {
+      const dir = stamped(extra);
+      const v = await gate(dir, ['stamp-ok', dir, ...args]);
+      assert.equal(v.code, 1, JSON.stringify(extra));
+      assert.match(v.stdout, why);
+    }
+  });
+
+  test('a dirty project is refused: its HEAD tree is not what it holds', async () => {
+    const dir = stamped();
+    write(dir, { 'src/a.txt': 'uncommitted\n' });
+    const v = await gate(dir, ['stamp-ok', dir]);
+    assert.equal(v.code, 1);
+    assert.match(v.stdout, /this checkout is dirty/);
+  });
+
+  test('a quiet rerun stands, and is shown', async () => {
+    const dir = stamped({ quiet_retried: true, quiet_retried_tests: ['tests/x/test_x.gd::test_budget'] });
+    const v = await gate(dir, ['stamp-ok', dir]);
+    assert.equal(v.code, 0, v.stdout);
+    assert.match(v.stdout, /note: gut:quiet passed only on its rerun .*test_budget/);
+  });
 });
 
 describe('floor', { concurrency: 4 }, () => {
   const JUNIT = '<testsuites name="GutTests" failures="0" tests="12"><testsuite name="tests/a/test_a.gd" tests="12" time="3.5"></testsuite></testsuites>';
 
   function floorRepo(stampOver = {}) {
-    const dir = repo({ 'tests/green_count_floor.txt': '10\n' });
+    const dir = repo({ 'tests/green_count_floor.txt': '10\n' }, NO_PINS_MANIFEST);
     const head = sh(dir, 'rev-parse', 'HEAD');
     write(dir, {
       'build/gate/strict.json': JSON.stringify({ mode: 'strict', sha: head, pass: true, partial: false, dirty: false, gut_total: 12, ...stampOver }),
@@ -575,6 +757,13 @@ describe('floor', { concurrency: 4 }, () => {
     });
   }
 
+  test('refuses while the manifest asks for pins and there are none', async () => {
+    const dir = repo({ 'tests/green_count_floor.txt': '10\n' });
+    const r = await gate(dir, ['floor', '--label=x']);
+    assert.equal(r.code, 1, r.stdout + r.stderr);
+    assert.match(r.stdout, /run tools\/gate pin-safety first/);
+  });
+
   test('refuses a dirty tree with exit 3, and no stamp at all', async () => {
     const dir = floorRepo();
     write(dir, { 'src/a.txt': 'a\n' });
@@ -600,21 +789,31 @@ func _initialize() -> void:
 	var suites: String = ""
 	var bad: String = str(cfg.get("forbidden_in", ""))
 	var once: String = str(cfg.get("fail_once_in", ""))
+	var always: String = str(cfg.get("fail_in", ""))
 	var code: int = 0
+	var failures: int = 0
 	for file: String in files:
 		var rel: String = file.trim_prefix("res://")
-		suites += '<testsuite name="%s" tests="1" time="0.1"></testsuite>' % rel
+		var failed: bool = not always.is_empty() and rel == always
 		if not bad.is_empty() and rel == bad:
 			print("SCRIPT ERROR: planted")
 		if not once.is_empty() and rel == once and not FileAccess.file_exists("res://build/failed_once.txt"):
 			var mark: FileAccess = FileAccess.open("res://build/failed_once.txt", FileAccess.WRITE)
 			mark.close()
+			failed = true
+		var status: String = "pass"
+		var child: String = ""
+		if failed:
 			code = 1
+			failures += 1
+			status = "fail"
+			child = '<failure message="failed"></failure>'
+		suites += '<testsuite name="%s" tests="1" time="0.1"><testcase name="test_a" assertions="1" status="%s" classname="%s" time="0.1" >%s</testcase></testsuite>' % [rel, status, rel, child]
 	var seen: FileAccess = FileAccess.open(junit.get_base_dir().path_join("env.txt"), FileAccess.WRITE)
 	seen.store_string(OS.get_environment("WATTLANDS_USERDATA_DIR"))
 	seen.close()
 	var f: FileAccess = FileAccess.open(junit, FileAccess.WRITE)
-	f.store_string('<testsuites name="GutTests" failures="0" tests="%d">%s</testsuites>' % [files.size(), suites])
+	f.store_string('<testsuites name="GutTests" failures="%d" tests="%d">%s</testsuites>' % [failures, files.size(), suites])
 	f.close()
 	print("= Run Summary")
 	quit(code)
@@ -625,6 +824,8 @@ describe('fast --lanes=gut on a scratch project', { skip: skipNoGodot }, () => {
   temps.push(lockDir);
   const lockEnv = { WATTLANDS_GODOT_LOCK_DIR: lockDir, WATTLANDS_GODOT_LOCK_CAP: '2' };
   const TEST_SRC = 'func test_a():\n\tassert_eq(a, b)\n';
+  const BUDGET_SRC = 'func test_a():\n\tvar t0 := Time.get_ticks_usec()\n\tassert_lt(t0, 9)\n';
+  const QUIET = 'tests/games/tank/perf/test_q.gd';
 
   function scratch(cfg = {}, extraFiles = {}) {
     const dir = makeScratchProject('gate', {
@@ -654,6 +855,7 @@ describe('fast --lanes=gut on a scratch project', { skip: skipNoGodot }, () => {
     const stamp = stampOf(dir);
     assert.equal(stamp.pass, true);
     assert.equal(stamp.partial, true, '--lanes marks the stamp, so floor and stamp-ok refuse it');
+    assert.deepEqual(stamp.partial_reasons, ['--lanes=gut']);
     assert.equal(stamp.gut_total, 5, 'the file with no test function is not run');
     assert.equal(stamp.quiet_retried, false);
     assert.deepEqual(stamp.lanes.map((l) => l.name).sort(), ['check', 'gut:1', 'gut:2', 'gut:quiet', 'gut:total', 'import']);
@@ -690,22 +892,63 @@ describe('fast --lanes=gut on a scratch project', { skip: skipNoGodot }, () => {
     assert.equal(r.code, 0, r.stdout);
   });
 
-  test('a quiet test failing once reruns under a whole-machine lease; the second verdict stands', async () => {
-    const dir = scratch({ fail_once_in: 'tests/games/tank/perf/test_q.gd' });
+  test('a budget test failing once reruns under a whole-machine lease; the second verdict stands', async () => {
+    const dir = scratch({ fail_once_in: QUIET }, { [QUIET]: BUDGET_SRC });
     const r = await fast(dir);
     assert.equal(r.code, 0, r.stdout + r.stderr);
-    assert.match(r.stdout, /once more inside a whole-machine lease/);
+    assert.match(r.stdout, /budget tests .*test_q\.gd::test_a.*once more inside a whole-machine lease/);
     const stamp = stampOf(dir);
     assert.equal(stamp.quiet_retried, true);
+    assert.deepEqual(stamp.quiet_retried_tests, [`${QUIET}::test_a`]);
     assert.equal(stamp.pass, true);
     assert.equal(stamp.lanes.filter((l) => l.name === 'gut:quiet').length, 1);
   });
 
-  test('a quiet test failing twice fails', async () => {
-    const dir = scratch({ forbidden_in: 'tests/games/tank/perf/test_q.gd' });
+  test('a budget test failing twice fails', async () => {
+    const dir = scratch({ fail_in: QUIET }, { [QUIET]: BUDGET_SRC });
     const r = await fast(dir);
     assert.equal(r.code, 1, r.stdout);
     assert.equal(stampOf(dir).quiet_retried, true);
+    assert.equal(stampOf(dir).pass, false);
+  });
+
+  test('a quiet file failing once on a test that is no budget stays red', async () => {
+    const dir = scratch({ fail_once_in: QUIET });
+    const r = await fast(dir);
+    assert.equal(r.code, 1, r.stdout);
+    assert.match(r.stdout, /does not rerun: not a budget test/);
+    const stamp = stampOf(dir);
+    assert.equal(stamp.quiet_retried, false);
+    assert.equal(stamp.pass, false);
+  });
+
+  test('a SCRIPT ERROR in a quiet budget file stays red, with no rerun', async () => {
+    const dir = scratch({ forbidden_in: QUIET, fail_once_in: QUIET }, { [QUIET]: BUDGET_SRC });
+    const r = await fast(dir);
+    assert.equal(r.code, 1, r.stdout);
+    assert.match(r.stdout, /does not rerun: .*SCRIPT ERROR/);
+    assert.equal(stampOf(dir).quiet_retried, false);
+  });
+
+  test('a failed test with exit 0 is red: the JUnit failure count is read', async () => {
+    const dir = scratch({}, { 'addons/gut/gut_cmdln.gd': FAKE_GUT.replace('quit(code)', 'quit(0)'), 'fake_gut.json': JSON.stringify({ fail_in: 'tests/b/test_c.gd' }) });
+    const r = await fast(dir);
+    assert.equal(r.code, 1, r.stdout);
+    assert.match(r.stdout, /JUnit reports 1 failed test/);
+  });
+
+  test('without --lanes, no test at all is a red gut:total, not a pass', async () => {
+    const dir = makeScratchProject('gate-empty', { 'addons/gut/gut_cmdln.gd': FAKE_GUT, 'fake_gut.json': '{}' });
+    temps.push(dir);
+    initRepo(dir, {}, NO_PINS_MANIFEST);
+    const r = await gate(dir, ['fast', '--games=all'], { env: lockEnv, timeoutMs: 400_000 });
+    assert.equal(r.code, 1, r.stdout);
+    assert.match(r.stdout, /FAIL gut:total/);
+    assert.match(r.stdout, /no GUT process ran/);
+    const stamp = stampOf(dir);
+    assert.equal(stamp.pass, false);
+    assert.equal(stamp.gut_total, 0);
+    assert.equal(stamp.partial, false);
   });
 
   test('a failing check fails the stamp, and the lanes still run', async () => {
@@ -741,7 +984,7 @@ printf '%s %s\\n' "$report" "\${WATTLANDS_USERDATA_DIR:-none}" >>build/pool_runs
 exit "$code"
 `;
 
-function simsScript(lines, { checker = 'exit 0' } = {}) {
+function simsScript(lines, { checker = "printf 'PASS S1 fake\\n'" } = {}) {
   return `#!/usr/bin/env bash
 set -euo pipefail
 here="$(cd "$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
@@ -752,6 +995,7 @@ mkdir -p "$out"
 run() { tools/run_game_sim --game=mygame "--report=$out/$1.json" "\${@:2}"; }
 have() { [ -f "$out/$1.json" ]; }
 printf '%s\\n' "$@" >>build/script_args.txt
+printf '[%s][%s][%s]\\n' "\${MYGAME_SEEDS:-}" "\${MYGAME_SIMS:-}" "\${MYGAME_FIT:-}" >>build/script_env.txt
 ${lines}
 if [ "\${MYGAME_SKIP_CHECK:-0}" != "1" ]; then
   printf 'checked\\n' >>build/checked.txt
@@ -762,13 +1006,15 @@ fi
 }
 
 describe('matrix', { skip: !BASH && 'bash not found' }, () => {
-  function matrixRepo(script) {
-    const dir = repo({ 'project.godot': 'config_version=5\n', 'tests/games/mygame/sim/run_sims.sh': script, 'tools/run_game_sim': FAKE_SIM });
+  function matrixRepo(script, manifest = REAL_MANIFEST) {
+    const dir = repo({ 'project.godot': 'config_version=5\n', 'tests/games/mygame/sim/run_sims.sh': script, 'tools/run_game_sim': FAKE_SIM }, manifest);
     fs.chmodSync(path.join(dir, 'tools', 'run_game_sim'), 0o755);
+    commit(dir, 'executable');
     fs.mkdirSync(path.join(dir, 'build'), { recursive: true });
     return dir;
   }
-  const matrix = (dir, ...args) => gate(dir, ['matrix', '--game=mygame', ...args], { env: { WATTLANDS_GODOT_LOCK_DIR: path.join(dir, 'build', 'lock'), WATTLANDS_GODOT_LOCK_CAP: '4' }, timeoutMs: 300_000 });
+  const matrixEnv = (dir, extra = {}) => ({ WATTLANDS_GODOT_LOCK_DIR: path.join(dir, 'build', 'lock'), WATTLANDS_GODOT_LOCK_CAP: '4', ...extra });
+  const matrix = (dir, ...args) => gate(dir, ['matrix', '--game=mygame', ...args], { env: matrixEnv(dir), timeoutMs: 300_000 });
   const stampOf = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'build', 'gate', 'matrix_mygame.json'), 'utf8'));
   const poolRuns = (dir) => fs.readFileSync(path.join(dir, 'build', 'pool_runs.txt'), 'utf8').trim().split('\n');
 
@@ -796,6 +1042,10 @@ describe('matrix', { skip: !BASH && 'bash not found' }, () => {
     assert.equal(stamp.runs, 4);
     assert.equal(stamp.partial, false);
     assert.deepEqual(stamp.failed_runs, []);
+    assert.equal(stamp.checker_rows, 1);
+    assert.ok(!fs.existsSync(path.join(dir, 'build', 'gate', 'matrix_mygame', 'plan.txt')), 'no plan file outlives its phase');
+    assert.ok(!fs.existsSync(path.join(dir, 'build', 'gate', 'matrix_mygame', 'plan_check.txt')));
+    assert.ok(fs.existsSync(path.join(dir, 'build', 'gate', 'matrix_mygame', 'plan_used.txt')));
     const checked = fs.readFileSync(path.join(dir, 'build', 'checked.txt'), 'utf8');
     assert.equal(checked.match(/checked/g).length, 1, 'the checker runs once, in phase 3');
     assert.match(checked, /a\.json/);
@@ -824,6 +1074,35 @@ describe('matrix', { skip: !BASH && 'bash not found' }, () => {
     assert.match(r.stdout, /FAIL check_sims/);
   });
 
+  test('a checker that printed no row fails: exit 0 is no evidence', async () => {
+    const dir = matrixRepo(simsScript('run a', { checker: 'true' }));
+    const r = await matrix(dir);
+    assert.equal(r.code, 1, r.stdout + r.stderr);
+    assert.match(r.stdout, /FAIL check_sims/);
+    assert.match(r.stdout, /no PASS row: the checker did not run/);
+    assert.equal((await gate(dir, ['stamp-ok', dir, '--matrix=mygame'])).code, 1);
+  });
+
+  test('a SKIP row fails a full matrix; a safety row must be PASS', async () => {
+    const skip = matrixRepo(simsScript('run a', { checker: "printf 'PASS S1 a\\nSKIP S4 no reports\\n'" }));
+    const r = await matrix(skip);
+    assert.equal(r.code, 1, r.stdout + r.stderr);
+    assert.match(r.stdout, /SKIP rows in a full matrix: S4/);
+    const safety = matrixRepo(simsScript('run a'), { ...REAL_MANIFEST, matrix_required_rows: { mygame: ['S4'] } });
+    const v = await matrix(safety);
+    assert.equal(v.code, 1, v.stdout + v.stderr);
+    assert.match(v.stdout, /the safety row S4 is missing/);
+  });
+
+  test('nothing in the shell skips the checker or narrows the runs', async () => {
+    const dir = matrixRepo(simsScript('run a'));
+    const r = await gate(dir, ['matrix', '--game=mygame'], { env: matrixEnv(dir, { MYGAME_SKIP_CHECK: '1', MYGAME_SEEDS: '1', MYGAME_SIMS: 's1', MYGAME_FIT: '0', MYGAME_SIMS_OUT: 'build/elsewhere' }), timeoutMs: 300_000 });
+    assert.equal(r.code, 0, r.stdout + r.stderr);
+    assert.match(fs.readFileSync(path.join(dir, 'build', 'checked.txt'), 'utf8'), /checked/, 'phase 3 ran its checker');
+    assert.deepEqual([...new Set(fs.readFileSync(path.join(dir, 'build', 'script_env.txt'), 'utf8').trim().split('\n'))], ['[][][]']);
+    assert.equal(stampOf(dir).partial, false);
+  });
+
   test('--scenarios reach the script, and the stamp is partial', async () => {
     const dir = matrixRepo(simsScript('run a'));
     const r = await matrix(dir, '--scenarios=s1,s4');
@@ -831,6 +1110,8 @@ describe('matrix', { skip: !BASH && 'bash not found' }, () => {
     assert.deepEqual(fs.readFileSync(path.join(dir, 'build', 'script_args.txt'), 'utf8').trim().split('\n'), ['s1', 's4', 's1', 's4']);
     assert.equal(stampOf(dir).partial, true, 'a subset never stands in for the whole matrix');
     assert.equal((await gate(dir, ['stamp-ok', dir, '--matrix=mygame'])).code, 1);
+    const skip = matrixRepo(simsScript('run a', { checker: "printf 'PASS S1 a\\nSKIP S4 not this subset\\n'" }));
+    assert.equal((await matrix(skip, '--scenarios=s1')).code, 0, 'a subset may skip what it did not run');
   });
 
   test('a script that plans nothing fails', async () => {
