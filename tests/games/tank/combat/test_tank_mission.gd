@@ -109,12 +109,19 @@ func test_the_advance_tables() -> void:
 			[360, "light", 1],
 			[600, "destroyer", 1],
 			[700, "tankette", 2],
+			[720, "destroyer", 4],
 			[830, "light", 1]
 		]
 	)
 	assert_eq(
 		_table(adv[1]["encounters"], "at_m"),
-		[[109, "medium", 1], [349, "recon", 2], [589, "destroyer", 1], [800, "light", 1]]
+		[
+			[109, "medium", 1],
+			[349, "recon", 2],
+			[589, "destroyer", 1],
+			[700, "destroyer", 4],
+			[800, "light", 1],
+		]
 	)
 	assert_eq(
 		_table(adv[2]["encounters"], "at_m"),
@@ -123,6 +130,7 @@ func test_the_advance_tables() -> void:
 			[266, "tankette", 2],
 			[475, "light", 1],
 			[608, "destroyer", 1],
+			[690, "destroyer", 4],
 			[760, "recon", 2]
 		]
 	)
@@ -209,16 +217,16 @@ func test_hard_counts_spill_to_the_last_entries() -> void:
 			n += v
 		return n
 	var seg1: Array = rig.content.segment(1)["encounters"]
-	assert_eq(total.call(TankEncounters.crew_counts(rig.state, seg1)), 6, "Normal crew 4")
+	assert_eq(total.call(TankEncounters.crew_counts(rig.state, seg1)), 7, "Normal crew 4")
 	rig.state.difficulty = TankIds.DIFF_HARD
-	assert_eq(total.call(TankEncounters.crew_counts(rig.state, seg1)), 6, "Hard's count is 1.0")
+	assert_eq(total.call(TankEncounters.crew_counts(rig.state, seg1)), 7, "Hard's count is 1.0")
 	# The rule itself, at a count above 1 (the shared content is restored below).
 	var row: Dictionary = rig.content.data["enemies"]["difficulty"][TankIds.DIFF_HARD]
 	var tuned: float = row["count"]
 	row["count"] = 1.3
 	var hard := TankEncounters.crew_counts(rig.state, seg1)
-	assert_eq(total.call(hard), 8, "crew 4: 6 x 1.3 rounded")
-	assert_eq(hard, [1, 1, 1, 1, 2, 2] as Array[int], "the last two get the extra")
+	assert_eq(total.call(hard), 9, "crew 4: 7 x 1.3 rounded")
+	assert_eq(hard, [1, 1, 1, 1, 1, 2, 2] as Array[int], "the last two get the extra")
 	var hold1 := TankEncounters.crew_counts(rig.state, rig.content.segment(2)["enemies"])
 	assert_eq(hold1, [2, 1, 2, 2] as Array[int], "5 x 1.3 rounded: from the last entry back")
 	rig.enter(2, 0.0)
@@ -388,7 +396,7 @@ func test_the_holding_force_stands_where_the_mission_put_it() -> void:
 func test_enemy_counts_scale_by_crew_size_per_segment() -> void:
 	var c := TankFixtures.content()
 	assert_eq(c.value("enemies", "crew_count_scale", []), [0.5, 0.7, 0.85, 1.0])
-	var adv_want := {1: 2, 2: 4, 3: 5, 4: 6}
+	var adv_want := {1: 2, 2: 4, 3: 5, 4: 7}
 	var hold2 := {1: [1, 0, 0, 0], 2: [1, 1, 0, 0], 3: [1, 2, 1, 0], 4: [1, 2, 1, 1]}
 	for crew: int in adv_want:
 		var rig := TankRulesRig.new(crew)

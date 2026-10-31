@@ -14,7 +14,7 @@
 #   s3  crew 3 at compliance 0.85 and 0.70 x seeds 1-3 (100% comes from s1)
 #   s4  drill, compliant, crews 1-4 as the S4 rule checks' other content (s1 is the other)
 #   s5  cadence_drop to 30 rpm at at_phase + at_target_pct=60: crew 3 in a Gun phase (slot 1, plan
-#       phase 2, ERG 55-100% with the bank), crew 4 in a Lights phase (slot 3, plan phase 1, ERG 65-80%)
+#       phase 1, ERG 55-100% with the bank), crew 4 in a Lights phase (slot 3, plan phase 1, ERG 65-80%)
 #       (v3: Drive digs in SIM, so no 90% gun line arms rescue any more)
 #   s6  crew 3, haptics off for slot 0
 #   s7  the s1 crew 3 seed 1 run again (same arguments, another report name)
@@ -25,8 +25,8 @@
 #   s10 crew 3 on the network path: every rider the same scripted sprinter (a client on the steam
 #       engine surges in its window: its `over` reaches the host as Telemetry.intents, owned by the
 #       steam engine; a client's `aim` needs a key, which headless sims cannot press: GUT-tested in
-#       tests/games/tank/integration), and slot 1 stopping dead for 60 s in the stage 1 gun line
-#       (rescue, AFK, a station on reserve, back; at_phase=2, ERG target >= 60%)
+#       tests/games/tank/integration), and slot 1 stopping dead for 60 s on the Gun in stage 1's Advance
+#       (rescue, AFK, a station on reserve, back; at_phase=1, ERG target >= 60%)
 #   s11 free roam, compliant `erg` riders: roam_10 for crews 1 (SOLO) and 4 (HOST), roam_30 for crew 3 (HOST):
 #       time up, the overtime bound, no patrol after time up, the FIT laps (drive-out, roam, cool-down), the grade
 #   s12 free roam roam_10, crew 3 at 0 W (HOST): like s2's zero crew the host's shared pause holds the drive-out, so
@@ -66,8 +66,8 @@ SPRINTER='intervals:on_w=300,off_w=150,on_s=12,off_s=28,rpm=100'
 # S9's sprinter rides 20 s on, 17 s off, so its sprints cover an Advance's end (the first ends at
 # about 490 s with the v2 content and this rider): a gun line entered while still sprinting.
 S9_SPRINTER='intervals:on_w=300,off_w=150,on_s=20,off_s=17,rpm=100'
-STOP='erg+cadence_drop:rpm=0,at_phase=2,at_target_pct=60,for_s=60'
-DYNAMO_DROP='erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=30'
+STOP='erg+cadence_drop:rpm=0,at_phase=1,at_target_pct=60,for_s=60'
+DYNAMO_DROP='erg+cadence_drop:rpm=30,at_phase=1,at_target_pct=60,for_s=30'
 ARC_DROP='erg+cadence_drop:rpm=30,at_phase=1,at_target_pct=60,for_s=30'
 # Pedaling for the not_pedaling detector (cadence >= 20 rpm) with no effort to speak of.
 IDLE='const:w=10,rpm=25'

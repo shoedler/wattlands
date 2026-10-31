@@ -1381,14 +1381,14 @@ export function checkS10(reports) {
     notes.push(`${n} ${overs.length} client Overpressure shells`);
   }
 
-  // Slot 1 stops pedaling in the stage 1 gun line (the dynamo, ERG 60% or more): rescue, then AFK and a station on reserve, then back.
+  // Slot 1 stops pedaling on the Gun in stage 1's Advance (the dynamo, ERG 60% or more; v4's near threats can pull it off the Gun by plan phase 2): rescue, then AFK and a station on reserve, then back.
   const stop = reports.s10_c3_dynamo_stop;
   if (stop) {
     const n = 's10_c3_dynamo_stop';
     hygiene(n, stop);
     const peer = '2';
     const rows = traceOf(stop, peer);
-    const span = phaseSpansOf(stop, peer).find((x) => x.index === 2);
+    const span = phaseSpansOf(stop, peer).find((x) => x.index === 1);
     const zero = rows.find((row) => num(row.game_t) >= num(span?.start, 0) - EPS && num(row.power_w) <= 0 && num(row.cadence_rpm) <= 0);
     const afk = rows.filter((row) => row.afk === true);
     if (!zero) probs.push(`${n}: peer ${peer} never stopped pedaling in the gun line`);
@@ -1594,6 +1594,9 @@ export function seatProblems(name, r) {
         ok = after !== null && after !== undefined && after.start <= next + EPS && engineAt(r, peer, after.start + 0.01) === want;
       }
       if (!ok && next === Infinity && e._t > num(r.game_seconds, Infinity) - SWITCH_SPACING_S) ok = true;
+      // The cool-down has no seats: the fight ended before the switch spacing let the trainer follow.
+      const cool = spans.find((sp) => sp.kind === 'COOLDOWN');
+      if (!ok && cool && e._t <= cool.start + EPS && cool.start <= deadline + EPS) ok = true;
       if (!ok) probs.push(`${name}: slot ${slot} moved to ${want} at ${fmt(e._t)} s; its trainer never followed`);
     });
   }

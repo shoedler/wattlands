@@ -91,7 +91,15 @@ func test_solo_loads_then_fires_then_loads() -> void:
 		_solo(s, _fight(1, 1)), TankIds.ENGINE_STEAM, "a target, the rack not full: the Loader"
 	)
 	_sit(s, 1, TankIds.ENGINE_STEAM)
-	assert_eq(_solo(s, _fight(1, 1)), TankIds.ENGINE_STEAM, "loading until the rack is full")
+	s.enemies.clear()
+	var e := TankFixturesV4._far(s, 91, TankIds.ENEMY_MEDIUM, 1200.0, 0)
+	e.hp = s.content.num("tanks", "damage.heavy", 35.0) * 3.0
+	assert_eq(_solo(s, _fight(1, 1)), TankIds.ENGINE_STEAM, "loading while the field needs more")
+	e.hp = s.content.num("tanks", "damage.heavy", 35.0)
+	assert_eq(
+		_solo(s, _fight(1, 1)), TankIds.ENGINE_DYNAMO, "the one shell the field needs: the Gun"
+	)
+	e.hp = s.content.num("tanks", "damage.heavy", 35.0) * 3.0
 	var full := TankConst.RACK_MAX
 	assert_eq(_solo(s, _fight(full, full)), TankIds.ENGINE_DYNAMO, "full: the Gun")
 	_sit(s, 1, TankIds.ENGINE_DYNAMO)

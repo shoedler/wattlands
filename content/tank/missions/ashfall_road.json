@@ -41,6 +41,7 @@
 				{"at_m": 360, "enemy": "light", "count": 1},
 				{"at_m": 600, "enemy": "destroyer", "count": 1},
 				{"at_m": 700, "enemy": "tankette", "count": 1, "min_crew": 2},
+				{"at_m": 720, "enemy": "destroyer", "count": 1, "min_crew": 4},
 				{"at_m": 830, "enemy": "light", "count": 1}
 			],
 			"obstacles": [
@@ -101,6 +102,7 @@
 				{"at_m": 109, "enemy": "medium", "count": 1},
 				{"at_m": 349, "enemy": "recon", "count": 1, "min_crew": 2},
 				{"at_m": 589, "enemy": "destroyer", "count": 1},
+				{"at_m": 700, "enemy": "destroyer", "count": 1, "min_crew": 4},
 				{"at_m": 800, "enemy": "light", "count": 1}
 			],
 			"obstacles": [
@@ -162,6 +164,7 @@
 				{"at_m": 266, "enemy": "tankette", "count": 1, "min_crew": 2},
 				{"at_m": 475, "enemy": "light", "count": 1},
 				{"at_m": 608, "enemy": "destroyer", "count": 1},
+				{"at_m": 690, "enemy": "destroyer", "count": 1, "min_crew": 4},
 				{"at_m": 760, "enemy": "recon", "count": 1, "min_crew": 2}
 			],
 			"obstacles": []

@@ -51,7 +51,7 @@
 		},
 		"heavy": {
 			"code": 5,
-			"hp": 140,
+			"hp": 105,
 			"size_px": [133, 53],
 			"sprite": "enemy_heavy",
 			"hold_m": [1300, 1900],

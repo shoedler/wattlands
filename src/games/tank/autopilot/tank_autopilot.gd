@@ -241,11 +241,12 @@ static func _switches_in_warmup(state: TankState, ri: TankRiderInput, engine: St
 ## done). v4: open while a near threat is alive: it lives 8-20 s, and stage 1's recon comes at about
 ## 40 s, so otherwise no Autopilot crew could ever man the Secondaries (the 1 s ask, the stay and the
 ## follows_now gate still hold). Also open while an Advance has nobody on Drive: a rider who left it in
-## the hold would otherwise keep the tank standing until min_s.
+## the hold would otherwise keep the tank standing until min_s. Free roam is one long segment with no
+## opening to hold: a rider a near threat pulled off the Loader would otherwise stay away until time up.
 static func _crew_may_move(state: TankState, at_end: bool) -> bool:
 	if state.seg.seg == TankIds.SEG_CHECKPOINT:
 		return false
-	if near_threat_alive(state):
+	if near_threat_alive(state) or state.seg.seg == TankIds.SEG_ROAM:
 		return true
 	if state.seg.seg == TankIds.SEG_ADVANCE and not state.seg.objective_done:
 		var drive := state.station(TankIds.ENGINE_DIESEL)
@@ -300,7 +301,8 @@ static func seat_wanted_solo(
 		return TankIds.ENGINE_FEED
 	match rider.engine:
 		TankIds.ENGINE_STEAM:
-			return TankIds.ENGINE_STEAM if rack < TankConst.RACK_MAX else TankIds.ENGINE_DYNAMO
+			var enough := rack >= TankConst.RACK_MAX or rack >= _hits_to_clear(state)
+			return TankIds.ENGINE_DYNAMO if enough else TankIds.ENGINE_STEAM
 		TankIds.ENGINE_DYNAMO:
 			return TankIds.ENGINE_DYNAMO if shells > 0 else TankIds.ENGINE_STEAM
 	# From Drive (or the Secondaries): a rack with SOLO_GUN_FIRST shells or more goes to the Gun at
@@ -308,6 +310,20 @@ static func seat_wanted_solo(
 	if shells >= SOLO_GUN_FIRST or rack >= TankConst.RACK_MAX:
 		return TankIds.ENGINE_DYNAMO
 	return TankIds.ENGINE_STEAM
+
+
+## The heavy shells that would kill every far enemy standing, at least 1: the solo Loader stops
+## filling the rack once it holds them (a hold's clock has no time for a third shell nobody needs).
+## RACK_MAX when the Behemoth stands: that fight wants a full rack.
+static func _hits_to_clear(state: TankState) -> int:
+	if state.boss.phase != TankIds.BOSS_NONE and state.boss.phase != TankIds.BOSS_DEAD:
+		return TankConst.RACK_MAX
+	var dmg := maxf(state.content.num("tanks", "damage.heavy", 35.0), 1.0)
+	var hits := 0
+	for e in state.enemies:
+		if not e.is_near() and e.mode != TankIds.EM_DEAD and e.hp > 0.0:
+			hits += ceili(e.hp / dmg)
+	return maxi(hits, 1)
 
 
 ## True when rider `rider` sat somewhere other than Drive in the current Advance: it sits there now,
