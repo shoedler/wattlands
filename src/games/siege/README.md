@@ -182,7 +182,7 @@ All in `docs/decisions/siege.md`:
 | `view/` | `SiegeView` and `SiegeViewMath`; `v2/` holds the bake bank, the depth-tested batch and sprite, the shaders, the world layer, machines, crowd, shots and shot replay, the tilt-shift pass and a standalone demo scene |
 | `hud/` | `SiegeHud` (the `HudSpec`, palette and help); `SiegeHudCtl` (the base Control) and the plates `SiegeHudSession`, `SiegeHudCrew`, `SiegeHudColumn`, `SiegeHudCockpit`, `SiegeHudWorld`, `SiegeShopPanel`; `SiegeHudModel`, `SiegeCockpitModel` and `SiegeShopModel` (what they say, as data); `SiegeHudDraw` and `SiegeHudType` (the materials and the baked letter) |
 | `audio/` | `SiegeAudio`: the adapter around `GameAudioKit`; the sounds are data in `assets/siege/audio/audio.json` |
-| `art/` | The CPU rasterizer and its tools: `mock.mjs`, `hud_mock.mjs` (the HUD's approved mock), `hud_font.mjs`, `hud_parts.mjs`, `hud_bake.mjs`, `bake.mjs`, `export_map.mjs`, and `scene.mjs`, `life.mjs`, `world.mjs`, `shade.mjs`, `raster.mjs`, `sprites.mjs`, `png.mjs`, `v3.mjs`; `PROPOSAL.md` is the mockup proposal |
+| `art/` | The CPU rasterizer and its tools: `mock.mjs`, `hud_mock.mjs` (the HUD's approved mock), `hud_font.mjs`, `hud_parts.mjs`, `hud_bake.mjs`, `bake.mjs`, `export_map.mjs`, and `scene.mjs`, `life.mjs`, `world.mjs`, `shade.mjs`, `raster.mjs`, `sprites.mjs`, `png.mjs`, `v3.mjs` |
 | `content/siege/` | `shifts.json`, `balance.json`, `stations.json`, `enemies.json`, `waves.json`, `cosmetics.json`, `maps/rotae.json`, `strings.csv` |
 | `assets/siege/bake/` | `world.png`, `world_depth.png`, `atlas_0.png` and `atlas_1.png` with their `_depth` twins, `manifest.json` |
 | `assets/siege/hud/` | `hud_atlas.png` and `hud_atlas.json`: the HUD's letter, icons and slot shapes |

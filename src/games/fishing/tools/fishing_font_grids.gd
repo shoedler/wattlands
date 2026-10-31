@@ -36,12 +36,6 @@ static func font_image() -> Image:
 	return out
 
 
-## The character of grid cell `i`.
-static func char_at(i: int) -> String:
-	var n := LAST - FIRST + 1
-	return char(FIRST + i) if i < n else char(EXTRA[i - n])
-
-
 ## The pixel font, 5 x 9 per glyph (cap height 7, descenders 2), "#" is ink; one entry per
 ## character of FONT_CHARS, in order.
 const FONT_GLYPHS: Array = [

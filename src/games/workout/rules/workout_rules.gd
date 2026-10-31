@@ -220,16 +220,6 @@ static func sprint_result(r: WorkoutRiderState, index: int) -> Dictionary:
 	return {}
 
 
-## Group score: the average session time in band over every rider, 0..1.
-static func group_fraction(state: WorkoutState) -> float:
-	if state.order.is_empty():
-		return 0.0
-	var sum := 0.0
-	for peer: int in state.order:
-		sum += state.rider(peer).tib_fraction()
-	return sum / float(state.order.size())
-
-
 ## Client prediction of the local rider between snapshots (marker position only).
 static func predict(state: WorkoutState, peer: int, dt: float, local: Telemetry) -> void:
 	var r := state.rider(peer)

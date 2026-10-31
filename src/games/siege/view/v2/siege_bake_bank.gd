@@ -222,10 +222,6 @@ func ramp_row_for(part: String, slot: int) -> int:
 	return row if row >= 0 else 0
 
 
-func ramp_row(name: String) -> int:
-	return ramp_rows.find(name)
-
-
 ## The shared depth-test material for atlas i.
 func material(i: int) -> ShaderMaterial:
 	while _materials.size() < atlases.size():
@@ -243,17 +239,6 @@ func material(i: int) -> ShaderMaterial:
 		m.set_shader_parameter("key_step", float(key_step))
 		_materials.append(m)
 	return _materials[i] if i >= 0 and i < _materials.size() else null
-
-
-## Moves every material's art origin (the canvas position of art pixel 0, 0).
-func set_art_origin(origin: Vector2) -> void:
-	for i in atlases.size():
-		material(i).set_shader_parameter("art_origin", origin)
-
-
-func set_depth_test(on: bool) -> void:
-	for i in atlases.size():
-		material(i).set_shader_parameter("depth_test", on)
 
 
 # --- Art space and encodings ---------------------------------------------------------------------

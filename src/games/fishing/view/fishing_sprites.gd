@@ -121,10 +121,3 @@ static func ids() -> Array[String]:
 	var out: Array[String] = []
 	out.assign(_meta.keys())
 	return out
-
-
-static func clear_cache() -> void:
-	_meta.clear()
-	_strips.clear()
-	_frames.clear()
-	_bounds.clear()

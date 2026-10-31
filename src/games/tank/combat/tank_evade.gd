@@ -136,15 +136,6 @@ static func resolve(
 	return ok
 
 
-## Seconds the best rider has held inside the running telegraph of `shooter_id` (0 when none).
-static func best_held(aux: TankAux, shooter_id: int) -> float:
-	var held: Dictionary = (aux.evade.get(shooter_id, {}) as Dictionary).get(HELD, {})
-	var best := 0.0
-	for s: int in held:
-		best = maxf(best, float(held[s]))
-	return best
-
-
 ## Forgets the telegraph of `shooter_id` (it died, broke off or the segment ended).
 static func forget(aux: TankAux, shooter_id: int) -> void:
 	aux.evade.erase(shooter_id)
