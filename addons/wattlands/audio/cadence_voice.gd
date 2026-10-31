@@ -2,7 +2,8 @@ class_name CadenceVoice
 extends RefCounted
 ## One machine's stroke pattern. plan() partitions the revs axis; every event k+f falls in exactly one interval.
 ## The kit hands it `revs` and `rpm` as plain floats: it never integrates cadence (SPEC_AUDIO 2.1, S1), so
-## the stroke and the crank on screen read the same number. Pure: no audio device, no clock, no RNG.
+## the stroke and the crank on screen read one number, less the kit's bounded FrameClockLock offset. Pure: no audio
+## device, no clock, no RNG.
 ## Each returned event: {"sound": String, "variant": int, "at_s": float, "db": float, "pitch": float, "pos": float,
 ## "priority": int}. `variant` is a running count per sound; AudioBank.stream wraps it by the sound's variants.
 const LATE_MAX_S := 0.08
