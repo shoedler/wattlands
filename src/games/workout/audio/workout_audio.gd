@@ -65,7 +65,8 @@ func prepare(p_view: WorkoutRideView) -> WorkoutAudio:
 	kit.set_bed(BED)
 	if game != null:
 		game.cue.connect(_on_cue)
-	var bus := get_node_or_null("/root/EventBus")
+	var tree := Engine.get_main_loop() as SceneTree
+	var bus: Node = tree.root.get_node_or_null("EventBus") if tree != null else null
 	if bus != null:
 		bus.connect("paused_changed", _on_paused_changed)
 	return self

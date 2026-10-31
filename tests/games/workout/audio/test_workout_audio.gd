@@ -6,6 +6,10 @@ extends GutTest
 const U := preload("res://tests/games/workout/workout_test_util.gd")
 const BANK := "res://assets/workout/audio/audio.json"
 const MANIFEST := "res://assets/workout/audio/audio_manifest.json"
+const INTERVAL_BELL_DELAY_S := 0.42
+
+var _sim_left: float = 0.0
+var _expected: Array = []
 
 
 func _view(
@@ -76,6 +80,87 @@ func _into_sprint(view: WorkoutRideView, i: int, rpm: float = 90.0) -> void:
 		r.speed.distance_m += 12.0 / 60.0
 		g.sim_alive()
 		view.advance(1.0 / 60.0)
+
+
+## `seconds` of frames with `peer` 1 at `rpm` and `mps`. The state's distance moves only on the sim's
+## 20 Hz steps, as it does on a host, however fast the frames come.
+func _roll(
+	view: WorkoutRideView, mps: float, rpm: float, seconds: float, fps: float = 60.0
+) -> void:
+	var r := view.game.state.rider(1)
+	r.cadence_rpm = rpm
+	var dt := 1.0 / fps
+	for f in roundi(seconds * fps):
+		_sim_left += dt
+		while _sim_left >= U.DT:
+			_sim_left -= U.DT
+			r.speed.v_mps = mps
+			r.speed.distance_m += mps * U.DT
+		view.game.sim_alive()
+		view.advance(dt)
+
+
+## The time between one sound's successive attacks (s).
+func _gaps(kit: GameAudioKit, sound: String) -> Array[float]:
+	var out: Array[float] = []
+	var last := -1.0
+	for i in kit.played.size():
+		if kit.played[i] != sound:
+			continue
+		if last >= 0.0:
+			out.append(kit.played_t[i] - last)
+		last = kit.played_t[i]
+	return out
+
+
+func _mean(xs: Array[float]) -> float:
+	var total := 0.0
+	for x: float in xs:
+		total += x
+	return total / maxf(xs.size(), 1.0)
+
+
+func _stddev(xs: Array[float]) -> float:
+	var m := _mean(xs)
+	var total := 0.0
+	for x: float in xs:
+		total += (x - m) * (x - m)
+	return sqrt(total / maxf(xs.size(), 1.0))
+
+
+## A U.ride rider: compliant, with one audio frame per sim step. Only the audio runs here: a whole
+## view per step over a quarter of an hour would take minutes and changes nothing it hears.
+func _rider_with_sound(
+	slot: PlayerSlot, p: PlanPhase, ps: PhaseState, _tick: int, view: WorkoutRideView
+) -> Dictionary:
+	view.audio.update(U.DT)
+	return U.compliant(slot, p, ps)
+
+
+func _note_cue(kind: String, data: Dictionary, kit: GameAudioKit, state: WorkoutState) -> void:
+	if kind == WorkoutRules.EV_INTERVAL_END:
+		_expected.append([kit._t, "interval_chime"])
+	elif kind == WorkoutRules.EV_INTERVAL_START:
+		_expected.append([kit._t + INTERVAL_BELL_DELAY_S, "interval_bell"])
+	elif kind == WorkoutRules.EV_SPRINT and WorkoutCrowd.cheers_for(state, int(data["i"])):
+		_expected.append([kit._t, "crowd_cheer"])
+
+
+func _earlier(a: Array, b: Array) -> bool:
+	return float(a[0]) < float(b[0])
+
+
+## Each event of the ride made its one sound, at its moment, and nothing else made one.
+func _assert_one_sound_per_event(kit: GameAudioKit, label: String) -> void:
+	_expected.sort_custom(_earlier)
+	var heard: Array = []
+	for i in kit.played.size():
+		if ["interval_chime", "interval_bell", "crowd_cheer"].has(kit.played[i]):
+			heard.append([kit.played_t[i], kit.played[i]])
+	assert_eq(heard.size(), _expected.size(), label)
+	for k in mini(heard.size(), _expected.size()):
+		assert_eq(heard[k][1], _expected[k][1], "%s, sound %d" % [label, k])
+		assert_almost_eq(float(heard[k][0]), float(_expected[k][0]), 0.11, label)
 
 
 # --- the bank -------------------------------------------------------------------------
@@ -212,6 +297,45 @@ func test_a_dead_stop_ends_strokes_and_loops() -> void:
 	assert_eq(strokes, 0, "nothing starts: the horizon's stroke, if any, began before the stop")
 
 
+func test_a_stop_at_speed_ends_the_chain_and_the_wheel_rolls_on() -> void:
+	var view := _view()
+	var kit := view.audio.kit
+	var r := view.game.state.rider(1)
+	r.power_w = r.ftp * 1.2
+	_roll(view, 8.5, 90.0, 5.0)
+	var chain := kit.machine_loop("bike1")
+	assert_eq(chain.on[0], 1, "the chain runs")
+	kit.clear_played()
+	r.power_w = 0.0
+	_roll(view, 8.5, 0.0, 0.12)
+	assert_true(chain.all_off(), "off within 120 ms, at speed")
+	_roll(view, 8.5, 0.0, 3.0)
+	for sound: String in ["chain_tick", "pedal_press", "bb_creak", "breath", "chain_shift"]:
+		assert_eq(_count(view, sound), 0, "%s: legs stopped, wheel or no wheel" % sound)
+	assert_false(kit.entry_loop("tyre_hum").all_off(), "the tyres roll on")
+	assert_false(kit.entry_loop("wind_rush").all_off(), "and the wind")
+	assert_gt(_count(view, "freewheel_tick"), 30, "the ratchet takes over")
+
+
+func test_what_rolls_on_a_coast_is_not_on_the_machines_bus() -> void:
+	var doc := _doc()
+	assert_ne(doc["loops"]["tyre_hum"]["bus"], AudioBuses.MACHINES)
+	assert_ne(doc["loops"]["wind_rush"]["bus"], AudioBuses.MACHINES)
+	assert_ne(doc["machines"]["wheel"]["bus"], AudioBuses.MACHINES)
+	var view := _view()
+	view.game.state.rider(1).power_w = 0.0
+	_roll(view, 8.5, 90.0, 1.0)
+	_roll(view, 8.5, 0.0, 0.5)
+	var kit := view.audio.kit
+	for instance: String in kit._machines:
+		var slot: GameAudioKit.MachineSlot = kit._machines[instance]
+		if slot.bus == AudioBuses.MACHINES:
+			assert_true(slot.loops.loop.all_off(), "%s still sounds on Machines" % instance)
+	for id: String in kit._entries:
+		var entry: GameAudioKit.EntrySlot = kit._entries[id]
+		assert_ne(entry.loops.bus, AudioBuses.MACHINES, id)
+
+
 func test_a_restart_has_no_burst_and_no_duplicate() -> void:
 	var view := _view()
 	_ride(view, 90.0, 5.0)
@@ -288,6 +412,63 @@ func test_the_local_rider_leads() -> void:
 	assert_gt(dbs[1], dbs[3] + 5.0, "lead's whirr over another's")
 
 
+func test_eight_riders_at_speed_with_a_crowd_stay_in_every_pool_with_real_players() -> void:
+	var view := _view("easy_30", U.players(1, 7))
+	var g := view.game
+	var kit := view.audio.kit
+	kit.force_audio = true
+	assert_true(kit.setup(WorkoutAudio.BANK_PATH, 1))
+	kit.set_bed(WorkoutAudio.BED)
+	var order := g.state.order
+	for i in order.size():
+		var r := g.state.rider(order[i])
+		# The real bots' cluster: all near 90 rpm.
+		r.cadence_rpm = 90.0 + 1.5 * sin(float(i) * 1.7)
+		r.power_w = r.ftp * 1.25
+		r.speed.v_mps = 12.0
+	var x := WorkoutRideView.RIDER_X
+	view.crowd_layer.windows = [{"w0": x - 5000.0, "w1": x + 500000.0, "open": false, "i": 99}]
+	var peak := {AudioBuses.MACHINES: 0, AudioBuses.SFX: 0}
+	var peak_loops := 0
+	var was_fps := Engine.max_fps
+	Engine.max_fps = 60
+	var last := Time.get_ticks_usec()
+	var left := 8.0
+	# Real time: voices end by the clock, and only then does a pool's peak mean anything.
+	while left > 0.0:
+		await get_tree().process_frame
+		var now := Time.get_ticks_usec()
+		var dt := minf(float(now - last) / 1e6, 0.1)
+		last = now
+		left -= dt
+		g.sim_alive()
+		for peer: int in order:
+			g.state.rider(peer).speed.distance_m += 12.0 * dt
+		g.tick_cranks(dt)
+		view.audio.update(dt)
+		peak_loops = maxi(peak_loops, kit.loops_in_use())
+		for bus: String in peak:
+			var playing := 0
+			for v: GameAudioKit.Voice in kit._pools[bus]:
+				playing += 1 if v.player.playing else 0
+			peak[bus] = maxi(peak[bus], playing)
+	Engine.max_fps = was_fps
+	gut.p(
+		(
+			"peak loops %d, Machines %d, Sfx %d"
+			% [peak_loops, peak[AudioBuses.MACHINES], peak[AudioBuses.SFX]]
+		)
+	)
+	assert_lte(peak_loops, 24, "loop players")
+	assert_gt(peak_loops, 12, "the whole group, road and bed run")
+	assert_lte(peak[AudioBuses.MACHINES], 16, "Machines voices")
+	assert_lte(peak[AudioBuses.SFX], 16, "Sfx voices")
+	assert_gt(peak[AudioBuses.MACHINES], 2, "strokes ring on real players")
+	assert_gt(peak[AudioBuses.SFX], 0, "the crowd claps on real players")
+	assert_eq(kit.voiceless, 0, "every stroke and event found a voice")
+	kit.stop_all()
+
+
 func test_eight_riders_stay_in_their_pools() -> void:
 	var view := _view("easy_30", U.players(1, 7))
 	var g := view.game
@@ -356,6 +537,43 @@ func test_the_freewheel_ticks_only_on_a_real_coast() -> void:
 	assert_eq(run.call(5.0, 0.0, 3.0), 0, "stopped")
 
 
+func test_the_freewheel_ticks_evenly_between_the_sims_steps() -> void:
+	for mps: float in [3.0, 5.0, 7.0, 9.0, 13.0]:
+		for fps: float in [60.0, 144.0]:
+			var view := _view()
+			_roll(view, mps, 0.0, 1.5, fps)
+			var kit := view.audio.kit
+			kit.clear_played()
+			_roll(view, mps, 0.0, 5.0, fps)
+			var gaps := _gaps(kit, "freewheel_tick")
+			var label := "%d m/s at %d fps" % [mps, fps]
+			var per := WorkoutAudio.TICK_M / mps
+			assert_gt(gaps.size(), 30, label)
+			assert_lte(_stddev(gaps), 0.004, label)
+			assert_almost_eq(_mean(gaps), per, per * 0.02, label)
+			view.free()
+
+
+func test_the_wheel_stays_with_the_shown_distance_and_never_runs_back() -> void:
+	var view := _view()
+	var r := view.game.state.rider(1)
+	_roll(view, 9.0, 0.0, 2.0)
+	var voice := view.audio.kit.machine_voice("wheel")
+	var off := voice.planned_to() * WorkoutAudio.TICK_M - r.distance_m()
+	assert_lte(absf(off), 9.0 * 0.15, "metres off the state")
+	# The sim stops moving the rider though the state still claims speed: the wheel waits for it.
+	var to := voice.planned_to()
+	r.speed.v_mps = 0.0
+	_ride(view, 0.0, 1.0)
+	assert_gte(voice.planned_to(), to, "never backwards")
+	# A jump (a resync) is followed at once, and no burst of ticks comes with it.
+	var ticks := _count(view, "freewheel_tick")
+	r.speed.distance_m += 500.0
+	_roll(view, 9.0, 0.0, 0.2)
+	assert_almost_eq(voice.planned_to() * WorkoutAudio.TICK_M, r.distance_m(), 2.0)
+	assert_lte(_count(view, "freewheel_tick") - ticks, 12, "0.2 s of ticks, not 500 m of them")
+
+
 func test_tyres_and_wind_follow_speed_and_stop_with_the_road() -> void:
 	var view := _view()
 	var g := view.game
@@ -376,6 +594,45 @@ func test_tyres_and_wind_follow_speed_and_stop_with_the_road() -> void:
 	assert_true(kit.entry_loop("tyre_hum").all_off(), "no road, no hum, legs or no legs")
 	assert_true(kit.entry_loop("wind_rush").all_off())
 	assert_eq(kit.machine_loop("bike1").on[0], 1, "the chain does not care")
+
+
+func test_a_steady_block_is_not_frozen_the_road_and_the_gusts_move_the_loops() -> void:
+	var lo_d := 0.0
+	var hi_d := 0.0
+	for d in 2000:
+		if WorkoutAudio.road_at(float(d)) < WorkoutAudio.road_at(lo_d):
+			lo_d = float(d)
+		if WorkoutAudio.road_at(float(d)) > WorkoutAudio.road_at(hi_d):
+			hi_d = float(d)
+	var view := _view()
+	var r := view.game.state.rider(1)
+	r.speed.v_mps = 8.5
+	var kit := view.audio.kit
+	r.speed.distance_m = lo_d
+	_ride(view, 90.0, 0.5)
+	var smooth := kit.entry_loop("tyre_hum").db[0]
+	r.speed.distance_m = hi_d
+	_ride(view, 90.0, 0.5)
+	assert_gt(
+		kit.entry_loop("tyre_hum").db[0], smooth + 3.0, "rough tarmac over smooth, same speed"
+	)
+	# The view's own gust: its strongest and its slackest moment in the first two minutes.
+	var strong_t := 0.0
+	var slack_t := 0.0
+	for t in 120:
+		if WorkoutAudio.gust_at(float(t)) > WorkoutAudio.gust_at(strong_t):
+			strong_t = float(t)
+		if WorkoutAudio.gust_at(float(t)) < WorkoutAudio.gust_at(slack_t):
+			slack_t = float(t)
+	assert_gt(WorkoutAudio.gust_at(strong_t), WorkoutAudio.gust_at(slack_t) + 0.5)
+	view.env_t = strong_t
+	_ride(view, 90.0, 1.0)
+	var strong_db := kit.entry_loop("wind_rush").db[0]
+	var strong_pitch := kit.entry_loop("wind_rush").pitch[0]
+	view.env_t = slack_t
+	_ride(view, 90.0, 1.0)
+	assert_gt(strong_db, kit.entry_loop("wind_rush").db[0] + 3.0, "the gust is louder")
+	assert_gt(strong_pitch, kit.entry_loop("wind_rush").pitch[0], "and higher")
 
 
 # --- the gears ------------------------------------------------------------------------
@@ -409,6 +666,52 @@ func test_a_shift_with_still_legs_clicks_and_the_chain_stays() -> void:
 	_ride(view, 5.0, 4.0)
 	assert_eq(_count(view, "gear_click_up"), 1, "the lever moves")
 	assert_eq(_count(view, "chain_shift"), 0, "the chain does not")
+
+
+func test_the_chain_crosses_on_the_crank_not_on_a_timer() -> void:
+	var view := _view()
+	var g := view.game
+	g.local_tm = Telemetry.new()
+	g.local_tm.gear = 12
+	_ride(view, 90.0, 0.5)
+	g.local_tm.gear = 13
+	_ride(view, 90.0, 1.0 / 60.0)
+	assert_eq(_count(view, "chain_shift"), 0, "not yet")
+	# The cadence falls to a third: the quarter revolution takes three times as long.
+	_ride(view, 30.0, 0.45)
+	assert_eq(_count(view, "chain_shift"), 0, "a timer would have fired by now")
+	_ride(view, 30.0, 0.1)
+	assert_eq(_count(view, "chain_shift"), 1, "the crank has come round")
+
+
+func test_a_rider_who_stops_inside_the_quarter_turn_never_crosses() -> void:
+	var view := _view()
+	var g := view.game
+	g.local_tm = Telemetry.new()
+	g.local_tm.gear = 12
+	_ride(view, 90.0, 0.5)
+	g.local_tm.gear = 13
+	_ride(view, 90.0, 1.0 / 60.0)
+	_ride(view, 0.0, 3.0)
+	assert_eq(_count(view, "chain_shift"), 0, "dropped at the stop")
+	_ride(view, 90.0, 2.0)
+	assert_eq(_count(view, "chain_shift"), 0, "and not owed on the restart")
+
+
+func test_a_pause_inside_the_quarter_turn_drops_the_crossing() -> void:
+	var view := _view()
+	var g := view.game
+	var bus := get_node("/root/EventBus")
+	g.local_tm = Telemetry.new()
+	g.local_tm.gear = 12
+	_ride(view, 90.0, 0.5)
+	g.local_tm.gear = 13
+	_ride(view, 90.0, 1.0 / 60.0)
+	bus.paused_changed.emit(true, "test")
+	_ride(view, 90.0, 2.0)
+	bus.paused_changed.emit(false, "test")
+	_ride(view, 90.0, 2.0)
+	assert_eq(_count(view, "chain_shift"), 0)
 
 
 # --- the breath -----------------------------------------------------------------------
@@ -564,6 +867,40 @@ func test_a_real_ride_sounds_through_the_games_cue_signal() -> void:
 	_frames(view, 0.6)
 	assert_gt(_count(view, "interval_chime"), 0, "phase ends")
 	assert_gt(_count(view, "interval_bell"), 0, "phase starts")
+
+
+func test_a_scored_sprint_rides_from_the_rules_to_one_sound_per_event_on_every_role() -> void:
+	var events: Array[Dictionary] = []
+	for role: String in [Wl.SOLO, Wl.HOST]:
+		var view := _view("easy_30", U.players(1), role, 1)
+		var g := view.game
+		var kit := view.audio.kit
+		var i := _scored_sprint(g.state)
+		assert_gte(i, 0, "easy_30 has a scored sprint")
+		_expected = []
+		g.cue.connect(_note_cue.bind(kit, g.state))
+		var stop := roundi((g.state.phase_start_s(i + 1) + 2.0) / U.DT)
+		events = U.ride(g, _rider_with_sound.bind(view), stop)
+		for f in 20:
+			view.audio.update(U.DT)
+		var kinds: Array[String] = []
+		for e: Dictionary in events:
+			kinds.append(str(e["type"]))
+		assert_true(kinds.has(WorkoutRules.EV_SPRINT), "the rules scored the sprint: %s" % role)
+		assert_eq(_count(view, "crowd_cheer"), 1, "one sprint, one cheer: %s" % role)
+		assert_eq(_expected.size(), events.size(), "every event reached the cue signal once")
+		_assert_one_sound_per_event(kit, role)
+		view.free()
+	# A client hears the same list, as the host's events arrive.
+	var client := _view("easy_30", U.players(2), Wl.CLIENT, 2)
+	_expected = []
+	client.game.cue.connect(_note_cue.bind(client.audio.kit, client.game.state))
+	for e: Dictionary in events:
+		client.game.apply_event(e)
+		for f in 12:
+			client.audio.update(U.DT)
+	assert_eq(_count(client, "crowd_cheer"), 1, "client")
+	_assert_one_sound_per_event(client.audio.kit, "client")
 
 
 func test_a_client_sounds_events_as_they_arrive() -> void:
