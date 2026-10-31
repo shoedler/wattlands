@@ -1,0 +1,3 @@
+- Three small view-only changes came with the cleanup, none of them in rules, effort, FIT or snapshots: snapshot interpolation no longer drops a tick in sessions past about 5000 s, Diesel Domestiques' seat cards hold their crank still at or below 1 rpm instead of letting it creep, and Turbo Reel's HUD clock uses the shared clock text.
+- Added `IntentValue` to the SDK, for reading an intent's flags and whole numbers, and an optional smallest delay to `SnapRenderClock.new()`.
+- A new game's tests now start from `tests/lib/` (`TestGameFakes`, `TestGameSuite`, `TestGameStaticSuite`, `TestGameSessionSuite`) in place of about 500 lines each game had copied.
