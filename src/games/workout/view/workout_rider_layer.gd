@@ -15,7 +15,7 @@ var _model: Dictionary = {}
 var _slices: Dictionary = {}
 
 
-func setup(p_kit: WorkoutKit) -> WorkoutRiderLayer:
+func prepare(p_kit: WorkoutKit) -> WorkoutRiderLayer:
 	kit = p_kit
 	return self
 

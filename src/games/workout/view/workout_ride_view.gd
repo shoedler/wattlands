@@ -278,18 +278,18 @@ func _build() -> void:
 	clouds_lo = _plane("clouds_lo")
 	far_hills = _plane("far_hills")
 	mid_hills = _plane("mid_hills")
-	mid_props = WorkoutPropLayer.new().setup(kit, mid_hills.factor, 260, _mid_table(), seed_value)
+	mid_props = WorkoutPropLayer.new().prepare(kit, mid_hills.factor, 260, _mid_table(), seed_value)
 	near_trees = _plane("near_trees")
-	near_props = WorkoutPropLayer.new().setup(
+	near_props = WorkoutPropLayer.new().prepare(
 		kit, near_trees.factor, 520, _near_table(), seed_value
 	)
 	near_props.chimneys = true
 	poles = _plane("poles")
-	road_layer = WorkoutRoadLayer.new().setup(kit, false)
+	road_layer = WorkoutRoadLayer.new().prepare(kit, false)
 	road_layer.material = _material
-	crowd_layer = WorkoutCrowd.new().setup(kit, seed_value)
-	riders = WorkoutRiderLayer.new().setup(kit)
-	verge_near = WorkoutRoadLayer.new().setup(kit, true)
+	crowd_layer = WorkoutCrowd.new().prepare(kit, seed_value)
+	riders = WorkoutRiderLayer.new().prepare(kit)
+	verge_near = WorkoutRoadLayer.new().prepare(kit, true)
 	verge_near.material = _material
 	bank = WorkoutBankLayer.new()
 	bank.seed_value = seed_value

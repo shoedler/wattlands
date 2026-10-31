@@ -16,7 +16,7 @@ var _scroll: int = 0
 var _frame: int = 0
 
 
-func setup(p_kit: WorkoutKit, p_near: bool) -> WorkoutRoadLayer:
+func prepare(p_kit: WorkoutKit, p_near: bool) -> WorkoutRoadLayer:
 	kit = p_kit
 	near = p_near
 	return self

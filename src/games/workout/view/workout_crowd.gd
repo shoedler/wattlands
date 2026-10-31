@@ -26,7 +26,7 @@ var _hands_up: bool = false
 var _env_t: float = 0.0
 
 
-func setup(p_kit: WorkoutKit, p_seed: int) -> WorkoutCrowd:
+func prepare(p_kit: WorkoutKit, p_seed: int) -> WorkoutCrowd:
 	kit = p_kit
 	seed_value = p_seed
 	return self

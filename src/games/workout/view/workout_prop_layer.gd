@@ -21,7 +21,7 @@ var _spots: Array[Dictionary] = []
 var _plan_t: float = 0.0
 
 
-func setup(
+func prepare(
 	p_kit: WorkoutKit, p_factor: float, p_bucket: int, p_table: Array[String], p_seed: int
 ) -> WorkoutPropLayer:
 	kit = p_kit
