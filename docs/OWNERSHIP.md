@@ -1,82 +1,42 @@
 # Ownership and game-brief inventory
 
-Written in W0 on 2026-10-21 from `docs/BRIEF.md`, the three game briefs (`docs/games/siege.md`, `tank.md`, `fishing.md`) and the W0 contracts and stubs in `addons/wattlands/`. Section 1 says who owns each path. Section 2 lists every SDK call, kit helper, tool flag and platform behaviour the game briefs cite, with what the game expects, the owner and the test that must prove it. Section 3 lists where a game brief assumes something BRIEF or the frozen contracts don't say, or say differently, with a resolution. Section 4 is the flat name checklist for the W3 SDK-completeness reviewer.
+Section 1 says who owns each path today; `tools/gate check` enforces it from `tools/lib/gate_manifest.json`, which wins if the two differ.
 
-How to read it:
+**Sections 2-4 are the W0 inventory, kept for their IDs.** Written in W0 on 2026-10-21 from `docs/BRIEF.md`, the three game briefs and the W0 contracts and stubs; comments and docs across the repo cite those IDs (GM4, C36, SH2). Section 2 lists every SDK call, kit helper, tool flag and platform behaviour the game briefs cite, with what the game expected and the test that had to prove it. Section 3 lists where a game brief assumed something BRIEF or the frozen contracts didn't say, with a resolution. Section 4 is the flat name checklist of the W3 SDK-completeness review. The W1 agents named in their Owner columns have ended; read those names as history, and section 1 for who owns a path now. `docs/GAME_SDK.md` is the live contract.
+
+How to read sections 2-4:
 
 - "B x.y" is a BRIEF section; "S x.y", "T x.y" and "F x.y" are sections of the Siege, Tank and Fishing briefs ("S4 S10" is Siege section 4, scenario S10; "G0.2" is step 2 of a brief's G0).
-- Owner is a W1 agent (1.1); "lead" is W0/W2. The lead split the brief's sdk-runtime role into sdk-runtime (`addons/wattlands/sdk/`, `tests/sdk/`) and sdk-tools (the template, the game-session tools and `docs/GAME_SDK.md`), so W1 has 16 builders. Where a row names several owners, the first writes the test.
-- Names in `code` exist in the W0 contracts or stubs unless marked **(add)**, an additive change to a frozen file that only the lead may make (collected in 3.2), or **(doc)**, behaviour `docs/GAME_SDK.md` must state in words (collected in 2.23).
-- Every row must work, be tested and be documented in `docs/GAME_SDK.md` (sdk-runtime) or `docs/ART_PIPELINE.md` (art-pipeline) before W3 (B 9: "every SDK name, kit helper and tool flag the game briefs cite exists").
+- Where a row names several owners, the first wrote the test.
+- Names in `code` existed in the W0 contracts or stubs unless marked **(add)**, an additive change to a frozen file that only the lead may make (collected in 3.2), or **(doc)**, behaviour `docs/GAME_SDK.md` must state in words (collected in 2.23).
+- A row can be out of date with the games as they shipped: the inventory describes the briefs of W0.
 
 ## 1. Ownership
 
 ### 1.1 Paths
 
-| Path | Owner | Holds |
+| Owner | Paths | CI |
 | --- | --- | --- |
-| `project.godot` | lead | Autoloads (`EventBus`, `Settings`, `InputRouter`, `TrainerService`, `NetSession`, `GameRegistry`, `Rides`, `Sfx`, `App`), the B 3.5 input map, main scene, renderer, platform translations (`content/strings/*.csv`), texture importer defaults (3.1 C36) |
-| `export_presets.cfg`, `tests/contracts/test_export_presets.gd` | lead (W2) | Windows Desktop preset shipping the GDBLE DLL |
-| `addons/wattlands/contracts/` | lead; frozen after W0, additive changes through the lead only | `Wl`, `GameModule`, `GameContext`, `PlayerSlot`, `EffortPlan`, `PlanPhase`, `PhaseState`, `EffortDirective`, `DirectiveResult`, `DirectiveSink`, `InputFrame`, `Telemetry`, `HudSpec`, `HudFeed`, `IntentSink`, `ProgressStore`, `GameStrings`, `GameResults`, `SessionStats`, `TrainerSample`, `TrainerDevice`, `BleTransport`, `Transport`, `NetMessages`, `RideRecorderApi`, `WlEventBus` |
-| `tests/contracts/` | lead | Contract tests (`Wl.slot_look`, to/from_dict round trips) |
-| `addons/wattlands/core/` | platform | `WlApp`, `Paths`, `CmdLine`, `RiderProfile`, `WlSettings`, `EffortScaling`, `Locks`, `LocalRider` (one rider's stack), `WlTrainerService` |
-| `addons/wattlands/trainer/` except `control/` and `ble/` | trainer-core | FTMS codec, `FtmsClient` (hardware lock), `FtmsTrainer`, `MockTrainer` (rider model and every B 4.2 profile) |
-| `tests/trainer/`, `tests/vectors/` | trainer-core | Codec and mock tests; `tests/vectors/ftms.json` golden vectors (reused by ble's Python tests) |
-| `addons/wattlands/trainer/control/` | trainer-control | `TrainerController`, `SafetyGovernor`, `GovernorClamps`, `CadenceEstimator`, virtual gears |
-| `tests/governor/`, `tests/control/`, `tests/arch/test_no_bypass.gd` | trainer-control | Every B 4.6 rule; the 4.6.11 scan |
-| `addons/wattlands/trainer/ble/`, `tools/trainer_bridge/`, `tests/ble/` | ble | `GdbleTransport`, `BridgeTransport`, `FtmsConnectionManager`, the Python bridge and `probe` |
-| `addons/wattlands/sim/`, `tests/sim/` | sim | `SimClock`, `SeededRng`, `SpeedModel`, `WBalance`, `Bots`, `GestureRecognizer`, `SprintRule`, `ZwoImport` |
-| `server/relay/` | relay | Node relay, Dockerfile, README, `node:test` suite |
-| `addons/wattlands/net/`, `tests/net/` | net-client | `Transport` impls (`RelayTransport`, `LoopbackTransport`, P1 `LanTransport`), `WlNetSession`, lobby, `RoomCode`, `Protocol` |
-| `addons/wattlands/rides/`, `tests/rides/` | rides | `RideRecorder`, FIT encoder, Strava client, upload queue, `WlRides` |
-| `server/mock_strava/`, `tools/fit_check/` | rides | Mock Strava (Node); `check.mjs` (pinned `@garmin/fitsdk`) |
-| `addons/wattlands/sdk/` | sdk-runtime | `WlGameRegistry`, `GameHost`, `PlanValidator`, the `DirectiveSink`/`HudFeed`/`IntentSink` implementations, `SessionStats` tracker, `GameSimRunner` |
-| `src/games/_template/`, `content/_template/`, `assets/_template/`, `tests/games/_template/` | sdk-tools | The template game and the counterparts `tools/new_game` copies |
-| `tools/run_game_sim`, `tools/run_game_sim.ps1`, `tools/sdk/`, `tools/new_game`, `tools/new_game.ps1`, `tools/lib/new_game.mjs`, `tests/tools/` | sdk-tools | Game-session tools (B 3.6); the flag parser itself is `GameSimRunner.parse_args` (sdk-runtime) |
-| `tests/sdk/` | sdk-runtime | Conformance, registry, validator, sink, host, report tests |
-| `docs/GAME_SDK.md` | sdk-tools (lead completes the Workout examples in W2) | The contract with worked examples; answers every question in 2.23 |
-| `src/app/`, `tests/app/` | app-shell | Title, first run, profile, settings (Strava, haptics), game picker, lobby (options, player options, bots), code entry, results frame |
-| `addons/wattlands/ui/` (incl. `hud/`, `theme/`), `addons/wattlands/audio/`, `tests/ui/`, `tests/audio/` | ui-hud | `HudLayer` and kit widgets, `PedalScanList`, `WlInputRouter`, bindings (`input.cfg`), font and Theme, `WlSfx`, synth, metronome |
-| `addons/wattlands/world2d/`, `addons/wattlands/world3d/`, `tests/world/` | world-kits | `PixelViewport`, `ParallaxStrip`, `SpinningPart`, `SlidingPart`, `PaletteSwap`, `SpriteWobble`, the pixel import preset, `LowPolyMesh`, MultiMesh scatter, camera rig, sky and ambient, both `demo.tscn` |
-| `tools/art/`, `tests/art/`, `docs/ART_PIPELINE.md` | art-pipeline | `generate.mjs`, `pixelate.gd`, `endpoints.json`, `prices.json`, `mock_fal/`, `tools/art/test/` |
-| `src/games/workout/`, `content/workout/`, `assets/workout/`, `tests/games/workout/`, `.github/workflows/game-workout.yml` | game-workout | The reference game (B 3.7) |
-| `tools/e2e/`, `tools/screenshot`, `tools/screenshot.ps1`, `tools/qa/`, `tools/fit_decode/`, `tests/scenarios/` | qa | End-to-end harness; screenshot tool (its GDScript driver lives in `tools/qa/`, which has no `.gdignore`); fallback FIT decoder; the B 7.4 scenario runner and its assertions |
-| `tools/godot.sh`, `tools/godot.ps1`, `tools/env.sh`, `tools/env.ps1`, `tools/run_tests`, `tools/run_tests.ps1`, `tools/check_scripts.gd`, `tools/lib/` | lead | Wrappers, Godot lock (`godot_lock.mjs`), locks, test runner, script check |
-| `tools/tests/` | lead, per file | Node tests of the wrappers, lock and env scripts (lead); `new_game.test.mjs`, `run_game_sim.test.mjs` (sdk-tools); `screenshot.test.mjs` (qa); `export_windows.test.mjs` (platform) |
-| `addons/gut/`, `addons/gdble/` | lead | Vendored, pinned (`docs/deps.d/`) |
-| `README.md`, `CLAUDE.md`, `CHANGELOG.md`, `CREDITS.md`, `LICENSE`, `.gitignore`, `gdlintrc`, every `.gdignore` | lead | |
-| `docs/PROTOCOL.md` | net-client | The relay and game-message protocol (net-client wrote it in W1; the lead reviews changes) |
-| `docs/BRIEF.md`, `docs/DESIGN.md`, `ARCHITECTURE.md`, `TRAINER.md`, `HARDWARE_TEST_PLAN.md`, `DECISIONS.md`, `BACKLOG.md`, `DEPENDENCIES.md`, `OWNERSHIP.md` | lead | Merged from owner fragments. `HARDWARE_TEST_PLAN.md` carries one section per game (workout, siege, tank, fishing) that only links to `src/games/<id>/HARDWARE_TEST.md`, so game sessions never edit it (B 4.7) |
-| `docs/games/`, `docs/concept/`, `docs/research.md`, `.gitattributes`, `.claude/settings.json` | nobody | Read only |
-| `src/games/<id>/`, `content/<id>/`, `assets/<id>/`, `tests/games/<id>/`, `.github/workflows/game-<id>.yml`, `docs/{decisions,credits.d,changelog.d}/<id>.md` | that game's session | Siege, Tank and Fishing come later; this run creates none of them |
+| Each game `<id>` (`fishing`, `siege`, `tank`, `workout`) | `src/games/<id>/`, `content/<id>/`, `assets/<id>/`, `tests/games/<id>/`, `.github/workflows/game-<id>.yml`, `docs/decisions/<id>.md`, `docs/credits.d/<id>.md`, `docs/changelog.d/<id>.md` | `game-<id>.yml` |
+| Relay | `server/relay/` | `relay.yml` |
+| Trainer bridge | `tools/trainer_bridge/`, `addons/wattlands/trainer/ble/` | `trainer-bridge.yml` |
+| Lead (the platform) | Everything else: `addons/wattlands/`, `src/app/`, `src/games/_template/` and its counterparts, `content/strings/`, `server/mock_strava/`, `tools/`, `tests/` outside `tests/games/<id>/`, `docs/` | `lead.yml` (every gate) |
+| Lead only, for every session | `README.md`, `CHANGELOG.md`, `CREDITS.md`, `CLAUDE.md`, `LICENSE`, `.gitignore`, `project.godot`, `gdlintrc`, `addons/gut/`, `addons/wattlands/contracts/` (frozen after W0, additive changes only), `tests/green_count_floor.txt`, `tests/pending_allowlist.txt`, `tools/lib/gut_gate.mjs`, `tools/lib/run_tests.mjs`, `tools/lib/gate*`, `tools/lib/safety_pins.json` | |
+| Nobody | `docs/BRIEF.md`, `docs/games/`, `docs/concept/`, `docs/research.md`, `.gitattributes`, `.claude/settings.json` | |
 
-### 1.2 Per-owner files in shared folders
+A game session changes the platform only under the platform-change policy in `CLAUDE.md`: small, additive, tested, and committed alone with the prefix `platform:`. A run's other workstreams (audio, cleanup, docs, gate) are the `workstreams` of the manifest; no workstream may touch a path its `deny` lists, and `safety_pin_globs` lists the files the gate pins.
+
+### 1.2 Shared folders
 
 | Folder | Rule |
 | --- | --- |
-| `tests/<area>/` | Owned by the module's agent: `core` platform; `trainer`, `vectors` trainer-core; `governor`, `control`, `arch` trainer-control; `sim` sim; `ble` ble; `net` net-client; `rides` rides; `sdk` sdk-runtime; `app` app-shell; `ui`, `audio` ui-hud; `world` world-kits; `art` art-pipeline; `scenarios` qa; `contracts` lead; `games/<id>` that game. |
-| `content/strings/<module>.csv` | One per owner: `core.csv`, `trainer.csv`, `governor.csv`, `sim.csv`, `ble.csv`, `net.csv`, `rides.csv`, `sdk.csv`, `app.csv`, `ui.csv`, `world.csv`. The lead registers each in `project.godot` (header `keys,en`, possibly empty) so W1 never needs a project change. Platform keys never start with `WORKOUT_`, `SIEGE_`, `TANK_`, `FISHING_` or `_TEMPLATE_`. |
-| `docs/decisions/`, `docs/deps.d/`, `docs/credits.d/`, `docs/changelog.d/` | `<agent>.md` per owner, append only; the lead merges. |
-| `.github/workflows/` | `<owner>.yml` per platform owner; `game-<id>.yml` per game (`game-workout.yml` for Workout). |
+| `content/strings/<module>.csv` | Platform strings, one file per module, each registered in `project.godot`. Platform keys never start with `WORKOUT_`, `SIEGE_`, `TANK_`, `FISHING_` or `_TEMPLATE_`. |
+| `docs/decisions/`, `docs/deps.d/`, `docs/credits.d/`, `docs/changelog.d/` | One `<agent or game id>.md` per owner. The lead merges them: changelog fragments are emptied at each release; decision fragments stay as the source. |
+| `.github/workflows/` | Seven workflows: `lead.yml` runs every gate, `game-<id>.yml` per game (`tools/new_game` writes it), `relay.yml` builds the relay's Docker image, `trainer-bridge.yml` runs the Python bridge's tests. |
 
-### 1.3 Seams between W1 owners
+### 1.3 Frozen seams
 
-Frozen in W0 so the 16 W1 builders can work in parallel. A builder that needs one changed asks the lead.
-
-| Seam | Producer → consumer | Fixed by |
-| --- | --- | --- |
-| Time | sim → every module on the sim path | `SimClock` (platform time always runs; game time stops on pause), `Wl.SIM_DT` 0.05 |
-| Rider stack | platform (`LocalRider`) ↔ trainer-control, trainer-core, sim, rides, sdk-runtime | `LocalRider.setup/set_plan/start_phase/resume_phase/apply_directive/apply_course_grade/set_cadence_band/set_power_band/tick/telemetry/take_gestures/take_intents/take_acks` (`resume_phase` added in W4r2). The GameHost keeps its riders private (`_local_riders`; the platform reads one through `local_rider(peer)`), and `tests/arch/test_no_bypass.gd` forbids both names under `src/games/`, so games can't reach a rider |
-| Governor | trainer-control → platform, sdk-runtime | `SafetyGovernor.configure/set_plan/start_phase/resume_phase/set_game_paused/apply_directive/set_course_grade/shift/tick/status` (`resume_phase` added in W4r2); `Wl.CLAMP_*`, `Wl.REFUSE_*` |
-| Mock rider feed | sdk-runtime, platform → trainer-core | `MockTrainer.from_spec/parse_spec/set_cadence_band/set_power_band/set_phase` |
-| Pixel layout | world-kits → ui-hud | `PixelViewport.integer_scale/letterbox_offset/art_rect_to_screen` |
-| HUD feed | sdk-runtime → ui-hud | `HudFeed`, `HudSpec`, `HudLayer.build/update/local_feed`, `WlEventBus` HUD signals |
-| Session runner | sdk-runtime → qa, game-workout | `GameSimRunner.setup/step/run_to_end/build_report/write_report` (one argument parser for `run_game_sim` and `screenshot`) |
-| Recorder | rides → platform, sdk-runtime | `RideRecorderApi`, `SessionStats` |
-| Messages | lead → net-client, sdk-runtime | `NetMessages`, `Protocol.decode/decode_game/apply_int_fields` |
-| Per-peer services | lead → net-client, sdk-runtime, platform | `WlEventBus` and `WlNetSession` instantiable per in-process peer (`ctx.events`, GameHost `config.bus`, `config.net`) |
-| Slot looks | lead → app-shell, ui-hud, games | `Wl.slot_look(slot_index)` |
-| Pixel import preset | world-kits → art-pipeline, lead | 3.1 C36 |
+Fixed in W0 and additive since. These are the APIs between platform modules that a change must keep: time (`SimClock`, `Wl.SIM_DT`); the rider stack (`LocalRider`, with the GameHost's riders private and forbidden under `src/games/`); the governor (`SafetyGovernor.configure/set_plan/start_phase/resume_phase/set_game_paused/apply_directive/set_course_grade/shift/tick/status`, `Wl.CLAMP_*`, `Wl.REFUSE_*`); the mock rider (`MockTrainer.from_spec/parse_spec/set_cadence_band/set_power_band/set_phase`); pixel layout (`PixelViewport`); the HUD feed (`HudFeed`, `HudSpec`, `HudLayer`, the `WlEventBus` HUD signals); the session runner (`GameSimRunner`); the recorder (`RideRecorderApi`, `SessionStats`); messages (`NetMessages`, `Protocol`); per-peer services (`WlEventBus` and `WlNetSession` instantiable per in-process peer); slot looks (`Wl.slot_look`); the pixel import preset (3.1 C36).
 
 ## 2. Game brief requirements
 

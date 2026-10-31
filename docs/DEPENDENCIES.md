@@ -10,7 +10,7 @@ Every third-party dependency, merged from `docs/deps.d/` (one record per depende
 | GDBLE | v0.6.0 (tag commit `ecae959`) | MIT; the DLL statically links btleplug 0.12 (MIT/Apache-2.0/BSD-3-Clause) and godot-rust `godot` 0.5.2 (MPL-2.0) | `addons/gdble/` (Windows and Linux x86_64 libraries) | Bluetooth LE GDExtension | `docs/deps.d/gdble.md` |
 | Microsoft Visual C++ 2015-2022 x64 runtime | system | Microsoft redistributable terms | Installed on most PCs; `tools/export_windows.mjs --with-vcruntime` can ship `vcruntime140.dll` next to the exe | Needed by the GDBLE DLL | `docs/THIRD_PARTY_NOTICES.txt` |
 
-Fonts and audio: Atkinson Hyperlegible was not downloaded in this run; the theme uses Godot's default font (BRIEF 3.9 fallback). Every sound is synthesized at runtime (no CC0 packs). Dropping the two Atkinson Hyperlegible `.ttf` files and `OFL.txt` into `addons/wattlands/ui/theme/fonts/` switches the theme with no code change (`docs/decisions/ui-hud.md`).
+Fonts and audio: Atkinson Hyperlegible was not downloaded in this run; the theme uses Godot's default font (BRIEF 3.9 fallback). Every sound is made from recipes in this repository (no samples, no CC0 packs). Dropping the two Atkinson Hyperlegible `.ttf` files and `OFL.txt` into `addons/wattlands/ui/theme/fonts/` switches the theme with no code change (`docs/decisions/ui-hud.md`).
 
 ## Servers and tools (not shipped with the app)
 

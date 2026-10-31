@@ -35,6 +35,8 @@
 
 ## 2026-10-31: the jitter bench misses with Godot's delta smoothing, and passes without it
 
+Superseded: `docs/decisions/audio-sync.md` replaces the call below to report the miss and keep the strokes on `revs`.
+
 Measured on WASAPI, 48 kHz, 59.94 Hz display, with other Godot runs on the machine; residual p99 / stddev in ms, limits 12 / 4, thresholds unchanged. All slopes hold (at most 0.056 %, limit 0.1 %), all onsets found, no stroke late or dropped.
 
 | rpm | engine delta, smoothing on (the exit code) | real clock | engine delta, smoothing off | no pre-roll seek |
