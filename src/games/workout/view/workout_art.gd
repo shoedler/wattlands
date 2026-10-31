@@ -52,11 +52,12 @@ const BOT_FLAG: Array[Vector3i] = [
 	Vector3i(6, 0, 6),
 	Vector3i(7, 0, 6),
 ]
+## A flag at rest: limp cloth down the pole, far longer than it is wide, with an uneven hem.
 const HANGING_FLAG: Array[Vector3i] = [
-	Vector3i(1, 0, 9),
-	Vector3i(2, 0, 7),
-	Vector3i(3, 0, 4),
-	Vector3i(4, 0, 2),
+	Vector3i(1, 0, 14),
+	Vector3i(2, 0, 16),
+	Vector3i(3, 0, 15),
+	Vector3i(4, 1, 11),
 ]
 const SECOND_FLAG: Array[Vector3i] = [
 	Vector3i(1, 0, 4),
@@ -129,29 +130,34 @@ static func pennant_shapes(
 	var top := -h
 	_add(out, 0, top - 1, 1, h + 1, POLE)
 	var edge := GOLD if style == "pennant_gold" else OUTLINE
-	var cols := _flag_columns(hanging, bool(opts.get("bot", false)), style)
 	if bool(opts.get("in_band", false)) and not hanging:
 		_add(out, 1, top - 1, FLAG_LEN - 3, 1, GLOW)
-	_cloth(out, cols, top, color, edge)
 	var dark := color.darkened(0.45)
-	match str(look.get("pattern", "solid")):
-		"dashed":
-			_add(out, 3, top + 2, 1, 2, dark)
-			_add(out, 5, top + 2, 1, 2, dark)
-		"dotted":
-			_add(out, 2, top + 2, 1, 1, dark)
-			_add(out, 4, top + 3, 1, 1, dark)
-		"double":
-			_cloth(out, SECOND_FLAG, top + 7, color, edge)
+	var pattern := str(look.get("pattern", "solid"))
+	if hanging:
+		_limp_cloth(out, top, color, edge)
+		_limp_pattern(out, pattern, top, dark)
+	else:
+		_cloth(out, _flag_columns(bool(opts.get("bot", false)), style), top, color, edge)
+		match pattern:
+			"dashed":
+				_add(out, 3, top + 2, 1, 2, dark)
+				_add(out, 5, top + 2, 1, 2, dark)
+			"dotted":
+				_add(out, 2, top + 2, 1, 1, dark)
+				_add(out, 4, top + 3, 1, 1, dark)
+			"double":
+				_cloth(out, SECOND_FLAG, top + 7, color, edge)
 	_emblem(out, style, top)
-	_badge(out, str(look.get("shape", "circle")), top - 6, color, bool(look.get("hollow", false)))
+	var fill := color.lerp(HOLLOW_FILL, 0.3) if hanging else HOLLOW_FILL
+	_badge(
+		out, str(look.get("shape", "circle")), top - 6, color, bool(look.get("hollow", false)), fill
+	)
 	return out
 
 
 ## The flag's columns: Vector3i(x, y from the flag's top, height).
-static func _flag_columns(hanging: bool, bot: bool, style: String) -> Array[Vector3i]:
-	if hanging:
-		return HANGING_FLAG
+static func _flag_columns(bot: bool, style: String) -> Array[Vector3i]:
 	if bot:
 		return BOT_FLAG
 	return SWALLOWTAIL_FLAG if style == "pennant_swallowtail" else PLAIN_FLAG
@@ -176,6 +182,35 @@ static func _cloth(
 		_add(out, c.x, y + c.z, 1, 1, edge)
 
 
+## Limp cloth, folds running down it: a lit column, a fold, a body and a shaded outer edge, a warm pixel
+## where it is tied to the pole and a dark hem under each column.
+static func _limp_cloth(out: Array[Dictionary], top: int, color: Color, edge: Color) -> void:
+	var hi := color.lerp(CLOTH_LIGHT, 0.34)
+	var shade := Color(color.r * 0.62, color.g * 0.64, color.b * 0.74)
+	var tones: Array[Color] = [color, shade, color, shade]
+	for i in HANGING_FLAG.size():
+		var c := HANGING_FLAG[i]
+		var y := top + c.y
+		_add(out, c.x, y, 1, c.z, tones[i])
+		_add(out, c.x, y, 1, 1, hi)
+		_add(out, c.x, y + c.z, 1, 1, edge)
+
+
+## The slot's pattern across the limp cloth, always on the cloth.
+static func _limp_pattern(out: Array[Dictionary], pattern: String, top: int, dark: Color) -> void:
+	match pattern:
+		"dashed":
+			_add(out, 1, top + 4, 3, 1, dark)
+			_add(out, 1, top + 9, 3, 1, dark)
+		"dotted":
+			_add(out, 2, top + 3, 1, 1, dark)
+			_add(out, 3, top + 7, 1, 1, dark)
+			_add(out, 2, top + 11, 1, 1, dark)
+		"double":
+			_add(out, 1, top + 6, 4, 1, dark)
+			_add(out, 1, top + 8, 4, 1, dark)
+
+
 ## A progression emblem, a few pixels on the flag.
 static func _emblem(out: Array[Dictionary], style: String, top: int) -> void:
 	match style:
@@ -193,7 +228,7 @@ static func _emblem(out: Array[Dictionary], style: String, top: int) -> void:
 
 ## The slot's shape at the pole's top, 5 px across; a hollow slot is its ring around a pale centre.
 static func _badge(
-	out: Array[Dictionary], shape: String, y: int, color: Color, hollow: bool
+	out: Array[Dictionary], shape: String, y: int, color: Color, hollow: bool, fill: Color
 ) -> void:
 	var rows := badge_rows(shape)
 	for r in rows.size():
@@ -202,7 +237,7 @@ static func _badge(
 	if hollow:
 		for r in range(1, rows.size() - 1):
 			if rows[r] >= 2:
-				_add(out, 1 - rows[r], y + r, rows[r] * 2 - 1, 1, HOLLOW_FILL)
+				_add(out, 1 - rows[r], y + r, rows[r] * 2 - 1, 1, fill)
 	var last := rows.size() - 1
 	_add(out, -rows[last], y + last + 1, rows[last] * 2 + 1, 1, OUTLINE)
 
