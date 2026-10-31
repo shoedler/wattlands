@@ -199,6 +199,42 @@ test('LayeredLoop: a layer that was off takes its pitch at once, then slews slow
   assert.ok(step > 0 && step < 0.01, 'a 3 rpm step moves it under 1 % a frame');
 });
 
+test('AmbienceBed: spot_min_gap_s keeps details apart, bursts counted, and leaves a texture alone', () => {
+  const spots = [
+    { sound: 'a', gap_s: [3, 5], db: -10, burst: 2, burst_gap_s: 0.7 },
+    { sound: 'b', gap_s: [3, 5], db: -10 },
+    { sound: 'c', gap_s: [3, 5], db: -10 },
+    { sound: 'tex', gap_s: [0.5, 1], db: -10 },
+  ];
+  const run = (spec, seed) => {
+    const bed = new AmbienceBed(spec, seed);
+    const out = [];
+    for (let i = 0; i < 60 * 300; i++) for (const e of bed.update({}, 1 / 60)) out.push({ ...e, t: i / 60 + e.at_s });
+    return out.sort((x, y) => x.t - y.t);
+  };
+  const closest = (evs) => {
+    const d = evs.filter((e) => e.sound !== 'tex');
+    let m = Infinity;
+    for (let i = 1; i < d.length; i++) if (d[i].sound !== d[i - 1].sound) m = Math.min(m, d[i].t - d[i - 1].t);
+    return m;
+  };
+  assert.ok(closest(run({ spots }, 5)) < 1, 'off by default, the timers run free');
+  const spaced = run({ spots, spot_min_gap_s: 2 }, 5);
+  assert.ok(closest(spaced) >= 2 - 1 / 60, `${closest(spaced)}`);
+  for (const s of ['a', 'b', 'c']) assert.ok(spaced.filter((e) => e.sound === s).length > 15, s);
+  const tex = spaced.filter((e) => e.sound === 'tex');
+  assert.ok(tex.length > 300, `a texture keeps its pace: ${tex.length}`);
+});
+
+test('AmbienceBed: a sound split into two spots by `when` keeps its round-robin across the switch', () => {
+  const spec = { spots: [{ sound: 'a', gap_s: 1, when: { param: 'x', max: 0.5 } }, { sound: 'a', gap_s: 1, when: { param: 'x', min: 0.5 } }] };
+  const bed = new AmbienceBed(spec, 3, () => 3);
+  const out = [];
+  for (let i = 0; i < 60 * 10; i++) out.push(...bed.update({ x: i < 60 * 5 ? 0 : 1 }, 1 / 60));
+  assert.ok(out.length >= 8);
+  for (let i = 0; i < out.length; i++) assert.equal(out[i].variant, i % 3);
+});
+
 test('AmbienceBed: seeded spots, bursts, `when`', () => {
   const spec = { layers: [], spots: [{ sound: 'a', gap_s: [0.5, 1], db: [-20, -10], pitch: [0.9, 1.1], burst: [2, 3], burst_gap_s: 0.09 }, { sound: 'b', gap_s: 0.5, db: -5, when: { param: 'x', min: 1 } }] };
   const run = (seed, x) => {

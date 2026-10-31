@@ -113,6 +113,7 @@ var verge_near: WorkoutRoadLayer = null
 var bank: WorkoutBankLayer = null
 var foreground: ParallaxStrip = null
 var track: WorkoutTrackLayer = null
+var audio: WorkoutAudio = null
 ## The latest model (tests and screenshots read it).
 var model: Dictionary = {}
 ## Client: the host time (s) the other riders are drawn at.
@@ -177,6 +178,7 @@ func advance(delta: float) -> void:
 	_breath_step(delta)
 	_glide_dt = delta
 	refresh()
+	audio.update(delta)
 
 
 func _is_client() -> bool:
@@ -305,6 +307,7 @@ func _build() -> void:
 	for layer: CanvasItem in _layers():
 		stage.add_child(layer)
 	_set_foreground_frame(0)
+	audio = WorkoutAudio.new().prepare(self)
 
 
 ## Back to front.

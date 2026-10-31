@@ -68,3 +68,15 @@ A warm-up sprint shows `FREE RIDE`, never `SPRINT` (BRIEF 4.6.8). F1 shows the h
 - e2e report check: `node tests/games/workout/e2e_check.mjs build/e2e/workout/report.json`.
 
 Real-trainer checklist: `HARDWARE_TEST.md`. Decisions: `docs/decisions/workout.md`.
+
+## Audio
+
+`audio/workout_audio.gd` (`WorkoutAudio`) maps game state to the bank `assets/workout/audio/audio.json`, rendered by `tools/audio` (`docs/AUDIO_PIPELINE.md`). It reads three clocks, the view's own:
+
+- **Cadence**, `game.cranks` and `game.cadence_of`, the numbers the rider sheets are drawn from, so sound and legs cannot drift. `chain_tick` at revolution fraction 0 (the near pedal on top), `pedal_press` at .25 and .75 (a pedal furthest forward, a strong leg and a weak one), `bb_creak` under load and on the roughest road, `chain_hum` by rpm and power, `chain_rattle` by rpm, power and road, `breath` every second revolution above FTP, and in a scored sprint `crowd_clap` and `cowbell` on the hands the crowd is drawn with. All of it stops dead at 0 rpm. Other riders carry one sound, `peer_tick` on their own crank, in a band of its own: no loops, so a group cannot swell by locking in phase.
+- **Speed**, `shown_distance`: `tyre_hum`, with `tyre_grit` on rough stretches (`road_at`, by the metre), `wind_rush`, and `freewheel_tick` per 0.35 m while coasting. The wheel runs on its own distance between sim steps, so ticks fall evenly. These sit on the Sfx bus: Machines holds only what stops with your legs.
+- **The view's `env_t`**: the breeze in the grass and the gusts in `wind_rush` follow `air_at`, half the picture's gust and half a slower swell, so half an hour of a steady block repeats no wave. The bed `dawn_road` crossfades `birds_dawn` to `birds_day` with session progress; spots are `chirrup` (near and far), `wood_call`, `lark`, `rooster` (start only), `dog_far`, `church_bell_far`, and `tractor_far` only while a tractor crosses the screen. The chirrups, wood calls and larks thin out as the day comes up, so the chorus is what you hear change. `spot_min_gap_s` keeps the details 2.2 s apart.
+
+The crowd and its cheer exist only where the view draws a crowd, so never in the warm-up (BRIEF 4.6.8), and you hear it as far as you can see it. `chain_shift` follows `gear_click_up` or `gear_click_down` a quarter of a revolution later, on the crank, and not at all if the legs stop first. Events: `interval_chime`, then `interval_bell` a beat later; `crowd_cheer` and `cowbell` at a scored sprint's finish.
+
+FTMS reports cadence about once a second, not crank angle: the sound locks to the crank on screen exactly and to your feet in rate only. Hear it: `node tools/audio/preview.mjs --game=workout`, then `build/audio_preview/workout.mp3`.
