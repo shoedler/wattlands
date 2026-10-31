@@ -9,7 +9,8 @@ extends Control
 ## User args: --siege-demo-t=<s> (start time), --siege-demo-sharp (tilt-shift off),
 ## --siege-demo-stress (150 attackers and a shot every 0.15 s; prints the cost of an update, the
 ## canvas and the art viewport's measured render time),
-## --siege-demo-flex (the game's pixel_flex canvas), --siege-demo-mock-pose (the machines posed as in the approved mock, no attackers or shots, to
+## --siege-demo-flex (the game's pixel_flex canvas),
+## --siege-demo-mock-pose (the machines posed as in the approved mock, no attackers or shots, to
 ## compare a capture with build/siege_mock_r2/frame_sharp_2x.png).
 
 const START_S := 6.0
@@ -125,21 +126,24 @@ func _process(_delta: float) -> void:
 	if _stress and _frames % 60 == 0:
 		print(
 			(
-				"siege_v2_demo: %s, %d enemies, %d projectiles, update %.2f ms, %d fps, %d draw calls, art viewport cpu %.2f ms gpu %.2f ms"
-				% [
-					pixel_viewport.art_size(),
-					crowd.drawn,
-					shots.in_flight(),
-					_usec / 60000.0,
-					Engine.get_frames_per_second(),
-					Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
-					RenderingServer.viewport_get_measured_render_time_cpu(
-						pixel_viewport.subviewport().get_viewport_rid()
-					),
-					RenderingServer.viewport_get_measured_render_time_gpu(
-						pixel_viewport.subviewport().get_viewport_rid()
-					),
-				]
+				"siege_v2_demo: %s, %d enemies, %d projectiles, update %.2f ms, %d fps, "
+				+ (
+					"%d draw calls, art viewport cpu %.2f ms gpu %.2f ms"
+					% [
+						pixel_viewport.art_size(),
+						crowd.drawn,
+						shots.in_flight(),
+						_usec / 60000.0,
+						Engine.get_frames_per_second(),
+						Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+						RenderingServer.viewport_get_measured_render_time_cpu(
+							pixel_viewport.subviewport().get_viewport_rid()
+						),
+						RenderingServer.viewport_get_measured_render_time_gpu(
+							pixel_viewport.subviewport().get_viewport_rid()
+						),
+					]
+				)
 			)
 		)
 		_usec = 0
