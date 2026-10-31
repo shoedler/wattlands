@@ -32,12 +32,13 @@ func test_manifest_fields() -> void:
 	assert_eq(m["id"], "workout")
 	assert_eq(m["title"], "Workout")
 	assert_true(str(m["summary"]).length() > 10)
-	assert_eq(m["version"], "0.1.0")
+	assert_eq(m["version"], "0.2.0")
 	assert_eq(int(m["min_players"]), 1)
 	assert_eq(int(m["max_players"]), 8)
 	assert_eq(m["bots"], true)
 	assert_eq(m["presentation"], "2d")
-	assert_eq([int(m["pixel_base"][0]), int(m["pixel_base"][1])], [640, 360])
+	assert_eq([int(m["pixel_base"][0]), int(m["pixel_base"][1])], [960, 540])
+	assert_eq(m["pixel_flex"], {"min": [852.0, 480.0]})
 	assert_eq(m["entry"], "res://src/games/workout/workout_game.gd")
 	assert_eq(
 		m["contents"],
@@ -104,8 +105,37 @@ func test_code_keys_exist() -> void:
 		"WORKOUT_PREVIEW_COURSE",
 		"WORKOUT_PREVIEW_CLAMP",
 		"WORKOUT_PREVIEW_WARNING",
-		"WORKOUT_HUD_WATTS",
 		"WORKOUT_HUD_IN_BAND",
+		"WORKOUT_HUD_TARGET_ERG",
+		"WORKOUT_HUD_TARGET_RAMP",
+		"WORKOUT_HUD_TARGET_EASY",
+		"WORKOUT_HUD_HOLD_BAND",
+		"WORKOUT_HUD_SPRINT",
+		"WORKOUT_HUD_FREE_RIDE",
+		"WORKOUT_HUD_DO_SPIN",
+		"WORKOUT_HUD_DO_HOLD",
+		"WORKOUT_HUD_DO_EASY",
+		"WORKOUT_HUD_NEXT",
+		"WORKOUT_HUD_NEXT_COOLDOWN",
+		"WORKOUT_HUD_NEXT_END",
+		"WORKOUT_HUD_LEFT",
+		"WORKOUT_HUD_FTP",
+		"WORKOUT_HUD_W",
+		"WORKOUT_HUD_WKG",
+		"WORKOUT_HUD_RPM",
+		"WORKOUT_HUD_WPRIME",
+		"WORKOUT_HUD_LOW",
+		"WORKOUT_HUD_GEAR",
+		"WORKOUT_HUD_CARD",
+		"WORKOUT_HUD_NO_POWER",
+		WorkoutHudModel.FLAG_RESCUE,
+		WorkoutHudModel.FLAG_AFK,
+		WorkoutHudModel.FLAG_LINK,
+		"WORKOUT_HUD_BLOCK",
+		"WORKOUT_HUD_GROUP",
+		"WORKOUT_HUD_KMH",
+		"WORKOUT_HUD_KM",
+		"WORKOUT_HUD_PEAK",
 		"WORKOUT_BANNER_RAMP",
 		"WORKOUT_BANNER_ERG",
 		"WORKOUT_BANNER_SPRINT",
@@ -128,6 +158,8 @@ func test_code_keys_exist() -> void:
 	]
 	for k: String in WorkoutResults.BEST_STATS.values():
 		keys.append(k)
+	for e: Array in WorkoutHud.HELP:
+		keys.append(str(e[0]))
 	for g in WorkoutProgress.GRADES:
 		keys.append("WORKOUT_RESULT_" + g)
 	for u in WorkoutProgress.UNLOCKS:
@@ -147,24 +179,9 @@ func test_placeholders_match() -> void:
 	assert_string_contains(s["WORKOUT_BANNER_ROLLING"], "{lo}")
 
 
-## The committed card matches a fresh render. A handful of edge pixels may differ where
-## another platform's libm rounds a sin() the other way (the CI runs on Linux), so the
-## check allows at most 0.1% of the pixels to differ.
-func test_picker_card_is_16_9_and_matches_the_generator() -> void:
+## The card is baked with the rest of the art: bake.mjs --check compares its pixels.
+func test_picker_card_is_16_9() -> void:
 	assert_true(FileAccess.file_exists(CARD))
 	var img := Image.new()
 	assert_eq(img.load_png_from_buffer(FileAccess.get_file_as_bytes(CARD)), OK)
-	assert_eq(img.get_size(), Vector2i(640, 360), "16:9")
-	var fresh := WorkoutArt.picker_card()
-	fresh.convert(img.get_format())
-	assert_eq(fresh.get_size(), img.get_size())
-	var differ := 0
-	for y in img.get_height():
-		for x in img.get_width():
-			if not img.get_pixel(x, y).is_equal_approx(fresh.get_pixel(x, y)):
-				differ += 1
-	assert_lte(
-		differ,
-		int(float(img.get_width() * img.get_height()) * 0.001),
-		"regenerate with src/games/workout/tools/make_picker_card.gd (%d pixels differ)" % differ
-	)
+	assert_eq(img.get_size(), Vector2i(960, 540), "16:9")
