@@ -428,6 +428,18 @@ func test_client_rejoin_replays_the_session() -> void:
 	assert_eq(fx.last_host().config_seen["role"], Wl.CLIENT)
 
 
+func test_a_broadcast_before_the_lobby_does_not_fail_the_rejoin() -> void:
+	var p := _client()
+	var net := fx.fake_net()
+	net.simulate_joined(2, "K7QX2M", {})
+	net.receive(1, {"type": "snapshot", "v": 1, "state": {"tick": 1.0}})
+	assert_eq(p.phase, "lobby", "no game yet: the host's catch-up comes after the lobby")
+	assert_eq(p.exit_code, -1, "the restarted client keeps running")
+	net.lobby = _lobby()
+	net.receive(1, {"type": "phase", "v": 1, "index": 3, "start_tick": 500, "ended_by": "duration"})
+	assert_eq(p.phase, "session")
+
+
 func test_a_session_that_ends_without_results_fails() -> void:
 	var p := _client()
 	var net := fx.fake_net()
