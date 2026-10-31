@@ -431,14 +431,11 @@ func test_eight_riders_at_speed_with_a_crowd_stay_in_every_pool_with_real_player
 	var peak_loops := 0
 	var was_fps := Engine.max_fps
 	Engine.max_fps = 60
-	var last := Time.get_ticks_usec()
 	var left := 8.0
 	# Real time: voices end by the clock, and only then does a pool's peak mean anything.
 	while left > 0.0:
 		await get_tree().process_frame
-		var now := Time.get_ticks_usec()
-		var dt := minf(float(now - last) / 1e6, 0.1)
-		last = now
+		var dt := minf(get_process_delta_time(), 0.1)
 		left -= dt
 		g.sim_alive()
 		for peer: int in order:
