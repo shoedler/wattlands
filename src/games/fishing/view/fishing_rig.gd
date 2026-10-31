@@ -188,7 +188,7 @@ static func raster(a: Vector2i, b: Vector2i) -> Array[Vector2i]:
 		return out
 	var run_len := ceili(float(big + 1) / float(small + 1))
 	if run_len * small > big:
-		return bresenham(a, b)
+		return PixelPainter.line_pixels(a, b)
 	var p := a
 	var run := 0
 	var steps := 0
@@ -204,11 +204,6 @@ static func raster(a: Vector2i, b: Vector2i) -> Array[Vector2i]:
 		else:
 			p += major
 	return out
-
-
-## Every pixel of the Bresenham line from `a` to `b`, both ends included.
-static func bresenham(a: Vector2i, b: Vector2i) -> Array[Vector2i]:
-	return PixelPainter.line_pixels(a, b)
 
 
 ## Every pixel of the runs through `points` (each joint once).

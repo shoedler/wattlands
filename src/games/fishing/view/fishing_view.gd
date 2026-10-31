@@ -798,7 +798,7 @@ func _paint_line_parts(c: CanvasItem, under: bool, only: int = -1) -> void:
 		var path: Array[Vector2i] = []
 		var tip := Vector2i(b.rod_tip())
 		if Vector2i(first.round()) != tip:
-			path = FishingRig.bresenham(tip, Vector2i(first.round()))
+			path = PixelPainter.line_pixels(tip, Vector2i(first.round()))
 			path.pop_back()
 		path.append_array(rope.pixels())
 		_draw_line(c, path, b, under)

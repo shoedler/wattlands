@@ -179,4 +179,4 @@ func test_the_minimap_draws_in_a_frame() -> void:
 	m.size = Vector2(FishingMinimap.ART.size) * 3.0
 	await wait_process_frames(2)
 	assert_eq(m.icons.size(), 2)
-	assert_almost_eq(m.ap(), 3.0, 0.001)
+	assert_almost_eq(m.u(), 3.0, 0.001)

@@ -112,7 +112,7 @@ func refresh() -> void:
 func _draw() -> void:
 	if floor_m.is_empty():
 		return
-	var s := ap()
+	var s := u()
 	var w := float(art_rect.size.x)
 	var top := float(ICON_ROWS + 1)
 	var h := STRIP_ROWS

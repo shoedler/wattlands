@@ -3,7 +3,7 @@ extends HudArtControl
 ## Base of Fishing's own HUD Controls: each sits alone in a Rect2i of the HudSpec (`art_rect`,
 ## art px of the current art size), so the HUD sizes it to that rect mapped to the screen (art
 ## px x 3 at 1080p); it fills it, ignores the mouse, refreshes its model every frame and draws
-## scaled to its size (`k()` = 1 at 1080p, `ap()` HUD px per art px). The HudLayer hands it the
+## scaled to its size (`k()` = 1 at 1080p, `u()` HUD px per art px). The HudLayer hands it the
 ## local rider's telemetry every tick (set_telemetry; `tm` stays null without a HUD, and then
 ## the rider state stands in).
 
@@ -28,11 +28,6 @@ func place_at(rect: Rect2i) -> void:
 ## Draw scale: the Control's height over its design height (1 at 1080p).
 func k() -> float:
 	return size.y / design_h if size.y > 0.0 else 1.0
-
-
-## HUD px per art px (3 at 1080p).
-func ap() -> float:
-	return u()
 
 
 func px(base: int) -> int:
