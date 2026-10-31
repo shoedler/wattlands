@@ -2,14 +2,11 @@ class_name SiegeSnapHistory
 extends SnapHistory
 ## Client: every enemy's path position in the last few snapshots, keyed by the host's game time
 ## (the snapshot's tick x Wl.SIM_DT), so the view can draw enemies between two snapshots (brief
-## 2.6; BRIEF 5.1). Like WorkoutSnapHistory: a game has no NetSession handle, so the render clock
+## 2.6; BRIEF 5.1). A game has no NetSession handle, so the render clock (a SnapRenderClock)
 ## runs behind the newest snapshot by their mean spacing (0.1 s at 10 Hz, about 1 s under the
 ## 8-rider load) and never passes the newest snapshot (no extrapolation) nor goes backwards.
 ## SiegeGame.apply_snapshot pushes one entry per snapshot; the view calls advance(delta) every
 ## frame and reads pos_of() / prog_of(). Times come from the host's ticks, never from a clock.
-
-## The shortest delay: NetSession's documented 100 ms interpolation at 10 Hz.
-const DELAY_MIN_S := 0.1
 
 ## Rows, oldest first: {"t": host seconds, "e": {enemy id: PackedFloat32Array [prog_m, lat_m]}}.
 
@@ -27,7 +24,6 @@ var _clock: SnapRenderClock = SnapRenderClock.new()
 
 func _init(p_path: SiegePath = null) -> void:
 	path = p_path
-	_clock.min_delay_s = DELAY_MIN_S
 	_clock.never_back = true
 
 
@@ -37,7 +33,7 @@ func clear() -> void:
 
 
 ## How far render_t runs behind the newest snapshot (s): the mean spacing, clamped to
-## DELAY_MIN_S..SnapRenderClock.MAX_DELAY_S (DELAY_MIN_S before two snapshots are in).
+## SnapRenderClock.CLIENT_DELAY_S..MAX_DELAY_S (CLIENT_DELAY_S before two snapshots are in).
 func delay() -> float:
 	return _clock.delay(self)
 
