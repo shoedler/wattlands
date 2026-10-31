@@ -526,12 +526,16 @@ func _next_variant(id: String) -> int:
 	return v
 
 
-## Held while paused.
+## Delayed cues are held while paused. A bed spot's follow-ups are not: the bed plays on under the pause, on its own
+## timers, so holding them would only save up its bursts for the moment the road is silent on resume (SPEC_AUDIO 2.5).
 func _run_pending(dt: float) -> void:
-	if _paused or _pending.is_empty():
+	if _pending.is_empty():
 		return
 	var keep: Array[Dictionary] = []
 	for p: Dictionary in _pending:
+		if _paused and not p.has("spot"):
+			keep.append(p)
+			continue
 		p["left"] = float(p["left"]) - dt
 		if float(p["left"]) > 0.0:
 			keep.append(p)
@@ -593,6 +597,7 @@ func _bed_spot(spot: Dictionary) -> void:
 			"bus": AudioBuses.AMBIENCE,
 			"priority": SPOT_PRIORITY,
 			"lead": true,
+			"spot": true,
 		}
 		_pending.append(entry)
 		return
