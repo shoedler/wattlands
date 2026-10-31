@@ -174,7 +174,7 @@ Each item is something a MockTrainer run cannot show: how the real firmware, a r
 | 58 | A real rider stopping in an ERG dynamo phase on a KICKR CORE: stop pedaling for 15 s in a dynamo stage at 60% FTP or more, then restart | The 3 s cadence-drop rescue, then AFK at 10 s, then back: the Citadel or Rampart gun is not left frozen once you pedal again (turret slews, bank charges, shells fly), after the rescue fix | |
 | 59 | 60 fps at 1080p on integrated graphics (Intel or AMD): a 60 s windowed boss fight with the Citadel at the caps, vsync on | Mean and 1%-low frame times against 16.7 ms. The measured machine had an RTX 5060 Ti only; additive halos versus `PointLight2D` were never compared on integrated graphics. Note the GPU, driver and resolution | |
 | 60 | Real-monitor legibility of the teammate strip: in its 140 x 22 art-px slot it scales to about 0.52 (130 x 66 px per card at 1080p, labels about 12 px) | Readable from riding distance on a real display: engine name, in-band mark, rescue and AFK marks, for 1 to 3 cards | |
-| 61 | Audio: your own station loudest, the diesel, dynamo and steam voices, the cannon, the casing and the clunk, all synthesized at runtime | A person has to listen: your own station is loudest, no voice is shrill or drowns the others, nothing clips at a normal volume. Note anything that grates over 30 minutes | |
+| 61 | Audio: your own station loudest, every seat's machine, the cannon, the casing and the clunk | See section 15, the Listen step. Your own station is loudest, no voice is shrill or drowns the others, nothing clips at a normal volume. | |
 | 62 | Vsync frame pacing on a real display with nothing else running: the vsync run showed three isolated 28 ms frames about 16 s apart, and an uncapped run had no frame above 7 ms after start-up | On a quiet machine, do the isolated long frames appear (the desktop compositor and other Godot processes sharing the GPU are the suspects)? Log their spacing | |
 | 63 | Boiler and Hoist feel at the default 50% difficulty: the steam grade peaks at 4.0% (8% x 0.5) in a ramp of about 20 s, then drops to 0 for 6.5 to 7 s at each latch; the Hoist peaks at 2.0% | The resistance steps are perceptible and the drop at a latch is felt; "building at 90% FTP or more" is holdable through the ramp. Note whether the difficulty should be higher by default | |
 | 64 | Rampart dynamo ERG at 98 to 100% FTP for 199 to 255 s after about 17 minutes of work, and 565 s at 98% or more over the ride with rotation off (ED-4) | Do riders finish it? How the rescue or the stagger behaves at the end of a long block, and whether the bank empties as the sims predict. Note the heart-rate or RPE drift | |
@@ -274,3 +274,25 @@ v3 (brief "v3 (2026-10-28)") puts every crew size in one landship with five seat
 | 111 | Move seats in the last 20 s of a gun line (its objective done) and again right after the next Advance starts | No lock after the stage change: both moves land at once; any mode switch waits at most 30 s from the last one | |
 
 Every seat move's split or replan passed the PlanValidator with no switch warning (the sims' S13; 0.3.1: no seat lock, the trainer follows within 30 s); a real rider's perception of the switches (how often, how they feel) is what this section judges. Note each move's time, from and to, and the ERG target or grade 10 s before, at and 10 s after.
+
+## 15. Listen
+
+Nobody has heard this audio: every number behind it was measured offline. A machine can check timing and levels, not whether a diesel reads as a diesel or whether an hour of it tires you. Listen with the sound on, over the fan and the trainer, and write down what you hear.
+
+| # | Step | Expected | Result |
+| --- | --- | --- | --- |
+| 112 | Before riding, play `build/audio_preview/tank.mp3` (`node tools/audio/preview.mjs --game=tank`) | A diesel with valves, a turbo whistle and crackle, not a monotone rumble; the night forest behind it; the gun, a far boom some time after it, an incoming whistle | |
+| 113 | Drive for 10 minutes at 60, then 90, then 110 rpm, with the fan on | The firing stays with the machine on screen at every cadence and stops when you stop; it follows your feet in rate, not in phase (FTMS reports cadence about once a second and no crank angle). No two-second bar you can sing along to. The turbo climbs when you push and is not shrill | |
+| 114 | Lift off hard from over band | One blow-off, then the exhaust crackles and fades | |
+| 115 | Ten minutes on each of Gun, Loader, Lights, Secondaries and Repairs | Each machine is about as loud as the diesel was, and brighter the harder you push; none reaches the point of grating. Its stroke matches the drawn one: the jars' dump, the chuff, the ladder's zap, the bolts, the hammer's strike | |
+| 116 | Stop pedalling on any seat with others riding | Your machine stops dead, and the others' machines do **not** get louder | |
+| 117 | Fire and watch a far hit | The flash first, the boom later (0.6 to 3.5 s by range; twice real sound speed on purpose). Say whether the delay feels right or detached | |
+| 118 | A far kill | The wreck goes up with its own boom, not before it | |
+| 119 | An incoming shell, then Surge | The whistle starts as the enemy fires and ends at the impact; it cuts through the machines, and you can react to it without looking at the screen | |
+| 120 | A near threat | A burst from the bushes, a small engine that fades as it flees, a small gun; no whistle | |
+| 121 | The track at speed | Links and a squeak that follow the tread on screen and stop with the hull. On a client, say whether they lurch when the network does (they follow the drawn tread, ADR 2026-10-31) | |
+| 122 | The depot, a fight, the cool-down | Wind, crickets and now and then a frog, an owl or a branch; a far battle in the fight only. Crickets stay crickets for 30 minutes, not a pattern | |
+| 123 | Lose the tank on Hard, then the restart | A heavy hit, the klaxon, everything else ducked, the chain of the tow, the engine catching at the restart | |
+| 124 | Pause and resume, with the crank still turning | Machines close, the night drops, a pending boom waits; nothing bursts on resume | |
+| 125 | A crew of 4 with bots at 90 rpm, as the driver | Your diesel in front; the others a texture behind it, no machine-gun | |
+| 126 | Half an hour on your speakers or headphones | Note what tires you, and set the levels in Settings > Audio (Machines holds the seats and track, Ambience the night, Effects the guns and hits) | |

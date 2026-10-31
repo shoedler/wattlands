@@ -2,11 +2,17 @@
 
 Short ADRs for Diesel Domestiques' sound on the audio kit. "SPEC" is the run's SPEC_AUDIO.
 
-## 2026-10-31 The adapter stands beside the old TankAudio until the view moves
+## 2026-10-31 Part (b) merges the v4 leaf branches, because Tank has not landed
 
-- Decision: part (a) adds `TankKitAudio` in `audio/tank_kit_audio.gd` and leaves `TankAudio` as it is. Part (b), after Tank v4 lands, edits the `audio.update(` line (SPEC 2.2, site 3), moves the new file onto `TankAudio` and retires `tests/games/tank/view/test_tank_audio.gd`.
-- Alternatives: rewrite `tank_audio.gd` now, which breaks `test_tank_audio.gd` and the script check until part (b), and conflicts with builder V's edits of the same file.
-- Reason: the branch stays green at every step, and part (b) is a rename plus one line.
+- Decision: `audio/tank` merges `game/tank4-rules`, `-effort`, `-art`, `-view`, `-hud`, `-sims` in T-INT's order, moves the adapter onto the `TankAudio` name, edits the `audio.update(` line (SPEC 2.2, site 3) and retires `tests/games/tank/view/test_tank_audio.gd`. It should land on main after T-FINAL; `git merge main` then keeps `tank_audio.gd` whole (SPEC 7).
+- Alternatives: wait for T-FINAL (the review's blockers stay open, and no test can run the real rules), or merge only the rules and art (site 3 needs the view's `travel` and the rules need the view's six seats).
+- Reason: part (a) held only offline. These merges resolve cleanly and touch nothing in those paths. The tank suite on this merge has six failures that exist without the adapter; they are T-INT's and T-TUNE's, not moved here.
+
+## 2026-10-31 On a client the track follows the tread as drawn
+
+- Decision: the track machine reads the view's `travel`, which advances by `render_dt` and so stalls and catches up on a client (SPEC 2.2 moved the cranks to frame time for that reason, not the tread). Accepted; links and squeak lurch when the tread does.
+- Alternatives: a frame-time `travel` for the audio on clients, which is a second integrator.
+- Reason: S1 is one number for picture and sound. A snapshot stall stalls the tread on screen too, the squeak is a texture rather than a rider's rhythm, and the kit's `plan()` still fires every stroke exactly once. The hardware test's step 121 asks a person to judge it. Not measured.
 
 ## 2026-10-31 A shot's flight comes from its event
 
@@ -28,9 +34,33 @@ Short ADRs for Diesel Domestiques' sound on the audio kit. "SPEC" is the run's S
 
 ## 2026-10-31 Levels per seat, and thinning
 
-- Decision: every machine leads at about -21 to -24 LUFS at 90 rpm (diesel -20.6, dynamo -21.2, steam -22.4, arc -22.5, feed -22.9, repair -24.4). `hoist_pawl` and `casing_tink` are `lead_only`, which SPEC 4.1 does not ask. `A13` is waived in the bank: 37 repeats among the 465 kept strokes of other riders in the preview, each from `other_min_gap_s` thinning the variant between. The lead has none.
+- Decision: every machine leads at about -21 to -24 LUFS at 90 rpm (diesel -20.6, dynamo -21.2, steam -22.4, arc -22.5, feed -22.9, repair -24.4). `hoist_pawl` and `casing_tink` are `lead_only`, which SPEC 4.1 does not ask. `A13` is waived in the bank: 31 repeats among the 465 kept strokes of other riders in the preview, each from `other_min_gap_s` thinning the variant between. The lead has none.
 - Alternatives: fewer riders in the preview, which hides how a full crew with bots sounds; more variants, which only makes the repeats rarer.
-- Reason: a rider on any seat should hear their machine at one level. With five others at 110 rpm the strokes ask more than the 16.7 a second D7 allows, so the smallest details go first. No listener can follow a variant through thinning at 14 dB under the lead.
+- Reason: a rider on any seat should hear their machine at one level. No listener can follow a variant through thinning at 14 dB under the lead.
+
+## 2026-10-31 What a full crew thins
+
+- Decision: `diesel_fire_hard` and `bolt_clack` are `lead_only`, which SPEC 4.1 does not ask, so other riders ask for fewer strokes before `other_min_gap_s` starts choosing.
+- Alternatives: leave the ask and let the gap thin it. An earlier version of this ADR said "the smallest details go first". That was wrong: thinning ignores priority and is first come in `at_s` order. Measured over 5 minutes of bots at 90 rpm: `chuff_a` 10-31 of 90 a minute, `diesel_fire_a` 21-90, and `bolt_clack` 0 while the bow guns fired; with identical cadence and phase some machines passed nothing in 100 revolutions.
+- Reason: a level cut in the bank is the only fix in reach. Fairness between tied strokes and a per-seat start offset are in the kit and outside the three allowed edit sites, so they went to the lead as requests. Bots' cadence noise keeps the exact tie from lasting.
+
+## 2026-10-31 Variation without bytes, and where the bytes went
+
+- Decision: fire takes 5 with per-variant `norm`, tables of 4 and 7; `pitch_table` of 7 on the single-stroke machines (their length co-prime with the variants, a test holds that), `norm` by variant on `cap_dump` and `rivet_hit`, 2 variants with a 3-entry table on the ticks. Cricket trains are baked into one file, because `AmbienceBed` walks variants and re-rolls pitch per burst entry, which hopped one cricket across the stereo field. A third bed layer `cricket_chorus`. `wind_pine_lo`'s tremolo goes to 0.2 and `wind_pine_hi`'s to 0.4. Each main-gun round takes the next of a counter's pitches and levels.
+- Alternatives: the review's table lengths of 3 to 5 (a 12-revolution bar on the rivet and the dump); `wind_pine_hi` alone at 0.4, which raised A12 to 0.68 at 11 s, since the low wind then dominated the envelope and it is what repeats.
+- Reason: at 90 rpm the 3-revolution diesel loop was a 2 s bar 900 times in 30 minutes. Lag 3 is now 0.60, lag 5 0.89 (A5 still reads 0.87..0.91, a 4 ms envelope at lag 1). Bank 6.91 MB, under the 7.0 cap: the rest of the review's list is all levels and tables, no files. A16 is a proxy on one seed: the spots' timers are independent, so at run time a frog can still land on a branch.
+
+## 2026-10-31 Levels: working harder brightens every seat, within the fatigue rule
+
+- Decision: the review's levels for the arc, dynamo and feed, except `link_clink`, which stays 16 dB under the feed's main stroke. The review's -11 breaks SPEC 5's fatigue rule, which `test_nothing_locked_above_two_kilohertz_outshouts_its_machine` holds, so it is -17. Repair: `rivet_ring` -7 by power, the compressor flatter.
+- Numbers, power 0.5 to 1.2 at 90 rpm, power-weighted centroid: diesel +101 %, dynamo +32 %, steam +36 %, arc +48 %, feed +13 %, repair about +28 %. Solo peaks at power 1.2: dynamo -0.0 dBFS reaches the limiter ceiling alone at the top of the range; feed -1.4.
+- Reason: a seat you stay on should answer your legs. The feed lands short of the review's look at the same +10 % goal only by the margin the fatigue rule costs, so it stays there.
+
+## 2026-10-31 An overrun's barrage rolls
+
+- Decision: a kill `by` `BY_BARRAGE` is heard at once in a staggered roll (1 s, then every 0.35 s) at the fallback range, not as a far kill.
+- Alternatives: a far kill, as for a shell. D8 on the real rules found these: 4 kills in one tick after an overrun, no HIT or SPLASH to give a range, so the stale range of the last shot and four explosions stacked.
+- Reason: there is no shell to be delayed from, and it is what a barrage sounds like.
 
 ## 2026-10-31 A reserve room is silent, and a spectator hears the track with the room
 
@@ -40,6 +70,6 @@ Short ADRs for Diesel Domestiques' sound on the audio kit. "SPEC" is the run's S
 
 ## 2026-10-31 The dynamo's ripple is locked to its crank
 
-- Decision: `dynamo_whine` is a 2 s file whose ripple runs at exactly 27 Hz, played at pitch rpm/90: 18 ripples per crank revolution at any cadence.
+- Decision: `dynamo_whine` is a 4 s file whose ripple runs at exactly 27 Hz, played at pitch rpm/90: 18 ripples per crank revolution at any cadence, and a 0.75 Hz swell and vibrato, one per 2 revolutions, so it is not three flat lines. `diesel_rasp` is 1.3333 s with its tremolo at 4.5 and 9 Hz, the firing rate at pitch 1.
 - Alternatives: 26.67 Hz in a 1.5 s file, which reads as a beat against the strokes and pulled the dynamo's rhythm 1.4 % off the revolution when it led.
-- Reason: a loop's own period should agree with the machine it belongs to.
+- Reason: a loop's own period should agree with the machine it belongs to. Its period does still show: lag 6 revolutions at the dynamo is 0.89 at 90 rpm, the loop's own 4 s.

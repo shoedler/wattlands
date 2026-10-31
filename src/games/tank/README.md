@@ -266,12 +266,26 @@ Gates: the Tank GUT suite, `check_scripts`, gdformat and gdlint, `tests/sdk/test
 | `autopilot/`, `net/` | `TankAutopilot`; `TankSnapshot`, `TankCues`, `TankEventCast` |
 | `view/` | `TankView` and the diorama from the v2 kit: planes (zone near planes in free roam), the tank variants (mirrored when driving west), room machines (`TankMech`), crew, enemies in their lanes, the Behemoth, lights, effects, the depth of field, interpolation |
 | `hud/` | `TankHud` (the game's own Controls at art-px rects): mission plate, hull plate, the Behemoth's bars, my numbers, the crew row, world tags, help; the free-roam strip and board |
-| `audio/` | `TankAudio`, synthesized with `Sfx.synth` |
+| `audio/` | `TankAudio`, the adapter on the platform's audio kit (see Audio below) |
 
 ## Known gaps and P2 notes
 
 - Not tested on a real trainer: `HARDWARE_TEST.md` is the checklist, and its last section lists every item the automated runs could not judge (real sprint gestures, the mix, frame pacing on integrated graphics, network loss). Nothing has met a real Strava upload either.
-- The sound is synthesized; the look and the mix have been reviewed from screenshots and headless logs only.
+- The mix has been measured offline and nobody has heard it; the look has been reviewed from screenshots and headless logs only.
 - P1 is not built: the garage between missions (scrap buys +10 HP armour x3, +20 bank units, -10 % boiler energy, and the hull finish picker, so unlocked finishes cannot be equipped yet), Viaduct Crossing (a river viaduct with an armoured train as the gun line), and two tanks in one lobby (up to 6 riders, the second on a rear ground line 40 px higher, enemy scales summed).
 - P2 ideas: tank duels across a ruined town square (a stand-off stage where heavies trade shells across rubble with dug-in guns behind cover); the cool-down gate roll-through (today the cool-down swaps the town backdrop in, or the field road if the Behemoth withdrew, and the tank keeps rolling; the broken Foundry Gate and a scripted camera move through it are not drawn); hull finishes drawn on the tank (today an unlock is a progress entry only); the garage.
 - Balance was tuned on the simulation matrix with compliant synthetic riders. Real riders' compliance and sprint timing may want a retune once someone has ridden it: from a 90 % FTP ride the 3 s sprint rule holds after about 1.5 s at 1.5 x FTP, so the heavy's 3 s glow needs about 1.8 x FTP from its start and the light's 2.5 s flank shot is evadable only by a rider already sprinting.
+
+## Audio
+
+Everything is rendered from `assets/tank/audio/audio.json` by `tools/audio` (`docs/AUDIO_PIPELINE.md`): no samples, no downloads. `TankAudio` only maps state to parameters and events to cues. `node tools/audio/preview.mjs --game=tank` writes `build/audio_preview/tank.mp3`.
+
+- **Each seat, 1:1 with its crank.** `TankView.audio_feed` hands the adapter each seat's `machine_phase`, the number the machine is drawn from, so sound and picture cannot drift. The fractions come from the art and `tests/games/tank/audio/test_tank_audio_bank.gd` pins them to `tank_mech.gd`. FTMS reports cadence about once a second and no crank angle: the strokes lock to the crank on screen exactly and to the rider's feet in rate only. A seat that stops, stops dead; a reserve room is silent because its crank stands still.
+- **Diesel (Drive):** three unequal cylinders, five takes each against pitch tables of 4 and 7, so no bar repeats for 20 or 35 revolutions. Exhaust and inlet valves, a body whose two loops cross over at 50-75 rpm, a rasp that breathes at the firing rate and opens with load, a turbo whistle by watts with a blow-off when you lift, and a crackle on lift-off or well over band.
+- **Dynamo (Gun):** a whine with a 27 Hz ripple locked to the armature and a slow swell every two revolutions, brush crackle and ticks, the jars' dump at 0.8 of a turn once they fill, the hoist's ratchet. **Steam (Loader):** two chuffs a revolution by pressure, valve, simmer, the pawl while the rack fills, the safety valve when over. **Arc (Lights):** a beating hum, the ladder's buzz and its zaps at 0 and 0.5, doubled over band. **Feed (Secondaries):** bolts, the bow guns while they fire, links, casings, the belt's rattle. **Repair:** the rivet hammer on each strike with its ring and a compressor while the hull needs it, a dry tap when it does not, the press when a patch is done.
+- **Track:** links and a squeak locked to the distance drawn (`travel`), three links and one squeak per 2.4 m, and a rumble by speed.
+- **Other riders' machines** play 10 dB under yours, without their small details, and their strokes keep a 60 ms gap across the crew (`other_min_gap_s`). Yours are never thinned. Someone who stops pedalling stays the lead; only a spectator lifts the room 4 dB.
+- **The gun and the far fight:** a low thump, crack and tail that vary round by round, the shell's flight, the casing and its clang. Far landings and kills are heard after the flash, at twice real sound speed (`range / 680` m/s, 0.6 to 3.5 s), and quieter with range. An enemy's far shot is a distant thump after its range and a whistle that ends at impact: the telegraph for Surge. Near threats bring a burst from the bushes, their own engine by distance and a small gun.
+- **The night:** wind in the pines in two layers and a cricket chorus (lengths 5, 11 and 13 s, so 715 s before they meet), cricket trains, frogs, an owl, a creaking branch, and a far battle that stays out of the depot and the cool-down.
+
+Settings > Audio holds the levels: Machines (seats, track), Ambience (the night), Effects (guns and hits).
