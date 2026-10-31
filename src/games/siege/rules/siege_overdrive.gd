@@ -35,7 +35,6 @@ extends RefCounted
 const MODE := "SIM"
 const REASON := "overdrive"
 const SOURCE := "siege"
-const DIRECTIVE_KEYS: Array[String] = ["duration_s", "mode", "reason", "source"]
 
 ## Why Overdrive can't start ("" = it can).
 const WHY_BOT := "bot"

@@ -18,26 +18,6 @@ const ROWS := 5
 const ITEM_MORE := "more"
 
 
-## The first empty pad (0 when every pad is built).
-static func empty_pad(state: SiegeState) -> int:
-	for n in range(1, SiegeIds.PAD_COUNT + 1):
-		if not state.pad(n).built():
-			return n
-	return 0
-
-
-## The built pad an upgrade is best spent on: the lowest level below 3, ties to the lower pad
-## (0 when there is none).
-static func upgrade_pad(state: SiegeState) -> int:
-	var best := 0
-	var level := 99
-	for pd in state.pads:
-		if pd.built() and pd.level < SiegeIds.MAX_LEVEL and pd.level < level:
-			level = pd.level
-			best = pd.pad
-	return best
-
-
 ## The cost of an item now (-1 when it can't be bought).
 static func cost_of(state: SiegeState, item: String, at: int) -> int:
 	match item:
