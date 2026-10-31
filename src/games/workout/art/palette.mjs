@@ -5,9 +5,19 @@
 // plane never needs a second copy for dawn and day, and LUT alpha fades stars and mist exactly.
 //
 // Index map (128):
-//   0-23 sky bands, 24-27 stars and moon, 28-33 cloud, 34-41 far ridge, 42-53 far fields and hedges,
-//   54-65 tree greens, 66-73 walls and roofs, 74-75 lit window, 76-79 mist, 80-85 wood, poles, wire,
-//   86-95 asphalt, paint, grit, 96-105 verge grass, 106-111 earth, 112-127 reserve.
+//   0-23 sky bands
+//   24-27 stars (dim, mid, bright) and the moon; alpha falls by sunrise
+//   28-33 cloud, shadow to lit
+//   34-37 far ridge, 38-41 nearer ridge
+//   42-44 hedge, 45-48 pasture, 49-51 crop, 52-53 plough
+//   54-58 poplar shades, 59 its lit rim; 60-64 round tree shades, 65 its rim
+//   66-69 walls, 70-73 roofs
+//   74 window pane: lit at dawn, dark by day, always opaque
+//   75 the glow on the wall round a pane: warm at dawn, plain wall by day, always opaque (no holes)
+//   76-77 hanging mist on empty pixels, alpha falls; 78-79 ground mist on land, opaque, turns into grass
+//   80-83 wood, 84 wire, 85 insulator
+//   86-91 asphalt, 92-93 paint, 94-95 grit
+//   96-105 grass, 106-111 earth, 112-127 reserve
 import { Canvas, hex } from './raster.mjs';
 
 export const LUT_SIZE = 128;
@@ -18,13 +28,24 @@ export const SKY_N = 24;
 export const STAR = 24;
 export const CLOUD = 28;
 export const RIDGE = 34;
+export const RIDGE_NEAR = 38;
 export const FIELD = 42;
+export const HEDGE = 42;
+export const PASTURE = 45;
+export const CROP = 49;
+export const PLOUGH = 52;
 export const TREE = 54;
+export const POPLAR = 54;
+export const OAK = 60;
 export const WALL = 66;
 export const ROOF = 70;
 export const WINDOW = 74;
+export const GLOW = 75;
 export const MIST = 76;
+export const MIST_GROUND = 78;
 export const WOOD = 80;
+export const WIRE = 84;
+export const INSULATOR = 85;
 export const ASPHALT = 86;
 export const PAINT = 92;
 export const GRIT = 94;
@@ -73,142 +94,205 @@ export function mix(c0, c1, t) {
   return fromOklab([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]);
 }
 
-const ramp = (from, to, n) => Array.from({ length: n }, (_, i) => mix(hex(from), hex(to), n > 1 ? i / (n - 1) : 0));
+/** n colours through two or more stops, evenly spaced in OKLab. */
+function ramp(stops, n) {
+  const cs = stops.map(hex);
+  return Array.from({ length: n }, (_, i) => {
+    const u = n > 1 ? (i / (n - 1)) * (cs.length - 1) : 0;
+    const k = Math.min(Math.floor(u), cs.length - 2);
+    return mix(cs[k], cs[k + 1], u - k);
+  });
+}
 
 // --- the morning ---------------------------------------------------------------------------------
 
-// Each key: the colours of the index groups (dark to light unless noted) and the alphas that fade.
+// Each key: the colours of the index groups, dark to light. Shadows lean blue and violet, lights lean
+// warm, and far planes sit close to the sky's own horizon colour, so depth comes from the palette.
 const KEYS = [
   {
     p: 0.0, // blue hour
-    sky: ['#1b2340', '#6b5a78'],
+    sky: ['#1b2340', '#3b3a66', '#6b5a78'],
     star: 1.0,
-    window: ['#ffc56a', 1.0],
-    mist: ['#8488a8', 1.0],
-    cloud: ['#2a2f50', '#5a5a80'],
-    ridge: ['#2c3050', '#464a70'],
-    field: ['#1f2c3c', '#34485a'],
-    tree: ['#141f2c', '#2c4048'],
-    wall: ['#3a3c50', '#585a70'],
-    roof: ['#26283a', '#3e3e54'],
-    wood: ['#1a1a26', '#34344a'],
-    asphalt: ['#20222e', '#3c3e4e'],
-    paint: ['#6a6c80', '#8c8e9e'],
-    grit: ['#2a2c3a', '#4c4e5e'],
-    grass: ['#16262c', '#2c4644'],
-    earth: ['#2a2430', '#463c48'],
-    bank: '#10181f',
-    bankHi: '#22303a',
+    pane: '#ffc56a',
+    glow: '#8a7458',
+    mist: ['#565a84', 1.0],
+    mistGround: ['#6e7296', '#8a8cae'],
+    cloud: ['#232850', '#5c5a82'],
+    ridgeFar: ['#45446e', '#5c5480'],
+    ridgeNear: ['#2e3158', '#454668'],
+    hedge: ['#16222f', '#233240'],
+    pasture: ['#1c2a3a', '#36485a'],
+    crop: ['#343c4c', '#525664'],
+    plough: ['#252636', '#363546'],
+    poplar: ['#0d1622', '#22343e', '#3a5458'],
+    oak: ['#101a26', '#283c42', '#42585a'],
+    wall: ['#353850', '#5a5c74'],
+    roof: ['#20223a', '#3c3c56'],
+    wood: ['#191a26', '#36364c'],
+    wire: '#101220',
+    insulator: '#7c7e94',
+    asphalt: ['#1c1e2a', '#363848'],
+    paint: ['#62647a', '#8c8e9e'],
+    grit: ['#282a38', '#4c4e5e'],
+    grass: ['#101e26', '#1f3338', '#385252'],
+    earth: ['#262230', '#463c48'],
+    bank: '#101e26',
+    bankHi: '#1f3338',
     tint: [0.74, 0.76, 0.92],
   },
   {
     p: 0.1, // first light
-    sky: ['#3a3566', '#e8a27a'],
+    sky: ['#3a3566', '#8a5f86', '#e8a27a'],
     star: 0.4,
-    window: ['#ffc56a', 1.0],
-    mist: ['#c2a4b0', 1.0],
-    cloud: ['#5a4a78', '#d09aa0'],
-    ridge: ['#544a78', '#8a7094'],
-    field: ['#2c3c4c', '#50646c'],
-    tree: ['#1a2a34', '#3c5458'],
-    wall: ['#5a5464', '#8a7c84'],
-    roof: ['#3a3444', '#5a4c5c'],
+    pane: '#ffc56a',
+    glow: '#b08a70',
+    mist: ['#a88ca8', 1.0],
+    mistGround: ['#a88c9c', '#c8a8b0'],
+    cloud: ['#54467a', '#e0a4a0'],
+    ridgeFar: ['#7a6490', '#a47f9c'],
+    ridgeNear: ['#4e4874', '#6e5c84'],
+    hedge: ['#1f2d38', '#34464a'],
+    pasture: ['#2c3c48', '#50645f'],
+    crop: ['#55585e', '#7c7868'],
+    plough: ['#34303c', '#4c4448'],
+    poplar: ['#121e2a', '#2c4248', '#557066'],
+    oak: ['#16222c', '#344c4c', '#5e7468'],
+    wall: ['#56505f', '#96808a'],
+    roof: ['#34303f', '#5a4c5c'],
     wood: ['#262430', '#4c4450'],
-    asphalt: ['#2c2c3a', '#50505e'],
+    wire: '#1c1a28',
+    insulator: '#a8a0a8',
+    asphalt: ['#282835', '#4c4c5a'],
     paint: ['#88848e', '#b0a8a8'],
-    grit: ['#3a3a48', '#646270'],
-    grass: ['#22363a', '#40605a'],
+    grit: ['#363644', '#605e6c'],
+    grass: ['#182a2e', '#2c4a46', '#587a62'],
     earth: ['#3a3038', '#5c4c50'],
-    bank: '#182228',
-    bankHi: '#30423f',
+    bank: '#182a2e',
+    bankHi: '#2c4a46',
     tint: [0.84, 0.8, 0.86],
   },
   {
     p: 0.22, // sunrise
-    sky: ['#5c7390', '#f2a14e'],
+    sky: ['#5c7390', '#d09a8a', '#f2a14e'],
     star: 0.0,
-    window: ['#d09a5a', 0.5],
-    mist: ['#f2c49a', 0.7],
-    cloud: ['#a07a80', '#ffd2a0'],
-    ridge: ['#8a7a88', '#c49a84'],
-    field: ['#4a5a44', '#94905a'],
-    tree: ['#2a3e30', '#6c7a44'],
-    wall: ['#8a6c5c', '#e0b080'],
-    roof: ['#54403c', '#8a5e48'],
-    wood: ['#38302c', '#6a5444'],
-    asphalt: ['#3c3a3e', '#6a6264'],
-    paint: ['#b0a490', '#e0cca4'],
-    grit: ['#4c484a', '#807670'],
-    grass: ['#35502c', '#86923e'],
-    earth: ['#54402e', '#86684a'],
-    bank: '#26321e',
-    bankHi: '#4c5a2c',
+    pane: '#c89a62',
+    glow: '#b88a68',
+    mist: ['#e4b898', 0.7],
+    mistGround: ['#d0a884', '#eec498'],
+    cloud: ['#a07a80', '#ffd8a8'],
+    ridgeFar: ['#a88a90', '#d0a48c'],
+    ridgeNear: ['#7a6f80', '#9c8484'],
+    hedge: ['#34442e', '#50603a'],
+    pasture: ['#4a5f3c', '#8c9450'],
+    crop: ['#a08450', '#d0ae64'],
+    plough: ['#54403a', '#7a5c48'],
+    poplar: ['#1c2e28', '#3f5a34', '#b8a048'],
+    oak: ['#22342a', '#4c6638', '#cca84c'],
+    wall: ['#7c6258', '#f0c08c'],
+    roof: ['#503c3c', '#9c6448'],
+    wood: ['#38302c', '#7a5c44'],
+    wire: '#2a2428',
+    insulator: '#e0c8a8',
+    asphalt: ['#38363c', '#66605f'],
+    paint: ['#b0a490', '#e8d0a4'],
+    grit: ['#4c484a', '#8a7e72'],
+    grass: ['#243a20', '#46652c', '#a09c40'],
+    earth: ['#54402e', '#8c6a4a'],
+    bank: '#243a20',
+    bankHi: '#46652c',
     tint: [1.0, 0.92, 0.82],
   },
   {
     p: 0.4, // golden
-    sky: ['#6fa3cf', '#f6d9a0'],
+    sky: ['#6fa3cf', '#c8cfc0', '#f6d9a0'],
     star: 0.0,
-    window: ['#5c5a58', 0.0],
+    pane: '#4c4c50',
+    glow: '#c8b088',
     mist: ['#f6e6c8', 0.3],
+    mistGround: ['#54762f', '#7c9a44'],
     cloud: ['#c4b8b0', '#fff4dc'],
-    ridge: ['#92a8b8', '#c0c4bc'],
-    field: ['#5c7c3e', '#b8b45a'],
-    tree: ['#2c4c2c', '#86a044'],
-    wall: ['#a08a70', '#f0d8a8'],
-    roof: ['#6a4c40', '#a86c4c'],
+    ridgeFar: ['#a0b4c4', '#c4cac4'],
+    ridgeNear: ['#86a0a8', '#a4b4ac'],
+    hedge: ['#3c5a30', '#5a7a3c'],
+    pasture: ['#5c7c3e', '#a0b050'],
+    crop: ['#a89a4c', '#d4c674'],
+    plough: ['#604a34', '#8c6e4c'],
+    poplar: ['#21402a', '#3f6a30', '#a8b848'],
+    oak: ['#26462a', '#4e7a34', '#b8c44c'],
+    wall: ['#8c7860', '#f4dcac'],
+    roof: ['#64483e', '#b0704c'],
     wood: ['#44382c', '#80684c'],
-    asphalt: ['#44444a', '#747078'],
-    paint: ['#c8c0a8', '#f0e8c8'],
-    grit: ['#54545a', '#8a8684'],
-    grass: ['#3e6a2c', '#a0b444'],
+    wire: '#342e2c',
+    insulator: '#f0e8d0',
+    asphalt: ['#3e3e46', '#6e6c72'],
+    paint: ['#c8c0a8', '#f4ecc8'],
+    grit: ['#50505a', '#8a8684'],
+    grass: ['#2a4a20', '#4e7a2c', '#b0bc48'],
     earth: ['#604a30', '#987850'],
-    bank: '#2c421e',
-    bankHi: '#5c7a2c',
+    bank: '#2a4a20',
+    bankHi: '#4e7a2c',
     tint: [1.0, 1.0, 1.0],
   },
   {
     p: 0.65, // morning
-    sky: ['#4f93d6', '#cfe3ea'],
+    sky: ['#4f93d6', '#94c0e0', '#cfe3ea'],
     star: 0.0,
-    window: ['#4c5258', 0.0],
+    pane: '#3c444c',
+    glow: '#c4bcac',
     mist: ['#e8f0f0', 0.0],
-    cloud: ['#b8c8d8', '#ffffff'],
-    ridge: ['#8aa8c8', '#b8cce0'],
-    field: ['#4c8444', '#a0bc58'],
-    tree: ['#28502e', '#6ca044'],
-    wall: ['#9a9488', '#ece6d4'],
-    roof: ['#68483e', '#a4644c'],
+    mistGround: ['#3f7a30', '#5a9a38'],
+    cloud: ['#a8bcd4', '#ffffff'],
+    ridgeFar: ['#8fb0d0', '#b8d0e4'],
+    ridgeNear: ['#6e98b4', '#94b8c8'],
+    hedge: ['#356434', '#508044'],
+    pasture: ['#4c8444', '#94bc58'],
+    crop: ['#a4ac50', '#d0d47c'],
+    plough: ['#5c4a34', '#866c4e'],
+    poplar: ['#1c4428', '#38702e', '#86b040'],
+    oak: ['#204a2a', '#447c30', '#98bc48'],
+    wall: ['#8c887c', '#f0ead8'],
+    roof: ['#60443c', '#a4644c'],
     wood: ['#40382e', '#786850'],
-    asphalt: ['#44464c', '#74767c'],
-    paint: ['#cccac0', '#f4f2e8'],
-    grit: ['#54565c', '#8a8c8e'],
-    grass: ['#37702e', '#8cb844'],
+    wire: '#2c2c2e',
+    insulator: '#eef0e8',
+    asphalt: ['#40424a', '#70727a'],
+    paint: ['#cccac0', '#f6f4ea'],
+    grit: ['#50525a', '#8a8c8e'],
+    grass: ['#27502a', '#3f7a2c', '#94bc44'],
     earth: ['#5c4a34', '#927a58'],
-    bank: '#2a4620',
-    bankHi: '#507e2e',
+    bank: '#27502a',
+    bankHi: '#3f7a2c',
     tint: [1.0, 1.0, 1.0],
   },
   {
     p: 1.0, // day
-    sky: ['#3f86d6', '#bfe0ee'],
+    sky: ['#3f86d6', '#84b8e4', '#bfe0ee'],
     star: 0.0,
-    window: ['#40484e', 0.0],
+    pane: '#323a42',
+    glow: '#c8c4b4',
     mist: ['#e8f4f8', 0.0],
-    cloud: ['#c4d4e4', '#ffffff'],
-    ridge: ['#86a8d0', '#b4cce4'],
-    field: ['#4a8a48', '#9cc05c'],
-    tree: ['#285630', '#68a848'],
-    wall: ['#9e9a90', '#f2eee0'],
-    roof: ['#684a40', '#a4644e'],
+    mistGround: ['#408232', '#609f3c'],
+    cloud: ['#b4c8dc', '#ffffff'],
+    ridgeFar: ['#8ab0da', '#b4d0e8'],
+    ridgeNear: ['#6a9cc0', '#90bcd0'],
+    hedge: ['#386c3a', '#548a48'],
+    pasture: ['#4a8a48', '#98c45c'],
+    crop: ['#a4b054', '#d0d880'],
+    plough: ['#5e4c36', '#887050'],
+    poplar: ['#1c4a2c', '#387830', '#84b844'],
+    oak: ['#205030', '#448434', '#98c44c'],
+    wall: ['#8e8c82', '#f4f0e2'],
+    roof: ['#624640', '#a4644e'],
     wood: ['#40382e', '#78684e'],
-    asphalt: ['#46484e', '#76787e'],
+    wire: '#2c2c30',
+    insulator: '#f0f2ea',
+    asphalt: ['#42444c', '#72747c'],
     paint: ['#d0cec6', '#f8f6ee'],
-    grit: ['#56585e', '#8c8e90'],
-    grass: ['#387632', '#8cbc48'],
+    grit: ['#52545c', '#8c8e90'],
+    grass: ['#285430', '#408032', '#90c048'],
     earth: ['#5e4c36', '#947c5a'],
-    bank: '#2a4a22',
-    bankHi: '#4e8230',
+    bank: '#285430',
+    bankHi: '#408032',
     tint: [1.0, 1.0, 1.0],
   },
 ];
@@ -219,24 +303,35 @@ function keyColors(k) {
   const add = (cols, a = 255) => {
     for (const c of cols) out.push([c[0], c[1], c[2], a]);
   };
-  add(ramp(k.sky[0], k.sky[1], SKY_N));
-  add(ramp('#f4f4ff', '#ffffff', 2).concat(ramp('#e8e6d8', '#f8f4e0', 2)), Math.round(k.star * 255));
-  add(ramp(k.cloud[0], k.cloud[1], 6));
-  add(ramp(k.ridge[0], k.ridge[1], 8));
-  add(ramp(k.field[0], k.field[1], 12));
-  add(ramp(k.tree[0], k.tree[1], 12));
-  add(ramp(k.wall[0], k.wall[1], 4));
-  add(ramp(k.roof[0], k.roof[1], 4));
-  // 74 is the pane: it stays opaque and goes dark by day. 75 is its glow, which fades away.
-  add(ramp(k.window[0], k.window[0], 1));
-  add(ramp(k.window[0], '#fff0c0', 1), Math.round(k.window[1] * 255));
-  add(ramp(k.mist[0], k.mist[0], 4), Math.round(k.mist[1] * 255));
-  add(ramp(k.wood[0], k.wood[1], 6));
-  add(ramp(k.asphalt[0], k.asphalt[1], 6));
-  add(ramp(k.paint[0], k.paint[1], 2));
-  add(ramp(k.grit[0], k.grit[1], 2));
-  add(ramp(k.grass[0], k.grass[1], 10));
-  add(ramp(k.earth[0], k.earth[1], 6));
+  add(ramp(k.sky, SKY_N));
+  const starAlpha = Math.round(k.star * 255);
+  add(['#8a8cb0', '#c0c4dc', '#f4f4ff', '#f8f4e0'].map(hex), starAlpha);
+  add(ramp(k.cloud, 6));
+  add(ramp(k.ridgeFar, 4));
+  add(ramp(k.ridgeNear, 4));
+  add(ramp(k.hedge, 3));
+  add(ramp(k.pasture, 4));
+  add(ramp(k.crop, 3));
+  add(ramp(k.plough, 2));
+  // Five shades through the middle stop, then the lit rim on its own.
+  add(ramp(k.poplar.slice(0, 2), 5));
+  add([hex(k.poplar[2])]);
+  add(ramp(k.oak.slice(0, 2), 5));
+  add([hex(k.oak[2])]);
+  add(ramp(k.wall, 4));
+  add(ramp(k.roof, 4));
+  add([hex(k.pane)]);
+  add([hex(k.glow)]);
+  add([hex(k.mist[0]), mix(hex(k.mist[0]), [255, 255, 255], 0.12)], Math.round(k.mist[1] * 255));
+  add(k.mistGround.map(hex));
+  add(ramp(k.wood, 4));
+  add([hex(k.wire)]);
+  add([hex(k.insulator)]);
+  add(ramp(k.asphalt, 6));
+  add(ramp(k.paint, 2));
+  add(ramp(k.grit, 2));
+  add(ramp(k.grass, 10));
+  add(ramp(k.earth, 6));
   // The reserve is loud on purpose: a flat rect under the shader shows up at once.
   add(Array.from({ length: LUT_SIZE - RESERVE }, () => [255, 0, 255]));
   return out;

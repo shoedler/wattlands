@@ -15,7 +15,7 @@ import * as R from './rig.mjs';
 import { SLOT_COLORS, WHEEL_CELL, WHEEL_FRAMES, fxSheet, riderSheet, wheelSheet } from './riders.mjs';
 import * as W from './world.mjs';
 import * as Props from './props.mjs';
-import { Canvas } from './raster.mjs';
+import { Canvas, bayer4 } from './raster.mjs';
 import { pickerCard, previews } from './compose.mjs';
 
 export const SEED = 7342;
@@ -29,13 +29,17 @@ const res = (path) => `res://assets/workout/${path}`;
 
 function sunSprite() {
   const c = new Canvas(40, 40);
-  for (const [r, col] of [
-    [19, [255, 214, 150, 50]],
-    [15, [255, 222, 160, 110]],
-    [11, [255, 240, 196, 255]],
-    [9, [255, 250, 226, 255]],
-  ]) {
-    c.disk(19.5, 19.5, r, col);
+  // An opaque disc, a warm rim, and a halo that thins out in an ordered dither instead of soft alpha.
+  for (let y = 0; y < 40; y++) {
+    for (let x = 0; x < 40; x++) {
+      const d = Math.hypot(x - 19.5, y - 19.5);
+      if (d <= 8.5) c.px(x, y, [255, 250, 226, 255]);
+      else if (d <= 10.5) c.px(x, y, [255, 238, 190, 255]);
+      else if (d <= 19.5) {
+        const t = 1 - (d - 10.5) / 9;
+        if (t * 0.85 > bayer4(x, y)) c.px(x, y, [255, 226, 168, 120]);
+      }
+    }
   }
   return c;
 }
