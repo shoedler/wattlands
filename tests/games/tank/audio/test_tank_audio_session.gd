@@ -151,7 +151,7 @@ func test_on_the_real_rules_a_far_enemy_shot_brings_its_flight_and_range() -> vo
 	assert_eq(_shots_with_flight, _far_enemy_shots, "SHOT carries flight_s and rng_m")
 
 
-## The one way a far boom could come from a near hit: the main gun with no target, its barrel laid low, a recon in the way.
+## The one way a far boom could come from a near hit: the main gun with no target, its barrel low, a recon in the way.
 ## Returns [the adapter, the events], the shell's whole flight handed over as the view would.
 func _near_shot(hp: float) -> Array:
 	var quiet := func(files: Dictionary) -> void:
