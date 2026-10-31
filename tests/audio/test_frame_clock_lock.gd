@@ -1,7 +1,7 @@
 extends GutTest
 ## The sawtooth of Godot's delta smoothing against the strokes (tools/audio/jitter_bench.gd measures the same on a real
 ## driver). Pure time: a headless kit has no real frames, so commit_timed() gives it the frame clock of the bench
-## machine's 59.94 Hz display. Each hard constraint of the lock is one test here.
+## machine's 59.94 Hz display. Each hard constraint of the lock is one test here, but D10: a timing is the bench's.
 
 const Bench := preload("res://tools/audio/jitter_bench.gd")
 const BANK := "res://tests/audio/fixtures/bank_min.json"
@@ -418,12 +418,3 @@ func test_audio_stays_away_from_the_trainer_and_the_sim() -> void:
 		assert_gt(text.length(), 0, path)
 		for word: String in ["directives", "Trainer", "SafetyGovernor", "GameContext", "ctx."]:
 			assert_false(text.contains(word), "%s reads no %s" % [path, word])
-
-
-## D10 is 0.5 ms for a whole commit, which the bench times; this is what the lock adds to it.
-func test_the_lock_costs_a_small_share_of_d10() -> void:
-	var lock := FrameClockLock.new()
-	var t0 := Time.get_ticks_usec()
-	for i in 20000:
-		lock.update(1.0 / 60.0, 1.0 / 59.94)
-	assert_lt(float(Time.get_ticks_usec() - t0) / 20000.0, 50.0, "microseconds a frame")
