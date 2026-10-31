@@ -11,11 +11,13 @@ class Sketch:
 	extends Node2D
 	var kit := TankEnemyKit.shared()
 	var calls: Array = []
+	var drawn := 0
 
 	func _draw() -> void:
 		for c: Array in calls:
 			TankEnemyDraw.draw(self, kit, str(c[0]), c[1], c[2])
 			TankEnemyDraw.draw_light(self, kit, str(c[0]), c[1], c[2])
+			drawn += 1
 
 
 func test_the_fixture_list_matches_the_script() -> void:
@@ -160,7 +162,6 @@ func test_every_fixture_runs_through_the_view_at_both_canvases() -> void:
 			assert_true(v.frames > 0, "%s at %s" % [n, size])
 			v.queue_free()
 	await wait_physics_frames(2)
-	assert_true(true, "no error drawing them")
 
 
 func test_every_fixture_builds_the_hud() -> void:
@@ -238,7 +239,7 @@ func test_the_enemy_draw_stub_draws_and_aims() -> void:
 	]
 	sk.queue_redraw()
 	await wait_physics_frames(2)
-	assert_true(true, "drew without error")
+	assert_eq(sk.drawn, sk.calls.size(), "every pose drew")
 
 
 func test_the_repairs_room_paints_the_rider_in_the_second_floor_room() -> void:

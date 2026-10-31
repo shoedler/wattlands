@@ -544,7 +544,6 @@ func test_every_fixture_draws_the_split_screen_at_every_canvas() -> void:
 			assert_eq(v.far.size.y, int(size.y), "%s at %s" % [n, size])
 			v.queue_free()
 	await wait_physics_frames(2)
-	assert_true(true, "no error drawing them")
 
 
 func test_the_split_screen_never_writes_the_state() -> void:

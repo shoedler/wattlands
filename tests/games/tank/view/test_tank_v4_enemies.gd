@@ -11,11 +11,13 @@ class Sketch:
 	extends Node2D
 	var kit := TankEnemyKit.shared()
 	var calls: Array = []
+	var drawn := 0
 
 	func _draw() -> void:
 		for c: Array in calls:
 			TankEnemyDraw.draw(self, kit, str(c[0]), c[1], c[2])
 			TankEnemyDraw.draw_light(self, kit, str(c[0]), c[1], c[2])
+			drawn += 1
 
 
 func _kit() -> TankEnemyKit:
@@ -40,7 +42,7 @@ func test_every_kind_draws_in_every_pose() -> void:
 	sk.calls.append(["behemoth", FOOT, {"bogies_wrecked": [true, false, true]}])
 	sk.queue_redraw()
 	await wait_physics_frames(2)
-	assert_true(true, "drew without error")
+	assert_eq(sk.drawn, sk.calls.size(), "every pose drew")
 
 
 ## The flame is hot: painted on black at its fullest it reaches near white at the core, on every kind, and it is

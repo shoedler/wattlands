@@ -37,6 +37,9 @@ const TRAVEL_PACE := 6.0
 const RECOIL_PX := 4.0
 const RECOIL_DECAY := 2.5
 const TELEGRAPH_PULSE := 30.0
+## The veil of a shooter in its telegraph: a pulse the plates still show through (at 0.25 + 0.25 sin, the
+## first number, TankEnemyDraw's veil made it a pale ghost for the whole telegraph). The muzzle's glow warns.
+const TELEGRAPH_FLASH := 0.07
 const MAX_WRECKS := 8
 const WRECK_DIM := 0.25
 const COLD := Color(0.66, 0.82, 1.0)
@@ -319,7 +322,7 @@ func _pose(
 
 
 func _pulse(telegraph_s: float) -> float:
-	return 0.25 + 0.25 * sin(v.time * TELEGRAPH_PULSE) if telegraph_s > 0.0 else 0.0
+	return TELEGRAPH_FLASH * (1.0 + sin(v.time * TELEGRAPH_PULSE)) if telegraph_s > 0.0 else 0.0
 
 
 ## An enemy's muzzle in panel px (or Vector2.ZERO when it is not drawn).
@@ -651,10 +654,6 @@ func _draw_world() -> void:
 	if not is_nan(bx):
 		TankForest.draw_base(ci, v, bx)
 	if boss_box.size != Vector2.ZERO:
-		var sz := boss_box.size
-		TankWorldDraw.contact_shadow(
-			ci, Vector2(boss_box.position.x + 3.0, boss_foot.y), sz.x - 6.0
-		)
 		TankEnemyDraw.draw(ci, kit, TankIds.BOSS_ID, boss_foot, boss_pose(state))
 	for lane in [3, 2, 1, 0]:
 		for w in wrecks:
@@ -670,7 +669,6 @@ func _draw_world() -> void:
 func _enemy(ci: CanvasItem, e: TankEnemyState) -> void:
 	var foot: Vector2 = feet[e.id]
 	var r: Rect2 = rects[e.id]
-	TankWorldDraw.contact_shadow(ci, Vector2(r.position.x + 3.0, foot.y), r.size.x - 6.0)
 	TankEnemyDraw.draw(ci, kit, TankIds.enemy_of(e.code), foot, pose_of(e, foot))
 	if e.hp_max > 0.0 and e.hp < e.hp_max:
 		var bw := roundf(r.size.x * 0.4)
@@ -681,19 +679,19 @@ func _enemy(ci: CanvasItem, e: TankEnemyState) -> void:
 
 
 func _wreck(ci: CanvasItem, w: Dictionary) -> void:
-	var foot := _wreck_foot(w)
-	var kind := str(w["kind"])
-	var sz: Vector2 = kit.kind(kind)["size"]
-	var rng := float(w["range"])
-	TankWorldDraw.contact_shadow(ci, foot - Vector2(sz.x * 0.5 - 3.0, 0.0), sz.x - 6.0)
 	var age := v.game.state.t - float(w["t"])
-	var pose := {
+	var dim := WRECK_DIM * clampf(age / TankView.WRECK_BURN_S, 0.0, 1.0)
+	TankEnemyDraw.draw(ci, kit, str(w["kind"]), _wreck_foot(w), _wreck_pose(w, dim))
+
+
+func _wreck_pose(w: Dictionary, dim: float) -> Dictionary:
+	return {
 		"travel": 0.0,
 		"turret_sx": 1.0,
 		"elev_deg": 0.0,
 		"recoil": 0.0,
-		"dim": WRECK_DIM * clampf(age / TankView.WRECK_BURN_S, 0.0, 1.0),
-		"haze": haze_at(rng),
+		"dim": dim,
+		"haze": haze_at(float(w["range"])),
 		"flash": 0.0,
 		"ground": null,
 		"wrecked": true,
@@ -701,7 +699,6 @@ func _wreck(ci: CanvasItem, w: Dictionary) -> void:
 		"flip": false,
 		"time": v.time,
 	}
-	TankEnemyDraw.draw(ci, kit, kind, foot, pose)
 
 
 func _draw_light() -> void:
@@ -777,9 +774,7 @@ func _wreck_fire(ci: CanvasItem, w: Dictionary, t: float) -> void:
 		if t - float(w["t"]) < TankView.WRECK_BURN_S * 2.0:
 			TankDraw.glow_at(ci, c, 3.0, Color(1.0, 0.35, 0.1, 0.35))
 		return
-	var fl := 0.75 + 0.25 * sin(v.time * 9.0 + c.x) * sin(v.time * 5.3)
-	TankDraw.glow_at(ci, c, 12.0 * k, Color(FIRE, 0.45 * fl * k))
-	TankDraw.glow_at(ci, c, 3.5, Color(FIRE_CORE, 0.7 * fl * k))
+	TankEnemyDraw.draw_light(ci, kit, str(w["kind"]), _wreck_foot(w), _wreck_pose(w, 1.0 - k))
 
 
 func _shells(ci: CanvasItem, state: TankState) -> void:

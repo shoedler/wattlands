@@ -249,7 +249,7 @@ static func _near_ambush(crew: int) -> TankState:
 	s.hull.speed_mps = 6.5
 	s.hull.hp = 96.0
 	s.hull.hp_max = 120.0
-	var rc := _near(s, 41, TankIds.ENEMY_RECON, 60.0, 0)
+	var rc := _near(s, 41, TankIds.ENEMY_RECON, 135.0, 0)
 	rc.mode = TankIds.EM_PAUSE
 	var tk := _near(s, 42, TankIds.ENEMY_TANKETTE, 25.0, 1)
 	tk.mode = TankIds.EM_MOVE
