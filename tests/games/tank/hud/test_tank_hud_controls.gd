@@ -260,34 +260,28 @@ func test_the_elevation_arc_never_touches_the_barrel() -> void:
 	assert_gt(opaque.size(), 200, "the barrel sprite")
 	for crew in range(1, 5):
 		var s := X.state(crew)
-		for facing in [TankIds.FACE_RIGHT, TankIds.FACE_LEFT]:
-			s.hull.facing = facing
-			var left: bool = facing == TankIds.FACE_LEFT
-			var deg := TankHudGeom.ELEV_MIN
-			while deg <= TankHudGeom.ELEV_MAX:
-				s.hull.elev_deg = deg
-				var b := TankHudGeom.make(s, null).barrel()
-				var piv: Vector2 = b["pivot"]
-				var radius := TankHudGeom.arc_radius(float(b["length"]))
-				var barrel := _barrel_sprite(opaque, piv, deg, left)
-				var model := TankHudGeom.barrel_pixels(piv, float(b["length"]), deg, left)
-				var drawn: Array[Vector2i] = TankHudGeom.arc_pixels(piv, radius, left)
-				drawn.append_array(
-					TankHudGeom.tick_pixels(piv, deg, left, radius - 2.0, radius + 3.0)
-				)
-				drawn.append_array(
-					TankHudGeom.tick_pixels(piv, deg, left, radius + 3.0, radius + 6.0)
-				)
-				var lr := TankHudGeom.label_rect(piv, radius, left, Vector2(30, 9))
-				for y in range(int(lr.position.y), int(lr.end.y)):
-					for x in range(int(lr.position.x), int(lr.end.x)):
-						drawn.append(Vector2i(x, y))
-				var hits := 0
-				for p in drawn:
-					if barrel.has(p) or model.has(p):
-						hits += 1
-				assert_eq(hits, 0, "crew %d facing %d at %.0f deg" % [crew, facing, deg])
-				deg += 3.0
+		var deg := TankHudGeom.ELEV_MIN
+		while deg <= TankHudGeom.ELEV_MAX:
+			s.hull.elev_deg = deg
+			var b := TankHudGeom.make(s, null).barrel()
+			var piv: Vector2 = b["pivot"]
+			var left := bool(b["left"])
+			var radius := TankHudGeom.arc_radius(float(b["length"]))
+			var barrel := _barrel_sprite(opaque, piv, deg, left)
+			var model := TankHudGeom.barrel_pixels(piv, float(b["length"]), deg, left)
+			var drawn: Array[Vector2i] = TankHudGeom.arc_pixels(piv, radius, left)
+			drawn.append_array(TankHudGeom.tick_pixels(piv, deg, left, radius - 2.0, radius + 3.0))
+			drawn.append_array(TankHudGeom.tick_pixels(piv, deg, left, radius + 3.0, radius + 6.0))
+			var lr := TankHudGeom.label_rect(piv, radius, left, Vector2(30, 9))
+			for y in range(int(lr.position.y), int(lr.end.y)):
+				for x in range(int(lr.position.x), int(lr.end.x)):
+					drawn.append(Vector2i(x, y))
+			var hits := 0
+			for p in drawn:
+				if barrel.has(p) or model.has(p):
+					hits += 1
+			assert_eq(hits, 0, "crew %d at %.0f deg" % [crew, deg])
+			deg += 3.0
 
 
 func test_the_barrel_check_catches_an_arc_inside_the_barrels_reach() -> void:

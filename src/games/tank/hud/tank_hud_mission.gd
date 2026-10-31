@@ -2,8 +2,9 @@ class_name TankHudMission
 extends TankHudCtl
 ## The mission plate, top left (200 x 72 art px; brief 3.6): the segment's name, the time left in
 ## the stage as a key number (to its nominal end, or to the latest end of an open-ended one), the
-## objective where no other element shows it (the gun line's guns, Regroup; the halt distance is on
-## the world post, the Behemoth on its bars), a compact stage strip of the whole mission (one block
+## difficulty at the top right (amber on Hard) with the tanks lost beside it, the objective where no
+## other element shows it (the holding force, Regroup; the halt distance is on the world post, the
+## Behemoth on its bars), a compact stage strip of the whole mission (one block
 ## per segment by its nominal length, coloured by type, past ones dark, the current one outlined
 ## with its progress) and the next segment. Data: TankHudModel.mission().
 
@@ -29,18 +30,31 @@ func paint() -> void:
 	if m.is_empty():
 		return
 	D.plate(self, Rect2(0, 0, W, H))
-	var title := D.fit_tall(tx(str(m["title"])).to_upper(), W - 12.0)
+	var right := _difficulty()
+	var title := D.fit_tall(tx(str(m["title"])).to_upper(), right - 11.0)
 	D.tall(self, 6, 5, title, D.AMBER)
 	D.big(self, 6, 18, D.clock(float(m["left_s"])), D.NUM)
 	if str(m["obj_key"]) != "":
 		var warn := bool(m["warn"])
-		D.tall_r(self, W - 6, 18, tx(str(m["obj_key"])).to_upper(), D.OVER if warn else D.DIM)
-		if str(m["obj_value"]) != "":
-			D.text_r(self, W - 6, 29, str(m["obj_value"]), D.NUM, 2)
+		var obj := tx(str(m["obj_key"]), m["obj_args"]).to_upper()
+		D.tall_r(self, W - 6, 18, obj, D.OVER if warn else D.DIM)
 	_strip(Rect2(6, 47, W - 12, 6))
 	if str(m["next"]) != "":
 		var nw := D.tall(self, 6, 58, tx("TANK_HUD_NEXT"), D.AMBER)
 		D.tall(self, 6 + nw + 6, 58, D.fit_tall(tx(str(m["next"])), W - 18.0 - nw), D.DIM)
+
+
+## The difficulty tag at the top right and the tanks lost beside it; returns the x they start at.
+func _difficulty() -> float:
+	var hard := bool(m["hard"])
+	D.tall_r(self, W - 6, 5, tx(str(m["diff_key"])), D.AMBER if hard else D.DIM)
+	var x := W - 6.0 - D.tall_w(tx(str(m["diff_key"])))
+	var losses := int(m["losses"])
+	if losses > 0:
+		var lost := tx("TANK_HUD_LOSSES", [losses])
+		D.tall_r(self, x - 5.0, 5, lost, D.OVER)
+		x -= 5.0 + D.tall_w(lost)
+	return x
 
 
 func _strip(sr: Rect2) -> void:

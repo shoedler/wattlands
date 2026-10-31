@@ -1,9 +1,8 @@
 extends GutTest
 ## The gun's elevation arc (brief 3.6) against the tank as the view draws it: for every variant
-## (crews 1-4), every facing (forward and traversed to the rear), the mission frame and free roam in
-## both travel directions (driving west the world is mirrored) and every elevation, the arc is
-## centred on the barrel's live pivot on the side the barrel points, beyond the muzzle, and none of
-## its pixels or its label lie on the turret or the hull. Mid-traverse there is no arc.
+## (crews 1-4), the mission frame and free roam in both travel directions (driving west the world is
+## mirrored) and every elevation, the arc is centred on the barrel's live pivot on the side the barrel
+## points, beyond the muzzle, and none of its pixels or its label lie on the turret or the hull.
 
 const U := preload("res://tests/games/tank/view/tank_view_util.gd")
 const LABEL := Vector2(30, 9)
@@ -36,83 +35,51 @@ func _cases() -> Array[Dictionary]:
 	return out
 
 
-func test_the_arc_never_lies_on_the_tank_for_any_variant_facing_or_elevation() -> void:
+func test_the_arc_never_lies_on_the_tank_for_any_variant_or_elevation() -> void:
 	for c: Dictionary in _cases():
 		var s: TankState = c["s"]
 		var v := _view(s)
-		for facing in [TankIds.FACE_RIGHT, TankIds.FACE_LEFT]:
-			s.hull.facing = facing
-			s.hull.traverse_s = 0.0
-			v.advance(1.0 / 60.0)
-			var deg := TankHudGeom.ELEV_MIN
-			while deg <= TankHudGeom.ELEV_MAX:
-				s.hull.elev_deg = deg
-				var what := "crew %d %s facing %d at %.0f deg" % [c["crew"], c["mode"], facing, deg]
-				var g := TankHudGeom.make(s, v)
-				var b := g.barrel()
-				assert_false(bool(b["turning"]), what)
-				var body := g.tank_rects()
-				assert_eq(body.size(), 2, "turret and hull")
-				var lay := TankHudGeom.arc_layout(b, LABEL, body)
-				var drawn := _drawn(b, lay)
-				var on_tank := 0
-				for p in drawn:
-					for r in body:
-						if r.has_point(Vector2(p) + Vector2(0.5, 0.5)):
-							on_tank += 1
-				assert_eq(on_tank, 0, what)
-				var arc := TankHudGeom.arc_pixels(b["pivot"], float(lay["radius"]), bool(b["left"]))
-				assert_gt(drawn.size(), arc.size(), "%s: the arc is drawn" % what)
-				# Anchored on the live barrel: its pivot, its side, past its muzzle.
-				var piv: Vector2 = b["pivot"]
-				var muz := v.hud_tank_point("muzzle")
-				assert_eq(piv, v.hud_tank_point("barrel_pivot"), what)
-				assert_eq(bool(b["left"]), muz.x < piv.x, "%s: the side the barrel points" % what)
-				assert_lt(piv.distance_to(muz), float(lay["radius"]) - 2.0, what)
-				deg += 3.0
+		s.hull.facing = TankIds.FACE_RIGHT
+		s.hull.traverse_s = 0.0
+		v.advance(1.0 / 60.0)
+		var deg := TankHudGeom.ELEV_MIN
+		while deg <= TankHudGeom.ELEV_MAX:
+			s.hull.elev_deg = deg
+			var what := "crew %d %s at %.0f deg" % [c["crew"], c["mode"], deg]
+			var g := TankHudGeom.make(s, v)
+			var b := g.barrel()
+			var body := g.tank_rects()
+			assert_eq(body.size(), 2, "turret and hull")
+			var lay := TankHudGeom.arc_layout(b, LABEL, body)
+			var drawn := _drawn(b, lay)
+			var on_tank := 0
+			for p in drawn:
+				for r in body:
+					if r.has_point(Vector2(p) + Vector2(0.5, 0.5)):
+						on_tank += 1
+			assert_eq(on_tank, 0, what)
+			var arc := TankHudGeom.arc_pixels(b["pivot"], float(lay["radius"]), bool(b["left"]))
+			assert_gt(drawn.size(), arc.size(), "%s: the arc is drawn" % what)
+			# Anchored on the live barrel: its pivot, its side, past its muzzle.
+			var piv: Vector2 = b["pivot"]
+			var muz := v.hud_tank_point("muzzle")
+			assert_eq(piv, v.hud_tank_point("barrel_pivot"), what)
+			assert_eq(bool(b["left"]), muz.x < piv.x, "%s: the side the barrel points" % what)
+			assert_lt(piv.distance_to(muz), float(lay["radius"]) - 2.0, what)
+			deg += 3.0
 
 
-func test_the_turret_mirrors_with_a_rear_facing_gun() -> void:
+func test_the_arc_stands_ahead_of_the_gun_wherever_the_order_says_it_faces() -> void:
 	for crew in [1, 2, 3, 4]:
 		var s := U.fixture("state", crew)
-		var v := _view(s)
-		s.hull.facing = TankIds.FACE_RIGHT
-		v.advance(1.0 / 60.0)
-		assert_eq(v.turret_sx(), 1.0)
-		var front := v.hud_tank_rects()[0]
-		var tp := v.hud_tank_point("turret_pivot").x
-		var piv_front := v.hud_tank_point("barrel_pivot")
 		s.hull.facing = TankIds.FACE_LEFT
-		v.advance(1.0 / 60.0)
-		assert_eq(v.turret_sx(), -1.0, "crew %d: the whole turret mirrored" % crew)
-		var back := v.hud_tank_rects()[0]
-		assert_almost_eq(back.position.x, 2.0 * tp - front.end.x, 1.0, "mirrored about its pivot")
-		var piv := v.hud_tank_point("barrel_pivot")
-		var muz := v.hud_tank_point("muzzle")
-		assert_lt(muz.x, piv.x, "crew %d: the barrel points back" % crew)
-		assert_almost_eq(
-			piv.x, 2.0 * tp - piv_front.x, 1.5, "crew %d: the trunnion mirrored" % crew
-		)
-		assert_true(back.encloses(Rect2(piv, Vector2.ZERO).grow(0.5)), "in the hitbox turret")
-		assert_gt(v.rig.hit_rect("turret").size.x, 0.0, "the hitbox's turret")
+		var b := TankHudGeom.make(s, null).barrel()
+		assert_false(bool(b["left"]), "crew %d: v4 has no rear traverse" % crew)
+		assert_false(b.has("turning"), "and no arc to hide mid-traverse")
 
 
-func test_a_traverse_squeezes_the_turret_and_hides_the_arc_until_it_is_round() -> void:
-	var s := U.fixture("state", 3)
-	var v := _view(s)
-	s.hull.facing = TankIds.FACE_RIGHT
-	s.hull.elev_deg = 8.0
-	s.hull.traverse_s = 2.0
-	v.advance(1.0 / 60.0)
-	assert_almost_eq(v.turret_sx(), 1.0, 0.01, "the traverse starts facing forward")
-	s.hull.traverse_s = 1.0
-	v.advance(1.0 / 60.0)
-	assert_almost_eq(absf(v.turret_sx()), TankView.TURRET_MIN_W, 0.01, "end on half way round")
-	var g := TankHudGeom.make(s, v)
-	assert_true(bool(g.barrel()["turning"]), "no arc mid-traverse")
-	s.hull.traverse_s = 0.0
-	s.hull.facing = TankIds.FACE_LEFT
-	v.advance(1.0 / 60.0)
-	var b := TankHudGeom.make(s, v).barrel()
-	assert_false(bool(b["turning"]))
-	assert_true(bool(b["left"]), "the arc follows the barrel round")
+func test_driving_west_mirrors_the_arc_with_the_world() -> void:
+	var s := U.roam_state(3, TankIds.DIR_LEFT)
+	assert_true(bool(TankHudGeom.make(s, null).barrel()["left"]), "the world is drawn mirrored")
+	var e := U.roam_state(3, TankIds.DIR_RIGHT)
+	assert_false(bool(TankHudGeom.make(e, null).barrel()["left"]))

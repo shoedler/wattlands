@@ -1,9 +1,10 @@
 class_name TankHudSeats
 extends TankHudCtl
 ## The seat panel, bottom middle (v3 brief "HUD": seat panel A, in place of v2's crew row): one card
-## per seat in TankIds.SEATS order (Drive, Gun, Loader, Lights, Secondaries), each a live machine
-## window (TankMech, 112 x 64 art px: diesel, dynamo, steam, arc, and the feed for the Secondaries;
-## one Image + ImageTexture per card, repainted every frame while manned) in a riveted frame with
+## per seat in TankIds.SEATS order (Drive, Gun, Loader, Lights, Secondaries, Repairs), each a live
+## machine window (TankMech, 112 x 64 art px: diesel, dynamo, steam, arc, the feed for the Secondaries
+## and the rivet hammer for Repairs; one Image + ImageTexture per card, repainted every frame while
+## manned) in a riveted frame with
 ## the seat's icon and name on a brass tab and a tiny ERG / SIM tag (the seat's trainer mode,
 ## TankHudModel.SEAT_MODE), and a footer: the rider's slot chip and name in their slot colour (cut
 ## with an ellipsis to fit), their watts, and a 2 px strip (green in band, blue under, red over).
@@ -17,7 +18,9 @@ extends TankHudCtl
 ##  - The picker's seat (TankGame.seat_picker) blinks amber with an arrow.
 ##  - The Gun and Loader cards carry the ready rack's three shell pips (the Loader's rack), the
 ##    Secondaries card its rounds a minute (TankFeedState.rpm) while manned, or "no target" while
-##    its rider pedals with nothing in the guns' reach (TankHudModel.feed_label).
+##    its rider pedals with nothing in the guns' reach (TankHudModel.feed_label). The Repairs card
+##    carries a 2 px hull bar while manned and "+0.4/s" (hull a second) while it works.
+##  - A bot's card says BOT; a human may pick that seat (the picker counts it as free).
 ##  - Every tag on a card (ERG / SIM, the rate, the rack pips, the lock) sits on a solid plate with a
 ##    1 px rim, so the live machine behind never runs into its text.
 ## `phase` is the crank's revolutions, the integral of the rider's cadence (rpm / 60 per second, on
@@ -27,7 +30,7 @@ extends TankHudCtl
 ## The cards dock left next to my numbers and run right up to the clear bottom-right corner on the
 ## canvas the HUD lays out (card_rects()): the Control's own rect is the part free on every canvas
 ## from 852 x 480 up, and on a wider canvas the row reaches left beyond it into the free space by my
-## numbers. Where five full cards do not fit, the cards narrow and each window shows the middle of
+## numbers. Where six full cards do not fit, the cards narrow and each window shows the middle of
 ## its machine. The hint plate stays over the seat row, clear of my numbers and of the tank's band.
 
 const WIN := Vector2i(TankMech.W, TankMech.H)
@@ -39,6 +42,13 @@ const FRAME_Y := 4
 const HINT_H := 12.0
 const HINT_LIFT := 15.0
 const TAB_H := 11.0
+## A tab's text padding with its icon and, where even the short name leaves no room for it, without.
+const TAB_PAD := 16.0
+const TAB_PAD_BARE := 6.0
+## A bot's tag: an abbreviation, like the ERG and SIM tags beside it.
+const BOT_TAG := "BOT"
+## The Repairs card's hull bar turns red under this share.
+const HULL_LOW := 0.34
 const SHELL := [".#.", "###", "###", "###", "###", "###", "###"]
 const ARROW := ["#######", ".#####.", "..###..", "...#..."]
 ## The Secondaries' rate (cold blue-white, like their dial) and an empty room's tint.
@@ -254,6 +264,10 @@ func _card(c: Dictionary, r: Rect2) -> void:
 	var fkey := ""
 	if engine == TankIds.ENGINE_FEED and not empty:
 		fkey = TankHudModel.feed_label(st(), float(c["cad"]))
+	if engine == TankIds.ENGINE_REPAIR and not empty:
+		_repair(fr, float(c["w"]))
+	if bool(c["bot"]):
+		_bot_tag(Vector2(fr.position.x + 3, r.position.y + 13))
 	if fkey != "":
 		var idle := fkey == "TANK_HUD_NO_TARGET"
 		var rpm := tx(fkey) if idle else tx(fkey, [roundi(feed_rpm)])
@@ -269,19 +283,22 @@ func _card(c: Dictionary, r: Rect2) -> void:
 
 
 ## The brass tab over the frame's top left: the seat's icon and name (its short name where the
-## full one does not fit in `max_w`), dull on an empty seat.
+## full one does not fit in `max_w`, without the icon beside YOU on the narrowest card), dull on an
+## empty seat.
 func _tab(engine: String, p: Vector2, empty: bool, max_w: float) -> void:
 	var label := tx("TANK_HUD_TAB_" + engine.to_upper())
-	if D.text_w(label) + 16.0 > max_w:
+	if D.text_w(label) + TAB_PAD > max_w:
 		label = tx("TANK_HUD_TAB_SHORT_" + engine.to_upper())
-	var tab := Rect2(p.x, p.y, D.text_w(label) + 16.0, TAB_H)
+	var has_icon := D.text_w(label) + TAB_PAD <= max_w
+	var tab := Rect2(p.x, p.y, D.text_w(label) + (TAB_PAD if has_icon else TAB_PAD_BARE), TAB_H)
 	var col := D.FRAME if not empty else Color("#4a3b26")
 	D.rect(self, tab, col)
 	D.rect(self, Rect2(tab.position, Vector2(tab.size.x, 1)), D.RIVET_HI if not empty else D.FRAME)
 	D.rect(self, Rect2(tab.position.x, tab.end.y - 1, tab.size.x, 1), Color("#4d3a20"))
 	var ink := D.PANEL if not empty else Color("#a08a66")
-	D.icon(self, engine, tab.position + Vector2(2, 2), ink)
-	D.text(self, tab.position.x + 12, tab.position.y + 2, label, ink)
+	if has_icon:
+		D.icon(self, engine, tab.position + Vector2(2, 2), ink)
+	D.text(self, tab.position.x + (12 if has_icon else 3), tab.position.y + 2, label, ink)
 
 
 ## The footer: chip and name in the slot colour, the watts tinted by state, the band strip; an
@@ -323,6 +340,36 @@ func _mode_tag(mode: String, p: Vector2, empty: bool) -> void:
 	var r := Rect2(p.x - tw, p.y, tw, 11)
 	_plate(r)
 	D.text(self, r.position.x + 3, r.position.y + 2, mode, Color("#6b5d48") if empty else D.DIM)
+
+
+## The Repairs card: the hull's 2 px bar along the window's foot and, while it works, the rate on a
+## plate over it, in the same style as the Secondaries' rate.
+func _repair(fr: Rect2, w: float) -> void:
+	var rp := TankHudModel.repair(st(), w)
+	if rp.is_empty():
+		return
+	var frac := float(rp["hull"])
+	var col := D.OVER if frac < HULL_LOW else D.BRASS
+	D.bar(self, Rect2(fr.position.x + 6, fr.end.y - 4, fr.size.x - 12, 2), frac, col)
+	if not bool(rp["working"]):
+		return
+	var txt := rate_text(float(rp["rate"]))
+	var tw := D.text_w(txt) + 6.0
+	var tr := Rect2(fr.end.x - 3.0 - tw, fr.end.y - 16, tw, 11)
+	_plate(tr)
+	D.text(self, tr.position.x + 3, tr.position.y + 2, txt, D.GOOD)
+
+
+## The hull a second as the Repairs card shows it.
+static func rate_text(rate: float) -> String:
+	return "+%.1f/s" % rate
+
+
+## A bot's tag at `p`, in the window's top-left corner.
+func _bot_tag(p: Vector2) -> void:
+	var r := Rect2(p, Vector2(D.text_w(BOT_TAG) + 6.0, 11))
+	_plate(r)
+	D.text(self, r.position.x + 3, r.position.y + 2, BOT_TAG, D.TEXT)
 
 
 ## A tag's backing plate: solid panel with a 1 px dark rim, so nothing behind shows through it.
