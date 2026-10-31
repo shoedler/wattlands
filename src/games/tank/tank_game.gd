@@ -15,9 +15,9 @@ extends GameModule
 ## riders; a human who is not flagged Autopilot but is still on the fallback (no deliberate
 ## intent yet) or on reserve (AFK, dropped) gets TankAutopilot's intents added in
 ## _collect_intents(), through the same ownership and 5-a-second filter. The first aim, target,
-## traverse, fire, latch, turn or seat intent of a human ends their fallback (over never does, nor
-## does anything tagged "auto"); while on the fallback the Autopilot also seats them (v3 automatic
-## seating, TankAutopilot.seat_intents).
+## fire, latch, turn or seat intent of a human ends their fallback (over never does, nor does
+## anything tagged "auto"); while on the fallback the Autopilot also seats them (v3 automatic
+## seating, TankAutopilot.seat_intents). v4: bots seat themselves through TankBots.
 ##
 ## Prompts and toasts are per peer (TankCues): each peer raises only its own rider's, the host with
 ## ctx.local_peer, a client from apply_event / apply_snapshot, so none is ever broadcast.
@@ -152,8 +152,8 @@ func _collect_intents(frame: InputFrame) -> Dictionary:
 	return out
 
 
-## A human who sends a deliberate intent (aim, target, traverse, fire, latch, turn, seat; not over
-## or anything tagged auto) plays that station themselves from now on.
+## A human who sends a deliberate intent (aim, target, fire, latch, turn, seat; not over or anything
+## tagged auto) plays that station themselves from now on.
 func _end_fallback(p: PlayerSlot, accepted: Array[Dictionary]) -> void:
 	var r := state.rider(p.peer_id)
 	if r == null or r.is_bot:
@@ -177,8 +177,8 @@ func _all_in_cooldown(frame: InputFrame) -> bool:
 ## The local rider's actions and gestures as intents for its current seat (brief 2.5, 2.6): a
 ## surge becomes only over (the Loader overpressures; "Surge to evade" needs no intent, the sprint
 ## itself is the input), never fire or latch. Keys: up and down nudge the elevation, swap (R / LB)
-## cycles targets, ability_2 traverses, confirm fires (the Gun); ability_1 overpressures, confirm
-## latches (the Loader). In free roam the Drive rider turns the tank round: ability_1 or confirm.
+## cycles targets, confirm fires (the Gun); ability_1 overpressures, confirm latches (the Loader).
+## In free roam the Drive rider turns the tank round: ability_1 or confirm.
 ## 0.3.1: the seat picker (TankHudSeatPicker) takes its keys first: left / right on every seat pick
 ## an empty seat, confirm sits there (at once, no seat lock), back closes it.
 func local_intents(actions: Array[StringName], gestures: Array[StringName]) -> Array:
@@ -219,8 +219,6 @@ func _gunner_intents(actions: Array[StringName]) -> Array:
 		out.append(TankIntents.aim(TankIds.AIM_UP))
 	if actions.has(&"down"):
 		out.append(TankIntents.aim(TankIds.AIM_DOWN))
-	if actions.has(&"ability_2"):
-		out.append(TankIntents.make(TankIds.INTENT_TRAVERSE))
 	return out
 
 
@@ -396,19 +394,22 @@ func _ride_tag() -> String:
 
 
 ## The crew's Strava description lines (GameResults.ride_lines): score and grade, kills,
-## breakdowns and evades.
+## breakdowns, evades and (v4) the tanks lost, when any was.
 func _team_ride_lines(res: GameResults) -> Array[String]:
 	var sc := state.score
 	var kills := 0
 	for code in range(1, sc.kills.size()):
 		kills += int(sc.kills[code])
 	var tx := ctx.strings
-	return [
+	var lines: Array[String] = [
 		tx.t("TANK_RIDE_SCORE", [roundi(res.score), res.grade]),
 		tx.t("TANK_RIDE_KILLS", [kills]),
 		tx.t("TANK_RIDE_BREAKDOWNS", [sc.breakdowns]),
 		tx.t("TANK_RIDE_EVADES", [sc.evades_ok, sc.evades_tried]),
 	]
+	if sc.losses > 0:
+		lines.append(tx.t("TANK_RIDE_LOSSES", [sc.losses]))
+	return lines
 
 
 ## One rider's own Strava lines (row["ride_lines"] after the crew's): gunnery and bow-gun hits.
@@ -420,9 +421,14 @@ func _rider_ride_lines(r: TankRiderState) -> Array[String]:
 	]
 
 
-## The crew's values in the results screen's order: the mission, hull HP at the end of each
-## segment, breakdowns, overruns, kills (light/medium/destroyer/dug-in/heavy/Behemoth), evades
-## (successful/tried) and bow-gun hits.
+## The difficulty's name for the results screen.
+func _difficulty_label() -> String:
+	return ctx.strings.t("TANK_DIFF_" + state.difficulty.to_upper())
+
+
+## The crew's values in the results screen's order: the mission, (v4) the difficulty and tanks lost,
+## hull HP at the end of each segment, breakdowns, overruns, kills by code (light, medium, destroyer,
+## reserved, heavy, Behemoth, recon, tankette), evades (successful/tried) and bow-gun hits.
 func _team_stats() -> Dictionary:
 	var sc := state.score
 	var outcome_key: String
@@ -443,6 +449,8 @@ func _team_stats() -> Dictionary:
 		kills.append(str(sc.kills[code]))
 	return {
 		"TANK_TEAM_OUTCOME": ctx.strings.t(outcome_key),
+		"TANK_TEAM_DIFFICULTY": _difficulty_label(),
+		"TANK_TEAM_LOSSES": sc.losses,
 		"TANK_TEAM_HP": "/".join(hp),
 		"TANK_TEAM_BREAKDOWNS": sc.breakdowns,
 		"TANK_TEAM_OVERRUNS": sc.overruns,
@@ -485,6 +493,8 @@ func _roam_results(res: GameResults) -> GameResults:
 		tx.t("TANK_RIDE_EVADES", [sc.evades_ok, sc.evades_tried]),
 		tx.t("TANK_RIDE_BREAKDOWNS", [sc.breakdowns]),
 	]
+	if sc.losses > 0:
+		lines.append(tx.t("TANK_RIDE_LOSSES", [sc.losses]))
 	res.ride_lines = lines
 	for row in res.rows:
 		var r2 := state.rider(int(row["peer_id"]))
@@ -502,17 +512,21 @@ func _kill_total() -> int:
 	return n
 
 
-## The crew's free-roam values in the results screen's order: the outcome, points, points per WORK
-## minute, kills by type (light/medium/destroyer/dug-in/heavy), distance, evades, breakdowns, patrols.
+## The crew's free-roam values in the results screen's order: the outcome, (v4) the difficulty and tanks
+## lost, points, points per WORK minute, kills by code without the Behemoth's (light, medium, destroyer,
+## reserved, heavy, recon, tankette), distance, evades, breakdowns, patrols.
 func _roam_team_stats(per_min: float) -> Dictionary:
 	var sc := state.score
 	var kills: PackedStringArray = []
-	for code in range(1, TankIds.BOSS_CODE):
-		kills.append(str(sc.kills[code]))
+	for code in range(1, sc.kills.size()):
+		if code != TankIds.BOSS_CODE:
+			kills.append(str(sc.kills[code]))
 	var timed_out := state.outcome == TankIds.OUTCOME_TIME_UP
 	return {
 		"TANK_TEAM_OUTCOME":
 		ctx.strings.t("TANK_OUTCOME_TIME_UP" if timed_out else "TANK_RESULT_ABANDONED"),
+		"TANK_TEAM_DIFFICULTY": _difficulty_label(),
+		"TANK_TEAM_LOSSES": sc.losses,
 		"TANK_TEAM_POINTS": state.roam.points,
 		"TANK_TEAM_POINTS_PER_MIN": "%.1f" % per_min,
 		"TANK_TEAM_ROAM_KILLS": "/".join(kills),
@@ -534,6 +548,8 @@ static func _rider_stats(r: TankRiderState) -> Dictionary:
 		"TANK_STAT_STEAM_S": roundi(r.engine_s[2]),
 		"TANK_STAT_ARC_S": roundi(r.engine_s[4]),
 		"TANK_STAT_FEED_S": roundi(r.engine_s[5]),
+		"TANK_STAT_REPAIR_S": roundi(r.engine_s[6]),
+		"TANK_STAT_REPAIRED": roundi(r.repaired_hp),
 		"TANK_STAT_EVADES": "%d/%d" % [r.evades_ok, r.evades_tried],
 		"TANK_STAT_BOW_HITS": r.bow_hits,
 		"TANK_STAT_BERM": roundi(r.berm_absorbed),

@@ -110,7 +110,16 @@ func test_a_solo_rider_plays_ashfall_road_to_the_results_with_zero_input() -> vo
 		if str(ph["kind"]) == Wl.WORK:
 			assert_has([Wl.ENDED_END_PHASE, Wl.ENDED_MAX_S], ph["ended_by"], at)
 		elif str(ph["kind"]) != Wl.COOLDOWN:
-			assert_eq(ph["ended_by"], Wl.ENDED_DURATION, at)
+			# A seat move inside a checkpoint splits it at the same ERG target (TankSeatPlan: every seat
+			# rides it alike); the segment itself still ends by its duration, never early.
+			var seg: int = plan[int(ph["index"])]["meta"]["segment"]
+			var splits_on: bool = int(plan[int(ph["index"]) + 1]["meta"].get("segment", -1)) == seg
+			assert_eq(ph["ended_by"], Wl.ENDED_END_PHASE if splits_on else Wl.ENDED_DURATION, at)
+			if splits_on:
+				var rest: Dictionary = plan[int(ph["index"]) + 1]
+				assert_eq(
+					rest["target_pct"], plan[int(ph["index"])]["target_pct"], at + ": same target"
+				)
 
 
 ## The Tank game events of a report entry list, in order.
