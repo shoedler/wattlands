@@ -429,7 +429,8 @@ func _hull_l(k: String, whole: bool = false) -> Array:
 
 
 ## A plate is one clean paint, as our tank's armour reads by structure, never by noise (the lead's ruling on real
-## frames: the crumbs this used to ask for read as static at the far panel's scale). Most neighbours sit within a step of each
+## frames: the crumbs this used to ask for read as static at the far panel's scale). Most neighbours sit within a step
+## of each
 ## other, the more so the bigger the kind's plates; what differs is an edge, a seam or a fastener.
 const CLEAN_SHARE := {
 	"light": 0.62, "medium": 0.67, "heavy": 0.74, "destroyer": 0.63, "behemoth": 0.77

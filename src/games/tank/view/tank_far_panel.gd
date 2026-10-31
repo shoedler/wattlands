@@ -5,7 +5,8 @@ extends SubViewport
 ## (a long lens sees less sky), a glow of moonlit air on the horizon, three walls of firs with mist at their feet
 ## and the ground band over them; `Base` a stage's little base (TankForest.far_base) and `BaseLight` its lamps, behind
 ## every enemy; `World` the wrecks, the far enemies by lane back to front and the Behemoth; `Light` (additive) slit
-## glows, the moon on each enemy, telegraph pulses, the searchlight's cold pool on the target, fires, shells and impact flashes from
+## glows, the moon on each enemy, telegraph pulses, the searchlight's cold pool on the target, fires, shells and
+## impact flashes from
 ## the panel's own TankFx; `Veil` the black a tow fades it to, with rows of noise. TankView draws its texture over
 ## the near stage.
 ##
