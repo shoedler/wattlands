@@ -62,7 +62,7 @@
 			"enemies": [
 				{"enemy": "heavy", "count": 1, "hold_m": [1400]},
 				{"enemy": "medium", "count": 2, "hold_m": [1100, 1350], "min_crew": 2},
-				{"enemy": "medium", "count": 1, "hold_m": [1250], "min_crew": 2},
+				{"enemy": "light", "count": 1, "hold_m": [950], "min_crew": 2},
 				{"enemy": "medium", "count": 1, "hold_m": [1500], "min_crew": 3}
 			],
 			"near": [

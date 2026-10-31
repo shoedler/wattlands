@@ -179,8 +179,8 @@
 			"backdrop": "forest_birches",
 			"enemies": [
 				{"enemy": "heavy", "count": 1, "hold_m": [1600]},
-				{"enemy": "destroyer", "count": 1, "hold_m": [1900], "min_crew": 2},
 				{"enemy": "medium", "count": 1, "hold_m": [1200], "min_crew": 2},
+				{"enemy": "destroyer", "count": 1, "hold_m": [1900], "min_crew": 2},
 				{"enemy": "medium", "count": 1, "hold_m": [1400], "min_crew": 3}
 			],
 			"near": [
