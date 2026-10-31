@@ -13,9 +13,10 @@
 #
 # It sets WATTLANDS_NO_HW_CONTROL=1 and WATTLANDS_NO_NETWORK_INTEGRATIONS=1 for Godot (unless dropped),
 # refuses -d and --debug, resolves the binary ($GODOT, tools\godot_bin.local here, then in the main
-# checkout, then godot or godot4 on PATH), sets APPDATA=<checkout>\.userdata except for exports, and
-# runs Godot through tools\lib\godot_lock.mjs (slot lock, stdin closed, run timeout). Environment
-# changes apply to Godot only; your PowerShell session keeps its own values.
+# checkout, then godot or godot4 on PATH), sets APPDATA to $env:WATTLANDS_USERDATA_DIR, else
+# <checkout>\.userdata, except for exports, and runs Godot through tools\lib\godot_lock.mjs (slot lock,
+# stdin closed, run timeout). Environment changes apply to Godot only; your PowerShell session keeps
+# its own values.
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'lib\wrapper_common.ps1')
@@ -135,7 +136,12 @@ if (-not $isExport) {
         if ($null -ne $top) { $root = [System.IO.Path]::GetFullPath($top) } else { $root = $cwd }
     }
     if ($null -ne $root) {
-        $userData = Join-Path $root '.userdata'
+        if ([string]::IsNullOrEmpty($env:WATTLANDS_USERDATA_DIR)) {
+            $userData = Join-Path $root '.userdata'
+        } else {
+            # Godot changes directory to --path; a relative value must not follow it.
+            $userData = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($cwd, $env:WATTLANDS_USERDATA_DIR))
+        }
         if (-not (Test-Path -LiteralPath $userData -PathType Container)) {
             New-Item -ItemType Directory -Path $userData -Force | Out-Null
         }

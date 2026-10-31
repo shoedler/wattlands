@@ -11,8 +11,10 @@
 //   tools/screenshot --app-screen=results [--app-riders=<1..8>]
 //
 // Runs Godot windowed (never headless) through tools/godot.sh (bash) or tools/godot.ps1
-// (PowerShell) with tools/qa/screenshot_main.gd, one Godot slot of the machine-wide lock, both
-// locks set and FAL_KEY / WATTLANDS_ALLOW_ART removed. On Linux without DISPLAY or
+// (PowerShell) with tools/qa/screenshot_main.gd, one display slot (at most DISPLAY_CAP windows on the
+// machine; the sub-lock lives in <lock dir>/display and guards GPU and desktop, not correctness), one
+// Godot slot of the machine-wide lock, both locks set and FAL_KEY / WATTLANDS_ALLOW_ART removed.
+// On Linux without DISPLAY or
 // WAYLAND_DISPLAY it uses xvfb-run (llvmpipe) when installed, and otherwise prints
 // "screenshot: skipped" and exits 0 (BRIEF 2). Wrapper flags: --mock-trainer=<profile> (default
 // erg:compliance=1.0; never off), --size=<W>x<H> (default 1920x1080), --timeout=<s> (default
@@ -21,7 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { killTree } from '../lib/godot_lock.mjs';
+import { LOCK_TIMEOUT_EXIT, LOCK_TIMEOUT_MESSAGE, acquire, killTree, lockDir } from '../lib/godot_lock.mjs';
 import { childEnv, findBash, slash } from '../e2e/lib/util.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -29,6 +31,8 @@ export const REPO = path.resolve(HERE, '..', '..');
 export const ENTRY = 'tools/qa/screenshot_main.gd';
 export const DEFAULT_MOCK = 'erg:compliance=1.0';
 export const SKIPPED_MESSAGE = 'screenshot: skipped (no display: set DISPLAY or install xvfb-run)';
+export const DISPLAY_CAP = 4;
+export const DISPLAY_LOCK_TIMEOUT_S = 1800;
 
 export const USAGE = `usage: tools/screenshot --game=<id> --at=<s>[,<s>...] [--content=<id>] [--players=<n>] [--bots=<n>]
                         [--rider=<profile>]... [--autopilot=all|none] [--seed=<n>] [--out=<dir>]
@@ -165,7 +169,22 @@ export function buildCommand(o, display, { repo = REPO, env = process.env, platf
   return { cmd, args, env: childEnv(env, extra), shell };
 }
 
-export async function main(argv, { stdout = process.stdout, stderr = process.stderr } = {}) {
+function runGodot({ cmd, args, env }, stderr) {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, { cwd: REPO, env, stdio: ['ignore', 'inherit', 'inherit'] });
+    const stop = () => killTree(child.pid);
+    process.once('SIGINT', stop);
+    process.once('SIGTERM', stop);
+    child.on('error', (e) => {
+      stderr.write(`screenshot: cannot start ${cmd}: ${e.code || e.message}\n`);
+      resolve(127);
+    });
+    child.on('exit', (code, signal) => resolve(code ?? (signal ? 130 : 1)));
+  });
+}
+
+/** `run` stands in for starting Godot in tests: (command, stderr) => exit code. */
+export async function main(argv, { stdout = process.stdout, stderr = process.stderr, run = runGodot } = {}) {
   const o = parseScreenshotArgs(argv);
   if (o.help) {
     stdout.write(`${USAGE}\n`);
@@ -180,22 +199,32 @@ export async function main(argv, { stdout = process.stdout, stderr = process.std
     stdout.write(`${SKIPPED_MESSAGE} [${display.reason}]\n`);
     return 0;
   }
-  const { cmd, args, env, shell } = buildCommand(o, display);
+  const command = buildCommand(o, display);
   if (o.dryRun) {
+    const { cmd, args, shell } = command;
     stdout.write(`${JSON.stringify({ cmd, args, shell, display: display.kind, mode: o.mode })}\n`);
     return 0;
   }
-  return await new Promise((resolve) => {
-    const child = spawn(cmd, args, { cwd: REPO, env, stdio: ['ignore', 'inherit', 'inherit'] });
-    const stop = () => killTree(child.pid);
-    process.once('SIGINT', stop);
-    process.once('SIGTERM', stop);
-    child.on('error', (e) => {
-      stderr.write(`screenshot: cannot start ${cmd}: ${e.code || e.message}\n`);
-      resolve(127);
+  // Taken before the Godot slot, and no slot holder ever waits for it, so the two locks cannot deadlock.
+  let slot;
+  try {
+    slot = await acquire({
+      lease: 1,
+      dir: path.join(lockDir(), 'display'),
+      cap: DISPLAY_CAP,
+      lockTimeoutS: o.lockTimeoutS ?? DISPLAY_LOCK_TIMEOUT_S,
+      label: 'screenshot',
     });
-    child.on('exit', (code, signal) => resolve(code ?? (signal ? 130 : 1)));
-  });
+  } catch (err) {
+    if (err.code !== 'ELOCKTIMEOUT') throw err;
+    stderr.write(`${LOCK_TIMEOUT_MESSAGE}\n`);
+    return LOCK_TIMEOUT_EXIT;
+  }
+  try {
+    return await run(command, stderr);
+  } finally {
+    slot.release();
+  }
 }
 
 function isMain() {
