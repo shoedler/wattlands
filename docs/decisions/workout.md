@@ -57,3 +57,62 @@ Short ADRs for the reference game Workout (`src/games/workout/`, `content/workou
 - Reason: W4r2 R17: the preview, the in-ride banner and the FIT lap name said "Steady 0%" while the target was 30 %, and the ramp line read "0 -> 20% -> 30 -> 30% FTP".
 
 - **2026-10-21 (W4 final): A client's ride view interpolates the other riders and blends its own.** On a client, `WorkoutGame.apply_snapshot` records every rider's distance per snapshot in `WorkoutSnapHistory` (8 entries, keyed by the snapshot's tick × 0.05 s, the host's game time; a gap over 1.5 s starts it over). `WorkoutRideView.advance(delta)` (called from `_process`) runs a render clock on the frame delta behind the newest snapshot by `interp_delay()`: the history's mean snapshot spacing, clamped to 0.1–1.4 s. That is 0.1 s at 10 Hz (NetSession's documented `host_time() - 0.1`) and about 1 s under the 8-rider load, where snapshots reach a client about once a second; the 1.4 s cap stays under the 1.5 s resync, so a growing delay never sends the clock back. The clock catches up softly (τ 0.25 s) when a late snapshot held it, jumps only when 1.5 s off, never passes the newest snapshot and never goes back; the other riders are drawn linearly between the two snapshots around it. The local rider (and the camera, parallax and road with it) is drawn from its own prediction: it moves by its predicted speed each frame and blends toward the client state's distance (the host's latest plus `client_predict` since) with τ 0.3 s, never moves backwards, stops when the state has not moved for 0.15 s (a pause), and jumps only when the error passes 10 m. Rules, snapshots and the host/SOLO view are unchanged; the state still takes each snapshot in full. *Alternatives:* call `NetSession.snapshot_pair_at(host_time() - 0.1)` (a game has no NetSession handle in `GameContext`, and contracts are frozen); blend inside `WorkoutSnapshot.apply`/`WorkoutRules.predict` (changes the rules state and the snapshot tests that pin it; the error is only visual); keep snapping (BRIEF 5.1 asks for soft reconciliation); a fixed 0.1 s delay (under the 8-rider load the other riders waited at the newest snapshot for about 0.9 s of every second, then hurried on); the longest recent spacing instead of the mean (fewer waits when spacing varies, but up to 1.4 s of delay at any load). *Reason:* DoD finding confirmed[13], BRIEF 5.1: "clients predict their own rider locally and reconcile softly toward the host", and GAME_SDK 12's "interpolate everything else between snapshots". Before, a client's markers and background snapped to every 10 Hz snapshot.
+
+## 2026-10-31 (0.2.0): Pixel art overrides BRIEF 3.7's 640 x 360, pennants and "no people"
+
+- Decision: Workout draws real pixel-art riders on bicycles on a 960 x 540 base with `pixel_flex` (minimum 852 x 480). Pennants stay as whip flags on the bikes, so slot shape and pattern still identify a rider. `docs/BRIEF.md` stays untouched: this ADR is the override (lead's ruling 8.4).
+- Alternatives: keep the pennants and improve the landscape only; 640 x 360 with riders (a rider's spokes, chain and crank would not fit the grid).
+- Reason: the owner asked for the same craft as Tank and Castellum Rotae in place of flat hills and flags, with moving details that show cadence. Workout's warm-up sprint banner and toast stay as they are (ruling 8.4).
+
+## 2026-10-31 (0.2.0): The art is a Node bake, committed as PNGs
+
+- Decision: `src/games/workout/art/bake.mjs` writes `assets/workout/` (sheets, indexed world, LUT, props, `kit.json`, picker card): zero dependencies, its own seeded PRNG, no clock. `--check` compares decoded pixels and `kit.json`. `hud_bake.mjs` writes `assets/workout/hud/`. `png.mjs` is a thin wrapper over `tools/art/lib/png.mjs`, not a third PNG codec. The view reads geometry only through `kit.json` (`WorkoutKit`). The art test's size cap on `assets/workout` excludes `audio/`, which has its own budget.
+- Alternatives: draw at runtime in GDScript as the old `WorkoutArt` did (slow at this detail, and a client's first frame would pay for it); a third raster stack (Siege's and Tank's are similar, and WS-CLEANUP promotes them).
+- Reason: Node runs in the node step with no Godot lock, so art rounds cost no Godot slot, and CI can prove the committed pixels match the code.
+- Additive `kit.json` keys beyond the spec's sample: `props.smoke.plane`, `.origin`, `.chimneys`; `rider.mouth_by_pose`; `props.crowd.hand_up`; `props.flag.grip`; `props.cattle.colors`. `rider.mouth` is `[53, 19]`, not the spec's `[66, 19]`, which is off the seated head. Index 74 (window pane) stays opaque and goes dark by day; only index 75 (glow) fades by alpha, so walls get no holes.
+
+## 2026-10-31 (0.2.0): One morning through a LUT
+
+- Decision: world planes store a palette index in R (`R = index * 2`). `workout_tod.gdshader` looks up column = index, row = time of day in `tod_lut.png`, 128 x 32. `WorkoutTod` picks the row from session progress. Riders and props are true colour under a tint from `kit.tod`. `render_frames` asserts a known sky pixel against the LUT row and exits 1 on a mismatch.
+- Alternatives: 5 flat keyframes per plane (more files and no smooth change); a global modulate (it cannot shift hue, and stars and windows could not fade).
+- Reason: one set of strips gives blue hour to full day with limited ramps. The colour cannot drift between peers: it depends only on the plan's progress.
+
+## 2026-10-31 (0.2.0): The group's formation is view-only
+
+- Decision: `WorkoutRig.formation_dx`, `lane_dy` and `spread` place riders on screen only: the viewer is pinned, the others spread from it, and no real gap is ever written back. Rules, snapshots and `SpeedModel` are unchanged, and `git diff` over `rules/` and `content/workout/sessions/` is empty for this version.
+- Alternatives: real draft and lateral positions in the rules (changes the speed model and every balance test); real gaps only (at 2 m per px, riders on one spot stand on each other).
+- Reason: a picture cannot change load, so BRIEF 4.6 stays out of it. `SpeedModel` has no draft, so nothing in the rules may suggest one.
+
+## 2026-10-31 (0.2.0): No crowd and no SPRINT in the warm-up
+
+- Decision: `WorkoutCrowd.cheers_for` is false for a sprint that starts inside the first 300 s, and `WorkoutHudModel.target_text` shows `FREE RIDE`, never `SPRINT`, there. `e2e` at 90 s has neither; `easy_30` at 660 s has both.
+- Alternative: show them everywhere. The pose still shows what the rider does: a rider who sprints inside the warm-up stands.
+- Reason: BRIEF 4.6.8. A cheering crowd under a gantry asks for the effort the warm-up forbids.
+
+## 2026-10-31 (0.2.0): The gear assert moved out of test_real_session
+
+- Decision: Workout has no kit widgets, so `hud.widget(HudSpec.GEAR)` is null, and `tests/app/test_real_session.gd::test_a_client_hud_from_session_start` now reads the game's own Controls (`platform:` commit, approved by ruling 8.4). The gear's coverage moves to `hud/test_workout_hud_controls.gd` (lit in SIM, `-` in ERG); the kit's gear placement stays covered by `tests/ui/test_hud_layer.gd`.
+- It differs from SPEC_WORKOUT's replacement text in two ways, and the spec's asserts all stay:
+  - The spec compares with 1080.5, but a Rect2i placement follows the PixelViewport, which sizes itself from the window and not from `screen_size_override`, and a headless root is 1920 x 1920. The test now puts the PixelViewport on the same 1920 x 1080.
+  - A slot's Control has size 0 until a frame sorts its container, so `get_global_rect()` alone tests only the top edge. The test also asserts `hud.map_rect(at).end.y`, the whole plate.
+
+## 2026-10-31 (0.2.0): Art critic bound reached with items open
+
+The critic reached its bound of 3 rounds with verdict FAIL. These are its last items, in substance; the owners are the critic's. The 2 blockers go to the lead under the failure policy (one more fix-and-judge round, then the lead rules). The integration step did not change art or view code.
+
+| # | Owner | Blocker | File or frame | Item |
+| --- | --- | --- | --- | --- |
+| 1 | W-VIEW | yes | `dawn_solo`, `golden_8`, `sprint_4`, `descent_4`, `crank_strip` | Checklist 5, 14. The local-rider mark is a filled pale pill with a hard cream outline (x 526-675, y 760-778 in `dawn_solo`). It reads as a hoverboard under the bike and is the hardest contrast on the road. A neighbour cuts it into a crosswalk slab, and it shows through the next rider's rear wheel. The enlarged caret does most of the job. Remove the fill and outline; use a quiet cue at most 2 tones above asphalt that does not out-contrast the lane dash. |
+| 2 | W-ART | yes | `crank_strip`, `golden_8`, `sprint_4` | Checklist 3, 8, the owner's cadence goal. `riders.mjs:531` paints the amber near crank after the near leg, so it reads as an orange shoe or boot (`golden_8` x 470-490, y 745-785; x 590, y 752). Paint the near shoe and pedal over the arm: dark shoe, light sole, toe forward. The down-tube accent on slots 0 and 2 is a static warm tab beside the arm (`golden_8` x 625, y 726; `sprint_4` x 860, y 708): mute or move it. |
+| 3 | W-ART | no | `sprint_4`, picker card | Checklist 5. The crowd overshot into ghosts: a full-width grey-mauve frieze with blue-grey outlines, paler than the poplars behind it (x 190-1920, y 640-735). Pale masks with two eye dots, equal heights, even spacing, heads at helmet height. Use mid values keyed to the verge, 3-4 muted shirt hues, no eye dots, varied height and clumps, heads below helmet height. |
+| 4 | W-ART | no | `sprint_4` | Checklist 10. The stand pose is the seated pose moved forward. Raise the hips 3-4 art px, open a clear gap above the saddle, shoulders over the bars, steeper back, straighter arms, a visible hip bob. Keep the crank contract. |
+| 5 | W-ART | no | `assets/workout/world/far_hills.png` | Checklist 3, 4. Facets have axis-aligned cuts like panes of glass (`descent_4` x 87-233, y 470-487), and a bright zig-zag crease runs down each main peak (`golden_8` x 345-370, y 390-490). Give edges the terrain's slope, and use a short irregular ridgeline between lit and shadow faces. |
+| 6 | W-ART | no | `sunrise_4` | Checklist 13. The valley mist is close. The low bands fail: a flat lilac bar with stepped ends (x 1415-1575, y 672-687) and a grey-brown strip like a gravel track (x 1125-1415, y 685-700). Thin them to soft wavy-topped pools at the tree bases. |
+| 7 | W-ART | no | `assets/workout/world/foreground_0.png`, `foreground_1.png` | Checklist 3. The clods are one repeated brown oval with a saw-toothed edge, loaves or caterpillars (`cooldown` x 1097-1192, y 1020-1040), and the largest shapes on the bank. Break them into irregular patches with grass over the edges, plus stones and tufts. |
+| 8 | W-ART | no | `assets/workout/riders/fx.png` | Checklist 15. The link bubble is a grey box with two slots and says nothing at 1x (`states_8` x 1085-1102, y 618-635): draw two separated chain links, blinking. Dust sits as stamped rosettes on the asphalt, and frame 3 is a hollow ring: drift it up and back, as fading specks. |
+| 9 | W-VIEW | no | `states_8` | Checklist 15. Drooped grey pennants read as street lamps (x 1038-1052, y 665-693; x 903-917, y 627-660). Keep the slot shape, and draw a limp cloth hanging down the pole, longer than it is wide. |
+
+## 2026-10-31 (0.2.0): Rendering cost as measured
+
+- 8 riders (4 humans, 4 bots) on Rolling road at 600 s, windowed at 1920 x 1080, Compatibility renderer, V-Sync off: 442-476 FPS (`Performance.TIME_FPS`), about 5.3 ms per process frame, about 110 draw calls, with other Godot test runs on the machine.
+- That machine has an RTX 5060 Ti. BRIEF 3.9's integrated graphics is unmeasured. The figure is reported, not gated.
