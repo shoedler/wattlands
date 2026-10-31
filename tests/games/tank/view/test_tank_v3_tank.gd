@@ -334,16 +334,15 @@ func test_little_bases_stand_at_the_depot_and_in_free_roam() -> void:
 	s.seg.seg = TankIds.SEG_DEPOT
 	s.hull.x_px = 0.0
 	var v := U.view_of(self, s)
-	var bases := TankForest.bases(v, s)
-	assert_eq(bases.size(), 1, "the depot's base in view at the start")
-	if bases.is_empty():
-		return
-	var lights := TankForest.base_lights(v, bases[0])
+	var base := TankForest.far_base(v, s)
+	assert_false(is_nan(base), "the depot's base in view at the start, in the far panel")
+	var lights := TankForest.base_lights(v, base)
 	assert_eq(lights.size(), 2, "its lamp and its slit")
 	var adv := U.fixture("state", 3)
 	adv.seg.seg = TankIds.SEG_ADVANCE
 	var va := U.view_of(self, adv)
 	assert_eq(TankForest.bases(va, adv).size(), 0, "none on the road between")
+	assert_true(is_nan(TankForest.far_base(va, adv)), "nor over there")
 	var r := U.roam_state(3)
 	r.roam.map_m = r.roam_map.strongpoints[0]
 	var g: TankGame = autofree(U.roam_game(r))

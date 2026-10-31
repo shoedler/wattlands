@@ -4,7 +4,8 @@ extends RefCounted
 ## near-saturated pixels.
 ##   draw()        the tank's own lights, on the Light layer over the tank and rotated with the hull:
 ##                 the rooms' incandescent lamps (warm; the seat's slot colour mixed in while its
-##                 rider is in band; the Lights room cold while its arc burns; dark in a breakdown),
+##                 rider is in band; the Lights room cold while its arc burns; Repairs a pinker
+##                 copper while manned; dark in a breakdown),
 ##                 falling back to the backup lighting while the Lights seat is unpowered
 ##                 (TankView.backup_level: the warm blooms down to BACKUP_GAIN, a small red emergency
 ##                 lamp in each room; TankBody dims the rooms), the turret windows' lamps, the
@@ -19,8 +20,8 @@ extends RefCounted
 ##                 the road, kept on screen, with a faint spill along the road out to where its
 ##                 axis lands, beam_pool(); the rooms' spill; the shot's flash), the little bases'
 ##                 lamps, the halt line's and the turning places' lamps, burning wrecks, the beams'
-##                 rim light on enemies and wrecks, the enemies' slits and telegraph glows; the far
-##                 panel has its own (TankFarPanel)
+##                 light on near threats and wrecks, the near threats' slits; the far panel has its
+##                 own (TankFarPanel)
 
 const WARM := Color(1.0, 0.64, 0.32)
 const COLD := Color(0.66, 0.82, 1.0)
@@ -30,6 +31,7 @@ const AMBER := Color(1.0, 0.68, 0.3)
 const SEARCH := Color(1.0, 0.94, 0.78)
 ## The beams' warm light on what they cross.
 const BEAM_LIT := Color(1.0, 0.8, 0.52)
+const BEAM_LIT_A := 0.16
 ## The headlight's beam: degrees below the hull's line, length, half spread (degrees).
 const HEAD_DEG := 9.0
 const HEAD_LEN := 210.0
@@ -46,6 +48,10 @@ const STANDBY := Color(1.0, 0.62, 0.34, 0.55)
 ## The backup lighting: what is left of the warm lamps' bloom, and the emergency lamps' red.
 const BACKUP_GAIN := 0.3
 const EMERGENCY := Color(1.0, 0.2, 0.08)
+## The Repairs room's lamp (SPEC_TANK 5.3): a pinker copper than the diesel's, no other seat's.
+const REPAIR_LAMP := Color(1.0, 0.7, 0.48)
+## The room the Repairs seat works in.
+const REPAIR_ROOM := "turret_drive"
 ## The rooms that glow (kit rooms).
 const GLOW_ROOMS: Array[String] = [
 	"drive", "loader", "gun", "lights", "sec", "quarters", "turret_drive", "upper_front"
@@ -73,17 +79,11 @@ static func draw_world(ci: CanvasItem, v: TankView, state: TankState) -> void:
 		TankForest.draw_base_light(ci, v, bx)
 	_fires(ci, v)
 	_lit_by_beams(ci, v, state)
-	for id: int in v.enemy_rects:
+	for id: int in v.enemy_feet:
 		var e := state.enemy(id)
-		if e == null:
-			continue
-		var er: Rect2 = v.enemy_rects[id]
-		if e.telegraph_s > 0.0:
-			TankDraw.glow_at(ci, v.enemy_muzzle(e, er), 12.0, Color(1.0, 0.4, 0.15, 0.6))
-		var slit_x := er.size.x - 6.0 if e.side >= 0 else 6.0
-		TankDraw.glow_at(
-			ci, er.position + Vector2(slit_x, er.size.y * 0.45), 3.0, Color(1.0, 0.2, 0.1, 0.7)
-		)
+		if e != null:
+			var kind := v.enemy_kind(e)
+			TankEnemyDraw.draw_light(ci, v.enemy_kit, kind, v.enemy_feet[id], v.near_pose(e))
 
 
 ## The tank's beams this frame: [{p (the lens, stage px), ang, half (radians), len, k, head}].
@@ -111,13 +111,11 @@ static func beams(v: TankView, state: TankState) -> Array[Dictionary]:
 	var ts := v.rig.detail("searchlight")
 	if not ts.is_empty() and v.search_level > 0.0:
 		var a := deg_to_rad(float(ts.get("ang", 11.0)))
-		if v.turret_sx() < 0.0:
-			a = PI - a
 		(
 			out
 			. append(
 				{
-					"p": v.at_turret(TankRig.lens_of(ts)),
+					"p": v.at_sprite(TankRig.lens_of(ts)),
 					"ang": v.hull_rot + a + sway,
 					"half": deg_to_rad(float(ts.get("half", 6.0))),
 					"len": float(ts.get("len", 560.0)),
@@ -173,14 +171,14 @@ static func _rooms(ci: CanvasItem, v: TankView, state: TankState) -> void:
 			continue
 		var c := v.at_sprite(r.get_center())
 		var lamp := v.at_sprite(Vector2(r.get_center().x, r.position.y + 3.0))
-		var col := WARM
 		var gain := 1.0
-		var rd: TankRiderState = v.rider_on(id) if id in TankRig.SEATS else null
+		var rd := room_rider(v, id)
+		var col := REPAIR_LAMP if id == REPAIR_ROOM and rd != null else WARM
 		if id == "lights" and arc_on:
 			col = COLD
 			gain = 1.4
 		elif rd != null and rd.in_band:
-			col = WARM.lerp(slot_color(rd), 0.15)
+			col = col.lerp(slot_color(rd), 0.15)
 			gain = 1.25
 		var fl := 0.92 + 0.08 * sin(v.time * 3.0 + r.position.x)
 		gain *= warm
@@ -193,8 +191,15 @@ static func _rooms(ci: CanvasItem, v: TankView, state: TankState) -> void:
 			TankDraw.glow_at(ci, e, 2.5, Color(EMERGENCY, 0.9 * bk))
 			TankDraw.glow_at(ci, e, r.size.x * 0.45, Color(EMERGENCY, 0.1 * bk * pulse))
 	for wl in v.rig.window_lamps:
-		var p := v.at_turret(wl) if v.rig.turret_rect.has_point(wl) else v.at_sprite(wl)
+		var p := v.at_sprite(wl)
 		TankDraw.glow_at(ci, p + Vector2(0, 4), 12.0, Color(WARM.r, WARM.g, WARM.b, 0.14 * warm))
+
+
+## The rider of the seat a room belongs to, or null.
+static func room_rider(v: TankView, id: String) -> TankRiderState:
+	if id == REPAIR_ROOM:
+		return v.rider_on("repair")
+	return v.rider_on(id) if id in TankRig.SEATS else null
 
 
 ## A room's emergency lamp (sprite px): in its ceiling's left corner.
@@ -236,7 +241,7 @@ static func standby_lenses(v: TankView) -> Array[Vector2]:
 	var out: Array[Vector2] = []
 	var ts := v.rig.detail("searchlight")
 	if not ts.is_empty():
-		out.append(v.at_turret(TankRig.lens_of(ts)))
+		out.append(v.at_sprite(TankRig.lens_of(ts)))
 	var rs := v.rig.detail("searchlight_rear")
 	if not rs.is_empty():
 		out.append(v.at_sprite(TankRig.lens_of(rs)))
@@ -316,7 +321,7 @@ static func _ground_pools(ci: CanvasItem, v: TankView, state: TankState) -> void
 		if r.size == Vector2.ZERO or r.position.y < 140.0:
 			continue
 		var lit := 0.08
-		var rd: TankRiderState = v.rider_on(id) if id in TankRig.SEATS else null
+		var rd := room_rider(v, id)
 		if rd != null:
 			lit = 0.12 if rd.in_band else 0.07
 		var x := v.at_sprite(r.get_center()).x
@@ -381,45 +386,35 @@ static func _world_lamps(ci: CanvasItem, v: TankView, state: TankState) -> void:
 		TankDraw.glow_at(ci, tl + Vector2(0, 16), 34.0, Color(AMBER.r, AMBER.g, AMBER.b, 0.26))
 
 
-## The beams' warm light on the enemies and the wrecks they cross: their edges facing the tank (the
-## kit's rim mask) catch it brightly, the rest of the sprite a little; back lanes less (haze).
+## The beams' warm light on the near threats and the wrecks they cross: over the kit's silhouette; the
+## back lane less (haze). The kit's stub has no silhouette, so nothing shows until its art.
 static func _lit_by_beams(ci: CanvasItem, v: TankView, state: TankState) -> void:
 	for id: int in v.enemy_rects:
 		var e := state.enemy(id)
-		if e == null or not v.lanes.has(id):
-			continue
-		var r: Rect2 = v.enemy_rects[id]
-		_beam_rim(ci, v, state, v.kit.enemies[v.enemy_kind(e)], r, e.side < 0, int(v.lanes[id]))
+		if e != null and v.lanes.has(id):
+			_beam_lit(ci, v, state, v.enemy_kind(e), v.enemy_rects[id], int(v.lanes[id]))
 	for w in v.wrecks:
-		if v.wreck_collapse(w) >= 1.0:
-			continue
-		var wr := TankWorldDraw.wreck_rect(v, w)
-		var row: Dictionary = v.kit.enemies.get(str(w["kind"]), {})
-		if not row.is_empty():
-			_beam_rim(ci, v, state, row, wr, int(w.get("side", 1)) < 0, int(w.get("lane", 0)), 0.7)
+		if v.wreck_collapse(w) < 1.0:
+			var wr := TankWorldDraw.wreck_rect(v, w)
+			_beam_lit(ci, v, state, str(w["kind"]), wr, int(w.get("lane", 0)), 0.7)
 
 
-static func _beam_rim(
+static func _beam_lit(
 	ci: CanvasItem,
 	v: TankView,
 	state: TankState,
-	row: Dictionary,
+	kind: String,
 	r: Rect2,
-	flip: bool,
 	lane: int,
 	gain: float = 1.0
 ) -> void:
-	if not row.has("rim") or r.end.x < 0.0 or r.position.x > v.canvas.x:
+	var tex := v.enemy_kit.texture()
+	var row := v.enemy_kit.kind(kind)
+	if tex == null or not row.has("sil") or r.end.x < 0.0 or r.position.x > v.canvas.x:
 		return
 	var k := beam_light(v, state, r.get_center()) * gain * (1.0 - TankWorldDraw.lane_fog(lane))
-	if k < 0.02:
-		return
-	TankWorldDraw.sprite(
-		ci, row["sil"], r, flip, Color(BEAM_LIT.r, BEAM_LIT.g, BEAM_LIT.b, 0.04 * k)
-	)
-	TankWorldDraw.sprite(
-		ci, row["rim"], r, flip, Color(BEAM_LIT.r, BEAM_LIT.g, BEAM_LIT.b, 0.5 * k)
-	)
+	if k >= 0.02:
+		ci.draw_texture_rect_region(tex, r, row["sil"], Color(BEAM_LIT, BEAM_LIT_A * k))
 
 
 static func _fires(ci: CanvasItem, v: TankView) -> void:

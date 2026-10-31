@@ -43,6 +43,35 @@ func test_headless_makes_no_players_and_stays_silent() -> void:
 	assert_gt(_audio.played.size(), 0, "it still records what it would play")
 
 
+func test_every_v4_event_is_handled_without_error() -> void:
+	for e: Dictionary in [
+		TankEvents.tank_lost(1, TankIds.SEG_ADVANCE, 2),
+		TankEvents.stage_restart(TankIds.SEG_ADVANCE, 2, 84.0),
+		TankEvents.ambush(41, TankIds.enemy_code(TankIds.ENEMY_RECON)),
+		TankEvents.escaped(41, TankIds.enemy_code(TankIds.ENEMY_RECON)),
+		TankEvents.splash(1500.0, TankIds.SHELL_HEAVY, true),
+		TankEvents.splash(60.0, TankIds.SHELL_ENEMY, false),
+	]:
+		_audio.on_cue(str(e["type"]), e)
+	assert_has(_audio.played, "tank_rustle", "the bushes burst")
+	assert_has(_audio.played, "tank_boom_big", "the tank is lost")
+	assert_has(_audio.played, "tank_boom_small", "our shell falls far off")
+	assert_has(_audio.played, "tank_boom_crack", "theirs falls on our road")
+
+
+func test_a_far_shell_whistles_just_before_it_lands() -> void:
+	assert_eq(TankAudio._whistle_at(0.0, 0.25), 0.25, "a near round: soon after the shot")
+	assert_almost_eq(TankAudio._whistle_at(3.0, 0.25), 2.5, 0.001, "half a second before")
+	assert_eq(TankAudio._whistle_at(0.2, 0.25), 0.0, "never before the shot")
+	var e := TankEvents.shot(-1, TankIds.SHELL_ENEMY, 40, 21, 3, 1.0, 1640.0)
+	_audio.on_cue(TankEvents.SHOT, e)
+	assert_does_not_have(_audio.played, "tank_whistle")
+	_step(0.3)
+	assert_does_not_have(_audio.played, "tank_whistle", "not yet")
+	_step(0.3)
+	assert_has(_audio.played, "tank_whistle")
+
+
 func test_a_friendly_shot_booms_cracks_and_drops_brass() -> void:
 	_audio.on_cue(TankEvents.SHOT, TankEvents.shot(0, TankIds.SHELL_HEAVY, 1))
 	assert_has(_audio.played, "tank_boom_low")

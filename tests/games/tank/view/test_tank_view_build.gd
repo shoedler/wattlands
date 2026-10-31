@@ -65,10 +65,12 @@ func test_pixel_flex_canvases_build_and_keep_the_world_on_screen() -> void:
 		assert_eq(v.canvas, size)
 		assert_eq(v.dof.canvas, size)
 		assert_eq(v.y_off, roundf((size.y - 540.0) * 0.5))
-		var right := v.sx(v.cam_x + float(TankConst.SCREEN_W))
-		assert_lte(right, size.x - 10.0, "%s: the rules' screen fits" % size)
+		var rf := float(TankConst.REAR_SCREEN_X) + float(s.hull.hull_w)
+		var right := v.sx(v.cam_x + rf + TankConst.NEAR_SPAN_PX)
+		assert_lte(right, TankFarMap.near_end_x(size.x), "%s: the near span fits its panel" % size)
 		var front := v.at_sprite(v.rig.detail("headlight")["at"]).x
-		assert_lt(front, size.x * 0.6, "%s: the tank leaves the road ahead in view" % size)
+		assert_lt(right, size.x, "%s: on the canvas" % size)
+		assert_gt(right, front + 60.0, "%s: the tank leaves road ahead in view" % size)
 		assert_gte(v.xf.origin.x, 0.0)
 		var band := v.dof.band
 		assert_eq(
@@ -76,15 +78,39 @@ func test_pixel_flex_canvases_build_and_keep_the_world_on_screen() -> void:
 		)
 
 
-func test_a_wider_canvas_shows_more_world_at_the_same_scale() -> void:
-	var base := U.view_of(self, U.fixture("state", 3), Wl.SOLO, 1, Vector2(960, 540))
-	var wide := U.view_of(self, U.fixture("state", 3), Wl.SOLO, 1, Vector2(1146, 480))
-	var x0 := base.cam_x + 400.0
-	var x1 := base.cam_x + 500.0
-	assert_almost_eq(wide.sx(x1) - wide.sx(x0), base.sx(x1) - base.sx(x0), 0.01, "same scale")
-	var beyond := wide.sx(wide.cam_x + 700.0)
-	assert_lt(beyond, 1146.0, "world past the rules' screen shows on the wide canvas")
-	assert_gt(base.sx(base.cam_x + 700.0), 960.0, "and is off the base canvas")
+func test_the_near_span_runs_from_the_nose_to_the_seam_on_every_canvas() -> void:
+	# SPEC_TANK section 2: canvas, the nose (front), the span's end, k.
+	for row: Array in [
+		[Vector2(960, 540), 471.0, 616.0, 0.725],
+		[Vector2(852, 480), 471.0, 552.0, 0.405],
+		[Vector2(1280, 680), 567.0, 846.0, 1.395],
+	]:
+		var size: Vector2 = row[0]
+		var v := U.view_of(self, U.fixture("state", 3), Wl.SOLO, 1, size)
+		var rf := float(TankConst.REAR_SCREEN_X) + float(v.game.state.hull.hull_w)
+		assert_almost_eq(v.tank_pos.x + v.headlight_x(), float(row[1]), 1.0, "%s: nose" % size)
+		assert_almost_eq(v.near_k(), float(row[3]), 0.006, "%s: k" % size)
+		var nose := v.sx(v.cam_x + rf)
+		assert_almost_eq(nose, v.tank_pos.x + v.headlight_x(), 0.01, "%s: from the nose" % size)
+		var end := v.sx(v.cam_x + rf + TankConst.NEAR_SPAN_PX)
+		assert_almost_eq(end, TankFarMap.near_end_x(size.x) - 6.0, 0.01, "%s: to the seam" % size)
+		assert_almost_eq(end, float(row[2]), 1.0, "%s: the table's end" % size)
+
+
+func test_a_very_wide_canvas_keeps_the_arts_own_scale_and_shows_more_road() -> void:
+	var v := U.view_of(self, U.fixture("state", 3), Wl.SOLO, 1, Vector2(1920, 680))
+	assert_eq(v.near_k(), TankView.NEAR_K_MAX, "capped")
+	var rf := float(TankConst.REAR_SCREEN_X) + float(v.game.state.hull.hull_w)
+	var end := v.sx(v.cam_x + rf + TankConst.NEAR_SPAN_PX)
+	assert_lt(end, TankFarMap.near_end_x(1920.0) - 6.0, "more road past the span")
+
+
+func test_the_hulls_own_span_keeps_its_mapping() -> void:
+	var v := U.view_of(self, U.fixture("state", 3))
+	var rear := float(TankConst.REAR_SCREEN_X)
+	assert_almost_eq(v.sx(v.cam_x + rear), v.tank_pos.x + TankView.ART_REAR, 0.01, "its rear")
+	var rf := rear + float(v.game.state.hull.hull_w)
+	assert_almost_eq(v.sx(v.cam_x + rf), v.tank_pos.x + v.headlight_x(), 0.01, "its front")
 
 
 func test_machines_turn_with_their_riders_cadence_and_stand_still_at_zero() -> void:
@@ -159,33 +185,34 @@ func test_slow_frames_for_five_seconds_switch_the_pass_off() -> void:
 func test_near_threats_stand_in_the_lanes_the_rules_hold_them_in() -> void:
 	var s := U.fixture("gun_line", 3)
 	s.enemies.clear()
-	var x := s.hull.x_px + 420.0
-	for i in 4:
+	var x := s.hull.x_px + float(s.hull.hull_w) + 60.0
+	for i in 2:
 		var e := TankEnemyState.new()
 		e.id = 100 + i
 		e.code = TankIds.ENEMY_CODES[TankIds.ENEMY_RECON]
 		e.x_px = x + i * 12.0
-		e.w = 96
-		e.h = 48
-		e.hp = 40.0
-		e.hp_max = 64.0
-		e.lane = 3 - i
+		e.w = 52
+		e.h = 24
+		e.hp = 20.0
+		e.hp_max = 30.0
+		e.lane = 1 - i
 		s.enemies.append(e)
 	var v := U.view_of(self, s)
 	U.run(v, 2)
 	for e in s.enemies:
 		assert_eq(int(v.lanes[e.id]), e.lane, "enemy %d in its rules lane" % e.id)
-	for i in range(1, 4):
-		var nearer: Rect2 = v.enemy_rects[100 + i]
-		var further: Rect2 = v.enemy_rects[100 + i - 1]
-		assert_gt(nearer.end.y, further.end.y, "a nearer lane stands lower on the road")
-	var front: Rect2 = v.enemy_rects[103]
-	assert_almost_eq(
-		front.end.y,
-		TankView.ROAD_ENEMY_Y - (TankView.GROUND - v.ground_y(front.get_center().x)),
-		2.0,
-		"the front lane stands on the road's relief"
-	)
+	var nearer: Rect2 = v.enemy_rects[101]
+	var further: Rect2 = v.enemy_rects[100]
+	assert_gt(nearer.end.y, further.end.y, "the front lane stands lower on the road")
+	for id: int in [100, 101]:
+		var foot: Vector2 = v.enemy_feet[id]
+		var lane := int(v.lanes[id])
+		assert_almost_eq(
+			foot.y,
+			TankView.lane_foot(lane) + v.ground_y(foot.x) - TankView.GROUND,
+			0.01,
+			"lane %d stands on the road's relief" % lane
+		)
 	s.enemies[0].lane = 9
 	U.run(v, 1)
 	assert_eq(int(v.lanes[100]), TankView.LANES - 1, "a lane past the last is drawn in the last")
@@ -307,7 +334,7 @@ func test_the_evade_lurches_the_tank_or_blows_a_smoke_screen() -> void:
 	assert_eq(v.evade_kind(solo, solo.stations[0].slot), "lurch", "the drive lurches")
 
 
-func test_the_barrel_swings_through_a_traverse_and_holds_its_elevation() -> void:
+func test_the_turret_never_turns_and_the_barrel_holds_its_elevation() -> void:
 	var s := U.fixture("state", 3)
 	var v := U.view_of(self, s)
 	s.hull.elev_deg = -12.0
@@ -316,17 +343,13 @@ func test_the_barrel_swings_through_a_traverse_and_holds_its_elevation() -> void
 	s.hull.elev_deg = 30.0
 	U.run(v, 1)
 	assert_almost_eq(v.barrel_vector().angle(), -deg_to_rad(30.0) + v.xf.get_rotation(), 0.001)
-	s.hull.traverse_s = 2.0
-	U.run(v, 1)
 	s.hull.traverse_s = 1.0
-	U.run(v, 1)
-	assert_almost_eq(v.barrel_dir, 0.0, 0.01, "half way round the barrel points at the viewer")
-	s.hull.traverse_s = 0.0
 	s.hull.facing = TankIds.FACE_LEFT
 	U.run(v, 1)
-	assert_eq(v.barrel_dir, -1.0)
-	assert_eq(v.turret_sx(), -1.0, "the whole turret mirrored")
-	assert_lt(v.muzzle().x, v.hud_tank_point("turret_pivot").x, "the muzzle faces the rear")
+	assert_gt(
+		v.muzzle().x, v.hud_tank_point("turret_pivot").x, "nothing behind, nothing to turn to"
+	)
+	assert_eq(v.hud_barrel_dir(), 1.0)
 
 
 func test_the_halt_line_stands_ahead_in_an_advance() -> void:

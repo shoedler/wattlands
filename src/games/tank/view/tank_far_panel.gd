@@ -2,10 +2,11 @@ class_name TankFarPanel
 extends SubViewport
 ## v4: the far panel (SPEC_TANK 4.2, 4.3): a long-lens view of the enemy, in its own SubViewport so it never
 ## runs the depth of field. `Back` is the same night forest at a third of the near panel's parallax and
-## lower (a long lens sees less sky), over the ground band; `World` the wrecks, the far enemies by lane back
-## to front and the Behemoth; `Light` (additive) the slit glows, telegraph pulses, the searchlight's cold pool
-## on the target, fires, shells and impact flashes from the panel's own TankFx. TankView draws its texture
-## over the near stage.
+## lower (a long lens sees less sky), over the ground band; `World` a stage's little base (TankForest.far_base),
+## the wrecks, the far enemies by lane back to front and the Behemoth; `Light` (additive) the base's lamps, slit
+## glows, telegraph pulses, the searchlight's cold pool on the target, fires, shells and impact flashes from
+## the panel's own TankFx; `Veil` the black a tow fades it to, with rows of noise. TankView draws its texture over
+## the near stage.
 ##
 ## Frames: "panel" px have x from the near-side edge (TankFarMap.range_x) and y on the stage (the road line at
 ## TankView.GROUND); World and Light mirror about the panel when the tank drives west, Back never does.
@@ -52,6 +53,12 @@ const SEARCH_POOL_R := 40.0
 const BOGIE_U: Array[float] = [0.2, 0.5, 0.8]
 const BOGIE_V := 0.85
 const TURRET_AT := Vector2(0.55, 0.3)
+## The tow's black: its fade in (s), the noise rows, their refresh (Hz) and their strongest alpha.
+const VEIL_IN_S := 1.0
+const VEIL_ROWS := 16
+const VEIL_NOISE_HZ := 12.0
+const VEIL_NOISE := Color(0.32, 0.36, 0.34)
+const VEIL_NOISE_A := 0.16
 
 var v: TankView = null
 var kit: TankEnemyKit = TankEnemyKit.shared()
@@ -66,11 +73,14 @@ var boss_foot: Vector2 = Vector2.ZERO
 var boss_box: Rect2 = Rect2()
 var far_w: float = TankFarMap.far_w(960.0)
 var shake: float = 0.0
+## How black the panel is (0..1): up while the tank is towed, down at the restart's pace after it.
+var veil: float = 0.0
 
 var _root: Node2D = null
 var _back: Node2D = null
 var _world: Node2D = null
 var _light: Node2D = null
+var _veil: Node2D = null
 var _mirrored: bool = false
 var _y_off: float = 0.0
 ## Enemy id -> {t0, travel, recoil, last, kind, lane, range}; _boss the same for the Behemoth.
@@ -98,9 +108,11 @@ func _init(view: TankView, sd: int) -> void:
 	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	_light.material = add
 	_light.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	_veil = _layer("Veil")
 	_back.draw.connect(_draw_back)
 	_world.draw.connect(_draw_world)
 	_light.draw.connect(_draw_light)
+	_veil.draw.connect(_draw_veil)
 
 
 func _layer(n: String) -> Node2D:
@@ -177,7 +189,11 @@ func frame(state: TankState, dt: float) -> void:
 		var t := v.time
 		off = Vector2(roundf(sin(t * 61.0) * SHAKE_PX * shake), roundf(cos(t * 47.0) * shake))
 	_root.position = Vector2(0, _y_off) + off
-	for l: Node2D in [_back, _world, _light]:
+	var towed := state.hull.tow_s > 0.0
+	veil = move_toward(
+		veil, 1.0 if towed else 0.0, dt / (VEIL_IN_S if towed else TankView.RESTART_FADE_S)
+	)
+	for l: Node2D in [_back, _world, _light, _veil]:
 		l.queue_redraw()
 
 
@@ -631,6 +647,9 @@ func _draw_world() -> void:
 		return
 	var state := v.game.state
 	var ci := _world
+	var bx := TankForest.far_base(v, state)
+	if not is_nan(bx):
+		TankForest.draw_base(ci, v, bx)
 	if boss_box.size != Vector2.ZERO:
 		var sz := boss_box.size
 		TankWorldDraw.contact_shadow(
@@ -690,6 +709,9 @@ func _draw_light() -> void:
 		return
 	var state := v.game.state
 	var ci := _light
+	var bx := TankForest.far_base(v, state)
+	if not is_nan(bx):
+		TankForest.draw_base_light(ci, v, bx)
 	_search_pool(ci, state)
 	for e in state.enemies:
 		if not feet.has(e.id):
@@ -767,3 +789,20 @@ func _shells(ci: CanvasItem, state: TankState) -> void:
 		ci.draw_line(s["from"], at, Color(col, 0.4), 2.0)
 		TankDraw.glow_at(ci, at, 5.0, Color(col, 0.6))
 		ci.draw_rect(Rect2(at.round(), Vector2.ONE), Color(1, 0.95, 0.8, 0.95))
+
+
+## The tow's black over the whole panel, with a lost signal's rows of noise.
+func _draw_veil() -> void:
+	if veil <= 0.0:
+		return
+	var top := -_y_off - OVERDRAW
+	var h := float(size.y) + OVERDRAW * 2.0
+	var ci := _veil
+	ci.draw_rect(Rect2(-OVERDRAW, top, far_w + OVERDRAW * 2.0, h), Color(0, 0, 0, veil))
+	var frame_n := floorf(v.time * VEIL_NOISE_HZ)
+	for i in VEIL_ROWS:
+		var a := TankDraw.hash01(frame_n * 0.37 + float(i) * 2.1)
+		var b := TankDraw.hash01(frame_n * 0.71 + float(i) * 5.3)
+		var y := roundf(top + a * h)
+		var c := Color(VEIL_NOISE, VEIL_NOISE_A * b * veil)
+		ci.draw_rect(Rect2(-OVERDRAW, y, far_w + OVERDRAW * 2.0, 1.0 + roundf(b)), c)

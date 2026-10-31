@@ -1,33 +1,30 @@
 extends GutTest
-## The world's art: enemies in depth lanes smaller, higher, darker and hazier further back, each on
-## its own ground; wrecks in their lane, opaque and lit by the beams they cross; the road band
+## The world's art: near threats in two lanes, the back one higher, darker and hazier, whole at the
+## kit's size; wrecks in their lane, lit by the beams they cross; the road band
 ## fading in over the verge and solid under the tracks; the engine windows' room light free of the
 ## slot colour.
 
 const U := preload("res://tests/games/tank/view/tank_view_util.gd")
 
 
-func test_back_lanes_stand_higher_smaller_darker_and_hazier() -> void:
+func test_the_back_lane_stands_higher_darker_and_hazier() -> void:
 	var v := U.view_of(self, U.fixture("gun_line", 3))
-	for kind: String in TankKit.ENEMY_KINDS:
+	for kind: String in TankIds.NEAR_KINDS:
 		var prev := Rect2()
 		for lane in TankView.LANES:
 			var r := v.lane_rect(kind, 500.0, lane)
 			assert_eq(
 				r.end.y, TankView.lane_foot(lane), "%s lane %d stands on its ground" % [kind, lane]
 			)
+			assert_eq(r.size, v.enemy_kit.kind(kind)["size"], "%s: the kit's size" % kind)
 			if lane > 0:
-				assert_lt(r.end.y, prev.end.y, "%s: a lane further back stands higher" % kind)
-				assert_lt(r.size.x, prev.size.x, "%s: and smaller" % kind)
+				assert_lt(r.end.y, prev.end.y, "%s: the back lane stands higher" % kind)
 				assert_lt(TankWorldDraw.lane_dim(lane), TankWorldDraw.lane_dim(lane - 1))
 				assert_gt(TankWorldDraw.lane_fog(lane), TankWorldDraw.lane_fog(lane - 1))
 			assert_almost_eq(r.get_center().x, 500.0, 1.0, "centred where the rules hold it")
 			prev = r
-	assert_eq(TankView.lane_foot(0), TankView.ROAD_ENEMY_Y, "the front lane on the road")
-	# A heavy two lanes back is drawn no larger than a medium in the front lane.
-	var heavy := v.lane_rect("heavy", 500.0, 2)
-	var medium := v.lane_rect("medium", 500.0, 0)
-	assert_lte(heavy.size.y, medium.size.y)
+	assert_eq(TankView.lane_foot(0), 396.0, "the front lane (SPEC_TANK 4.7)")
+	assert_eq(TankView.lane_foot(1), 380.0, "the back lane")
 
 
 func test_every_enemy_sprite_carries_its_shading_masks() -> void:
@@ -45,7 +42,7 @@ func test_wrecks_stand_in_their_lane_and_the_beams_light_them() -> void:
 	var s := U.fixture("state", 3)
 	var v := U.view_of(self, s)
 	for lane in TankView.LANES:
-		var w := {"x": s.hull.x_px + 420.0, "kind": "medium", "lane": lane, "side": 1, "t": s.t}
+		var w := {"x": s.hull.x_px + 420.0, "kind": "recon", "lane": lane, "t": s.t}
 		var r := TankWorldDraw.wreck_rect(v, w)
 		assert_eq(r.end.y, TankView.lane_foot(lane) + TankWorldDraw.WRECK_SINK, "lane %d" % lane)
 		var hatch := TankWorldDraw.wreck_hatch(v, w)

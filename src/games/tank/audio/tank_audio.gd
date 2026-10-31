@@ -31,6 +31,7 @@ const SOUND_NAMES: Array[String] = [
 	"tank_arc_crackle",
 	"tank_bow_rattle",
 	"tank_cricket",
+	"tank_rustle",
 ]
 ## name -> [synth kind, Hz, duration s, attack s, release s]
 const DEFS := {
@@ -50,6 +51,7 @@ const DEFS := {
 	"tank_arc_crackle": ["noise", 0.0, 0.07, 0.001, 0.06],
 	"tank_bow_rattle": ["square", 210.0, 0.035, 0.001, 0.03],
 	"tank_cricket": ["sine", 4300.0, 0.05, 0.004, 0.04],
+	"tank_rustle": ["noise", 0.0, 0.28, 0.02, 0.24],
 }
 ## The arc generator's engine id (TankIds.ENGINE_ARC).
 const ENGINE_ARC := TankIds.ENGINE_ARC
@@ -87,6 +89,8 @@ const LOOP_MIN_RPM := 8.0
 const OWN_CHUFF_DB := -9.0
 const OTHER_CHUFF_DB := -18.0
 const MAX_PLAYS_PER_FRAME := 8
+## How long before a far shell lands its whistle starts (s).
+const WHISTLE_LEAD_S := 0.5
 const PLAYED_MAX := 256
 const DELAYED_MAX := 32
 const CLANK_MIN_S := 0.16
@@ -190,6 +194,19 @@ func on_cue(kind: String, data: Dictionary) -> void:
 			_latch(data)
 		TankEvents.BOSS_PHASE:
 			_play("tank_boom_big", -4.0, 0.75)
+		TankEvents.SPLASH:
+			if int(data.get("f", 0)) == 1:
+				_play("tank_boom_small", -20.0, 0.7)
+			else:
+				_play("tank_boom_crack", -14.0, 0.8)
+		TankEvents.AMBUSH:
+			_play("tank_rustle", -10.0)
+			_after(0.08, "tank_clank", -14.0, 1.3)
+		TankEvents.TANK_LOST:
+			_play("tank_boom_big", -2.0, 0.7)
+			_after(0.2, "tank_breakdown", -5.0)
+		TankEvents.STAGE_RESTART:
+			_play("tank_clunk", -6.0, 0.9)
 
 
 func _latch(data: Dictionary) -> void:
@@ -218,13 +235,19 @@ func _shot(data: Dictionary) -> void:
 		_play("tank_boom_crack", -8.0 + db)
 		_after(0.35, "tank_brass", -14.0 + (4.0 if gunner else 0.0))
 		return
+	var flight := float(data.get("flight_s", 0.0))
 	if sh == TankIds.SHELL_BOSS_MAIN:
 		_play("tank_boom_low", -2.0, 0.7)
 		_play("tank_boom_crack", -5.0)
-		_after(0.5, "tank_whistle", -10.0, 0.7)
+		_after(_whistle_at(flight, 0.5), "tank_whistle", -10.0, 0.7)
 		return
 	_play("tank_boom_small", -13.0)
-	_after(0.25, "tank_whistle", -16.0)
+	_after(_whistle_at(flight, 0.25), "tank_whistle", -16.0)
+
+
+## A far shell's whistle comes just before it lands; a near one's `near_s` after the shot.
+static func _whistle_at(flight_s: float, near_s: float) -> float:
+	return maxf(flight_s - WHISTLE_LEAD_S, 0.0) if flight_s > 0.0 else near_s
 
 
 func _hit(data: Dictionary) -> void:

@@ -204,59 +204,44 @@ func test_the_bow_rounds_are_heavier_tracers_with_a_glow() -> void:
 # --- the bases ------------------------------------------------------------------------------------
 
 
-func test_the_depot_base_stands_ahead_of_the_nose_with_its_gate_on_screen() -> void:
+func test_a_stages_base_stands_whole_in_the_far_panel_never_cut_by_the_seam() -> void:
+	for seg: String in [TankIds.SEG_DEPOT, TankIds.SEG_GUN_LINE]:
+		for size: Vector2 in [Vector2(960, 540), Vector2(852, 480)]:
+			var s := U.fixture("state", 3)
+			s.seg.seg = seg
+			s.hull.x_px = 0.0
+			var v := U.view_of(self, s, Wl.SOLO, 1, size)
+			assert_eq(TankForest.bases(v, s).size(), 0, "%s: not on the near stage" % seg)
+			var x := TankForest.far_base(v, s)
+			assert_gte(x, 0.0, "%s at %s" % [seg, size])
+			assert_lte(x + TankForest.BASE_W, v.far.far_w, "%s at %s: its gate too" % [seg, size])
+
+
+func test_a_stages_base_slides_away_as_the_hull_drives_off() -> void:
 	var s := U.fixture("state", 3)
 	s.seg.seg = TankIds.SEG_DEPOT
 	s.hull.x_px = 0.0
 	var v := U.view_of(self, s)
-	var b := TankForest.bases(v, s)
-	assert_eq(b.size(), 1, "the depot's base")
-	if b.is_empty():
-		return
-	var nose := v.tank_pos.x + v.headlight_x()
-	assert_gt(b[0], nose, "ahead of the tank, not hidden behind it")
-	assert_lt(b[0] + TankForest.BASE_W, v.canvas.x, "the whole clearing, gate and all, on screen")
-
-
-func test_a_gun_line_base_keeps_clear_of_every_lanes_dug_ins() -> void:
-	for lane in [0, 1]:
-		var s := U.fixture("gun_line", 3)
-		s.seg.seg = TankIds.SEG_GUN_LINE
-		var dg := s.enemy(22)
-		dg.lane = lane
-		dg.x_px = TankForest.GUN_LINE_BASE_X - 20.0
-		var v := U.view_of(self, s)
-		var spans := TankForest.dugin_spans(v, s)
-		assert_eq(spans.size(), 2, "both dug-ins")
-		var b := TankForest.bases(v, s)
-		var gx := TankForest.gun_line_base(v, s)
-		if is_nan(gx):
-			assert_eq(b.size(), 0, "no base where none fits")
-			continue
-		var a := gx - TankForest.BASE_BANK
-		var e := gx + TankForest.BASE_W + TankForest.BASE_BANK
-		for sp in spans:
-			assert_true(e <= sp.x or a >= sp.y, "lane %d: the base clear of a dug-in" % lane)
-		assert_ne(gx, roundf(v.sx(TankForest.GUN_LINE_BASE_X)), "slid off the dug-in")
-		s.enemies.erase(dg)
-		U.run(v, 2)
-		assert_eq(TankForest.gun_line_base(v, s), gx, "latched: no jump when a dug-in goes")
+	var x0 := TankForest.far_base(v, s)
+	s.hull.x_px = 200.0
+	U.run(v, 12)
+	assert_lt(TankForest.far_base(v, s), x0, "at the far parallax")
+	s.hull.x_px = 4000.0
+	U.run(v, 12)
+	assert_true(is_nan(TankForest.far_base(v, s)), "gone when it is out of the panel")
+	s.seg.seg = TankIds.SEG_ADVANCE
+	assert_true(is_nan(TankForest.far_base(v, s)), "none on the road between")
 
 
 # --- enemies --------------------------------------------------------------------------------------
 
 
-func test_back_lane_enemies_stand_level_on_their_berms() -> void:
+func test_both_near_lanes_follow_the_road_under_them() -> void:
 	var v := U.view_of(self, U.fixture("state", 3))
-	var sloped := 0
-	for i in 60:
-		var r := Rect2(Vector2(480.0 + i * 7.0, 300.0), Vector2(90, 40))
-		var p0 := v.enemy_pose(r, 0)
-		if absf(float(p0["rot"])) > 0.001:
-			sloped += 1
-		for lane in [1, 2, 3]:
-			assert_eq(float(v.enemy_pose(r, lane)["rot"]), 0.0, "lane %d level" % lane)
-	assert_gt(sloped, 0, "the road lane still follows the slopes")
+	for i in 12:
+		var x := 480.0 + i * 12.0
+		assert_almost_eq(v.near_ground(x, 0), v.ground_y(x) + 11.0, 0.01, "lane 0, in front")
+		assert_almost_eq(v.near_ground(x, 1), v.ground_y(x) - 5.0, 0.01, "lane 1, behind")
 
 
 # --- the tank -------------------------------------------------------------------------------------

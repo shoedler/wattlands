@@ -124,6 +124,18 @@ static func tick(state: TankState, dt: float) -> void:
 			if rp.press_t >= 1.0:
 				rp.press_t -= 1.0
 				rp.patches += 1
+		elif st is TankFeedState and not st.is_empty() and (st as TankFeedState).rpm > 0.0:
+			_tick_feed(state, st as TankFeedState, dt)
+
+
+## The Secondaries' rounds rise at the feed's rate.
+static func _tick_feed(state: TankState, feed: TankFeedState, dt: float) -> void:
+	var due := float(feed.get_meta(&"due", 0.0)) + feed.rpm / 60.0 * dt
+	while due >= 1.0:
+		due -= 1.0
+		feed.rounds += 1
+		feed.fire_tick = state.tick
+	feed.set_meta(&"due", due)
 
 
 static func _tick_enemy(state: TankState, e: TankEnemyState, dx: float, dt: float) -> void:
