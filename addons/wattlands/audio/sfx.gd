@@ -35,6 +35,11 @@ const BUILTIN_NAMES: Array[String] = [
 const POOL_SIZE := 8
 const METRONOME_SOUND := "click"
 const METRONOME_DB := -8.0
+const SHARED_DIR := "res://assets/_shared/audio/"
+const SAFETY_SOUNDS: Array[String] = ["warning", "rescue"]
+const SFX_BUILTINS: Array[String] = ["coin", "hit", "boom", "whoosh"]
+const SAFETY_DUCK_ATTACK_S := 0.02
+const SAFETY_DUCK_RELEASE_S := 1.2
 
 ## Added to every play() volume.
 var master_db: float = 0.0
@@ -52,14 +57,17 @@ var _metro_rpm: float = 0.0
 var _metro_t: float = 0.0
 var _metro_clicks: int = 0
 var _warned: Dictionary = {}
+var _registered: Dictionary = {}
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	AudioBuses.ensure()
 
 
 func _process(delta: float) -> void:
 	tick(delta)
+	AudioBuses.tick(delta)
 
 
 func play(sound: String, volume_db: float = 0.0, pitch: float = 1.0) -> void:
@@ -73,11 +81,30 @@ func play(sound: String, volume_db: float = 0.0, pitch: float = 1.0) -> void:
 	play_count += 1
 	if muted or not is_inside_tree():
 		return
-	var p := _free_player()
+	var p := _free_player(SAFETY_SOUNDS.has(sound))
+	if p == null:
+		return
 	p.stream = s
+	p.bus = bus_of(sound)
 	p.volume_db = volume_db + master_db
 	p.pitch_scale = clampf(pitch, 0.05, 4.0)
 	p.play()
+	if SAFETY_SOUNDS.has(sound):
+		AudioBuses.duck(AudioBuses.MACHINES, -6.0, SAFETY_DUCK_ATTACK_S, SAFETY_DUCK_RELEASE_S)
+		AudioBuses.duck(AudioBuses.AMBIENCE, -6.0, SAFETY_DUCK_ATTACK_S, SAFETY_DUCK_RELEASE_S)
+		AudioBuses.duck(AudioBuses.SFX, -4.0, SAFETY_DUCK_ATTACK_S, SAFETY_DUCK_RELEASE_S)
+
+
+## The bus a play(sound) goes to. A safety prompt goes to Master: only the master volume governs it, no sub-slider can
+## hide it, and nothing ducks it.
+func bus_of(sound: String) -> String:
+	if SAFETY_SOUNDS.has(sound):
+		return AudioBuses.MASTER
+	if sound == METRONOME_SOUND:
+		return AudioBuses.UI
+	if _registered.has(sound) or SFX_BUILTINS.has(sound):
+		return AudioBuses.SFX
+	return AudioBuses.UI
 
 
 ## Add a named effect (an AudioStream, e.g. a game's own synthesized clip).
@@ -86,19 +113,22 @@ func register(sound: String, stream: AudioStream) -> void:
 		push_error("Sfx: register needs a name and a stream (got '%s', %s)" % [sound, stream])
 		return
 	_streams[sound] = stream
+	_registered[sound] = true
 
 
 func has_sound(sound: String) -> bool:
 	return _streams.has(sound) or BUILTIN_NAMES.has(sound)
 
 
-## The stream registered or built in under `sound` (built-ins are synthesized on first use);
-## null if unknown.
+## The stream registered or built in under `sound` (a built-in is assets/_shared/audio/<name>.wav when that
+## is there, else synthesized on first use); null if unknown.
 func get_stream(sound: String) -> AudioStream:
 	if _streams.has(sound):
 		return _streams[sound]
 	if BUILTIN_NAMES.has(sound):
-		var s := SfxSynth.builtin(sound)
+		var s := _shared_stream(sound)
+		if s == null:
+			s = SfxSynth.builtin(sound)
 		_streams[sound] = s
 		return s
 	return null
@@ -169,16 +199,31 @@ func stop_all() -> void:
 		p.stop()
 
 
-func _free_player() -> AudioStreamPlayer:
+func _shared_stream(sound: String) -> AudioStream:
+	var path := SHARED_DIR + sound + ".wav"
+	return load(path) as AudioStream if ResourceLoader.exists(path) else null
+
+
+## A free player, else a new one up to POOL_SIZE, else the next in turn. A player holding a safety prompt (only those
+## play on Master) is never cut (SPEC_AUDIO 5): if all of them hold one, a new prompt gets a player past the cap and
+## anything else gets none.
+func _free_player(safety: bool) -> AudioStreamPlayer:
 	for p in _players:
 		if not p.playing:
 			return p
 	if _players.size() < POOL_SIZE:
-		var np := AudioStreamPlayer.new()
-		np.name = "Player%d" % _players.size()
-		add_child(np)
-		_players.append(np)
-		return np
-	var p := _players[_next_player % _players.size()]
-	_next_player += 1
+		return _new_player()
+	for i in _players.size():
+		var p := _players[_next_player % _players.size()]
+		_next_player += 1
+		if str(p.bus) != AudioBuses.MASTER:
+			return p
+	return _new_player() if safety else null
+
+
+func _new_player() -> AudioStreamPlayer:
+	var p := AudioStreamPlayer.new()
+	p.name = "Player%d" % _players.size()
+	add_child(p)
+	_players.append(p)
 	return p

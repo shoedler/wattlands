@@ -1,0 +1,75 @@
+{
+  "schema": 1,
+  "game": "bank_min",
+  "mix": {"other_db": -10.0, "other_doubling_db": -3.0, "other_min_gap_s": 0.06,
+          "machine_voices": 16, "sfx_voices": 16, "spot_voices": 6, "max_loop_players": 24},
+  "sounds": {
+    "stroke": {"dur": 0.1, "rate": 22050, "ch": 1, "locked": true, "variants": 3},
+    "tick": {"dur": 0.1, "rate": 22050, "ch": 1, "locked": true},
+    "other_stroke": {"dur": 0.1, "rate": 22050, "ch": 1, "locked": true},
+    "body": {"dur": 1.5, "rate": 22050, "ch": 1, "loop": true},
+    "whine": {"dur": 1.5, "rate": 22050, "ch": 1, "loop": true},
+    "wind": {"dur": 12.0, "rate": 11025, "ch": 2, "loop": true},
+    "scream": {"dur": 1.5, "rate": 22050, "ch": 1, "loop": true},
+    "cricket": {"dur": 0.3, "rate": 22050, "ch": 2, "variants": 2},
+    "bang": {"dur": 0.7, "rate": 22050, "ch": 1},
+    "boom": {"dur": 0.7, "rate": 22050, "ch": 1}
+  },
+  "machines": {
+    "main": {
+      "bus": "Machines",
+      "priority": 5,
+      "events": [
+        {"at": [0.25, 0.75], "sound": "stroke", "db": -2.0,
+         "db_by": [{"param": "power", "points": [[0, -9], [1, 0]]}],
+         "pitch_by": [],
+         "pitch_table": [1.0, 0.98, 1.02]},
+        {"at": [0.5], "sound": "tick", "db": -12.0, "lead_only": true,
+         "when": {"param": "power", "min": 0.5}}
+      ],
+      "loops": [
+        {"sound": "body", "db": -8.0, "min_rpm": 8, "other": true,
+         "pitch_by": [{"param": "rpm", "ratio": 90}]},
+        {"sound": "whine", "db": -14.0, "min_rpm": 8,
+         "db_by": [{"param": "rpm", "points": [[50, -60], [75, 0]]}],
+         "pitch_by": [{"param": "rpm", "ratio": 110}]}
+      ]
+    },
+    "other": {
+      "bus": "Machines",
+      "priority": 5,
+      "events": [{"at": [0.0, 0.5], "sound": "other_stroke", "db": 0.0}]
+    },
+    "bare": {
+      "bus": "Machines",
+      "loops": [{"sound": "body", "db": -8.0}]
+    }
+  },
+  "loops": {
+    "drag_scream": {"bus": "Sfx", "layers": [
+      {"sound": "scream", "db": -6.0, "other": true, "when": {"param": "tension", "min": 0.5},
+       "pitch_by": [{"param": "tension", "ratio": 1}]}
+    ]}
+  },
+  "beds": {
+    "night": {
+      "layers": [{"sound": "wind", "db": -20.0, "db_by": [{"param": "gust", "points": [[0, -6], [1, 0]]}]}],
+      "spots": [{"sound": "cricket", "gap_s": [0.7, 2.6], "db": [-30, -24], "pitch": [0.92, 1.08],
+                 "burst": [2, 3], "burst_gap_s": 0.09}]
+    },
+    "day": {"layers": [{"sound": "wind", "db": -26.0}], "spots": []}
+  },
+  "cues": {
+    "shot": {
+      "hits": [
+        {"sound": "bang", "db": -4.0, "pitch": 1.0, "bus": "Sfx", "priority": 8},
+        {"sound": "boom", "db": -6.0, "bus": "Sfx", "delay_s": 0.5, "delay_var": "flight",
+         "pitch_var": "scale", "db_var": "gain"}
+      ],
+      "duck": [{"bus": "Machines", "db": -4, "attack_s": 0.01, "release_s": 0.35}],
+      "other_db": -8.0
+    },
+    "quiet": {"hits": [{"sound": "bang", "db": 0.0, "bus": "Sfx"}]},
+    "plain_duck": {"hits": [], "duck": [{"bus": "Machines", "db": -4}]}
+  }
+}
