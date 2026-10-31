@@ -1,7 +1,7 @@
 extends GutTest
 ## The art critic's second round on the v4 frames: a real night over the far treeline, a far base that is scenery and
-## not a pasted slab, enemy hatches that read as warm rooms, near threats that run and stand apart, a firing mark that stays
-## a hot barrel, a shell screen that folds between shots, and tags that stay where they are.
+## not a pasted slab, enemy hatches that read as warm rooms, near threats that run and stand apart, a firing mark that
+## stays a hot barrel, a shell screen that folds between shots, and tags that stay where they are.
 
 const U := preload("res://tests/games/tank/view/tank_view_util.gd")
 

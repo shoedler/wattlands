@@ -107,8 +107,8 @@ const VEIL_NOISE_HZ := 12.0
 const VEIL_NOISE := Color(0.32, 0.36, 0.34)
 const VEIL_NOISE_A := 0.05
 ## The firing mark: a hot barrel down the bore and a short flare off the muzzle, in a colour and a shape no idle cue
-## uses (the exhausts and vents are round warm orange, the slits cold). Only the soonest shots burn; the rest of a crowded
-## field keep the cross on the muzzle and the HUD's tick, so it never turns into a laser show.
+## uses (the exhausts and vents are round warm orange, the slits cold). Only the soonest shots burn; the rest of a
+## crowded field keep the cross on the muzzle and the HUD's tick, so it never turns into a laser show.
 const SIGNAL := Color(1.0, 0.1, 0.26)
 const SIGNAL_CORE := Color(1.0, 0.86, 0.8)
 const SIGNAL_HZ := 7.0
