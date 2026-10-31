@@ -54,7 +54,7 @@ export function skyPlane() {
   return c;
 }
 
-/** 480 x 380: stars in three strengths, a faint band of many, and a thin moon, fading by LUT alpha. */
+/** 480 x 380: stars in three strengths and a faint band of many, fading by LUT alpha. It tiles, so no moon. */
 export function starsPlane(seed) {
   const c = new Canvas(480, 380, { wrapX: true });
   const rnd = mulberry32(seed ^ 0x51a2);
@@ -76,12 +76,6 @@ export function starsPlane(seed) {
     c.px(x + 1, y, ix(P.STAR + 1));
     c.px(x, y - 1, ix(P.STAR + 1));
     c.px(x, y + 1, ix(P.STAR + 1));
-  }
-  // A waning moon, its dark side cut away.
-  for (let y = -6; y <= 6; y++) {
-    for (let x = -6; x <= 6; x++) {
-      if (x * x + y * y <= 36 && (x - 3) * (x - 3) + y * y > 30) c.px(120 + x, 244 + y, ix(P.STAR + 3));
-    }
   }
   return c;
 }
@@ -488,6 +482,22 @@ export function nearTreesPlane(seed) {
       c.px(x, y, ix(P.PASTURE + (d < 1 ? 3 : d < 3 ? 2 : d < 7 ? 1 : 0)));
     }
     if (hash2(x, 1, seed) < 0.25) c.px(x, top - 1, ix(P.PASTURE + 2));
+  }
+  // The field below the trees shows on climbs: mown strips, tufts, and a low hedge with bushes along it.
+  for (let y = 112; y < c.h; y++) {
+    for (let x = 0; x < c.w; x++) {
+      const d = y - groundAt(x);
+      if (d < 7) continue;
+      const strip = ((x + y * 3) >> 5) % 2 === 0;
+      const tuft = hash2(x >> 1, y, seed + 5) < 0.14;
+      c.px(x, y, ix(P.PASTURE + (strip ? 1 : 0) + (tuft ? 1 : 0)));
+    }
+  }
+  for (let x = 0; x < c.w; x++) {
+    const y = 133 + Math.round(3 * f(x));
+    c.px(x, y, ix(P.HEDGE));
+    c.px(x, y + 1, ix(P.HEDGE));
+    if (hash2(x, 2, seed) < 0.18) bush(c, x, y - 1, hash2(x, 3, seed) < 0.3 ? 3 : 2);
   }
   const rnd = mulberry32(seed ^ 0x56);
   c.chimneys = [];

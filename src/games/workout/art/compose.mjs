@@ -109,7 +109,7 @@ function nearProps(out, parts, kit, tod, scroll) {
 }
 
 /** A backdrop plus riders at LUT row `row`. `contact(x)` is the middle lane's contact y. */
-export function scene(parts, kit, row, { contact = () => 384, scroll = 0, riders = [], blocks = [], crowd = false }) {
+export function scene(parts, kit, row, { contact = () => 384, scroll = 0, riders = [], blocks = [], crowd = false, blockBottom = 460 }) {
   const out = new Canvas(W, H);
   const tod = kit.tod[row];
   const planeOf = (name) => recolour(parts.planes[name], parts.lut, row);
@@ -140,12 +140,19 @@ export function scene(parts, kit, row, { contact = () => 384, scroll = 0, riders
   for (const r of order) drawRider(out, parts, r, contact, tod.rider_tint);
   roadRows(out, vergeNear, contact, (c) => c + kit.road.verge_near.below, scroll);
   bankFill(out, contact, tod);
-  tile(out, planeOf('foreground_0'), 396, Math.round(scroll * 1.35));
+  // The foreground follows the road here (the view's flat case gives its fixed y 396: contact 384 + 12).
+  roadRows(out, planeOf('foreground_0'), contact, (c) => c + 12, Math.round(scroll * 1.35));
   for (const b of blocks) {
     const color = hex(b.color);
-    const bottom = 460;
+    const lit = color.map((u) => Math.min(u + 40, 255));
+    const dark = color.map((u) => Math.round(u * 0.72));
+    const bottom = blockBottom;
     for (let x = b.x0; x < b.x1; x++) {
-      for (let y = bottom - b.h; y < bottom; y++) out.px(x, y, y === bottom - b.h ? color.map((u) => Math.min(u + 40, 255)) : color);
+      for (let y = bottom - b.h; y < bottom; y++) {
+        const top = y === bottom - b.h;
+        const hatch = b.hatched && (x + y) % 4 === 0;
+        out.px(x, y, top ? lit : hatch || x === b.x0 ? dark : color);
+      }
     }
   }
   return out;
@@ -160,10 +167,13 @@ const FORMATION = [
 
 /** The picker card: golden hour, a road rising to the right, four riders, a crowd, blocks. No text. */
 export function pickerCard(parts, kit) {
-  const contact = (x) => 400 - 30 * (x / W) - 8 * Math.sin((x / W) * Math.PI * 2);
+  // A 480 x 270 window of the world at 2x: on a small card the riders are the picture, as Tank's hull is.
+  const x0 = 250;
+  const y0 = 176;
+  const contact = (x) => 414 - 42 * ((x - x0) / 480) - 3 * Math.sin(((x - x0) / 480) * Math.PI * 2);
   const frames = [3, 9, 15, 21];
   const riders = FORMATION.map(([dx, lane], i) => ({
-    x: 560 + dx,
+    x: 540 + dx,
     lane,
     slot: i,
     pose: i === 0 ? 'stand' : 'seat',
@@ -171,16 +181,19 @@ export function pickerCard(parts, kit) {
     wheel: (i * 5) % 16,
   }));
   const blocks = [
-    [0, 120, 16, '#4fa36a'],
-    [120, 300, 28, '#e88a3a'],
-    [300, 380, 12, '#8fa3b8'],
-    [380, 560, 32, '#d4553f'],
-    [560, 640, 12, '#8fa3b8'],
-    [640, 690, 40, '#b45fc4'],
-    [690, 860, 28, '#e88a3a'],
-    [860, 960, 12, '#6f8296'],
-  ].map(([x0, x1, h, color]) => ({ x0: x0 + 1, x1, h, color }));
-  return scene(parts, kit, Math.floor(0.4 * 31), { contact, riders, blocks, crowd: true, scroll: 340 });
+    [250, 330, 12, '#4fa36a'],
+    [330, 420, 22, '#e88a3a'],
+    [420, 470, 8, '#8fa3b8'],
+    [470, 560, 26, '#d4553f'],
+    [560, 600, 8, '#8fa3b8'],
+    [600, 628, 32, '#b45fc4', true],
+    [628, 700, 22, '#e88a3a'],
+    [700, 740, 8, '#6f8296'],
+  ].map(([x, x1, h, color, hatched]) => ({ x0: x + 1, x1, h, color, hatched }));
+  const full = scene(parts, kit, Math.floor(0.4 * 31), { contact, riders, blocks, crowd: true, scroll: 340, blockBottom: 444 });
+  const win = new Canvas(480, 270);
+  for (let y = 0; y < 270; y++) for (let x = 0; x < 480; x++) win.px(x, y, full.get(x + x0, y + y0));
+  return win.scaled(2);
 }
 
 const PREVIEW_RIDERS = FORMATION.map(([dx, lane], i) => ({
