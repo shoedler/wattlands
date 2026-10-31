@@ -15,7 +15,7 @@ mkdir -p "$out"
 tools/screenshot --scene=res://tests/games/siege/view2/siege_card_scene.tscn --frames=60 --size=1920x1080 \
   --siege-demo-mock-pose --siege-demo-sharp "--out=$out/siege" --timeout=300
 
-# Diesel Domestiques: the four-rider landship, gun raised, lamps on. nohud and nopip drop the HUD and the shell screen.
+# Torque Company: the four-rider landship, gun raised, lamps on. nohud and nopip drop the HUD and the shell screen.
 TANK_FIXTURE="kind=v4:far_duel;flex;crew=4;nohud;nopip;fire=0" \
   tools/screenshot --scene=res://tests/games/tank/view/fixture_scene.tscn --frames=160 --size=1920x1080 \
   "--out=$out/tank" --timeout=300
