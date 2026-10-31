@@ -1,6 +1,6 @@
 {
   "version": "v2-2",
-  "note": "Diesel Domestiques v2 art kit (docs/games/tank.md 3), built from the reference image only (no fal), 960x540 art px. The single manifest the view reads (TankKit). Regenerate with tools_src/regen.sh. v3: the enemies, the Behemoth and the cards are used; the tank, crew and planes went with v3 (regen.sh still writes the v2 tank section and turret_barrel.png; drop both after a regen).",
+  "note": "Diesel Domestiques v2 art kit: what is left of it, the content cards. The tank is assets/tank/v3, the enemies assets/tank/v4.",
   "art_resolution": [
     960,
     540
@@ -10,93 +10,6 @@
     "scale": 0.882352941176471,
     "offset_y": 2,
     "note": "x960 = x1088 * 15/17, y540 = y608 * 15/17 + 2 (1088x608 -> 960x536, edge rows repeated to 540)"
-  },
-  "enemies": {
-    "light": {
-      "file": "enemies/light.png",
-      "size": [
-        136,
-        45
-      ],
-      "muzzle": [
-        3,
-        19
-      ]
-    },
-    "medium": {
-      "file": "enemies/medium.png",
-      "size": [
-        165,
-        83
-      ],
-      "muzzle": [
-        2,
-        26
-      ]
-    },
-    "destroyer": {
-      "file": "enemies/destroyer.png",
-      "size": [
-        163,
-        56
-      ],
-      "muzzle": [
-        3,
-        5
-      ]
-    },
-    "heavy": {
-      "file": "enemies/heavy.png",
-      "size": [
-        199,
-        79
-      ],
-      "muzzle": [
-        3,
-        51
-      ]
-    },
-    "dugin": {
-      "file": "enemies/dugin.png",
-      "size": [
-        110,
-        28
-      ],
-      "muzzle": [
-        7,
-        13
-      ]
-    },
-    "behemoth": {
-      "file": "enemies/behemoth.png",
-      "size": [
-        583,
-        297
-      ],
-      "muzzle": [
-        16,
-        140
-      ],
-      "bogies_at": [
-        [
-          0.25,
-          0.78
-        ],
-        [
-          0.47,
-          0.78
-        ],
-        [
-          0.69,
-          0.78
-        ]
-      ],
-      "turret_at": [
-        0.466,
-        0.414
-      ],
-      "note": "muzzle: the main gun's left end; bogies_at / turret_at: fractions of the sprite (fires, hits): the bogies' centres and the turret block's centre (art x 151-392, y 102-144), measured on the sprite; assets/tank/rigs.json boss holds the same parts in rules px"
-    }
   },
   "cards": {
     "picker": "picker_card.png",

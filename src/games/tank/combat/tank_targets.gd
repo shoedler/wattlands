@@ -100,7 +100,7 @@ static func build(state: TankState, aux: TankAux) -> void:
 			t.kind = TankTarget.KIND_BOSS
 			t.part = i
 			t.tier = (
-				TankTarget.TIER_HEAVY if i == TankBossState.TURRET_PART else TankTarget.TIER_DUGIN
+				TankTarget.TIER_HEAVY if i == TankBossState.TURRET_PART else TankTarget.TIER_BOGIE
 			)
 			t.rect = boss_rect(state, aux, i)
 			if b.range_m > 0.0:

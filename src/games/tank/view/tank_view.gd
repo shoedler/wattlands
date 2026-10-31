@@ -133,7 +133,6 @@ var audio: TankAudio = null
 ## Turn off to drive advance() yourself (tests, screenshots).
 var auto_process: bool = true
 var rig: TankRig = null
-var kit: TankKit = null
 var enemy_kit: TankEnemyKit = TankEnemyKit.shared()
 var fx: TankFx = TankFx.new()
 var dof: TankDof = null
@@ -264,7 +263,6 @@ func _build() -> void:
 		return
 	_built = true
 	rig = TankRig.shared()
-	kit = TankKit.shared()
 	var ctx := game.ctx
 	var sd := ctx.seed if ctx != null else 1
 	fx.seed_rng(sd)

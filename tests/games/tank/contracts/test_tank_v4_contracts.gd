@@ -55,11 +55,11 @@ func test_codes_stay_unique_and_never_take_the_boss_code() -> void:
 	assert_gt(TankIds.EM_RETIRE, TankIds.EM_LEAVE, "appended, none reused")
 
 
-func test_every_kind_is_far_near_or_the_dug_in_and_the_score_counts_them() -> void:
+func test_every_kind_is_far_or_near_and_the_score_counts_them() -> void:
 	for t: String in TankIds.ENEMY_TYPES:
 		var far := TankIds.FAR_KINDS.has(t)
 		var near := TankIds.NEAR_KINDS.has(t)
-		assert_true(far != near or t == TankIds.ENEMY_DUGIN, t)
+		assert_true(far != near, t)
 		assert_eq(TankIds.is_near_code(TankIds.enemy_code(t)), near, t)
 	var score := TankScoreState.new()
 	assert_eq(score.kills.size(), 9)

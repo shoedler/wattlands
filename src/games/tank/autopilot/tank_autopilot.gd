@@ -106,12 +106,8 @@ static func is_gunner(engine: String) -> bool:
 
 
 ## The live enemies the main gun could lay on: far kinds within its range, the Behemoth while a part
-## of it stands. Near threats are the Secondaries' (the main gun does not lay on them). An enemy in
-## the old frame (range 0; gone with the old rules at T) counts while on screen.
+## of it stands. Near threats are the Secondaries' (the main gun does not lay on them).
 static func enemies_in_range(state: TankState) -> int:
-	var cam := state.camera_x()
-	var lo := cam + EDGE_MARGIN_PX
-	var hi := cam + float(TankConst.SCREEN_W) - EDGE_MARGIN_PX
 	var max_range := 2500.0
 	if state.content != null:
 		max_range = state.content.num("tanks", "gun.far.max_range_m", max_range)
@@ -119,21 +115,17 @@ static func enemies_in_range(state: TankState) -> int:
 	for e in state.enemies:
 		if e.mode == TankIds.EM_DEAD or e.hp <= 0.0 or e.is_near():
 			continue
-		if e.range_m > 0.0:
-			n += 1 if e.range_m <= max_range else 0
-		elif e.x_px + maxf(float(e.w), 1.0) >= lo and e.x_px <= hi and e.side > 0:
+		if e.range_m > 0.0 and e.range_m <= max_range:
 			n += 1
 	var b := state.boss
 	var stands := b.phase == TankIds.BOSS_PHASE_1 or b.phase == TankIds.BOSS_PHASE_2
-	if stands and (b.range_m > 0.0 or b.x_px < hi):
+	if stands and b.range_m > 0.0:
 		n += 1
 	return n
 
 
 static func _obstacle_shot(state: TankState) -> Array:
 	var hull := state.hull
-	if hull.facing != TankIds.FACE_RIGHT or hull.traverse_s > 0.0:
-		return []
 	if enemies_in_range(state) > 0:
 		return []
 	var ob := _blocking_obstacle(state)
@@ -445,7 +437,6 @@ static func repair_need(state: TankState) -> float:
 ## "far": a far enemy beyond the headlight's range (arc.dark_range_m), "gun": the auto-aim can lay on
 ## a target now (TankAim.pick), "rack": shells in the rack, "shells": the rack plus a chambered round,
 ## "far_target": a far enemy or Behemoth part stands, "near_threat": a recon car or tankette is alive}.
-## An enemy in the old frame (range 0; gone with the old rules at T) reads as it always did.
 static func situation(state: TankState) -> Dictionary:
 	var aux := TankAux.of(state)
 	var cam := state.camera_x()
@@ -454,7 +445,6 @@ static func situation(state: TankState) -> Dictionary:
 	var hi := c.num("tanks", "bow.max_px", 220.0) if c != null else 220.0
 	var reach := c.num("tanks", "arc.dark_range_px", 260.0) if c != null else 260.0
 	var dark_m := c.num("tanks", "arc.dark_range_m", 2300.0) if c != null else 2300.0
-	var light_code := TankIds.enemy_code(TankIds.ENEMY_LIGHT)
 	var targets := false
 	var near := false
 	var only_light := true
@@ -484,16 +474,12 @@ static func situation(state: TankState) -> Dictionary:
 			continue
 		if not TankShells.collidable(t) or not TankTargets.engageable(t, cam):
 			continue
-		var enemy := t.kind == TankTarget.KIND_ENEMY
 		if t.kind == TankTarget.KIND_OBSTACLE and not TankDrive.blocks(t.obstacle):
-			continue
-		if enemy and t.enemy.side < 0 and t.enemy.code == light_code:
 			continue
 		targets = true
 		near = near or TankAim.in_reach(state, t)
 		var d := TankBow.distance(state, t)
-		var ahead := not enemy or t.enemy.side > 0
-		var in_bow := ahead and d >= lo - 1e-6 and d <= hi + 1e-6
+		var in_bow := d >= lo - 1e-6 and d <= hi + 1e-6
 		bow = bow or in_bow
 		if in_bow and not light_target(state, t):
 			only_light = false

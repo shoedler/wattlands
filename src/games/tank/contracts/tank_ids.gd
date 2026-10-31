@@ -133,7 +133,6 @@ const BACKDROPS: Array[String] = [BACKDROP_FOREST, BACKDROP_FIRS, BACKDROP_BIRCH
 const ENEMY_LIGHT := "light"
 const ENEMY_MEDIUM := "medium"
 const ENEMY_DESTROYER := "destroyer"
-const ENEMY_DUGIN := "dugin"
 const ENEMY_HEAVY := "heavy"
 const ENEMY_RECON := "recon"
 const ENEMY_TANKETTE := "tankette"
@@ -149,11 +148,12 @@ const ENEMY_CODES := {
 	ENEMY_LIGHT: 1,
 	ENEMY_MEDIUM: 2,
 	ENEMY_DESTROYER: 3,
-	ENEMY_DUGIN: 4,
 	ENEMY_HEAVY: 5,
 	ENEMY_RECON: 7,
 	ENEMY_TANKETTE: 8,
 }
+## Kinds that are gone, with the codes they held: a code is never used again.
+const RETIRED_ENEMY_CODES := {"dugin": 4}
 ## The Behemoth's code in kill counts and events ("kill" t, results kills by type).
 const BOSS_CODE := 6
 const BOSS_ID := "behemoth"
@@ -175,7 +175,6 @@ const EM_PAUSE := 8
 
 ## Where an Advance encounter enters.
 const FROM_FRONT := "front"
-const FROM_REAR := "rear"
 
 # --- Difficulty (v4, game.json option "difficulty"; TankDifficulty) ---------------------------------
 const DIFF_AUTO := "auto"

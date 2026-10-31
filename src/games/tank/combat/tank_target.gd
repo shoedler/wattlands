@@ -8,10 +8,10 @@ const KIND_ENEMY := 0
 const KIND_BOSS := 1
 const KIND_OBSTACLE := 2
 
-## Auto-aim tiers, lower first: a destroyer in its telegraph, dug-in, heavy, medium (or a
+## Auto-aim tiers, lower first: a destroyer in its telegraph, a Behemoth's bogie, heavy, medium (or a
 ## destroyer not telegraphing), light, obstacle, the depot's drill wrecks.
 const TIER_TELEGRAPH := 0
-const TIER_DUGIN := 1
+const TIER_BOGIE := 1
 const TIER_HEAVY := 2
 const TIER_MEDIUM := 3
 const TIER_LIGHT := 4
