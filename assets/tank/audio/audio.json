@@ -98,10 +98,10 @@
         {"src": "sine", "f": 1260, "gain": 0.14, "fx": [{"trem": {"hz": 5.3333, "depth": 0.6}}]},
         {"src": "noise", "color": "pink", "gain": 0.14, "fx": [{"bp": {"f": 700, "q": 0.8}}]}
       ]},
-    "dynamo_whine": {"dur": 1.5, "rate": 22050, "ch": 1, "seed": 1113, "loop": true, "xfade_s": 0.3,
+    "dynamo_whine": {"dur": 2.0, "rate": 22050, "ch": 1, "seed": 1113, "loop": true, "xfade_s": 0.3,
       "layers": [
-        {"src": "tri", "f": 380, "gain": 0.6, "fx": [{"trem": {"hz": 26.6667, "depth": 0.45}}]},
-        {"src": "sine", "f": 760, "gain": 0.28, "fx": [{"trem": {"hz": 26.6667, "depth": 0.3}}]},
+        {"src": "tri", "f": 380, "gain": 0.6, "fx": [{"trem": {"hz": 27, "depth": 0.45}}]},
+        {"src": "sine", "f": 760, "gain": 0.28, "fx": [{"trem": {"hz": 27, "depth": 0.3}}]},
         {"src": "saw", "f": 1140, "gain": 0.1, "fx": [{"lp": {"f": 2400}}]},
         {"src": "noise", "color": "pink", "gain": 0.12, "fx": [{"bp": {"f": 1800, "q": 1.0}}]}
       ]},
@@ -114,6 +114,17 @@
       "layers": [
         {"src": "modal", "f": [1620, 2700], "t60": [0.02, 0.012], "g": [1, 0.3], "gain": 0.7},
         {"src": "noise", "color": "white", "gain": 0.2, "env": {"a": 0.0003, "d": 0.003}}
+      ]},
+    "belt_rattle": {"dur": 1.4, "rate": 22050, "ch": 1, "seed": 1178, "loop": true, "xfade_s": 0.3,
+      "layers": [
+        {"src": "grains", "rate_hz": 44, "f": [800, 3400], "dur_s": [0.003, 0.012], "g": [0.2, 1.0], "gain": 0.9},
+        {"src": "noise", "color": "pink", "gain": 0.12, "fx": [{"bp": {"f": 1300, "q": 0.8}}]}
+      ]},
+    "repair_compressor": {"dur": 1.6, "rate": 22050, "ch": 1, "seed": 1179, "loop": true, "xfade_s": 0.3,
+      "layers": [
+        {"src": "pulse", "f": 57.5, "duty": 0.2, "gain": 0.6, "fx": [{"lp": {"f": 650, "q": 1.1}}, {"trem": {"hz": 7.5, "depth": 0.5}}]},
+        {"src": "noise", "color": "white", "gain": 0.12, "fx": [{"bp": {"f": 2600, "q": 1.0}}, {"trem": {"hz": 3.75, "depth": 0.7}}]},
+        {"src": "grains", "rate_hz": 20, "f": [500, 1900], "dur_s": [0.004, 0.012], "g": [0.3, 1.0], "gain": 0.4}
       ]},
     "cap_dump": {"dur": 0.26, "rate": 22050, "ch": 1, "seed": 1116, "variants": 2, "locked": true, "room": "iron",
       "per_variant": [{"pitch": 1.0}, {"pitch": 0.95}],
@@ -215,7 +226,7 @@
       "per_variant": [{"pitch": 1.0}, {"pitch": 0.92}, {"pitch": 1.08}, {"pitch": 0.97}],
       "layers": [
         {"src": "modal", "f": [3100, 4700, 6400], "t60": [0.1, 0.06, 0.03], "g": [1, 0.5, 0.2], "gain": 0.8},
-        {"src": "modal", "f": [3100, 4700], "t60": [0.05, 0.03], "g": [1, 0.4], "gain": 0.3, "at": 0.06}
+        {"src": "modal", "f": [3100, 4700], "t60": [0.05, 0.03], "g": [1, 0.4], "gain": 0.3, "at": 0.012}
       ]},
     "rivet_hit": {"dur": 0.18, "rate": 22050, "ch": 1, "seed": 1133, "variants": 4, "locked": true, "room": "iron",
       "per_variant": [{"pitch": 1.0}, {"pitch": 0.97}, {"pitch": 1.03}, {"pitch": 1.06}],
@@ -226,7 +237,8 @@
       ]},
     "rivet_ring": {"dur": 0.26, "rate": 22050, "ch": 1, "seed": 1134, "locked": true,
       "layers": [
-        {"src": "modal", "f": [1235, 1880], "t60": [0.24, 0.14], "g": [1, 0.4], "gain": 0.7, "env": {"a": 0.002}}
+        {"src": "modal", "f": [1235, 1880], "t60": [0.24, 0.14], "g": [1, 0.4], "gain": 0.7},
+        {"src": "noise", "color": "white", "gain": 0.2, "env": {"a": 0.0003, "d": 0.003}, "fx": [{"bp": {"f": 1400, "q": 0.8}}]}
       ]},
     "repair_idle": {"dur": 0.05, "rate": 22050, "ch": 1, "seed": 1135, "locked": true,
       "layers": [
@@ -516,50 +528,54 @@
       ]},
     "dynamo": {"bus": "Machines", "priority": 5,
       "events": [
-        {"at": [0.8], "sound": "cap_dump", "db": 2, "db_by": [{"param": "power", "points": [[0.46, -9], [1.2, 0]]}], "when": {"param": "power", "min": 0.46}, "priority": 5},
-        {"at": [0, 0.3333, 0.6667], "sound": "brush_tick", "db": -16, "lead_only": true, "priority": 4},
+        {"at": [0.8], "sound": "cap_dump", "db": 5, "db_by": [{"param": "power", "points": [[0.46, -9], [1.2, 0]]}], "when": {"param": "power", "min": 0.46}, "priority": 5},
+        {"at": [0, 0.3333, 0.6667], "sound": "brush_tick", "db": -12, "lead_only": true, "priority": 4},
         {"at": [0, 0.25, 0.5, 0.75], "sound": "hoist_ratchet", "db": -8, "when": {"param": "hoist_s", "min": 0.01}, "priority": 4}
       ],
       "loops": [
-        {"sound": "dynamo_whine", "db": -4, "min_rpm": 8, "other": true, "pitch_by": [{"param": "rpm", "ratio": 90}], "db_by": [{"param": "power", "points": [[0, -10], [1.2, 0]]}]},
+        {"sound": "dynamo_whine", "db": -5, "min_rpm": 8, "other": true, "pitch_by": [{"param": "rpm", "ratio": 90}], "db_by": [{"param": "power", "points": [[0, -10], [1.2, 0]]}]},
         {"sound": "brush_crackle", "db": -14, "min_rpm": 8, "other": true, "db_by": [{"param": "power", "points": [[0.3, -14], [1.15, 0]]}, {"param": "over", "points": [[0, 0], [1, 8]]}]}
       ]},
     "steam": {"bus": "Machines", "priority": 5,
       "events": [
-        {"at": [0], "sound": "chuff_a", "db": 0, "db_by": [{"param": "power", "points": [[0, -8], [1.2, 0]]}], "pitch_by": [{"param": "pressure_pct", "points": [[0, 0.9], [150, 1.18]]}], "priority": 5},
-        {"at": [0.5], "sound": "chuff_b", "db": -3, "db_by": [{"param": "power", "points": [[0, -8], [1.2, 0]]}], "pitch_by": [{"param": "pressure_pct", "points": [[0, 0.9], [150, 1.18]]}], "priority": 5},
+        {"at": [0], "sound": "chuff_a", "db": 3, "db_by": [{"param": "power", "points": [[0, -8], [1.2, 0]]}], "pitch_by": [{"param": "pressure_pct", "points": [[0, 0.9], [150, 1.18]]}], "priority": 5},
+        {"at": [0.5], "sound": "chuff_b", "db": 0, "db_by": [{"param": "power", "points": [[0, -8], [1.2, 0]]}], "pitch_by": [{"param": "pressure_pct", "points": [[0, 0.9], [150, 1.18]]}], "priority": 5},
         {"at": [0.25, 0.75], "sound": "steam_valve", "db": -14, "lead_only": true, "priority": 4},
         {"at": [0], "sound": "hoist_pawl", "db": -14, "when": {"param": "loaded", "max": 0.5}, "lead_only": true, "priority": 4}
       ],
       "loops": [
-        {"sound": "boiler_simmer", "db": -14, "min_rpm": 8, "pitch_by": [{"param": "pressure_pct", "points": [[0, 0.8], [150, 1.3]]}], "db_by": [{"param": "pressure_pct", "points": [[0, -8], [100, 0]]}]},
+        {"sound": "boiler_simmer", "db": -12, "min_rpm": 8, "pitch_by": [{"param": "pressure_pct", "points": [[0, 0.8], [150, 1.3]]}], "db_by": [{"param": "pressure_pct", "points": [[0, -8], [100, 0]]}]},
         {"sound": "safety_valve", "db": -10, "min_rpm": 8, "other": true, "when": {"param": "over", "min": 0.02}, "db_by": [{"param": "over", "points": [[0, -24], [1, 0]]}]}
       ]},
     "arc": {"bus": "Machines", "priority": 5,
       "events": [
-        {"at": [0, 0.5], "sound": "arc_zap", "db": -2, "db_by": [{"param": "reach", "points": [[0, -10], [1, 0]]}], "when": {"param": "power", "min": 0.12}, "priority": 5},
-        {"at": [0.25, 0.75], "sound": "arc_zap_over", "db": -2, "db_by": [{"param": "over", "points": [[0.3, -6], [1, 0]]}], "when": {"param": "over", "min": 0.3}, "priority": 5},
-        {"at": [0, 0.25, 0.5, 0.75], "sound": "belt_tick", "db": -18, "lead_only": true, "priority": 4}
+        {"at": [0, 0.5], "sound": "arc_zap", "db": 1, "db_by": [{"param": "reach", "points": [[0, -10], [1, 0]]}], "when": {"param": "power", "min": 0.12}, "priority": 5},
+        {"at": [0.25, 0.75], "sound": "arc_zap_over", "db": 1, "db_by": [{"param": "over", "points": [[0.3, -6], [1, 0]]}], "when": {"param": "over", "min": 0.3}, "priority": 5},
+        {"at": [0, 0.25, 0.5, 0.75], "sound": "belt_tick", "db": -15, "lead_only": true, "priority": 4}
       ],
       "loops": [
-        {"sound": "arc_hum", "db": -10, "min_rpm": 8, "other": true, "pitch_by": [{"param": "rpm", "ratio": 90}], "db_by": [{"param": "power", "points": [[0, -10], [1.2, 0]]}]},
-        {"sound": "ladder_buzz", "db": -14, "min_rpm": 8, "other": true, "db_by": [{"param": "power", "points": [[0.1, -18], [1.15, 0]]}, {"param": "over", "points": [[0, 0], [1, 6]]}]}
+        {"sound": "arc_hum", "db": -8, "min_rpm": 8, "other": true, "pitch_by": [{"param": "rpm", "ratio": 90}], "db_by": [{"param": "power", "points": [[0, -10], [1.2, 0]]}]},
+        {"sound": "ladder_buzz", "db": -12, "min_rpm": 8, "other": true, "db_by": [{"param": "power", "points": [[0.1, -18], [1.15, 0]]}, {"param": "over", "points": [[0, 0], [1, 6]]}]}
       ]},
     "feed": {"bus": "Machines", "priority": 5,
       "events": [
-        {"at": [0, 0.5], "sound": "bow_shot", "db": -3, "db_by": [{"param": "power", "points": [[0, -6], [1.2, 0]]}], "when": {"param": "firing", "min": 0.5}, "priority": 5},
-        {"at": [0, 0.5], "sound": "bolt_clack", "db": -6, "db_by": [{"param": "power", "points": [[0, -8], [1.2, 0]]}], "priority": 5},
-        {"at": [0.25, 0.75], "sound": "link_clink", "db": -19, "lead_only": true, "priority": 4},
-        {"at": [0.2, 0.7], "sound": "casing_tink", "db": -22, "when": {"param": "rounds", "min": 1}, "lead_only": true, "priority": 4}
+        {"at": [0, 0.5], "sound": "bow_shot", "db": 2, "db_by": [{"param": "power", "points": [[0, -6], [1.2, 0]]}], "when": {"param": "firing", "min": 0.5}, "priority": 5},
+        {"at": [0, 0.5], "sound": "bolt_clack", "db": -1, "db_by": [{"param": "power", "points": [[0, -8], [1.2, 0]]}], "priority": 5},
+        {"at": [0.25, 0.75], "sound": "link_clink", "db": -14, "lead_only": true, "priority": 4},
+        {"at": [0.2, 0.7], "sound": "casing_tink", "db": -17, "when": {"param": "rounds", "min": 1}, "lead_only": true, "priority": 4}
       ],
-      "loops": []},
+      "loops": [
+        {"sound": "belt_rattle", "db": -13, "min_rpm": 8, "pitch_by": [{"param": "rpm", "ratio": 90}], "db_by": [{"param": "power", "points": [[0, -8], [1.2, 0]]}]}
+      ]},
     "repair": {"bus": "Machines", "priority": 5,
       "events": [
-        {"at": [0], "sound": "rivet_hit", "db": 0, "db_by": [{"param": "power", "points": [[0, -8], [1.2, 0]]}], "when": {"param": "repairing", "min": 0.5}, "priority": 5},
-        {"at": [0.03], "sound": "rivet_ring", "db": -12, "when": {"param": "repairing", "min": 0.5}, "lead_only": true, "priority": 4},
-        {"at": [0], "sound": "repair_idle", "db": -14, "when": {"param": "repairing", "max": 0.5}, "priority": 4}
+        {"at": [0], "sound": "rivet_hit", "db": 3, "db_by": [{"param": "power", "points": [[0, -8], [1.2, 0]]}], "when": {"param": "repairing", "min": 0.5}, "priority": 5},
+        {"at": [0.03], "sound": "rivet_ring", "db": -9, "when": {"param": "repairing", "min": 0.5}, "lead_only": true, "priority": 4},
+        {"at": [0], "sound": "repair_idle", "db": -10, "when": {"param": "repairing", "max": 0.5}, "priority": 4}
       ],
-      "loops": []},
+      "loops": [
+        {"sound": "repair_compressor", "db": -15, "min_rpm": 8, "when": {"param": "repairing", "min": 0.5}, "pitch_by": [{"param": "rpm", "ratio": 90}], "db_by": [{"param": "power", "points": [[0, -6], [1.2, 0]]}]}
+      ]},
     "track": {"bus": "Machines", "priority": 4,
       "events": [
         {"at": [0, 0.33, 0.66], "sound": "track_link", "db": -9, "db_by": [{"param": "speed", "points": [[0.5, -8], [8, 0]]}], "priority": 4},
@@ -722,7 +738,7 @@
       "a14": {"cue": "shot_main"}
     },
     "waive": {
-      "A13": "Lead machine repeats: 0. Every repeat is another rider's stroke after other_min_gap_s thinned the variant between (D7, about 35 repeats of 1500 strokes, 10 dB or more under the lead): the round-robin itself never repeats, and no listener can follow a variant through thinning."
+      "A13": "Lead machine repeats: 0. Every repeat is another rider's stroke after other_min_gap_s thinned the variant between (D7, 37 repeats among 465 kept strokes of other riders, 14 dB under the lead): the round-robin itself never repeats, and no listener can follow a variant through thinning."
     }
   }
 }
