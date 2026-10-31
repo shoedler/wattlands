@@ -31,6 +31,10 @@ const COLUMN := [
 	[3, 30.0, 6.0, 1, 2],
 ]
 const SPACING_M := 1.2
+const STRESS_LINE := (
+	"siege_v2_demo: %s, %d enemies, %d projectiles, update %.2f ms, %d fps, %d draw calls, "
+	+ "art viewport cpu %.2f ms gpu %.2f ms"
+)
 
 var bank: SiegeBakeBank = null
 var path: SiegePath = null
@@ -124,28 +128,18 @@ func _process(_delta: float) -> void:
 	_usec += Time.get_ticks_usec() - t0
 	_frames += 1
 	if _stress and _frames % 60 == 0:
-		print(
-			(
-				"siege_v2_demo: %s, %d enemies, %d projectiles, update %.2f ms, %d fps, "
-				+ (
-					"%d draw calls, art viewport cpu %.2f ms gpu %.2f ms"
-					% [
-						pixel_viewport.art_size(),
-						crowd.drawn,
-						shots.in_flight(),
-						_usec / 60000.0,
-						Engine.get_frames_per_second(),
-						Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
-						RenderingServer.viewport_get_measured_render_time_cpu(
-							pixel_viewport.subviewport().get_viewport_rid()
-						),
-						RenderingServer.viewport_get_measured_render_time_gpu(
-							pixel_viewport.subviewport().get_viewport_rid()
-						),
-					]
-				)
-			)
-		)
+		var art_rid := pixel_viewport.subviewport().get_viewport_rid()
+		var values := [
+			pixel_viewport.art_size(),
+			crowd.drawn,
+			shots.in_flight(),
+			_usec / 60000.0,
+			Engine.get_frames_per_second(),
+			Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+			RenderingServer.viewport_get_measured_render_time_cpu(art_rid),
+			RenderingServer.viewport_get_measured_render_time_gpu(art_rid),
+		]
+		print(STRESS_LINE % values)
 		_usec = 0
 
 
