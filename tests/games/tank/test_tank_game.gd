@@ -317,3 +317,22 @@ func test_the_same_seed_gives_the_same_snapshots() -> void:
 		F.run(g, plans, 0, 400.0)
 		out.append(JSON.stringify(g.snapshot()))
 	assert_eq(out[0], out[1])
+
+
+## Lead's ruling 2, SPEC_TANK 3.5: the difficulty changes the enemy, never the plan. For every content
+## and every level the plans a game builds are the same, and configure does set the level.
+func test_plans_are_identical_for_every_difficulty_on_every_content() -> void:
+	for content: String in F.manifest()["contents"]:
+		var base := ""
+		for level in [TankIds.DIFF_EASY, TankIds.DIFF_NORMAL, TankIds.DIFF_HARD]:
+			var ctx := F.make_ctx(3, 0, content)
+			ctx.options["difficulty"] = level
+			var g := _game(ctx)
+			assert_eq(g.state.difficulty, level, content)
+			var plans := g.build_effort_plans()
+			var dump := ""
+			for peer: int in plans:
+				dump += JSON.stringify((plans[peer] as EffortPlan).to_dict())
+			if base == "":
+				base = dump
+			assert_eq(dump, base, "%s %s" % [content, level])

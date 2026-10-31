@@ -306,8 +306,7 @@ static func option_defaults(entries: Variant) -> Dictionary:
 	return out
 
 
-## A context like the GameHost builds: humans 1..n (1 is the host). Tank has no bots; `bots` is
-## kept for the scaffold's signature and must stay 0 for Tank.
+## A context like the GameHost builds: humans 1..n (1 is the host), then bots (negative peers).
 static func make_ctx(
 	humans: int = 1,
 	bots: int = 0,

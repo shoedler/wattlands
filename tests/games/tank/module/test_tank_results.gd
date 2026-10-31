@@ -10,6 +10,8 @@ const STAT_KEYS: Array[String] = [
 	"TANK_STAT_STEAM_S",
 	"TANK_STAT_ARC_S",
 	"TANK_STAT_FEED_S",
+	"TANK_STAT_REPAIR_S",
+	"TANK_STAT_REPAIRED",
 	"TANK_STAT_EVADES",
 	"TANK_STAT_BOW_HITS",
 	"TANK_STAT_BERM",
@@ -20,6 +22,8 @@ const STAT_KEYS: Array[String] = [
 ]
 const TEAM_KEYS: Array[String] = [
 	"TANK_TEAM_OUTCOME",
+	"TANK_TEAM_DIFFICULTY",
+	"TANK_TEAM_LOSSES",
 	"TANK_TEAM_HP",
 	"TANK_TEAM_BREAKDOWNS",
 	"TANK_TEAM_OVERRUNS",
@@ -277,3 +281,21 @@ func test_the_strava_tag_and_lines() -> void:
 	drill.state.seg.seg = TankIds.SEG_COOLDOWN
 	drill.state.outcome = TankIds.OUTCOME_COMPLETE
 	assert_eq(drill.results().ride_tag, "Depot drill - complete")
+
+
+## v4: the level and the tanks lost reach the results screen and Strava; the repair stats reach the rows.
+func test_the_difficulty_losses_and_repairs_in_the_results() -> void:
+	var perfect := _perfect(3)
+	perfect.state.difficulty = TankIds.DIFF_HARD
+	assert_eq(perfect.results().team["TANK_TEAM_LOSSES"], 0)
+	assert_eq(perfect.results().ride_lines.size(), 4, "no line for no loss")
+	perfect.state.score.losses = 2
+	perfect.state.riders[1].engine_s[6] = 71.6
+	perfect.state.riders[1].repaired_hp = 33.4
+	var res := perfect.results()
+	assert_eq(res.team["TANK_TEAM_LOSSES"], 2)
+	assert_eq(res.team["TANK_TEAM_DIFFICULTY"], "Hard")
+	assert_eq(res.ride_lines.size(), 5)
+	assert_eq(res.ride_lines[4], "2 tanks lost")
+	assert_eq(res.row(2)["stats"]["TANK_STAT_REPAIR_S"], 72)
+	assert_eq(res.row(2)["stats"]["TANK_STAT_REPAIRED"], 33)

@@ -414,3 +414,58 @@ func test_no_power_is_said_when_every_rider_is_away() -> void:
 	var n := _toasts(ctx).size()
 	cues.on_state(s)
 	assert_eq(_toasts(ctx).size(), n, "once")
+
+
+# --- v4 ----------------------------------------------------------------------------------------------
+
+
+func test_the_v4_events_toast_the_whole_crew_once_each() -> void:
+	for local in [1, 2]:
+		var s := TankFixtures.state(2)
+		var ctx := _ctx(2, local)
+		var cues := TankCues.new(ctx)
+		cues.on_event(s, TankEvents.stage_restart(TankIds.SEG_ADVANCE, 2, 84.0))
+		cues.on_event(s, TankEvents.ambush(41, TankIds.enemy_code(TankIds.ENEMY_RECON)))
+		cues.on_event(s, TankEvents.escaped(41, TankIds.enemy_code(TankIds.ENEMY_RECON)))
+		assert_eq(
+			_keys(_toasts(ctx)),
+			["TANK_TOAST_RESTART", "TANK_TOAST_AMBUSH", "TANK_TOAST_ESCAPED"],
+			"peer %d" % local
+		)
+		for c: Array in _toasts(ctx):
+			assert_eq(c[3], local, "drawn for the local rider only")
+		assert_eq(_banners(ctx), [], "no platform banner: the HUD's plate shows TANK LOST")
+
+
+func test_every_v4_toast_key_is_a_real_string() -> void:
+	var csv := FileAccess.get_file_as_string("res://content/tank/strings.csv")
+	for key in ["TANK_TOAST_RESTART", "TANK_TOAST_AMBUSH", "TANK_TOAST_ESCAPED"]:
+		assert_true(csv.contains(key + ","), key)
+
+
+func test_tank_lost_raises_no_toast_of_its_own() -> void:
+	var s := TankFixtures.state(2)
+	var ctx := _ctx(2, 1)
+	var cues := TankCues.new(ctx)
+	cues.on_event(s, TankEvents.tank_lost(1, TankIds.SEG_ADVANCE, 2))
+	assert_eq(_toasts(ctx), [])
+
+
+## "Surge to evade" holds through the flight: a surge can still make an evadable shell miss.
+func test_an_evadable_shell_in_the_air_keeps_the_evade_prompt() -> void:
+	var s := TankFixtures.state(3)
+	s.enemies.clear()
+	s.shells.clear()
+	var peer := _peer_of(s, TankIds.ENGINE_DIESEL)
+	s.rider(peer).can_evade = true
+	assert_false(TankCues.telegraph_running(s))
+	var shell := TankShellState.new()
+	shell.far = true
+	shell.left_s = 2.0
+	s.shells.append(shell)
+	assert_false(TankCues.telegraph_running(s), "not evadable")
+	shell.evadable = true
+	assert_true(TankCues.telegraph_running(s))
+	assert_eq(TankCues.prompt_of(s, s.rider(peer)), TankCues.PROMPT_EVADE)
+	shell.left_s = 0.0
+	assert_false(TankCues.telegraph_running(s), "landed")

@@ -44,6 +44,10 @@ const PURE_DIRS: Array[String] = ["rules", "combat"]
 const DIRECTIVE_CALLS: Array[String] = [
 	"request", "course_grade", "cadence_band", "end_phase", "replan", "split"
 ]
+## v4: what no effort code may name (SPEC_TANK 3.5, lead's ruling 2).
+const DIFFICULTY := "TankDifficulty|DIFF_(AUTO|EASY|NORMAL|HARD)|\\.difficulty\\b"
+## The folders whose choices become plans, directives or seat moves. effort/ holds TankSeatPlan too.
+const NO_DIFFICULTY_DIRS: Array[String] = ["effort", "autopilot"]
 const CLOCKS := (
 	"\\bTime\\b|\\bOS\\s*\\.\\s*(get_ticks|get_unix_time|get_system_time|delay_)"
 	+ "|\\bEngine\\s*\\.\\s*get_(frames|process_frames|physics_frames)"
@@ -341,3 +345,37 @@ func test_class_names_are_unique_and_carry_the_tank_prefix() -> void:
 func test_no_todo_implement_marker_is_left_in_the_game() -> void:
 	for path in files(GAME_DIR, ["gd", "json", "md"]):
 		assert_false(read(path).to_lower().contains("todo: implement"), path)
+
+
+# --- v4: no effort code reads the difficulty (SPEC_TANK 3.5, lead's ruling 2) ------------------------
+
+
+## On the raw text, comments and strings included, so nothing can hide; "before difficulty" in the
+## director's boiler comment is the platform's SIM difficulty and is not matched.
+func test_effort_code_never_reads_the_difficulty() -> void:
+	var scanned := 0
+	for dir in NO_DIFFICULTY_DIRS:
+		for path in files(GAME_DIR.path_join(dir), ["gd"]):
+			scanned += 1
+			assert_eq(hit(read(path), DIFFICULTY), "", path)
+	assert_gte(
+		scanned, 5, "tank_director, tank_plan_builder, tank_seat_plan, tank_autopilot, tank_bots"
+	)
+	var seat_plan := read(GAME_DIR.path_join("effort/tank_seat_plan.gd"))
+	assert_true(seat_plan.contains("class_name TankSeatPlan"), "the seat plan lives in effort/")
+
+
+func test_the_difficulty_scan_catches_every_form() -> void:
+	var bad := [
+		'var m := TankDifficulty.mult(state, "damage")',
+		"if state.difficulty == x:",
+		"if s == TankIds.DIFF_HARD:",
+		"if s == TankIds.DIFF_AUTO:",
+		"if s == TankIds.DIFF_EASY:",
+		"if s == TankIds.DIFF_NORMAL:",
+	]
+	for line: String in bad:
+		assert_ne(hit(line, DIFFICULTY), "", line)
+	var fine := ["## the boiler's mode grade before difficulty: grade x pressure", "var d := 1"]
+	for line: String in fine:
+		assert_eq(hit(line, DIFFICULTY), "", line)

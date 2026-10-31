@@ -47,6 +47,12 @@ extends RefCounted
 ##    the dictionary). While a switch waits, the trainer keeps the plan's seat: its ERG pattern holds
 ##    (that seat stands empty, so its bank or load does not move) and its SIM grade goes flat (no
 ##    boiler grade, no terrain) until the switch.
+## 10. Repair (v4; the Repairs seat, ERG phases with a range_pct, never the depot or checkpoints): the
+##     same schedule (stations.json repair) toward repair_target_pct = 55 + 15 x duty, the share of the
+##     last 10 s the hull stood below its maximum (TankRepairState), clamped to the phase's range:
+##     {mode ERG, target_pct, reason "repair"}.
+## A tank under tow (v4, TankHullState.tow_s) gets course grade 0: the rider pedals flat, and no other
+## directive, plan or phase changes for it. Nothing in effort/ reads the game's difficulty level.
 ## Sprints (evade, Overpressure) send nothing: they are the rider's own in the phase's SIM.
 ## A rider on reserve (dropped or AFK) gets no bank, arc or boiler request: a dropped peer never
 ## receives them, so the director's idea of the held target would run away from the rider's real
@@ -63,6 +69,7 @@ const HAPTIC_BOSS_HIT := "boss_hit"
 const SOURCE := "tank"
 const REASON_BANK := "bank"
 const REASON_ARC := "arc"
+const REASON_REPAIR := "repair"
 const REASON_BOILER := "boiler"
 
 ## Changes smaller than this are float noise, not worth a directive.
@@ -93,7 +100,7 @@ var _started: Dictionary = {}
 ## peer -> the tick that phase started on.
 var _start_tick: Dictionary = {}
 ## peer -> {"cur": last sent %, "from": update start %, "goal": update goal %} of the rider's bank
-## (dynamo) or arc load (arc generator) pattern in its current phase.
+## (dynamo), arc load (arc generator) or repair pattern in its current phase.
 var _bank: Dictionary = {}
 ## peer -> the last boiler mode grade sent in this phase (the platform resets the channel
 ## at every phase change).
@@ -195,7 +202,7 @@ func _segment_start(ri: TankRiderInput) -> void:
 	ctx.hud.power_band(ri.peer, pb[0] / 100.0 * slot.ftp, pb[1] / 100.0 * slot.ftp)
 
 
-# --- Patterns 1 and 2: the bank and the arc load -------------------------------------------------
+# --- Patterns 1, 2 and 10: the bank, the arc load and the repair load -----------------------------
 
 
 ## True when pattern 1 runs in `ph` for a rider on `engine`: the dynamo in an ERG phase with a
@@ -210,6 +217,12 @@ static func arc_phase(engine: String, ph: PlanPhase) -> bool:
 	return engine == TankIds.ENGINE_ARC and _load_phase(ph)
 
 
+## True when pattern 10 runs in `ph` for a rider on `engine`: the Repairs seat in an ERG phase with a
+## range_pct, never the depot or a checkpoint.
+static func repair_phase(engine: String, ph: PlanPhase) -> bool:
+	return engine == TankIds.ENGINE_REPAIR and _load_phase(ph)
+
+
 static func _load_phase(ph: PlanPhase) -> bool:
 	if ph == null or ph.mode != Wl.ERG or ph.range_pct.size() != 2:
 		return false
@@ -217,8 +230,8 @@ static func _load_phase(ph: PlanPhase) -> bool:
 	return seg != TankIds.SEG_DEPOT and seg != TankIds.SEG_CHECKPOINT
 
 
-## Patterns 1 and 2 share one schedule: every <key>.every_s an update toward the engine's goal,
-## sent in <key>.substeps sub-steps <key>.substep_s apart (key "bank" or "arc").
+## Patterns 1, 2 and 10 share one schedule: every <key>.every_s an update toward the engine's goal,
+## sent in <key>.substeps sub-steps <key>.substep_s apart (key "bank", "arc" or "repair").
 func _bank_step(state: TankState, ri: TankRiderInput, ph: PlanPhase, e: int) -> void:
 	if ri.phase_mode != Wl.ERG:
 		return
@@ -226,6 +239,7 @@ func _bank_step(state: TankState, ri: TankRiderInput, ph: PlanPhase, e: int) -> 
 	var reason := ""
 	var dyn: TankDynamoState = null
 	var arc: TankArcState = null
+	var repair: TankRepairState = null
 	if bank_phase(ri.engine, ph):
 		key = "bank"
 		reason = REASON_BANK
@@ -237,6 +251,12 @@ func _bank_step(state: TankState, ri: TankRiderInput, ph: PlanPhase, e: int) -> 
 		reason = REASON_ARC
 		arc = state.station(TankIds.ENGINE_ARC) as TankArcState
 		if arc == null:
+			return
+	elif repair_phase(ri.engine, ph):
+		key = "repair"
+		reason = REASON_REPAIR
+		repair = state.station(TankIds.ENGINE_REPAIR) as TankRepairState
+		if repair == null:
 			return
 	else:
 		return
@@ -268,8 +288,10 @@ func _bank_step(state: TankState, ri: TankRiderInput, ph: PlanPhase, e: int) -> 
 		b["from"] = cur
 		if dyn != null:
 			b["goal"] = bank_goal_pct(content, dyn.bank, ph, cur)
-		else:
+		elif arc != null:
 			b["goal"] = arc_goal_pct(content, arc.duty, ph, cur)
+		else:
+			b["goal"] = repair_goal_pct(content, repair.duty, ph, cur)
 	if u % sub != 0 or u / sub >= n:
 		return
 	var from := float(b["from"])
@@ -313,6 +335,24 @@ static func arc_goal_pct(c: TankContent, duty: float, ph: PlanPhase, cur_pct: fl
 static func arc_target_pct(c: TankContent, duty: float, ph: PlanPhase) -> float:
 	var base := c.num("stations", "arc.base_pct", 65.0)
 	var span := c.num("stations", "arc.span_pct", 15.0)
+	var pct := base + span * clampf(duty, 0.0, 1.0)
+	var r := ph.effective_range()
+	return clampf(pct, float(r[0]), float(r[1]))
+
+
+## One repair update's goal: repair_target_pct, moved at most repair.max_step_pts from `cur_pct`.
+static func repair_goal_pct(c: TankContent, duty: float, ph: PlanPhase, cur_pct: float) -> float:
+	var step := c.num("stations", "repair.max_step_pts", 10.0)
+	var target := repair_target_pct(c, duty, ph)
+	return clampf(target, cur_pct - step, cur_pct + step)
+
+
+## Pattern 10: the Repairs seat's ERG target in % FTP, base + span x duty (55 + 15 x duty), clamped
+## to the phase's effective_range() (55..70 in a stage, 55..65 in the drill's skirmish). Apply it
+## before the <= max_step_pts limit and the sub-steps. Only for phases with a range_pct.
+static func repair_target_pct(c: TankContent, duty: float, ph: PlanPhase) -> float:
+	var base := c.num("stations", "repair.base_pct", 55.0)
+	var span := c.num("stations", "repair.span_pct", 15.0)
 	var pct := base + span * clampf(duty, 0.0, 1.0)
 	var r := ph.effective_range()
 	return clampf(pct, float(r[0]), float(r[1]))
@@ -397,6 +437,9 @@ func _terrain_step(state: TankState, ri: TankRiderInput, ph: PlanPhase, e: int) 
 	var g := 0.0
 	if _waits_for_seat(state, ri):
 		ctx.directives.course_grade(ri.peer, 0.0)  # the rider left Drive: flat until the switch
+		return
+	if state.hull.tow_s > 0.0:
+		ctx.directives.course_grade(ri.peer, 0.0)  # the tow: the rider pedals flat, TankDrive too
 		return
 	if state.roam.active:
 		g = TankRoam.grade_pct(state, ri.in_warmup())

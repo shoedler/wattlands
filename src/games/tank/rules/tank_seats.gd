@@ -7,6 +7,10 @@ extends RefCounted
 ##   TankIds.SEATS order (wrapping, skipping manned seats). There is no seat lock (0.3.1): any rider
 ##   may move at any time outside the cool-down (not on reserve), and the move lands in the same
 ##   tick: the stations' slots follow, the rider's sprint rule restarts and the `seat` event goes out.
+## - v4: a human's move always wins. To a human a bot's seat counts as free (is_free_for): the bot lands
+##   on TankBots.next_seat first, then the human lands. A bot takes only an empty seat. A bot covering a
+##   human on reserve swaps seats with it (`swap`, TankBots.cover) and the human lands back when it
+##   returns (`_cover_returns`).
 ## - The rider's trainer follows the seat (TankSeatPlan.follow, sent by TankDirector): a same-mode
 ##   move at once, an ERG <-> SIM one once the rider's last switch is 30 s old (BRIEF 4.5), or at the
 ##   segment's end. Meanwhile the seat works from the rider's power against its own band
@@ -34,6 +38,8 @@ static func step(state: TankState, inputs: TankInputs, events: Array[Dictionary]
 		if ri.phase_kind == Wl.COOLDOWN:
 			r.mode_wait_s = 0.0
 			r.mode_to = ""
+	_cover_returns(state, inputs, events)
+	TankBots.cover(state, events)
 	for ri in inputs.riders:
 		var r := state.rider(ri.peer)
 		if r == null:
@@ -63,14 +69,76 @@ static func land(
 		to.slot = r.slot
 		to.peer = r.peer
 	r.engine = engine
+	_seated(state, r)
+	if from != "" and from != engine:
+		events.append(TankEvents.seat(r.slot, from, engine))
+
+
+## v4: riders `a` and `b` trade seats in one step (a bot covering a human on reserve): `land` refuses a
+## held seat, so this writes both stations and both riders itself. Two seat events.
+static func swap(
+	state: TankState, a: TankRiderState, b: TankRiderState, events: Array[Dictionary]
+) -> void:
+	var sa := state.station(a.engine)
+	var sb := state.station(b.engine)
+	if sa == null or sb == null or a == b:
+		return
+	var from_a := a.engine
+	var from_b := b.engine
+	sa.slot = b.slot
+	sa.peer = b.peer
+	sb.slot = a.slot
+	sb.peer = a.peer
+	a.engine = from_b
+	b.engine = from_a
+	_seated(state, a)
+	_seated(state, b)
+	events.append(TankEvents.seat(a.slot, from_a, from_b))
+	events.append(TankEvents.seat(b.slot, from_b, from_a))
+
+
+## What every landing restarts: the stay, the Drive bookkeeping and the sprint rule.
+static func _seated(state: TankState, r: TankRiderState) -> void:
 	var aux := TankAux.of(state)
 	aux.seat_since[r.peer] = state.t
-	if engine != TankIds.ENGINE_DIESEL:
+	if r.engine != TankIds.ENGINE_DIESEL:
 		aux.off_drive_seg[r.peer] = state.seg.segment_index
 	if state.content != null:
 		r.sprint_rule(state.content.num("tanks", "evade.sprint_window_s", 3.0)).reset()
-	if from != "" and from != engine:
-		events.append(TankEvents.seat(r.slot, from, engine))
+
+
+## v4: the tick a covered human is back (before the director runs, so its plan never moves) it lands on
+## the seat it left, the bot evicted if one holds it. A seat another human took in the meantime stays
+## theirs.
+static func _cover_returns(state: TankState, inputs: TankInputs, events: Array[Dictionary]) -> void:
+	var aux := TankAux.of(state)
+	if aux.cover.is_empty():
+		return
+	for ri in inputs.riders:
+		if ri.on_reserve() or not aux.cover.has(ri.peer):
+			continue
+		var seat := str(aux.cover[ri.peer]["seat"])
+		aux.cover.erase(ri.peer)
+		var r := state.rider(ri.peer)
+		if r == null or r.engine == seat or state.in_cooldown() or ri.phase_kind == Wl.COOLDOWN:
+			continue
+		if is_free_for(state, r, seat) and _evict(state, seat, events):
+			land(state, r, seat, events)
+
+
+## Clears `engine` of the bot on it, which lands on TankBots.next_seat. True when the seat is free now.
+static func _evict(state: TankState, engine: String, events: Array[Dictionary]) -> bool:
+	var st := state.station(engine)
+	if st == null or st.is_empty():
+		return st != null
+	var bot := state.rider_at(st.slot)
+	if bot == null or not bot.is_bot:
+		return false
+	var to := TankBots.next_seat(state, bot)
+	if to == "":
+		return false
+	land(state, bot, to, events)
+	return true
 
 
 ## Judges rider `r`'s ask for seat `want` ("" for none; `step` +1 / -1 when it came from next or
@@ -90,7 +158,9 @@ static func request(
 		return false
 	if step != 0:
 		want = next_free(state, r, step)
-	if want == r.engine or not is_free(state, want):
+	if want == r.engine or not is_free_for(state, r, want):
+		return false
+	if not _evict(state, want, events):
 		return false
 	land(state, r, want, events)
 	return true
@@ -161,14 +231,14 @@ static func is_free_for(state: TankState, r: TankRiderState, engine: String) -> 
 
 
 ## The next seat from rider `r`'s in TankIds.SEATS order (`step` +1 next, -1 previous, wrapping)
-## that is free; its own seat when none is.
+## that is free for it (v4: a human's next seat may be a bot's); its own seat when none is.
 static func next_free(state: TankState, r: TankRiderState, step: int) -> String:
 	var at := r.engine
 	for _i in TankIds.SEATS.size():
 		at = TankIds.seat_step(at, signi(step))
 		if at == r.engine:
 			break
-		if is_free(state, at):
+		if is_free_for(state, r, at):
 			return at
 	return r.engine
 

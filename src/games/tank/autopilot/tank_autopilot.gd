@@ -12,17 +12,13 @@ extends RefCounted
 ##     (seat_wanted_solo): Drive while no target is in range; the Loader when a target comes and
 ##     the rack is not full, until it is full; the Gun while the rack holds shells and a target is
 ##     in range; the Secondaries when only light targets (and barricades) are within the bow guns'
-##     range. Crews of 2-4 (seat_wanted_crew): the Autopilot's riders fill the most needed seats
+##     range (v4: only with an empty rack), and Repairs with the hull below 35% and no far target
+##     laid. Crews of 2-4 (seat_wanted_crew): the Autopilot's riders fill the most needed seats
 ##     (seat_needs: by the situation, ties in TankIds.SEATS order Drive, Gun, Loader, Lights,
-##     Secondaries) around the riders who play their own seat. 0.3.1: no seat lock; every stay
-##     is at least 30 s solo and 60 s in a crew (TankSeats.auto_stay_s), so nothing thrashes;
-##   - rear traverses (for rear enemies the main gun can reach; it cannot reach a rear light, which
-## breaks off after its linger_s): the main turret faces right or left, and a traverse flips it. It
-## flips when
-##     nothing is in range on the side it faces and something is on the other side, and flips
-##     back to the front once the rear is clear (no flip while the current side still has a
-##     target, so a mixed fight never makes it flip-flop); asked for twice a second at most;
-##   - obstacle shots: with no enemy in range anywhere, the turret facing front and the gun
+##     Secondaries, Repairs) around the riders who play their own seat. 0.3.1: no seat lock; every
+##     stay is at least 30 s solo and 60 s in a crew (TankSeats.auto_stay_s), so nothing thrashes.
+##     v4: a bot asks through TankBots instead, which adapts to the humans;
+##   - obstacle shots: with no enemy in range anywhere and the gun
 ##     loaded, a wire or wreck barricade that blocks the road is targeted (a target cycle, at most
 ##     once a second) and shot once the gun points at it.
 ##   - free roam (brief 2.10): the Drive rider turns the tank round once it
@@ -39,8 +35,8 @@ extends RefCounted
 const EDGE_MARGIN_PX := 4.0
 ## A target cycle toward a blocking obstacle at most once in this many ticks.
 const RETARGET_TICKS := 20
-## A traverse or a shot is asked for at most once in this many ticks (2 a second), so a request
-## the rules decline (a breech still closing) never eats the 5-a-second budget.
+## A shot is asked for at most once in this many ticks (2 a second), so a request the rules decline
+## (a breech still closing) never eats the 5-a-second budget.
 const ASK_EVERY_TICKS := 10
 ## The aim tolerance used when the content does not give gun.aim_tol_deg.
 const DEFAULT_AIM_TOL_DEG := 0.5
@@ -53,6 +49,15 @@ const SEAT_EVERY_TICKS := 20
 ## The solo loop goes from Drive straight to the Gun with this many shells (rack and chamber).
 const SOLO_GUN_FIRST := 2
 const SEAT_MARGIN := 0.5
+## v4: the Repairs seat's need: 4.2 with the hull below HULL_LOW, 5.6 below HULL_CRITICAL (the solo
+## loop's Repairs too), else almost none.
+const HULL_LOW := 0.6
+const HULL_CRITICAL := 0.35
+const REPAIR_LOW := 4.2
+const REPAIR_CRITICAL := 5.6
+const REPAIR_IDLE := 0.05
+## v4: the Secondaries' need while a near threat is alive.
+const FEED_NEAR_THREAT := 4.7
 
 
 ## This tick's Autopilot intents for the rider `peer` (wire form, before normalize()).
@@ -72,11 +77,8 @@ static func intents(state: TankState, peer: int) -> Array:
 		return []
 	if state.in_cooldown() or state.seg.seg == TankIds.SEG_NONE:
 		return []
-	if state.all_afk or state.hull.breakdown:
+	if state.all_afk or state.hull.out_of_action():
 		return []
-	var flip := _traverse(state)
-	if not flip.is_empty():
-		return flip if state.tick % ASK_EVERY_TICKS == 0 else []
 	return _obstacle_shot(state)
 
 
@@ -103,54 +105,36 @@ static func is_gunner(engine: String) -> bool:
 	return engine == TankIds.ENGINE_DYNAMO
 
 
-## {ahead, behind}: the live enemies in range on each side (the Behemoth counts ahead while a
-## part of it stands). Rear lights are out of the main gun's reach: not counted.
-static func enemies_in_range(state: TankState) -> Dictionary:
+## The live enemies the main gun could lay on: far kinds within its range, the Behemoth while a part
+## of it stands. Near threats are the Secondaries' (the main gun does not lay on them). An enemy in
+## the old frame (range 0; gone with the old rules at T) counts while on screen.
+static func enemies_in_range(state: TankState) -> int:
 	var cam := state.camera_x()
 	var lo := cam + EDGE_MARGIN_PX
 	var hi := cam + float(TankConst.SCREEN_W) - EDGE_MARGIN_PX
-	var ahead := 0
-	var behind := 0
+	var max_range := 2500.0
+	if state.content != null:
+		max_range = state.content.num("tanks", "gun.far.max_range_m", max_range)
+	var n := 0
 	for e in state.enemies:
-		if e.mode == TankIds.EM_DEAD or e.hp <= 0.0:
+		if e.mode == TankIds.EM_DEAD or e.hp <= 0.0 or e.is_near():
 			continue
-		if e.x_px + maxf(float(e.w), 1.0) < lo or e.x_px > hi:
-			continue
-		if e.side < 0:
-			# The main gun cannot reach a rear light (24 px show over the hull's rear; ADR G1
-			# rules engines 11): a traverse for it only burns bank and pauses the auto-aim.
-			if TankIds.enemy_of(e.code) != TankIds.ENEMY_LIGHT:
-				behind += 1
-		else:
-			ahead += 1
-	if (
-		(state.boss.phase == TankIds.BOSS_PHASE_1 or state.boss.phase == TankIds.BOSS_PHASE_2)
-		and state.boss.x_px < hi
-	):
-		ahead += 1
-	return {"ahead": ahead, "behind": behind}
-
-
-static func _traverse(state: TankState) -> Array:
-	var hull := state.hull
-	if hull.traverse_s > 0.0:
-		return []
-	var seen := enemies_in_range(state)
-	var facing_n := int(seen["ahead"] if hull.facing == TankIds.FACE_RIGHT else seen["behind"])
-	var other_n := int(seen["behind"] if hull.facing == TankIds.FACE_RIGHT else seen["ahead"])
-	if facing_n > 0:
-		return []
-	if other_n > 0 or hull.facing == TankIds.FACE_LEFT:
-		return [TankIntents.auto(TankIds.INTENT_TRAVERSE)]
-	return []
+		if e.range_m > 0.0:
+			n += 1 if e.range_m <= max_range else 0
+		elif e.x_px + maxf(float(e.w), 1.0) >= lo and e.x_px <= hi and e.side > 0:
+			n += 1
+	var b := state.boss
+	var stands := b.phase == TankIds.BOSS_PHASE_1 or b.phase == TankIds.BOSS_PHASE_2
+	if stands and (b.range_m > 0.0 or b.x_px < hi):
+		n += 1
+	return n
 
 
 static func _obstacle_shot(state: TankState) -> Array:
 	var hull := state.hull
 	if hull.facing != TankIds.FACE_RIGHT or hull.traverse_s > 0.0:
 		return []
-	var seen := enemies_in_range(state)
-	if int(seen["ahead"]) + int(seen["behind"]) > 0:
+	if enemies_in_range(state) > 0:
 		return []
 	var ob := _blocking_obstacle(state)
 	if ob == null:
@@ -201,6 +185,8 @@ static func seat_intent(state: TankState, rider: TankRiderState) -> Dictionary:
 		return {}
 	if state.seg.seg == TankIds.SEG_NONE:
 		return {}
+	if rider.is_bot:
+		return TankBots.intent(state, rider)
 	if TankSeats.stay_s(state, rider.peer) < TankSeats.auto_stay_s(state) - 1e-6:
 		return {}
 	var ri: TankRiderInput = TankAux.of(state).seat_input.get(rider.peer)
@@ -260,13 +246,34 @@ static func _switches_in_warmup(state: TankState, ri: TankRiderInput, engine: St
 ## A crew's automatic riders hold their seats through a segment's opening (0.3.1, the v3 timing the
 ## crews are tuned on): never in a checkpoint, not in a segment's first AUTO_STAY_S, and in a fight
 ## not before the segment's own min_s (`at_end`: planning the next segment once the objective is
-## done).
+## done). v4: open while a near threat is alive: it lives 8-20 s, and stage 1's recon comes at about
+## 40 s, so otherwise no Autopilot crew could ever man the Secondaries (the 1 s ask, the stay and the
+## follows_now gate still hold).
 static func _crew_may_move(state: TankState, at_end: bool) -> bool:
 	if state.seg.seg == TankIds.SEG_CHECKPOINT:
 		return false
+	if near_threat_alive(state):
+		return true
 	if state.seg.elapsed_s < TankConst.AUTO_STAY_S - 1e-6:
 		return false
 	return at_end or (state.seg.open_ended and state.seg.elapsed_s >= state.seg.min_s - 1e-6)
+
+
+## v4: true while a recon car or a tankette is alive.
+static func near_threat_alive(state: TankState) -> bool:
+	for e in state.enemies:
+		if e.is_near() and e.mode != TankIds.EM_DEAD and e.hp > 0.0:
+			return true
+	return false
+
+
+## v4: the hull's share of its maximum (1 while it cannot be worked on: at 0 under a tow or broken down,
+## the restart or the breakdown's own repair lifts it, not the Repairs seat).
+static func _hull_share(state: TankState) -> float:
+	var hull := state.hull
+	if hull.out_of_action() or hull.hp_max <= 0.0:
+		return 1.0
+	return hull.hp / hull.hp_max
 
 
 ## The solo loop (brief v3 "Automatic seating"), from the seat the rider is on, for a segment of
@@ -285,12 +292,15 @@ static func seat_wanted_solo(
 	var here := seg == state.seg.seg
 	if here and seg == TankIds.SEG_ADVANCE and _advance_stay_spent(state, rider):
 		return TankIds.ENGINE_DIESEL
+	if here and _hull_share(state) < HULL_CRITICAL and not bool(sit["gun"]):
+		return TankIds.ENGINE_REPAIR
 	if not bool(sit["near"]):
 		return TankIds.ENGINE_DIESEL
-	if bool(sit["only_light"]):
-		return TankIds.ENGINE_FEED
 	var rack := int(sit["rack"])
 	var shells := int(sit["shells"])
+	# v4: the Secondaries only when nothing else works: the main gun has no round to fire.
+	if bool(sit["only_light"]) and shells <= 0:
+		return TankIds.ENGINE_FEED
 	match rider.engine:
 		TankIds.ENGINE_STEAM:
 			return TankIds.ENGINE_STEAM if rack < TankConst.RACK_MAX else TankIds.ENGINE_DYNAMO
@@ -367,8 +377,9 @@ static func rank_seats(seats: Array[String], needs: Dictionary) -> Array[String]
 ## (4 in a fight, 3 on the road) while the rack has room, 3 in a fight with the rack full (the fight
 ## will need it: only the Secondaries' 3.5 or more take its rider); the Lights (3.4) in a fight while the gun
 ## can fire (lit, it reaches the whole field with half the dark dispersion) or an enemy stands
-## beyond the headlight; the Secondaries with a target in the bow guns' range (3.5, a rider on the
-## Lights stays: 3.5 is not 0.5 more; 4.6 when the main gun has nothing to lay on).
+## beyond the headlight; the Secondaries 4.7 while a near threat is alive, else with a barricade in
+## the bow guns' range (3.5, a rider on the Lights stays: 3.5 is not 0.5 more; 4.6 when the main gun
+## has nothing to lay on); Repairs by the hull (repair_need).
 static func seat_needs(state: TankState, sit: Dictionary = {}, seg: String = "") -> Dictionary:
 	if sit.is_empty():
 		sit = situation(state)
@@ -389,7 +400,9 @@ static func seat_needs(state: TankState, sit: Dictionary = {}, seg: String = "")
 	elif fight:
 		gun = 1.0
 	var feed := 0.1
-	if bool(sit["bow"]):
+	if bool(sit.get("near_threat", false)):
+		feed = FEED_NEAR_THREAT
+	elif bool(sit["bow"]):
 		feed = 3.5 if bool(sit["gun"]) else 4.6
 	var steam := 0.2
 	if int(sit["rack"]) < TankConst.RACK_MAX:
@@ -407,17 +420,27 @@ static func seat_needs(state: TankState, sit: Dictionary = {}, seg: String = "")
 		TankIds.ENGINE_STEAM: steam,
 		TankIds.ENGINE_ARC: arc,
 		TankIds.ENGINE_FEED: feed,
-		TankIds.ENGINE_REPAIR: 0.05,
+		TankIds.ENGINE_REPAIR: repair_need(state),
 	}
 
 
+## v4: how much the Repairs seat is needed, by the hull.
+static func repair_need(state: TankState) -> float:
+	var share := _hull_share(state)
+	if share < HULL_CRITICAL:
+		return REPAIR_CRITICAL
+	return REPAIR_LOW if share < HULL_LOW else REPAIR_IDLE
+
+
 ## What the seating reads (the latest target list, TankAux.targets): {"targets": something the main
-## gun could engage with the searchlights lit (an enemy or Behemoth part on screen, rear lights
-## aside, or a barricade blocking the road), "near": one of them within the gun's reach now
-## (TankAim.in_reach: the headlight's range while the searchlights are dark), "only_light": something
-## in the bow guns' range and every target there a light one (light_target), "bow": something in the bow
-## guns' range, "far": an enemy beyond the headlight's range, "gun": the auto-aim can lay on a
-## target now (TankAim.pick), "rack": shells in the rack, "shells": the rack plus a chambered round}.
+## gun could engage with the searchlights lit (a far enemy or Behemoth part, or a barricade blocking
+## the road), "near": one of them within the gun's reach now (TankAim.in_reach: the headlight's range
+## while the searchlights are dark), "only_light": something in the bow guns' range and every target
+## there a light one (light_target), "bow": a near threat or a barricade in the bow guns' range,
+## "far": a far enemy beyond the headlight's range (arc.dark_range_m), "gun": the auto-aim can lay on
+## a target now (TankAim.pick), "rack": shells in the rack, "shells": the rack plus a chambered round,
+## "far_target": a far enemy or Behemoth part stands, "near_threat": a recon car or tankette is alive}.
+## An enemy in the old frame (range 0; gone with the old rules at T) reads as it always did.
 static func situation(state: TankState) -> Dictionary:
 	var aux := TankAux.of(state)
 	var cam := state.camera_x()
@@ -425,14 +448,36 @@ static func situation(state: TankState) -> Dictionary:
 	var lo := c.num("tanks", "bow.min_px", 40.0) if c != null else 40.0
 	var hi := c.num("tanks", "bow.max_px", 220.0) if c != null else 220.0
 	var reach := c.num("tanks", "arc.dark_range_px", 260.0) if c != null else 260.0
+	var dark_m := c.num("tanks", "arc.dark_range_m", 2300.0) if c != null else 2300.0
 	var light_code := TankIds.enemy_code(TankIds.ENEMY_LIGHT)
 	var targets := false
 	var near := false
 	var only_light := true
 	var bow := false
 	var far := false
+	var far_target := false
+	var near_threat := false
 	for t in aux.targets:
-		if t.drill or not TankShells.collidable(t) or not TankTargets.engageable(t, cam):
+		if t.drill:
+			continue
+		if t.far:
+			if t.kind == TankTarget.KIND_ENEMY and t.enemy.hp <= 0.0:
+				continue
+			targets = true
+			far_target = true
+			near = near or TankAim.in_reach(state, t)
+			far = far or t.range_m > dark_m
+			continue
+		if t.near:
+			if t.enemy.hp <= 0.0:
+				continue
+			near_threat = true
+			var dn := TankBow.distance(state, t)
+			if dn >= lo - 1e-6 and dn <= hi + 1e-6:
+				bow = true
+				only_light = only_light and light_target(state, t)
+			continue
+		if not TankShells.collidable(t) or not TankTargets.engageable(t, cam):
 			continue
 		var enemy := t.kind == TankTarget.KIND_ENEMY
 		if t.kind == TankTarget.KIND_OBSTACLE and not TankDrive.blocks(t.obstacle):
@@ -464,11 +509,13 @@ static func situation(state: TankState) -> Dictionary:
 		"far": far,
 		"rack": rack,
 		"shells": rack + chambered,
+		"far_target": far_target,
+		"near_threat": near_threat,
 	}
 
 
 ## A light target (the solo loop's Secondaries rule): one the bow guns hurt in full, a barricade or
-## an enemy whose enemies.json light_mult is 1 or more (light tanks and dug-in turrets).
+## an enemy whose enemies.json light_mult is 1 or more (recon cars and tankettes).
 static func light_target(state: TankState, t: TankTarget) -> bool:
 	if t.kind == TankTarget.KIND_OBSTACLE:
 		return true
@@ -491,10 +538,8 @@ static func next_fight_segment(state: TankState) -> String:
 
 
 ## The situation the seating expects at the start of a segment of type `seg`: a fight at a gun line
-## or the boss (targets in reach and past the headlight), the open road in an Advance; the rack as
-## it is now. For a solo rider a gun line reads its enemy list (what a crew of 1 meets of it,
-## TankEncounters.crew_counts): "bow" when one stands inside the bow guns' range, "only_light" when
-## every one is a light target there (dug-in turrets).
+## or the boss (far targets in reach and past the headlight; no near threat yet: they burst from the
+## bushes later), the open road in an Advance; the rack as it is now.
 static func expected(state: TankState, seg: String) -> Dictionary:
 	var sit := situation(state)
 	var fight := seg == TankIds.SEG_GUN_LINE or seg == TankIds.SEG_BOSS
@@ -504,36 +549,6 @@ static func expected(state: TankState, seg: String) -> Dictionary:
 	sit["bow"] = false
 	sit["only_light"] = false
 	sit["gun"] = fight
-	if seg == TankIds.SEG_GUN_LINE and state.content != null and state.riders.size() == 1:
-		var i := next_fight_index(state)
-		var specs: Array = state.content.segment(i).get("enemies", []) if i >= 0 else []
-		var counts := TankEncounters.crew_counts(state, specs)
-		var lo := state.content.num("tanks", "bow.min_px", 40.0)
-		var hi := state.content.num("tanks", "bow.max_px", 220.0)
-		var light := true
-		var bow := false
-		for k in specs.size():
-			if counts[k] <= 0:
-				continue
-			var def := state.content.enemy_def(str(specs[k].get("enemy", "")))
-			var at: Array = specs[k].get("at_px", [200])
-			for n in counts[k]:
-				var raw: Variant = at[mini(n, at.size() - 1)]
-				var near := not (raw is String) and float(raw) >= lo and float(raw) <= hi
-				bow = bow or near
-				light = light and near and float(def.get("light_mult", 0.0)) >= 1.0 - 1e-9
-		sit["bow"] = bow
-		sit["only_light"] = bow and light
+	sit["far_target"] = fight
+	sit["near_threat"] = false
 	return sit
-
-
-## The index of the next segment with work in it after the current one (checkpoints skipped), or
-## -1 after the last.
-static func next_fight_index(state: TankState) -> int:
-	if state.content == null:
-		return -1
-	var segs := state.content.segments()
-	var i := state.seg.segment_index + 1
-	while i < segs.size() and str(segs[i].get("type", "")) == TankIds.SEG_CHECKPOINT:
-		i += 1
-	return i if i < segs.size() else -1
