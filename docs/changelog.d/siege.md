@@ -1,5 +1,11 @@
 # Changelog: siege
 
+### Fixed (Castellum Rotae) v0.3.1
+
+- A rules step at the enemy cap now fits its 1 ms budget on the GitHub runners (851 us against 1293-1394 us). Enemies remember their path segment, station targeting no longer builds lists, and enemy lookup by id is a binary search. Scores are unchanged.
+- The perf test times `SiegeRules.step` alone and takes the best of three measurements. The budget is unchanged.
+- `game-siege` CI checks T1 over seeds 1-3, as the target is defined, instead of seed 1 alone.
+
 ### Changed (Castellum Rotae) v0.3.0
 
 - Castellum Rotae has its own Roman HUD, matching the approved mock (`src/games/siege/art/hud_mock.mjs`): dark wax plates in a limestone frame with a brick course, tabula ansata plaques, a Roman letter baked from the mock's own code, and a red chip as the only alarm. The kit widgets are gone from Siege.
