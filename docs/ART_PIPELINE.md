@@ -1,6 +1,6 @@
 # Art pipeline
 
-2D games make their pixel art with `tools/art` (BRIEF 3.10): `generate.mjs` asks fal.ai's GPT Image 2.5 for one picture per sprite, and `pixelate.gd` turns each picture into a small sprite in the game's palette. The art is animated by parts in the `world2d` kit, not by drawn frames. Castellum Rotae needs none of this; Diesel Domestiques and Turbo Reel use it.
+A 2D game can make its pixel art with `tools/art` (BRIEF 3.10): `generate.mjs` asks fal.ai's GPT Image 2.5 for one picture per sprite, and `pixelate.gd` turns each picture into a small sprite in the game's palette. The art is animated by parts in the `world2d` kit, not by drawn frames. No shipped game uses this today: Castellum Rotae, Diesel Domestiques and Workout bake their art with their own scripts, and Turbo Reel draws it from grids in code. Turbo Reel tried the pipeline first; `assets/fishing/art_manifest.json` is the record of that, and none of its output ships.
 
 ```
 assets/<id>/art.json ──► node tools/art/generate.mjs ──► .art_cache/<id>/<request id>.png   (raw, gitignored)
@@ -24,7 +24,7 @@ In the Claude desktop app, add both variables to the app's Local environment bef
 ### Budgets and fal credits
 
 - Every run stops before its own estimated spend would pass `--budget=<usd>` (default `$10`). The stop sums, per request, the larger of the estimate and the billed amount fal reports (exit 3, with the sprites it didn't pay for). Cached and recovered results cost nothing.
-- A game session's total art spend is `spend.total_usd` in `assets/<id>/art_manifest.json` (the larger of estimate and billed amount per paid request, summed). Pass `--budget=<session cap − spent>` on every run (Tank: $15, Fishing: $10).
+- A game session's total art spend is `spend.total_usd` in `assets/<id>/art_manifest.json` (the larger of estimate and billed amount per paid request, summed). Pass `--budget=<session cap − spent>` on every run.
 - Estimates come from `tools/art/prices.json`: sunburst at high quality is $0.07 an image up to 1536 × 864 (more above, by pixel count); flare uses fal's listed per-size price plus a prompt allowance (about $0.04–0.06 at the sizes the tool requests). fal bills on completion, even when the download fails afterwards (see Recovery).
 - fal credits: top up in fal's dashboard (Billing). When the balance runs out fal refuses new requests (an HTTP 403 "exhausted balance" error); the run records them as `submit_failed`, which costs nothing, and exits 1. A submit that never left this machine (offline, no DNS answer, connection refused, a failed TLS handshake) costs nothing either: it is `submit_failed`, and the run stops submitting, names the sprites it did not submit and exits 1. A submit whose answer never arrives after the connection was made (a dropped connection or a timeout) is different: fal may have queued it, so it stays counted against `--budget` and in `spend.total_usd` (`submit_unconfirmed`), and the next run adopts it from fal's request history.
 
