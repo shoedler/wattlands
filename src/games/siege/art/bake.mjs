@@ -3,7 +3,9 @@
 // assets/siege/bake/, from the same scene the approved mock draws (mock.mjs):
 //   world.png         the static world: sun shadows, AO, outlines, glow and the grade, without
 //                     tilt-shift, vignette or haze (the game's screen shader adds those), and
-//                     without anything that moves or takes a rider's hue;
+//                     without anything that moves or takes a rider's hue. The design frame's 960 x
+//                     540 pixels, plus WORLD_MARGIN of more terrain all round for the flex canvas
+//                     (manifest world.origin is the frame's top-left in the image);
 //   world_depth.png   per pixel: depth x + y + z in 16 bits (R high byte, G low byte) as
 //                     (depth - WORLD_DEPTH.offset) * WORLD_DEPTH.scale, 0 for the sky; B is the
 //                     sun (255 lit, 0 in shadow); A 255;
@@ -30,7 +32,7 @@ import * as W from './world.mjs';
 import { writePng } from './png.mjs';
 
 // Bump when the baked art or its encodings change; `--check` compares it with the manifest.
-export const BAKE_VERSION = 2;
+export const BAKE_VERSION = 3;
 export const GENERATOR = 'src/games/siege/art/bake.mjs';
 export const WORLD_DEPTH = { offset: -400, scale: 64 };
 export const SPRITE_DEPTH = { zero: 32768, scale: 256 };
@@ -39,6 +41,11 @@ export const KEY_STEP = 8;
 export const HALO_ALPHA = 0.45;
 const ART_W = 960;
 const ART_H = 540;
+// More world round the design frame for pixel_flex canvases: every canvas of a window up to 3840 x
+// 1080 or 1703 x 1079 (src/games/siege/README.md). Multiples of 4, so the ordered dither lines up.
+export const WORLD_MARGIN = { x: 480, y: 272 };
+export const WORLD_W = ART_W + WORLD_MARGIN.x * 2;
+export const WORLD_H = ART_H + WORLD_MARGIN.y * 2;
 const CAM = W.CAMERA;
 const POST = { skyTop: hex('#c8c3ba'), skyBottom: hex('#c8c3ba') };
 // The mock's tilt-shift focus band (rows), also where the grade adds its in-band contrast.
@@ -281,37 +288,64 @@ function unprojectDepth(x, y, d) {
 
 const DYNAMIC_LIFE = ['walkers', 'army', 'shots', 'tar', 'brazier', 'dust'];
 
-function bakeWorld() {
-  const r = new Raster(ART_W, ART_H, CAM.ox, CAM.oy, CAM.k);
+// finish()'s grade band at a pixel of the frame's coordinates: rows 110..460 in the frame, as approved,
+// with an edge that softens away from the frame's sides, so it doesn't rule a line across the margin.
+function gradeBand(x, y) {
+  const away = Math.max(-x, x - (ART_W - 1), 0);
+  if (away === 0) return y >= 110 && y <= 460 ? 1 : 0;
+  const soft = away * 0.75 + 1;
+  return clamp(Math.min(y - 110, 460 - y) / soft + 0.5, 0, 1);
+}
+
+// The static world's raster over w x h pixels, the design frame's top-left at (mx, my).
+function renderWorld(w, h, mx, my, margin) {
+  const r = new Raster(w, h, CAM.ox + mx, CAM.oy + my, CAM.k);
+  if (margin) r.hmBox = { x0: -300, y0: -320, W: 1400, H: 1400 };
   // the moving parts still cast their (mock-pose) shadows and contact shade; the siege engines
   // and the tar come and go, so they leave nothing
   r.partMode = (p) => (p === 'engines' || p === 'curtain' || p === 'coat' ? 0 : 1);
-  const scene = new Scene(r, { routes: [-1, -1, -1, -1] });
+  const scene = new Scene(r, { routes: [-1, -1, -1, -1], terrainPad: margin ? 200 : 40 });
   scene.build();
+  if (margin) scene.marginProps();
   r.render();
-  new Life(r, scene, { skip: DYNAMIC_LIFE }).run();
-  const img = r.finish({ ...POST, maxBlur: 0, vignette: false, haze: false });
-  const color = new Uint8Array(ART_W * ART_H * 4);
-  const depth = new Uint8Array(ART_W * ART_H * 4);
-  for (let i = 0; i < ART_W * ART_H; i++) {
+  const life = new Life(r, scene, { skip: DYNAMIC_LIFE });
+  life.run();
+  if (margin) life.marginPalms();
+  const img = r.finish({ ...POST, bandAt: (x, y) => gradeBand(x - mx, y - my), maxBlur: 0, vignette: false, haze: false });
+  const color = new Uint8Array(w * h * 4);
+  const depth = new Uint8Array(w * h * 4);
+  for (let i = 0; i < w * h; i++) {
     color.set([byte(img[i * 3]), byte(img[i * 3 + 1]), byte(img[i * 3 + 2]), 255], i * 4);
     if (r.dep[i] < -1e8) {
       depth.set([0, 0, 255, 255], i * 4);
       continue;
     }
     const v = encodeWorld(r.dep[i]);
-    const x = i % ART_W, y = Math.floor(i / ART_W);
+    const x = (i % w) - mx, y = Math.floor(i / w) - my;
     const lit = r.sunVis(add(unprojectDepth(x, y, r.dep[i]), v3(0, 0, 0.3)));
     depth.set([v >> 8, v & 255, lit ? 255 : 0, 255], i * 4);
   }
-  WORLD = { dep: r.dep };
+  return { r, color, depth };
+}
+
+function bakeWorld() {
+  // the design frame alone, as approved: its pixels go into the image unchanged, and the parts bake
+  // against it, so a bigger world can't move one pixel of them
+  const frame = renderWorld(ART_W, ART_H, 0, 0, false);
+  WORLD = { dep: frame.r.dep };
   // the static world's own shadow map, for the parts rendered where they stand
   const st = new Raster(1, 1, CAM.ox, CAM.oy, CAM.k);
-  st.tris = r.tris.filter((t) => !t.part);
+  st.tris = frame.r.tris.filter((t) => !t.part);
   st.buildShadowMap();
   STATIC_SHADOW = st;
-  writePng(join(OUT, 'world.png'), ART_W, ART_H, color);
-  writePng(join(OUT, 'world_depth.png'), ART_W, ART_H, depth);
+  const all = renderWorld(WORLD_W, WORLD_H, WORLD_MARGIN.x, WORLD_MARGIN.y, true);
+  for (let y = 0; y < ART_H; y++) {
+    const at = ((y + WORLD_MARGIN.y) * WORLD_W + WORLD_MARGIN.x) * 4;
+    all.color.set(frame.color.subarray(y * ART_W * 4, (y + 1) * ART_W * 4), at);
+    all.depth.set(frame.depth.subarray(y * ART_W * 4, (y + 1) * ART_W * 4), at);
+  }
+  writePng(join(OUT, 'world.png'), WORLD_W, WORLD_H, all.color);
+  writePng(join(OUT, 'world_depth.png'), WORLD_W, WORLD_H, all.depth);
 }
 
 // --- the parts ---------------------------------------------------------------------------------
@@ -796,7 +830,7 @@ function main() {
     art_size: [ART_W, ART_H],
     camera: { k: CAM.k, ox: CAM.ox, oy: CAM.oy, depth: 'x + y + z (larger is nearer)' },
     focus: FOCUS,
-    world: { color: 'world.png', depth: 'world_depth.png' },
+    world: { color: 'world.png', depth: 'world_depth.png', size: [WORLD_W, WORLD_H], origin: [WORLD_MARGIN.x, WORLD_MARGIN.y] },
     depth: {
       world: { offset: WORLD_DEPTH.offset, scale: WORLD_DEPTH.scale, encode: 'v = round((depth - offset) * scale), R = v >> 8, G = v & 255; v 0 is the sky (farthest)', sun: 'B: 255 lit, 0 in the sun shadow' },
       sprite: { zero: SPRITE_DEPTH.zero, scale: SPRITE_DEPTH.scale, encode: 'v = round(rel * scale) + zero, R = v >> 8, G = v & 255; depth = anchor depth + rel' },

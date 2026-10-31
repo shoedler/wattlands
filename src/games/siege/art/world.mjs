@@ -52,6 +52,33 @@ function spline(ctrl, step = 1) {
 
 export const ROADS = [spline(ROAD_CTRL)];
 
+// The road beyond the camp, west of the design frame: art only. The rules' road (ROADS, exported to
+// content/siege/maps/rotae.json) still starts at the camp; a wide canvas (pixel_flex) sees where it
+// came from. Screen pixels like ROAD_SCREEN, near to far; it starts where ROADS ends.
+const ROAD_TAIL_SCREEN = [[60, 85], [-30, 60], [-112, 46], [-205, 58], [-318, 28], [-430, -12], [-560, -40]];
+export const ROAD_TAIL = (() => {
+  const near = ROADS[0][ROADS[0].length - 1];
+  const pts = spline(ROAD_TAIL_SCREEN.map(toWorld).reverse());
+  // the first span (the rules' road) only sets the tangent
+  let i = 0;
+  while (i < pts.length && Math.hypot(pts[i].x - near.x, pts[i].y - near.y) > 0.6) i++;
+  return pts.slice(i);
+})();
+
+// World point (z 0) under a design-frame screen pixel, and whether a world point stands at least
+// `pad` pixels outside the frame (the bake's margin props).
+export const fromScreen = (sx, sy) => {
+  const [x, y] = toWorld([sx, sy]);
+  return { x, y };
+};
+export const offFrame = (x, y, pad = 34) => {
+  const sx = (x - y) * CAMERA.k + CAMERA.ox;
+  const sy = ((x + y) * CAMERA.k) / 2 + CAMERA.oy;
+  return sx < -pad || sx > 960 + pad || sy < -pad || sy > 540 + pad + 20;
+};
+// Oasis pools outside the frame (screen pixels).
+export const MARGIN_POOLS = [[-330, 470], [1320, 540], [150, 740]];
+
 export function roadLength(r = 0) {
   let l = 0;
   for (let i = 0; i < ROADS[r].length - 1; i++) l += dist2(ROADS[r][i], ROADS[r][i + 1]);
@@ -60,6 +87,9 @@ export function roadLength(r = 0) {
 
 const GRID_MIN = { x: -130, y: -90 };
 const GRID_MAX = { x: 220, y: 200 };
+// The road's grids reach the whole bake (bake.mjs WORLD_MARGIN); same cell boundaries as GRID_MIN.
+const ROAD_MIN = { x: -300, y: -120 };
+const ROAD_MAX = { x: 220, y: 200 };
 const GRID_RES = 0.5;
 let road = null;
 let roadSGrid = null;
@@ -152,7 +182,15 @@ export function wadi(x, y) {
   const t = clamp(((x - a.x) * abx + (y - a.y) * aby) / (abx * abx + aby * aby), 0, 1);
   const cx = a.x + abx * t + Math.sin(t * 9) * 5, cy = a.y + aby * t - Math.sin(t * 9) * 4;
   const half = 0.6 + t * 3.4;
-  return 1 - clamp((Math.hypot(x - cx, y - cy) - half) / 3, 0, 1);
+  const near = 1 - clamp((Math.hypot(x - cx, y - cy) - half) / 3, 0, 1);
+  if (x < 150 || y < 130) return near;
+  // its run on south of the design frame, for a tall canvas
+  const c = { x: 262, y: 290 };
+  const cdx = c.x - b.x, cdy = c.y - b.y;
+  const q = clamp(((x - b.x) * cdx + (y - b.y) * cdy) / (cdx * cdx + cdy * cdy), 0, 1);
+  const wob = Math.sin(q * 11) * 7 * Math.min(q * 6, 1);
+  const far = 1 - clamp((Math.hypot(x - (b.x + cdx * q + wob), y - (b.y + cdy * q - wob)) - (4 + q * 1.5)) / 3, 0, 1);
+  return Math.max(near, far);
 }
 
 export function heightRaw(x, y) {
@@ -177,8 +215,8 @@ export function heightRaw(x, y) {
 }
 
 export function build() {
-  gw = Math.floor((GRID_MAX.x - GRID_MIN.x) / GRID_RES);
-  gh = Math.floor((GRID_MAX.y - GRID_MIN.y) / GRID_RES);
+  gw = Math.floor((ROAD_MAX.x - ROAD_MIN.x) / GRID_RES);
+  gh = Math.floor((ROAD_MAX.y - ROAD_MIN.y) / GRID_RES);
   road = new Float32Array(gw * gh);
   roadSGrid = new Float32Array(gw * gh).fill(1e9);
   for (const poly of ROADS) {
@@ -189,6 +227,11 @@ export function build() {
     }
   }
   stampSegment({ x: 44, y: 74 }, { x: 44, y: 82 }, ROAD_HALF);
+  let tailS = roadLength(0);
+  for (let i = 0; i < ROAD_TAIL.length - 1; i++) {
+    stampSegment(ROAD_TAIL[i], ROAD_TAIL[i + 1], ROAD_HALF, tailS);
+    tailS += dist2(ROAD_TAIL[i], ROAD_TAIL[i + 1]);
+  }
   hw = GRID_MAX.x - GRID_MIN.x + 1;
   hh = GRID_MAX.y - GRID_MIN.y + 1;
   hc = new Float32Array(hw * hh);
@@ -197,16 +240,16 @@ export function build() {
 
 function stampSegment(a, b, half, s0 = 0) {
   const pad = half + 2;
-  const gx0 = Math.max(Math.floor((Math.min(a.x, b.x) - pad - GRID_MIN.x) / GRID_RES), 0);
-  const gx1 = Math.min(Math.floor((Math.max(a.x, b.x) + pad - GRID_MIN.x) / GRID_RES), gw - 1);
-  const gy0 = Math.max(Math.floor((Math.min(a.y, b.y) - pad - GRID_MIN.y) / GRID_RES), 0);
-  const gy1 = Math.min(Math.floor((Math.max(a.y, b.y) + pad - GRID_MIN.y) / GRID_RES), gh - 1);
+  const gx0 = Math.max(Math.floor((Math.min(a.x, b.x) - pad - ROAD_MIN.x) / GRID_RES), 0);
+  const gx1 = Math.min(Math.floor((Math.max(a.x, b.x) + pad - ROAD_MIN.x) / GRID_RES), gw - 1);
+  const gy0 = Math.max(Math.floor((Math.min(a.y, b.y) - pad - ROAD_MIN.y) / GRID_RES), 0);
+  const gy1 = Math.min(Math.floor((Math.max(a.y, b.y) + pad - ROAD_MIN.y) / GRID_RES), gh - 1);
   const abx = b.x - a.x, aby = b.y - a.y;
   const l2 = Math.max(abx * abx + aby * aby, 1e-6);
   for (let gy = gy0; gy <= gy1; gy++) {
     for (let gx = gx0; gx <= gx1; gx++) {
-      const px = GRID_MIN.x + gx * GRID_RES;
-      const py = GRID_MIN.y + gy * GRID_RES;
+      const px = ROAD_MIN.x + gx * GRID_RES;
+      const py = ROAD_MIN.y + gy * GRID_RES;
       const t = clamp(((px - a.x) * abx + (py - a.y) * aby) / l2, 0, 1);
       const d = Math.hypot(px - (a.x + abx * t), py - (a.y + aby * t));
       const wob = (vnoise(px * 0.35, py * 0.35) - 0.5) * 1.6;
@@ -220,8 +263,8 @@ function stampSegment(a, b, half, s0 = 0) {
 
 export function roadAt(x, y) {
   if (!road) return 0;
-  const gx = Math.floor((x - GRID_MIN.x) / GRID_RES);
-  const gy = Math.floor((y - GRID_MIN.y) / GRID_RES);
+  const gx = Math.floor((x - ROAD_MIN.x) / GRID_RES);
+  const gy = Math.floor((y - ROAD_MIN.y) / GRID_RES);
   if (gx < 0 || gy < 0 || gx >= gw || gy >= gh) return 0;
   return road[gy * gw + gx];
 }
@@ -229,8 +272,8 @@ export function roadAt(x, y) {
 // Arc length (m from the bridgehead) of the road at x, y (1e9 off the road).
 export function roadS(x, y) {
   if (!roadSGrid) return 1e9;
-  const gx = Math.floor((x - GRID_MIN.x) / GRID_RES);
-  const gy = Math.floor((y - GRID_MIN.y) / GRID_RES);
+  const gx = Math.floor((x - ROAD_MIN.x) / GRID_RES);
+  const gy = Math.floor((y - ROAD_MIN.y) / GRID_RES);
   if (gx < 0 || gy < 0 || gx >= gw || gy >= gh) return 1e9;
   return roadSGrid[gy * gw + gx];
 }

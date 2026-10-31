@@ -1,7 +1,9 @@
 class_name SiegeView
 extends Node2D
 ## Castellum Rotae's 2D view (docs/games/siege.md 3 "View"), drawn in the platform's
-## PixelViewport at 960 x 540 art pixels: the baked world (SiegeV2WorldLayer), every machine
+## PixelViewport (960 x 540 art pixels, flexing with the window: SiegeViewMath.view_offset keeps
+## this node's origin, the design frame's top-left, centred on the canvas, and fit_canvas() moves
+## what follows it): the baked world (SiegeV2WorldLayer), every machine
 ## (SiegeV2Machines), the attackers (SiegeV2Crowd), the shots (SiegeV2Shots) and the tilt-shift
 ## pass (SiegeV2TiltShift), with Siege's sound (SiegeAudio). It only reads the state
 ## (contracts/STATE_V2.md) and listens to SiegeGame.cue; on a client the enemies come from the
@@ -29,6 +31,8 @@ const MARCH_MPS := 1.3
 ## The mine's and the pump's cycles per second at m = 1.
 const MINE_HZ := 0.9
 const PUMP_HZ := 0.5
+## Attackers fade in over the road's first metres: on a wide canvas the road's start is on screen.
+const ARRIVE_M := 6.0
 
 var game: SiegeGame = null
 var state: SiegeState = null
@@ -57,6 +61,8 @@ var mine_phase: float = 0.0
 var pump_phase: float = 0.0
 ## Seconds since the march home began (negative: not marching).
 var march_s: float = -1.0
+## The art canvas the view is laid out on.
+var canvas: Vector2i = SiegeBakeBank.ART_SIZE
 
 var _built: bool = false
 var _tick_seen: int = -1
@@ -99,7 +105,30 @@ func _build() -> void:
 	audio.rng_seed = SeededRng.derive(game.ctx.seed, "siege:audio") if _has_ctx() else 0
 	for n: Node in [world, machines, crowd, shots, tilt, audio]:
 		add_child(n)
+	fit_canvas(self, bank, world, tilt, _canvas_now())
+	canvas = _canvas_now()
 	update(0.0)
+
+
+## Lays a view root and its world and screen pass out on an art canvas.
+static func fit_canvas(
+	root: Node2D,
+	p_bank: SiegeBakeBank,
+	p_world: SiegeV2WorldLayer,
+	p_tilt: SiegeV2TiltShift,
+	art: Vector2i
+) -> void:
+	var offset := SiegeViewMath.view_offset(art)
+	root.position = Vector2(offset)
+	p_bank.set_view_offset(offset)
+	p_world.set_canvas(art, offset)
+	p_tilt.set_canvas(art, offset)
+
+
+## The canvas this view is on: the PixelViewport's SubViewport (the base outside one).
+func _canvas_now() -> Vector2i:
+	var vp := get_viewport() if is_inside_tree() else null
+	return (vp as SubViewport).size if vp is SubViewport else SiegeBakeBank.ART_SIZE
 
 
 ## The local rider's tilt_shift option (on unless they turned it off).
@@ -131,6 +160,10 @@ func update(delta: float) -> void:
 		path = state.path
 	if not _built or state == null:
 		return
+	var now := _canvas_now()
+	if now != canvas:
+		canvas = now
+		fit_canvas(self, bank, world, tilt, canvas)
 	_advance_clock(delta)
 	_update_wheels(delta)
 	_update_machines(delta)
@@ -203,6 +236,7 @@ func _update_crowd(delta: float) -> void:
 	var walk := PackedFloat32Array()
 	var hp := PackedFloat32Array()
 	var sts := PackedInt32Array()
+	var alpha := PackedFloat32Array()
 	var client := _is_client() and game.history != null
 	for e in state.enemies:
 		# retreating bodies keep walking back until the rules drop them
@@ -218,10 +252,11 @@ func _update_crowd(delta: float) -> void:
 		walk.append(prog / stride if e.st != SiegeIds.EN_BATTER else 0.0)
 		hp.append(e.hp / maxf(e.max_hp, 1.0))
 		sts.append(e.st)
+		alpha.append(clampf(prog / ARRIVE_M, 0.0, 1.0))
 	_add_boarders(types, pos, yaw, walk, hp, sts)
 	_add_march(delta, types, pos, yaw, walk, hp, sts)
 	shots.bodies = pos
-	crowd.set_enemies(types, pos, yaw, walk, hp, sts)
+	crowd.set_enemies(types, pos, yaw, walk, hp, sts, alpha)
 
 
 ## Spearmen on the wall walk beside a docked tower while it lands its boarders.

@@ -19,6 +19,7 @@ const MANIFEST := {
 	"bots": true,
 	"presentation": "2d",
 	"pixel_base": [960.0, 540.0],
+	"pixel_flex": {"min": [852.0, 480.0]},
 	"entry": "res://src/games/siege/siege_game.gd",
 	"contents": ["short", "vo2", "sweetspot", "endurance", "drill"],
 	"default_content": "short",

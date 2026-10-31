@@ -48,14 +48,16 @@ func _ready() -> void:
 
 ## Rebuilds the batch. Arrays are parallel, one entry per enemy: type, world position (feet),
 ## travel yaw in degrees (atan2(dy, dx)), walk phase 0..1 (any real; frames repeat every 1),
-## hp fraction 0..1, and optionally the SiegeIds.EN_* state.
+## hp fraction 0..1, and optionally the SiegeIds.EN_* state and an opacity 0..1 (1 for entries past
+## its end).
 func set_enemies(
 	types: PackedInt32Array,
 	positions: PackedVector3Array,
 	facing_deg: PackedFloat32Array,
 	walk: PackedFloat32Array,
 	hp: PackedFloat32Array,
-	states: PackedInt32Array = PackedInt32Array()
+	states: PackedInt32Array = PackedInt32Array(),
+	alphas: PackedFloat32Array = PackedFloat32Array()
 ) -> void:
 	begin()
 	drawn = 0
@@ -69,11 +71,12 @@ func set_enemies(
 		var ph := walk[i] if i < walk.size() else 0.0
 		var st := states[i] if i < states.size() else 0
 		var shade := bank.sun_at(bank.art_pixel(p))
-		add(SHADOWS[t], 0, p, 0, 1.0, 1.0, SiegeBakeBank.depth_of(p) - 0.5)
+		var alpha := alphas[i] if i < alphas.size() else 1.0
+		add(SHADOWS[t], 0, p, 0, 1.0, alpha, SiegeBakeBank.depth_of(p) - 0.5)
 		var part: String = PARTS[t]
 		if t == TYPE_TOWER and st == ST_DOCKED:
 			part = "tower_dock"
-		add(part, frame_for(t, yaw, ph), p, 0, shade)
+		add(part, frame_for(t, yaw, ph), p, 0, shade, alpha)
 		if (t == TYPE_RAM or t == TYPE_TOWER) and i < hp.size() and hp[i] < 0.999:
 			_hp_bar(p + Vector3(0, 0, HP_BAR_Z[t]), clampf(hp[i], 0.0, 1.0))
 		drawn += 1

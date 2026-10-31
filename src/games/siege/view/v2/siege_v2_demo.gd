@@ -7,7 +7,9 @@ extends Control
 ## a capture after n frames is always the same picture.
 ##   tools/screenshot --scene=res://src/games/siege/view/v2/siege_v2_demo.tscn --frames=<n>
 ## User args: --siege-demo-t=<s> (start time), --siege-demo-sharp (tilt-shift off),
-## --siege-demo-stress (150 attackers and a shot every 0.15 s; prints the cost of an update),
+## --siege-demo-stress (150 attackers and a shot every 0.15 s; prints the cost of an update, the
+## canvas and the art viewport's measured render time),
+## --siege-demo-flex (the game's pixel_flex canvas),
 ## --siege-demo-mock-pose (the machines posed as in the approved mock, no attackers or shots, to
 ## compare a capture with build/siege_mock_r2/frame_sharp_2x.png).
 
@@ -29,6 +31,10 @@ const COLUMN := [
 	[3, 30.0, 6.0, 1, 2],
 ]
 const SPACING_M := 1.2
+const STRESS_LINE := (
+	"siege_v2_demo: %s, %d enemies, %d projectiles, update %.2f ms, %d fps, %d draw calls, "
+	+ "art viewport cpu %.2f ms gpu %.2f ms"
+)
 
 var bank: SiegeBakeBank = null
 var path: SiegePath = null
@@ -40,6 +46,7 @@ var crowd: SiegeV2Crowd = null
 var shots: SiegeV2Shots = null
 var tilt: SiegeV2TiltShift = null
 var time_s: float = START_S
+var pixel_viewport_flex: bool = false
 
 var _types := PackedInt32Array()
 var _prog0 := PackedFloat32Array()
@@ -64,6 +71,8 @@ func _ready() -> void:
 			sharp = true
 		elif a == "--siege-demo-mock-pose":
 			_mock_pose = true
+		elif a == "--siege-demo-flex":
+			pixel_viewport_flex = true
 		elif a == "--siege-demo-stress":
 			_stress = true
 			_shot_every = 0.15
@@ -71,14 +80,30 @@ func _ready() -> void:
 	path = SiegePath.load_file(MAP_PATH)
 	pixel_viewport = PixelViewport.new()
 	pixel_viewport.pixel_base = SiegeBakeBank.ART_SIZE
+	if pixel_viewport_flex:
+		pixel_viewport.flex_min = SiegeViewMath.MUST_SHOW.size
 	pixel_viewport.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(pixel_viewport)
 	build_view()
 	tilt.enabled = not sharp
 	pixel_viewport.set_game_view(view)
+	_fit_canvas()
+	pixel_viewport.art_size_changed.connect(_on_art_size)
+	if _stress:
+		RenderingServer.viewport_set_measure_render_time(
+			pixel_viewport.subviewport().get_viewport_rid(), true
+		)
 	_make_column()
 	_fired = floori((time_s - 8.0) / _shot_every)
 	update_at(time_s)
+
+
+func _fit_canvas() -> void:
+	SiegeView.fit_canvas(view, bank, world, tilt, pixel_viewport.art_size())
+
+
+func _on_art_size(_art: Vector2i) -> void:
+	_fit_canvas()
 
 
 ## The view: world, machines, crowd, shots, then the screen pass.
@@ -103,18 +128,18 @@ func _process(_delta: float) -> void:
 	_usec += Time.get_ticks_usec() - t0
 	_frames += 1
 	if _stress and _frames % 60 == 0:
-		print(
-			(
-				"siege_v2_demo: %d enemies, %d projectiles, update %.2f ms, %d fps, %d draw calls"
-				% [
-					crowd.drawn,
-					shots.in_flight(),
-					_usec / 60000.0,
-					Engine.get_frames_per_second(),
-					Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
-				]
-			)
-		)
+		var art_rid := pixel_viewport.subviewport().get_viewport_rid()
+		var values := [
+			pixel_viewport.art_size(),
+			crowd.drawn,
+			shots.in_flight(),
+			_usec / 60000.0,
+			Engine.get_frames_per_second(),
+			Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+			RenderingServer.viewport_get_measured_render_time_cpu(art_rid),
+			RenderingServer.viewport_get_measured_render_time_gpu(art_rid),
+		]
+		print(STRESS_LINE % values)
 		_usec = 0
 
 

@@ -18,8 +18,9 @@ func before_all() -> void:
 func test_manifest_loads() -> void:
 	assert_true(bank.ok, "bank loads: %s" % bank.error)
 	assert_eq(bank.manifest.get("art_size"), [960.0, 540.0])
-	assert_eq(bank.world_texture.get_size(), Vector2(960, 540))
-	assert_eq(bank.world_depth_image.get_size(), Vector2i(960, 540))
+	# the design frame and the flex canvas's margin round it
+	assert_eq(bank.world_texture.get_size(), Vector2(1920, 1084))
+	assert_eq(bank.world_depth_image.get_size(), Vector2i(1920, 1084))
 	assert_gt(bank.atlases.size(), 0)
 	assert_eq(bank.atlases.size(), bank.depth_atlases.size())
 	for name in [
