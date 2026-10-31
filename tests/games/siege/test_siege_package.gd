@@ -26,6 +26,7 @@ const MANIFEST := {
 	"e2e_content": "drill",
 	"zero_input_content": "short",
 	"first_run_priority": -1.0,
+	"picker_image": "res://assets/siege/cards/picker_card.png",
 	"player_options":
 	[
 		{

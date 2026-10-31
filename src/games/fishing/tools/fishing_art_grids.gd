@@ -69,7 +69,7 @@ const ICONS: Array[String] = [
 ]
 ## The town's sage ground rows.
 const TOWN_BASE_ROWS := 2
-## Card size (the game's picker card and the Free Roam and workout cards).
+## Card size (the Free Roam and workout cards; the game's picker card is a render, tools/picker_cards).
 const CARD := Vector2i(160, 90)
 ## The offset of boat()'s image over the hull's boat-local frame (rows added above for the rod).
 const BOAT_PAD := Vector2i(0, 16)
@@ -309,7 +309,6 @@ static func build() -> Dictionary:
 	var town := town_img()
 	_add(out, "scenery_town", [town], Vector2i(0, town.get_height()), "harbour town in the haze")
 	_add(out, "scenery_pier", [img(SCENERY_PIER)], Vector2i(0, 6), "pier, deck top on row 6")
-	_add(out, "picker_card", [card(0)], Vector2i.ZERO, "the game's picker card")
 	_add(out, "card_roam", [card(1)], Vector2i.ZERO, "Free Roam card")
 	_add(out, "card_workout", [card(2)], Vector2i.ZERO, "workout card")
 	return out
@@ -578,24 +577,24 @@ static func boat(fishing: bool, k: int = 0) -> Image:
 	return tall
 
 
-## Card `kind` (0 the game's picker card, 1 Free Roam, 2 workout): the flat sky, the haze town,
-## the water bands, the boat and a fish, composed from the sprites above.
+## Card `kind` (1 Free Roam, 2 workout): the flat sky, the haze town, the water bands, the boat
+## and a fish, composed from the sprites above.
 static func card(kind: int) -> Image:
 	var out := Image.create_empty(CARD.x, CARD.y, false, Image.FORMAT_RGBA8)
 	var surf := 46
 	out.fill(FishingPalette.SKY)
 	if kind != 2:
-		blit(out, town_img(), Vector2i(-20 if kind == 0 else -60, surf - 2 - 30))
+		blit(out, town_img(), Vector2i(-60, surf - 2 - 30))
 	out.fill_rect(Rect2i(0, surf - 2, CARD.x, 2), FishingPalette.HAZE)
 	var tops: Array[int] = [surf, surf + 18, surf + 30, surf + 39]
 	for i in tops.size():
 		out.fill_rect(Rect2i(0, tops[i], CARD.x, CARD.y - tops[i]), FishingPalette.SEA[i])
-	var fish := "fish_marlin" if kind == 0 else ("fish_grouper" if kind == 1 else "fish_tuna")
+	var fish := "fish_grouper" if kind == 1 else "fish_tuna"
 	var ff := fish_frames(fish)
 	var full: Image = (ff["frames"] as Array)[0]
 	var used := full.get_used_rect()
 	var fimg := full.get_region(used)
-	var fat := Vector2i(96, 58) if kind == 1 else Vector2i(4, 64 if kind == 0 else 66)
+	var fat := Vector2i(96, 58) if kind == 1 else Vector2i(4, 66)
 	var band := 0
 	for i in tops.size():
 		if fat.y + fimg.get_height() / 2 >= tops[i]:

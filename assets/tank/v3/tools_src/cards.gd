@@ -1,13 +1,12 @@
 extends SceneTree
-# Cuts the picker card and the content cards (320 x 180, 16:9) from in-engine renders of the view at
+# Cuts the content cards (320 x 180, 16:9) from in-engine renders of the view at
 # 960 x 540 (cards.sh shoots them with tools/screenshot --scene and the view's fixture scene, no HUD).
-# args: <render dir>; reads <dir>/<name>/view_fixture_scene.png for picker, mission, ambush, drill and roam
+# args: <render dir>; reads <dir>/<name>/view_fixture_scene.png for mission, ambush, drill and roam
 # (TankFixturesV4: the tank, the seam and the enemy across the valley).
 
 const OUT := "res://assets/tank/cards/"
 ## name -> [the crop of the 960 x 540 render (x, y, w, h; 16:9), the card's file].
 const CARDS := {
-	"picker": [Rect2i(60, 0, 900, 486), "picker_card.png"],
 	"mission": [Rect2i(200, 50, 760, 428), "card_mission.png"],
 	"ambush": [Rect2i(250, 110, 660, 370), "card_ambush.png"],
 	"drill": [Rect2i(20, 150, 480, 270), "card_drill.png"],
