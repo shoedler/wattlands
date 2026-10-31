@@ -1,4 +1,4 @@
-extends GutTest
+extends TestGameStaticSuite
 ## Brief 4 static tests for Diesel Domestiques, lexer-based (comments are cut out and string
 ## contents reduced to quotes first, so a doc comment that mentions "Time." or a toast key never
 ## trips them). They extend the lead's test_tank_package.gd scans instead of repeating them:
@@ -12,26 +12,6 @@ extends GutTest
 ##   - the scanner itself is proven on bad snippets, so a green run cannot be a dead regex.
 
 const GAME_DIR := "res://src/games/tank"
-const TRAINER_NAMES: Array[String] = [
-	"TrainerController",
-	"SafetyGovernor",
-	"FtmsClient",
-	"write_control",
-	"set_target_power",
-	"set_simulation",
-	"set_resistance",
-	"write_characteristic",
-	"request_stop",
-	"TrainerService",
-	"LocalRider",
-	"GameHost",
-	"MockTrainer",
-	"TrainerDevice",
-	"FtmsTrainer",
-	"DirectiveRouter",
-	"HudRouter",
-	"governor_profile",
-]
 ## Folders the brief names for the determinism rule, and the rest of what runs on the host.
 const BRIEF_DIRS: Array[String] = ["rules", "effort", "combat"]
 const HOST_DIRS: Array[String] = [
@@ -51,101 +31,21 @@ const DIFFICULTY := (
 )
 ## The folders whose choices become plans, directives or seat moves. effort/ holds TankSeatPlan too.
 const NO_DIFFICULTY_DIRS: Array[String] = ["effort", "autopilot"]
-const CLOCKS := (
-	"\\bTime\\b|\\bOS\\s*\\.\\s*(get_ticks|get_unix_time|get_system_time|delay_)"
-	+ "|\\bEngine\\s*\\.\\s*get_(frames|process_frames|physics_frames)"
-)
-const GLOBAL_RNG := (
-	"(?<![\\w.])(randi|randf|randi_range|randf_range|randfn|randomize|rand_from_seed|seed)\\s*\\("
-	+ "|RandomNumberGenerator\\s*\\.\\s*new\\s*\\(|\\.\\s*(shuffle|pick_random)\\s*\\("
-)
 const WORLD := (
 	"\\bget_tree\\s*\\(|\\bget_node\\s*\\(|\\bget_node_or_null\\s*\\(|\\bEngine\\s*\\.|\\bInput\\s*\\."
 	+ "|\\bDisplayServer\\b|\\bFileAccess\\b|\\bDirAccess\\b|\\bOS\\s*\\.|\\bResourceLoader\\b"
 	+ "|\\bTankView\\b|\\bTankHud\\b|\\bTankGame\\b|\\bTankAudio\\b"
 )
 
-
-static func files(dir: String, exts: Array) -> Array[String]:
-	var out: Array[String] = []
-	var da := DirAccess.open(dir)
-	if da == null:
-		return out
-	for f in da.get_files():
-		if exts.has(f.get_extension()):
-			out.append(dir.path_join(f))
-	for sub in da.get_directories():
-		out.append_array(files(dir.path_join(sub), exts))
-	return out
-
-
-static func read(path: String) -> String:
-	return FileAccess.get_file_as_string(path)
-
-
-## The first name of `names` that `code` holds as a whole identifier, or "".
-static func first_name(code: String, names: Array[String]) -> String:
-	for name in names:
-		var re := RegEx.create_from_string("(?<![A-Za-z0-9_])" + name + "(?![A-Za-z0-9_])")
-		if re.search(code) != null:
-			return name
-	return ""
-
-
-## What `pattern` finds in `code` ("" when nothing).
-static func hit(code: String, pattern: String) -> String:
-	var m := RegEx.create_from_string(pattern).search(code)
-	return m.get_string() if m != null else ""
-
-
 # --- the scanner itself ------------------------------------------------------------------------------
 
 
 func test_lexer_drops_comments_and_string_contents_but_keeps_code() -> void:
-	var src := 'var a := 1 # Time.get_ticks_msec()\nvar s := "set_target_power #x"\nrandi()\n'
-	var lexed := TestGdLex.lex(src)
-	var code: String = lexed["code"]
-	assert_false(code.contains("Time"), "comment cut")
-	assert_false(code.contains("set_target_power"), "string content cut")
-	assert_true(code.contains("randi()"), "code kept")
-	assert_eq(lexed["strings"], ["set_target_power #x"])
-	var triple := TestGdLex.lex('var d := """Time.now\n# still text"""\nvar e := 2')
-	assert_false((triple["code"] as String).contains("Time"))
-	assert_true((triple["code"] as String).contains("var e := 2"))
-	var esc := TestGdLex.lex('var q := "a \\" Time. b"\nrandf()')
-	assert_false((esc["code"] as String).contains("Time"), "an escaped quote does not end it")
-	assert_true((esc["code"] as String).contains("randf()"))
+	check_lexer()
 
 
 func test_the_determinism_scan_catches_every_forbidden_form() -> void:
-	var bad := [
-		"var t := Time.get_ticks_msec()",
-		"var t := OS.get_ticks_usec()",
-		"var t := OS.get_unix_time()",
-		"var r := RandomNumberGenerator.new()",
-		"var r := randi() % 6",
-		"var r := randf_range(0.0, 1.0)",
-		"randomize()",
-		"arr.shuffle()",
-		"var x = arr.pick_random()",
-		"var f := Engine.get_frames_drawn()",
-	]
-	for line: String in bad:
-		var code: String = TestGdLex.lex(line)["code"]
-		assert_ne(hit(code, CLOCKS) + hit(code, GLOBAL_RNG), "", line)
-	var fine := [
-		"var r := state.rng.randf()",
-		"var r := ctx.rng.randi_range(1, 3)",
-		"var v := rng.randf_range(a, b)",
-		"var t := state.t",
-		"# Time.get_ticks_msec() in a comment",
-		'var k := "Time.now"',
-		"var d := runtime_randi_like(3)",
-		"var s := state.seed_value",
-	]
-	for line: String in fine:
-		var code: String = TestGdLex.lex(line)["code"]
-		assert_eq(hit(code, CLOCKS) + hit(code, GLOBAL_RNG), "", line)
+	check_determinism_scan()
 
 
 func test_the_trainer_scan_catches_names_in_code_and_as_exact_strings() -> void:
