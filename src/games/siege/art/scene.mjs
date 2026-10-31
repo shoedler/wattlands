@@ -70,6 +70,8 @@ export class Scene {
     this.gateStage = opts.gate ?? 0;
     this.coat = opts.coat ?? 1;
     this.padWeapons = opts.padWeapons ?? [null, 110, null, 160];
+    // How far off the raster terrain is still built (px); steep rock needs more at the top edge.
+    this.terrainPad = opts.terrainPad ?? 40;
     let s = 7;
     this.rand = () => {
       s = (s * 1103515245 + 12345) & 0x7fffffff;
@@ -147,7 +149,8 @@ export class Scene {
         const x = x0 + i * step, y = y0 + j * step;
         const h00 = hs[j * nx + i], h10 = hs[j * nx + i + 1], h01 = hs[(j + 1) * nx + i], h11 = hs[(j + 1) * nx + i + 1];
         const sp = this.r.project(v3(x + 1, y + 1, h00));
-        if (sp.x < -40 || sp.x > this.r.w + 40 || sp.y > this.r.h + 40 || sp.y < -40) continue;
+        const pad = this.terrainPad;
+        if (sp.x < -pad || sp.x > this.r.w + pad || sp.y > this.r.h + pad || sp.y < -pad) continue;
         if (y === 4 && x >= 0 && x < 84) {
           this.groundTri(v3(x, y, 0), v3(x + step, y, 0), v3(x + step, y + step, 0), M.PAVE);
           this.groundTri(v3(x, y, 0), v3(x + step, y + step, 0), v3(x, y + step, 0), M.PAVE);

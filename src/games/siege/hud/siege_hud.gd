@@ -2,7 +2,8 @@ class_name SiegeHud
 extends RefCounted
 ## hud_spec() for Castellum Rotae (docs/games/siege.md 3 "HUD"; GAME_SDK 10): the game's own Roman
 ## HUD, no kit widgets, only Siege's Controls (SiegeHudCtl) at Rect2i placements in art px of the
-## 960 x 540 base, drawn on the art grid in the mock's materials and letter (SiegeHudDraw,
+## 960 x 540 base (the HudLayer anchors them on the flex canvas, pixel_flex min 852 x 480; no two
+## overlap down to that), drawn on the art grid in the mock's materials and letter (SiegeHudDraw,
 ## SiegeHudType; the approved mock is src/games/siege/art/hud_mock.mjs):
 ##  - top left: the session plate (SiegeHudSession: title, ENDS IN, profile strip, enemies, news);
 ##  - top centre: the teammate cards (SiegeHudCrew), the platform's banners under them and the
@@ -18,9 +19,9 @@ extends RefCounted
 ## game banner and the help take the palette.
 
 const BASE := Vector2i(960, 540)
-## The platform's banners, between the session plate and the right column, under the crew.
-const BANNER_RECT := Rect2i(411, 69, 380, 27)
-const TOAST_RECT := Rect2i(411, 100, 380, 40)
+## The platform's banners, under the session plate and the crew, left of the right column.
+const BANNER_RECT := Rect2i(370, 86, 380, 27)
+const TOAST_RECT := Rect2i(370, 116, 380, 40)
 ## The palette for the platform's toasts, game banner and help, from the mock.
 const PALETTE := {
 	"panel": SiegeHudDraw.WAX,
@@ -59,13 +60,14 @@ const HELP_AT := {
 
 static func spec(game: SiegeGame) -> HudSpec:
 	var hs := HudSpec.new()
-	# the world's tags first, so every plate draws over them
-	_add(hs, SiegeHudWorld.new(), game, SiegeHudWorld.RECT)
 	_add(hs, SiegeHudSession.new(), game, SiegeHudSession.RECT)
 	_add(hs, SiegeHudCrew.new(), game, SiegeHudCrew.RECT)
 	_add(hs, SiegeHudColumn.new(), game, SiegeHudColumn.RECT)
 	_add(hs, SiegeHudCockpit.new(), game, SiegeHudCockpit.RECT)
 	_add(hs, SiegeShopPanel.new(), game, SiegeShopPanel.RECT)
+	# the world's tags last and under the plates (its z_index): the plates come first so a help
+	# point on one follows that plate, and every other point follows the world
+	_add(hs, SiegeHudWorld.new(), game, SiegeHudWorld.RECT)
 	hs.toasts_at(TOAST_RECT)
 	hs.banners_at(BANNER_RECT)
 	hs.shows_power = true
@@ -80,6 +82,17 @@ static func spec(game: SiegeGame) -> HudSpec:
 
 static func _add(hs: HudSpec, c: SiegeHudCtl, game: SiegeGame, r: Rect2i) -> void:
 	hs.add_control(c.setup(game, r), r)
+
+
+## The plates, for telling a help point on one from a point on the world (SiegeHudWorld).
+static func plate_rects() -> Array[Rect2i]:
+	return [
+		SiegeHudSession.RECT,
+		SiegeHudCrew.RECT,
+		SiegeHudColumn.RECT,
+		SiegeHudCockpit.RECT,
+		SiegeShopPanel.RECT,
+	]
 
 
 ## The help overlay (art pixels on 960 x 540): your wheel, your powered path, the stations, the

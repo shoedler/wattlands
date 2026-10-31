@@ -5,13 +5,15 @@ extends SiegeHudCtl
 ## heart rate cell. No sensor: no cell, and the plate is NARROW wide instead of WIDE. All of it
 ## comes from SiegeCockpitModel. The plaque above the frame says whose it is and where they ride.
 
-const X := 456
+const X := 479
 const Y := 16
 const WIDE := 404
 const NARROW := 344
 const H := 112
 ## The art rect: the plate, its shadow and the plaque above it.
-const RECT := Rect2i(456, 404, 408, 130)
+## Starts just left of the base's middle, so it stays centred on a flex canvas and, at the narrowest,
+## ends up right of the road's east hairpin.
+const RECT := Rect2i(479, 404, 408, 130)
 
 const CAP_Y := Y + 6
 const NUM_Y := Y + 21

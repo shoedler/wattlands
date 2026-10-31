@@ -9,7 +9,10 @@ extends SiegeHudCtl
 ## the same intent as ability_1; only that plate takes the mouse, and only when a press would start
 ## Overdrive.
 
-const RECT := Rect2i(804, 8, 150, 276)
+## Ends on the base's middle row, so on a flex canvas the column stays at the top right. Its tallest
+## content (the shop's gold and a coupling bar at once, for a moment) runs 5 px past the rect, over
+## nothing.
+const RECT := Rect2i(804, 8, 150, 262)
 const W := 148
 const FORT_H := 68
 const GOLD_Y := 70

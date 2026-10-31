@@ -8,7 +8,7 @@ extends Control
 ##   tools/screenshot --scene=res://src/games/siege/view/v2/siege_v2_demo.tscn --frames=<n>
 ## User args: --siege-demo-t=<s> (start time), --siege-demo-sharp (tilt-shift off),
 ## --siege-demo-stress (150 attackers and a shot every 0.15 s; prints the cost of an update),
-## --siege-demo-mock-pose (the machines posed as in the approved mock, no attackers or shots, to
+## --siege-demo-flex (the game's pixel_flex canvas), --siege-demo-mock-pose (the machines posed as in the approved mock, no attackers or shots, to
 ## compare a capture with build/siege_mock_r2/frame_sharp_2x.png).
 
 const START_S := 6.0
@@ -40,6 +40,7 @@ var crowd: SiegeV2Crowd = null
 var shots: SiegeV2Shots = null
 var tilt: SiegeV2TiltShift = null
 var time_s: float = START_S
+var pixel_viewport_flex: bool = false
 
 var _types := PackedInt32Array()
 var _prog0 := PackedFloat32Array()
@@ -64,6 +65,8 @@ func _ready() -> void:
 			sharp = true
 		elif a == "--siege-demo-mock-pose":
 			_mock_pose = true
+		elif a == "--siege-demo-flex":
+			pixel_viewport_flex = true
 		elif a == "--siege-demo-stress":
 			_stress = true
 			_shot_every = 0.15
@@ -71,14 +74,26 @@ func _ready() -> void:
 	path = SiegePath.load_file(MAP_PATH)
 	pixel_viewport = PixelViewport.new()
 	pixel_viewport.pixel_base = SiegeBakeBank.ART_SIZE
+	if pixel_viewport_flex:
+		pixel_viewport.flex_min = SiegeViewMath.MUST_SHOW.size
 	pixel_viewport.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(pixel_viewport)
 	build_view()
 	tilt.enabled = not sharp
 	pixel_viewport.set_game_view(view)
+	_fit_canvas()
+	pixel_viewport.art_size_changed.connect(_on_art_size)
 	_make_column()
 	_fired = floori((time_s - 8.0) / _shot_every)
 	update_at(time_s)
+
+
+func _fit_canvas() -> void:
+	SiegeView.fit_canvas(view, bank, world, tilt, pixel_viewport.art_size())
+
+
+func _on_art_size(_art: Vector2i) -> void:
+	_fit_canvas()
 
 
 ## The view: world, machines, crowd, shots, then the screen pass.

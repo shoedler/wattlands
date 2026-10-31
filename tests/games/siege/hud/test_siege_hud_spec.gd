@@ -71,12 +71,14 @@ func test_the_placements_match_the_mock() -> void:
 	assert_eq(_rect_of(spec, SiegeHudCrew).position, Vector2i(470, 8))
 	assert_eq(_rect_of(spec, SiegeHudColumn).position, Vector2i(804, 8))
 	var cockpit := _rect_of(spec, SiegeHudCockpit)
-	assert_eq(cockpit.position.x, 456)
+	# 23 px east of the mock: on the narrowest flex canvas it clears the road's east hairpin
+	assert_eq(cockpit.position.x, 479)
 	assert_eq(cockpit.position.y + SiegeHudCockpit.Y, 420)
 	var shop := _rect_of(spec, SiegeShopPanel)
 	assert_eq(shop.position.x, 8)
 	assert_eq(shop.end.y - 2, 532)
-	assert_eq(spec.banner_area, Rect2i(411, 69, 380, 27))
+	# below the session plate's bottom: on the narrowest flex canvas they'd meet it at the crew's level
+	assert_eq(spec.banner_area, Rect2i(370, 86, 380, 27))
 
 
 func test_banners_and_toasts_sit_clear_of_the_plates() -> void:

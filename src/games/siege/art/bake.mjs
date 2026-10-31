@@ -304,7 +304,7 @@ function renderWorld(w, h, mx, my, margin) {
   // the moving parts still cast their (mock-pose) shadows and contact shade; the siege engines
   // and the tar come and go, so they leave nothing
   r.partMode = (p) => (p === 'engines' || p === 'curtain' || p === 'coat' ? 0 : 1);
-  const scene = new Scene(r, { routes: [-1, -1, -1, -1] });
+  const scene = new Scene(r, { routes: [-1, -1, -1, -1], terrainPad: margin ? 200 : 40 });
   scene.build();
   if (margin) scene.marginProps();
   r.render();
