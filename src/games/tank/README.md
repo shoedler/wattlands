@@ -75,7 +75,20 @@ Lobby option `difficulty`, set by the host: `auto` (the mission's `difficulty_de
 | Target, crew at 85 % | wins or withdraws, no losses | more losses than compliant | more losses than compliant |
 | Target grades | A or S | B or A; S with no losses | C to A; never S with a loss |
 
-The targets are what the sim matrix checks (S14-S17 and `TankBalanceTargets`).
+The targets are what the sim matrix checks (S14-S17 and `TankBalanceTargets`). Measured with the Autopilot (compliant, which never sprints, so it never evades), seeds 1-6, Easy seeds 1-3:
+
+| Compliant crew | Easy | Normal | Hard |
+| --- | --- | --- | --- |
+| `ashfall_road`, crews 1-4 | 12 of 12 won, no losses, A or S | 24 of 24 won, no losses, A or S | 17 of 24 won, 1-3 losses (one run in 24 has 3), C to A |
+| `ambush_15`, crews 1, 3, 4 | not in the matrix | 17 of 18 won, no losses, B to S | **0 of 18 won**, 1-3 losses, D to B |
+
+`ambush_15` starts short of plates (`hull_hp` 90, `checkpoint_hp` 20, against the tank's 150 and 30), on every difficulty.
+
+Open shortfalls against the targets, none of them touching effort, plans or safety:
+
+- **T1, crew 2 holds run long.** The sim matrix's S1 row is red on one run: crew 2 seed 3, stage 2's hold lasted 175 s against T1's 160 s (it did not reach its 180 s `max_s`). Seeds 4-6 show one more: crew 2 seed 4, stage 3, 168 s. Every other S row passes. One rider shuttles between Gun and Loader while the other repairs, and every tuning step that fixed this seed moved the miss to another seed or took crew 2's Hard losses under target.
+- **Hard `ambush_15` is not winnable by the Autopilot.** The target asks for 1-2 losses, which holds, but no compliant crew killed the Behemoth in 18 runs and 7 of them graded D, under the C the target table asks for. Bots did better: 1 human + 3 bots and 2 + 2 both won with no loss (seed 1), so Hard is easier with bots filling the seats than with a full Autopilot crew. Whether a human who evades can win is not known until someone rides it.
+- Normal cost no compliant crew a tank at all, the low end of its 0-1 target.
 
 **TANK LOST.** The crew is towed back (`hull.tow_s`: no movement, no fire, nothing spawns, a flat grade for Drive), then the stage restarts from its start with its enemies back and part of the hull (`restart_hp_frac`). Rules only: same plan phase, same clock, no directive, no replan, no lap. Riders keep pedalling and the HUD says KEEP RIDING. `max_s` still cuts the phase, so a failed stage may be skipped when its time runs out. Each loss costs survival score and caps the grade at A. In free roam the field clears and the tank drives on, at the breakdown's points. A rider in rescue, AFK or dropped holds the hull at 1 HP on every difficulty (`TankHullRules.protected`, BRIEF 4.6.3), as do a won stage and every phase but WORK.
 
@@ -139,7 +152,7 @@ Evade and Overpressure sprints send nothing: the rider sprints inside the phase'
 
 The rules work in the travel frame: `TankRoamState.map_m` is the hull's place on the road and `TankHullState.dir` which way +x points. A turn (the driver's `turn` intent, 30 s cooldown, or the Autopilot 3 s after a road's end) is an 8 s stop; at its midpoint `TankRoam.flip` mirrors the obstacles and clears everything that moves with no credit, so nothing is ever behind the tank. Driving west the near stage draws mirrored and the far panel lands on the left.
 
-Patrols come every 50-110 s of WORK time, drawn by weight: far kinds in the far panel, near kinds from the bushes, scaled by crew and `difficulty.count`, trimmed to `max_alive`. Strongpoints are holding forces of one heavy at seeded spots, on the field once within `spawn_m` ahead, back after `respawn_s`. The tank halts ("Engage") while one stands or a heavy holds within `engage_heavy_m`. Time up at `min_s`: no new patrol, a fight in progress may finish (OVERTIME), then the director ends the phase for every rider in one step and the module finishes `time_up`. Points per kill and kilometre, minus a breakdown or a loss; grade by points per WORK minute. HUD: the map strip and the board replace the mission plate.
+Patrols come every 90-110 s of WORK time, drawn by weight: far kinds in the far panel, near kinds from the bushes, scaled by crew and `difficulty.count`, trimmed to `max_alive`. Strongpoints are holding forces of one heavy at seeded spots, on the field once within `spawn_m` ahead, back after `respawn_s`. The tank halts ("Engage") while one stands or a heavy holds within `engage_heavy_m`. Time up at `min_s`: no new patrol, a fight in progress may finish (OVERTIME), then the director ends the phase for every rider in one step and the module finishes `time_up`. Points per kill and kilometre, minus a breakdown or a loss; grade by points per WORK minute. HUD: the map strip and the board replace the mission plate.
 
 ## The look
 
@@ -168,7 +181,7 @@ Every file is JSON, validated at load by `TankContentSchema`, which also holds e
 | Repairs | `tanks.json` `repair`; `stations.json` `repair` |
 | Surge to evade | `tanks.json` `evade` |
 | Plans and patterns | `stations.json` `plans`, `drill_plans`, `roam_plans`, `bank`, `arc`, `boiler`, `terrain`, `haptics` (schema-bounded) |
-| Missions | `missions/<id>.json` `segments[]`: `encounters` (`at_m`), `enemies` (`hold_m`), `near` (`at_s`), `difficulty_default`, `score_stages` |
+| Missions | `missions/<id>.json` `segments[]`: `encounters` (`at_m`), `enemies` (`hold_m`), `near` (`at_s`), `difficulty_default`, `score_stages`, `hull_hp`, `checkpoint_hp` |
 | Valley | `roam/valley.json` `patrols`, `strongpoints`, `turn`, `points`, `grades` |
 | Score | `scoring.json` |
 | Strings | `strings.csv`, keys `TANK_*` (commit the generated `strings.en.translation`) |
@@ -239,7 +252,7 @@ Gates: the Tank GUT suite, `check_scripts`, gdformat and gdlint, `tests/sdk/test
 
 - Not tested on a real trainer: `HARDWARE_TEST.md` is the checklist, and its last section lists what the automated runs cannot judge. Nothing has met a real Strava upload.
 - Frames and the mix are judged from screenshots and logs only. The split-screen frame budget still needs measuring on a quiet machine.
-- Balance is tuned on the simulation matrix with compliant synthetic riders. Real riders' compliance and sprint timing may want a retune.
+- Balance is tuned on the simulation matrix with compliant synthetic riders. Real riders' compliance and sprint timing may want a retune. The open shortfalls are listed under "Difficulty".
 - A Behemoth (300 px) cannot fit the 286 px far panel at 852 x 480: it is centred and clipped 7 px each side.
 - Far wrecks dim and burn but do not collapse into debris heaps.
 - Hull finishes unlock but cannot be equipped or seen: the garage is not built.

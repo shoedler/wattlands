@@ -164,7 +164,7 @@ On Normal or Hard take the hull to 0: ride the Gun out of band, or leave the cre
 
 | # | Step | Expected | Result |
 | --- | --- | --- | --- |
-| 56 | Start `ambush_15` with the difficulty on "Mission default" | Hard's tag. The full 300 s warm-up runs under section 1's limits before any fight | |
+| 56 | Start `ambush_15` with the difficulty on "Mission default" | Hard's tag, the hull at 90. The full 300 s warm-up runs under section 1's limits before any fight | |
 | 57 | Ride it through | Advance, holding action, checkpoint, Behemoth, cool-down; ERG <-> SIM switches 30 s or more apart; 15 minutes nominal, under 17 at worst | |
 | 58 | `node tools/fit_check/check.mjs <file> --expect-laps=6` | Clean FIT with 6 laps | |
 | 59 | How it feels on Hard | A good workout even after losing the tank once or twice. Note the RPE and how many stages were skipped | |
