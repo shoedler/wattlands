@@ -1,7 +1,7 @@
 class_name TankInterior
 extends RefCounted
 ## The v3 tank's rooms, painted live (docs/games/tank.md v3 "The tank, in the view"), ported from
-## the r6 generator (assets/tank/v3/tools_src/mach.gd, tank_r4.gd, tank_r5.gd, tank_r6.gd): one Image
+## the r6 mock's generator: one Image
 ## the size of the sprite that starts as the base art and gets each seat's machine painted into its
 ## room, clipped to the room's open cutaway:
 ##   drive    the rider on the crank, the chain to the flywheel, the diesel opened (four pistons on
@@ -36,7 +36,7 @@ const UNIT_RECTS := {
 const UNIT_STEPS := 24.0
 const FLICKER_HZ := 15.0
 const MAX_HZ := 30.0
-## The loader's cycle (r6 tank_r6.gd STEPS): [step, from s, to s] of the mock's 7 s cycle.
+## The loader's cycle: [step, from s, to s] of the mock's 7 s cycle.
 const STEPS: Array = [
 	["RACK", 0.0, 1.0],
 	["HOIST", 1.0, 2.4],
@@ -785,7 +785,7 @@ func _leg(hip: Vector2, foot: Vector2, col: Color, far: bool) -> void:
 # --- The machines -----------------------------------------------------------------------------------------
 
 
-## Drive: the rider, the flywheel on the crank's chain, the diesel opened (tank_r5 diesel_open).
+## Drive: the rider, the flywheel on the crank's chain, the diesel opened.
 func _drive(st: Dictionary, t: float) -> void:
 	var rd: Rect2i = Rect2i(rig.rooms["drive"])
 	var fyd := rd.end.y - 2
@@ -916,7 +916,7 @@ func arc_v(rr: Rect2, ang: float, t: float, slot: int, on: bool) -> void:
 	pl(Vector2(ra.x + 3, ra.y), Vector2(ra.x + 3, r.position.y), Color("#3a1a10"))
 
 
-## The secondaries' crank-driven twin belt feed (tank_r4 beltfeed_small): the star wheel turning
+## The secondaries' crank-driven twin belt feed: the star wheel turning
 ## half a turn per crank revolution, the ammunition box, two belts climbing to the receivers.
 func beltfeed(rr: Rect2, revs_in: float, slot: int, on: bool) -> void:
 	var r := Rect2i(rr)
@@ -942,7 +942,7 @@ func beltfeed(rr: Rect2, revs_in: float, slot: int, on: bool) -> void:
 			p(x0, y, BR2 if u < 1.0 else BR0)
 
 
-# --- The loader and the turret windows (tank_r6) ------------------------------------------------------------
+# --- The loader and the turret windows ------------------------------------------------------------
 
 
 ## A round lying along `ang` with its middle at `c` (tank.gd shell).
