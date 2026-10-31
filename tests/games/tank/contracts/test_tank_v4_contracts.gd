@@ -298,7 +298,7 @@ func test_the_table_and_who_can_lose() -> void:
 	assert_eq(TankDifficulty.mult(s, "hp"), 1.0)
 	assert_true(TankDifficulty.tank_loss(s))
 	s.difficulty = TankIds.DIFF_HARD
-	assert_eq(TankDifficulty.mult(s, "damage"), 1.6)
+	assert_eq(TankDifficulty.mult(s, "damage"), 1.5)
 	assert_eq(TankDifficulty.mult(s, "nothing"), 1.0, "default 1")
 	assert_true(TankDifficulty.tank_loss(s))
 	s.difficulty = TankIds.DIFF_EASY
@@ -475,7 +475,9 @@ func test_a_clients_maxima_follow_the_difficulty() -> void:
 	s.difficulty = TankIds.DIFF_HARD
 	var c := _client_of(s)
 	TankSnapshot.apply(c, TankSnapshot.encode(s))
-	assert_eq(c.enemies[0].hp_max, ceilf(70.0 * 1.25), "enemy HP x difficulty")
+	var kind := TankIds.enemy_of(s.enemies[0].code)
+	var hp := float(s.content.enemy_def(kind)["hp"])
+	assert_eq(c.enemies[0].hp_max, ceilf(hp * 1.25), "enemy HP x difficulty")
 	var def := s.content.boss_def()
 	assert_eq(c.boss.bogie_max, float(def["bogie_hp"]) * 1.25)
 	assert_eq(c.boss.turret_max, float(def["turret_hp"]) * 1.25)

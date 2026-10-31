@@ -218,7 +218,7 @@ func test_hit_chance_zero_and_one_are_certain_and_the_driver_in_band_is_harder_t
 
 
 func test_a_far_hit_lands_after_its_flight_and_costs_the_hull() -> void:
-	var rig := _rig(2)
+	var rig := _rig(4)
 	rig.hull().evasive = false
 	var full := rig.hull().hp
 	var s := _launch_far(rig, 1500.0, 1.0)
@@ -253,7 +253,7 @@ func test_a_far_miss_raises_a_splash_40_to_90_m_off_the_hull_and_costs_nothing()
 
 
 func test_at_the_shell_cap_a_far_shot_resolves_at_once_evade_first() -> void:
-	var rig := _rig(2)
+	var rig := _rig(4)
 	rig.hull().evasive = false
 	var full := rig.hull().hp
 	var aux := TankAux.of(rig.state)
@@ -326,7 +326,7 @@ func test_a_missing_near_shell_lands_20_to_40_px_short_of_the_tank_and_a_hit_on_
 
 
 func test_a_near_shell_that_hits_costs_the_hull_its_damage_when_it_arrives() -> void:
-	var rig := _rig(2)
+	var rig := _rig(4)
 	rig.hull().evasive = false
 	var s := _fire_from(rig, 1.0)
 	var full := rig.hull().hp
@@ -343,7 +343,7 @@ func test_a_near_shell_that_hits_costs_the_hull_its_damage_when_it_arrives() -> 
 
 
 func test_at_the_shell_cap_a_near_shot_resolves_at_once() -> void:
-	var rig := _rig(2)
+	var rig := _rig(4)
 	rig.hull().evasive = false
 	var full := rig.hull().hp
 	var aux := TankAux.of(rig.state)
@@ -383,5 +383,7 @@ func test_a_solo_hull_takes_the_crew_damage_scale_of_an_enemy_shell() -> void:
 		var want := 4.0 * rig.content.crew_damage_scale(crew)
 		assert_almost_eq(lost, want, 1e-6, "crew %d" % crew)
 		assert_almost_eq(rig.hull().hp, full - want, 1e-6)
-	assert_eq(TankFixtures.content().crew_damage_scale(1), 0.5)
-	assert_eq(TankFixtures.content().crew_damage_scale(2), 1.0)
+	assert_eq(TankFixtures.content().crew_damage_scale(1), 0.65)
+	assert_eq(TankFixtures.content().crew_damage_scale(2), 0.72)
+	assert_eq(TankFixtures.content().crew_damage_scale(3), 0.85)
+	assert_eq(TankFixtures.content().crew_damage_scale(4), 1.0)

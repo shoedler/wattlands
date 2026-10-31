@@ -259,7 +259,7 @@ func test_the_berm_only_grows_while_in_band_and_not_in_rescue() -> void:
 
 
 func test_the_berm_absorbs_hits_before_the_hull() -> void:
-	var rig := _gun_line_rig(2)
+	var rig := _gun_line_rig(4)
 	rig.hull().berm_hp = 10.0
 	var events: Array[Dictionary] = []
 	var lost := TankHullRules.hit(rig.state, 4.0, TankIds.SHELL_ENEMY, 300.0, events)

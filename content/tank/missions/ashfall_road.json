@@ -61,8 +61,9 @@
 			"backdrop": "base",
 			"enemies": [
 				{"enemy": "medium", "count": 2, "hold_m": [1200, 1500]},
-				{"enemy": "light", "count": 2, "hold_m": [900, 1050], "min_crew": 2},
-				{"enemy": "medium", "count": 1, "hold_m": [1350], "min_crew": 4}
+				{"enemy": "medium", "count": 1, "hold_m": [1350], "min_crew": 2},
+				{"enemy": "light", "count": 1, "hold_m": [900], "min_crew": 2},
+				{"enemy": "light", "count": 1, "hold_m": [1050], "min_crew": 4}
 			],
 			"near": [
 				{"at_s": 15, "enemy": "tankette", "count": 1, "min_crew": 3},

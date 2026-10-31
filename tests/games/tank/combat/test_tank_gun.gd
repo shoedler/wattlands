@@ -155,6 +155,7 @@ func test_the_gun_lays_within_a_tenth_of_a_degree_and_hits_after_the_flight() ->
 	assert_eq(rig.hull().loaded, TankIds.SHELL_NONE)
 	var chamber := rig.content.num("tanks", "steam.chamber_s")
 	assert_almost_eq(rig.steam().chamber_s, chamber, 0.06, "v3: the next round from the rack")
+	rig.set_rack(0)
 	assert_lte(absf(rig.hull().elev_deg - aux.aim_elev), 0.1 + 1e-6, "within gun.far.aim_tol_deg")
 	var s := rig.state.shells[0]
 	assert_true(s.friendly)
@@ -363,22 +364,23 @@ func test_the_elevation_limits_are_minus_12_and_plus_30() -> void:
 func test_aim_nudges_move_one_degree_and_pause_auto_aim_for_5_seconds() -> void:
 	var rig := _rig(2)
 	rig.set_rack(0)
+	var rest := rig.hull().elev_deg
 	rig.send(_g(rig), {"k": "aim", "d": 1})
 	rig.run(0.05)
-	assert_eq(rig.hull().elev_target_deg, 1.0)
+	assert_eq(rig.hull().elev_target_deg, rest + 1.0)
 	assert_almost_eq(rig.hull().aim_pause_s, 5.0, 0.1)
 	rig.send(_g(rig), {"k": "aim", "d": -1})
 	rig.run(0.05)
 	rig.send(_g(rig), {"k": "aim", "d": -1})
 	rig.run(0.05)
-	assert_eq(rig.hull().elev_target_deg, -1.0)
+	assert_eq(rig.hull().elev_target_deg, rest - 1.0)
 	# While paused the auto-aim leaves the barrel alone, then it takes over again.
 	var m := rig.far(TankIds.ENEMY_MEDIUM)
 	m.gun_s = 999.0
 	rig.load_shell(TankIds.SHELL_HEAVY)
 	rig.run(4.0)
 	assert_eq(_gun_shots(rig).size(), 0, "paused: no auto fire")
-	assert_almost_eq(rig.hull().elev_deg, -1.0, 0.05)
+	assert_almost_eq(rig.hull().elev_deg, rest - 1.0, 0.05)
 	rig.run(1.5)
 	rig.run(3.0)
 	assert_eq(_gun_shots(rig).size(), 1, "auto-aim resumed")
@@ -442,7 +444,7 @@ func test_fire_shoots_the_loaded_shell_at_the_current_elevation() -> void:
 ## Far: gun.far.dispersion_deg lit, x arc.dark_dispersion_mult dark; the wider one below a bank of 20.
 func test_the_far_dispersion_by_bank_and_lights() -> void:
 	for row: Array in [
-		[100.0, true, 0.2], [10.0, true, 0.6], [100.0, false, 0.4], [10.0, false, 1.2]
+		[100.0, true, 0.2], [10.0, true, 0.35], [100.0, false, 0.3], [10.0, false, 0.525]
 	]:
 		var rig := _rig(4)
 		rig.hull().elev_deg = 10.0

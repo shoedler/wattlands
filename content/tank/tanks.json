@@ -86,7 +86,7 @@
 	"dynamo": {
 		"bank_max": 100,
 		"j_per_unit": 150,
-		"stabilizer_per_s": 2.25,
+		"stabilizer_per_s": 2.0,
 		"per_degree": 0.5,
 		"per_traverse": 15,
 		"elev_deg_s": [2, 8],

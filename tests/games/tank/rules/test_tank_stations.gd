@@ -80,6 +80,7 @@ func test_elevation_costs_half_a_unit_per_degree_and_runs_at_8_degrees_a_second(
 	var dy := rig.dynamo()
 	dy.bank = 100.0
 	rig.power_w[2] = 50.0
+	rig.hull().elev_deg = 0.0
 	rig.hull().elev_target_deg = 20.0
 	rig.run(1.0)
 	assert_almost_eq(rig.hull().elev_deg, 8.0, 0.25, "8 degrees/s at 50 units or more")
@@ -94,6 +95,7 @@ func test_elevation_slows_linearly_to_2_degrees_a_second_at_an_empty_bank() -> v
 		var rig := _quiet(2)
 		rig.dynamo().bank = bank
 		rig.power_w[2] = 50.0
+		rig.hull().elev_deg = 0.0
 		rig.hull().elev_target_deg = 30.0
 		rig.run(1.0)
 		# The bank pays while it moves, so allow for the speed dropping a little during the second.
@@ -113,6 +115,7 @@ func test_rescue_stalls_the_dynamo_the_turret_freezes_and_the_bank_holds() -> vo
 	var dy := rig.dynamo()
 	dy.bank = 50.0
 	rig.rescue[2] = true
+	rig.hull().elev_deg = 0.0
 	rig.hull().elev_target_deg = 10.0
 	rig.spawn(TankIds.ENEMY_MEDIUM, 1, 300.0)
 	rig.run(5.0)
@@ -349,14 +352,15 @@ func test_the_gun_chambers_the_oldest_shell_in_1_s_at_the_loading_elevation() ->
 	rig.set_rack(0)
 	TankAux.of(rig.state).rack_types.append_array([TankIds.SHELL_LIGHT, TankIds.SHELL_HEAVY])
 	st.rack = 2
-	rig.hull().elev_deg = 8.0
-	rig.hull().elev_target_deg = 8.0
+	var load_elev := rig.content.num("tanks", "gun.load_elev_deg")
+	rig.hull().elev_deg = load_elev + 8.0
+	rig.hull().elev_target_deg = load_elev + 8.0
 	rig.run(0.5)
-	assert_lt(rig.hull().elev_deg, 8.0, "back down to the loading elevation")
+	assert_lt(rig.hull().elev_deg, load_elev + 8.0, "back down to the loading elevation")
 	assert_false(st.chamber)
 	assert_almost_eq(st.chamber_s, 1.0, 1e-6, "the chambering waits for the elevation")
 	rig.run(0.6)
-	assert_almost_eq(rig.hull().elev_deg, 0.0, 1e-6, "at 8 degrees a second")
+	assert_almost_eq(rig.hull().elev_deg, load_elev, 1e-6, "at 8 degrees a second")
 	rig.run(0.7)
 	assert_eq(rig.hull().loaded, TankIds.SHELL_NONE, "1 s of chambering")
 	rig.run(0.5)

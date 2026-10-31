@@ -137,21 +137,38 @@ func test_the_holding_action_tables() -> void:
 	var c := _load("ashfall_road")
 	var lines := _segments(c, "gun_line")
 	assert_eq(
-		_force(lines[0]["enemies"]), [["medium", 2, [1200, 1500], 1], ["light", 2, [900, 1050], 2]]
+		_force(lines[0]["enemies"]),
+		[
+			["medium", 2, [1200, 1500], 1],
+			["medium", 1, [1350], 2],
+			["light", 1, [900], 2],
+			["light", 1, [1050], 4]
+		]
 	)
-	assert_eq(_table(lines[0]["near"], "at_s"), [[15, "tankette", 2], [40, "recon", 2]])
+	assert_eq(_table(lines[0]["near"], "at_s"), [[15, "tankette", 3], [40, "recon", 3]])
 	assert_eq(
-		_force(lines[1]["enemies"]), [["heavy", 1, [1500], 1], ["medium", 2, [1150, 1450], 2]]
+		_force(lines[1]["enemies"]),
+		[
+			["heavy", 1, [1500], 1],
+			["medium", 2, [1150, 1450], 2],
+			["medium", 1, [1300], 3],
+			["medium", 1, [1550], 3]
+		]
 	)
-	assert_eq(_table(lines[1]["near"], "at_s"), [[20, "recon", 2], [55, "tankette", 2]])
+	assert_eq(_table(lines[1]["near"], "at_s"), [[20, "recon", 3], [55, "tankette", 3]])
 	assert_eq(
 		_force(lines[2]["enemies"]),
-		[["heavy", 1, [1600], 1], ["destroyer", 1, [1900], 2], ["medium", 1, [1200], 2]]
+		[
+			["heavy", 1, [1600], 1],
+			["medium", 1, [1200], 2],
+			["destroyer", 1, [1900], 2],
+			["medium", 1, [1400], 3]
+		]
 	)
-	assert_eq(_table(lines[2]["near"], "at_s"), [[25, "recon", 2], [60, "recon", 2]])
+	assert_eq(_table(lines[2]["near"], "at_s"), [[25, "recon", 3], [60, "recon", 3]])
 	assert_eq(
 		_table(c.segment(10)["near"], "at_s"),
-		[[30, "tankette", 2], [90, "recon", 2], [150, "tankette", 2]]
+		[[30, "tankette", 3], [90, "recon", 3], [150, "tankette", 3]]
 	)
 	for i in 3:
 		var g: Dictionary = lines[i]
@@ -194,20 +211,24 @@ func test_hard_counts_spill_to_the_last_entries() -> void:
 	var seg1: Array = rig.content.segment(1)["encounters"]
 	assert_eq(total.call(TankEncounters.crew_counts(rig.state, seg1)), 6, "Normal crew 4")
 	rig.state.difficulty = TankIds.DIFF_HARD
+	assert_eq(total.call(TankEncounters.crew_counts(rig.state, seg1)), 6, "Hard's count is 1.0")
+	# The rule itself, at a count above 1 (the shared content is restored below).
+	var row: Dictionary = rig.content.data["enemies"]["difficulty"][TankIds.DIFF_HARD]
+	var tuned: float = row["count"]
+	row["count"] = 1.3
 	var hard := TankEncounters.crew_counts(rig.state, seg1)
-	assert_eq(total.call(hard), 8, "Hard crew 4: 6 x 1.3 rounded")
+	assert_eq(total.call(hard), 8, "crew 4: 6 x 1.3 rounded")
 	assert_eq(hard, [1, 1, 1, 1, 2, 2] as Array[int], "the last two get the extra")
-	var hold2 := TankEncounters.crew_counts(rig.state, rig.content.segment(5)["enemies"])
-	assert_eq(hold2, [1, 3] as Array[int], "a heavy and 3 mediums")
-	rig.enter(5, 0.0)
-	var heavy := TankIds.enemy_code(TankIds.ENEMY_HEAVY)
-	var heavies := rig.state.enemies.filter(func(e: TankEnemyState) -> bool: return e.code == heavy)
-	assert_eq(heavies.size(), 1)
-	assert_eq(rig.state.enemies.size(), 4)
+	var hold1 := TankEncounters.crew_counts(rig.state, rig.content.segment(2)["enemies"])
+	assert_eq(hold1, [2, 1, 2, 2] as Array[int], "5 x 1.3 rounded: from the last entry back")
+	rig.enter(2, 0.0)
+	var spawned := rig.state.enemies.size()
+	row["count"] = tuned
+	assert_eq(spawned, 7)
 	var easy := TankRulesRig.new(4)
 	easy.state.difficulty = TankIds.DIFF_EASY
 	assert_eq(
-		total.call(TankEncounters.crew_counts(easy.state, seg1)), 5, "Easy crew 4: 6 x 0.85 rounded"
+		total.call(TankEncounters.crew_counts(easy.state, seg1)), 4, "Easy crew 4: 6 x 0.6 rounded"
 	)
 
 
@@ -360,7 +381,7 @@ func test_the_holding_force_stands_where_the_mission_put_it() -> void:
 	var rig := TankRulesRig.new(4)
 	rig.enter(8, 0.0)
 	var holds: Array = rig.state.enemies.map(func(e: TankEnemyState) -> float: return e.hold_m)
-	assert_eq(holds, [1600.0, 1900.0, 1200.0])
+	assert_eq(holds, [1600.0, 1200.0, 1900.0, 1400.0])
 
 
 ## The segment's total x the crew's scale (rounded, at least 1), taken from the list in order.
@@ -368,7 +389,7 @@ func test_enemy_counts_scale_by_crew_size_per_segment() -> void:
 	var c := TankFixtures.content()
 	assert_eq(c.value("enemies", "crew_count_scale", []), [0.5, 0.7, 0.85, 1.0])
 	var adv_want := {1: 2, 2: 4, 3: 5, 4: 6}
-	var hold2 := {1: [1, 0], 2: [1, 1], 3: [1, 2], 4: [1, 2]}
+	var hold2 := {1: [1, 0, 0, 0], 2: [1, 1, 0, 0], 3: [1, 2, 1, 0], 4: [1, 2, 1, 1]}
 	for crew: int in adv_want:
 		var rig := TankRulesRig.new(crew)
 		assert_eq(
@@ -426,6 +447,7 @@ func test_ambush_15_defaults_to_hard_and_lists_its_enemies() -> void:
 			[210.0, "light"],
 			[315.0, "destroyer"],
 			[420.0, "tankette"],
+			[470.0, "light"],
 			[525.0, "medium"]
 		]
 	)
