@@ -1,0 +1,52 @@
+{
+  "never_edit": ["docs/BRIEF.md", "docs/games/**", "docs/concept/**", "docs/research.md", ".gitattributes", ".claude/settings.json"],
+  "lead_only": ["README.md", "CHANGELOG.md", "CREDITS.md", "CLAUDE.md", "LICENSE", ".gitignore", "project.godot", "gdlintrc",
+    "addons/wattlands/contracts/**", "tests/green_count_floor.txt", "tests/pending_allowlist.txt",
+    "tools/lib/gut_gate.mjs", "tools/lib/run_tests.mjs", "tools/lib/gate*", "tools/lib/safety_pins.json"],
+  "quiet_tests": ["tests/games/*/perf/**", "tests/games/siege/combat/test_siege_perf.gd", "tests/games/siege/view2/test_siege_view.gd",
+    "tests/games/siege/view2/test_siege_v2_drawers.gd", "tests/games/tank/rules/test_tank_determinism.gd"],
+  "shard_pins": [],
+  "lead_branches": ["^main$", "^queue"],
+  "branch_ws": [["^tooling/", "gate"], ["^audio/", "audio"], ["^cleanup/", "cleanup"], ["^docs/", "docs"], ["^wo/", "workout"],
+    ["^game/tank", "tank"], ["^game/workout", "workout"], ["^game/siege", "siege"], ["^game/fishing", "fishing"]],
+  "workstreams": {
+    "tank":    { "game": "tank" },
+    "workout": { "game": "workout" },
+    "siege":   { "game": "siege" },
+    "fishing": { "game": "fishing" },
+    "audio":   { "paths": ["tools/audio/**", "addons/wattlands/audio/**", "addons/wattlands/core/settings.gd", "tests/audio/**", "assets/_shared/audio/**", "assets/*/audio/**",
+                 "src/games/*/**", "tests/games/*/**", "src/app/**", "tests/app/**", "content/strings/**", "docs/AUDIO_PIPELINE.md", "docs/GAME_SDK.md",
+                 "docs/decisions/audio*.md", "docs/changelog.d/audio*.md", "docs/credits.d/*.md", ".github/workflows/game-*.yml"],
+                 "also": ["tools/lib/run_tests.mjs"] },
+    "cleanup": { "paths": ["**"], "deny": ["addons/wattlands/trainer/**", "tests/governor/**", "tests/control/**", "tests/arch/**"] },
+    "docs":    { "paths": ["docs/**", ".claude/agents/**", "assets/readme/**"], "also": ["README.md", "CLAUDE.md", "CHANGELOG.md", "CREDITS.md"] },
+    "gate":    { "paths": ["tools/**", "docs/decisions/gate.md", "docs/changelog.d/gate.md"], "also": ["tools/lib/**"], "deny": ["tools/lib/safety_pins.json"] }
+  },
+  "safety_pin_globs": [
+    "addons/wattlands/trainer/control/{safety_governor,governor_clamps,governor_warmup,trainer_controller,cadence_estimator,virtual_gears}.gd",
+    "addons/wattlands/trainer/{ftms_client,ftms_codec,ftms_trainer}.gd",
+    "addons/wattlands/core/locks.gd",
+    "addons/wattlands/sdk/{plan_validator,directive_router}.gd",
+    "addons/wattlands/contracts/directive_sink.gd",
+    "tests/governor/**",
+    "tests/control/**",
+    "tests/arch/test_no_bypass.gd",
+    "tests/sdk/{test_conformance,test_plan_validator,test_directive_sink}.gd",
+    "tests/scenarios/workout/**",
+    "tools/e2e/lib/checks.mjs",
+    "tools/lib/gut_gate.mjs",
+    "tools/lib/godot_lock.mjs",
+    "tools/godot.sh",
+    "tools/godot.ps1",
+    "tools/run_game_sim",
+    "tools/run_game_sim.ps1",
+    "tools/env.sh",
+    "tools/env.ps1",
+    "gdlintrc"
+  ],
+  "append_only_pins": {
+    "tests/games/tank/sim/check_sims.mjs": ["checkS4", "checkS5", "directiveProblems", "appliedProblems", "directivesProblems", "planProblems", "traceProblems", "cleanProblems"],
+    "tests/games/siege/sim/check_sims.mjs": ["checkS5", "checkS6", "directiveProblems", "traceProblems", "planProblems"],
+    "tests/games/fishing/sim/check_sims.mjs": ["checkAll"]
+  }
+}
