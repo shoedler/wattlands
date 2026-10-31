@@ -59,7 +59,7 @@ func test_the_fonts_load_as_fonts() -> void:
 	assert_true(D.font_tall() is Font, "wo_tall_5x9's too")
 	assert_not_null(D.digits())
 	assert_not_null(D.crank_texture())
-	assert_eq(D.crank_texture().get_size(), Vector2(13 * WorkoutRig.CRANK_FRAMES, 13))
+	assert_eq(D.crank_texture().get_size(), Vector2(27 * WorkoutRig.CRANK_FRAMES, 27))
 	assert_gt(D.tall_w("HOLD"), 15.0)
 	assert_eq(D.big_w("88"), 30.0)
 	assert_eq(D.fit_tall("A very long rider name indeed", 40.0).right(1), D.ELLIPSIS)
@@ -67,6 +67,22 @@ func test_the_fonts_load_as_fonts() -> void:
 
 func test_key_digits_are_48_px_at_1080p() -> void:
 	assert_eq(D.DIGIT_CELL.y * 2, 48)
+
+
+func test_the_crank_icon_fills_the_cadence_column_and_touches_nothing() -> void:
+	var at := WorkoutHudMine.CRANK_AT
+	var icon := Rect2(at, Vector2(D.CRANK_CELL, D.CRANK_CELL))
+	assert_gte(D.CRANK_CELL, 27, "54 px at 1080p, big enough to read at trainer distance")
+	assert_eq(icon.end.x, float(WorkoutHudMine.W - 6), "on the plate's right margin")
+	assert_gt(icon.position.y, 17.0, "under the header rule")
+	assert_lte(icon.end.y, 45.0, "over the gauge's needle, which starts at y 45")
+	var rpm_end := (
+		WorkoutHudMine.CADENCE_X
+		+ D.big_w("140")
+		+ 3.0
+		+ D.tall_w(TranslationServer.translate("WORKOUT_HUD_RPM"))
+	)
+	assert_lt(rpm_end, icon.position.x, "clear of RPM after a 3-digit cadence")
 
 
 func test_every_control_draws_with_telemetry() -> void:

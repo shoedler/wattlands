@@ -17,7 +17,18 @@ export const HUD_DIR = join(here, '../../../../assets/workout/hud');
 
 const WHITE = [255, 255, 255, 255];
 const GREY = [150, 150, 150, 255];
-export const ICON = 13;
+const FAINT = [92, 92, 92, 255];
+// The pedal keeps its own colour through the tint, so it stands off the arm even when the two line up.
+const PEDAL_INK = [255, 176, 48, 255];
+const CLEAR = [0, 0, 0, 0];
+// The crank icon: 27 px fills the plate's cadence column from its rule (y 16) to the gauge's needle (y 45).
+export const ICON = 27;
+export const ARM = 10;
+export const FAR_ARM = 9;
+export const RING = 6;
+export const TEETH = 8;
+// Half width and half height of the level pedal, around the crank's tip.
+export const PEDAL = [3, 2];
 
 /** The characters in the font's grid order. */
 export const chars = () => {
@@ -75,21 +86,40 @@ function digitsImage() {
   return canvas;
 }
 
-/** 24 frames in a row: chainring, the near crank with its pedal, the far crank. White ink: tinted when drawn. */
+/** A level rectangle around (x, y): half widths `hw`, `hh`. */
+const box = (frame, x, y, hw, hh, ink) => frame.rect(x - hw, y - hh, 2 * hw + 1, 2 * hh + 1, ink);
+
+/**
+ * One frame, in draw order: the far crank, faint and with no pedal, so the icon is never symmetric; the
+ * chainring, grey, with teeth that turn; a clear halo; then the near crank and its level pedal in full
+ * ink, with the axle as a hole in the arm so the arm reads as an arm and not as an arrow.
+ */
+function crankFrame(k) {
+  const frame = new Canvas(ICON, ICON);
+  const c = (ICON - 1) / 2;
+  const a = crankTheta(k);
+  const along = (r) => [Math.round(c + r * Math.cos(a)), Math.round(c + r * Math.sin(a))];
+  frame.thick(c, c, ...along(-FAR_ARM), 3, FAINT);
+  frame.ring(c, c, RING, GREY, 2);
+  for (let t = 0; t < TEETH; t++) {
+    const ta = a + (t * 2 * Math.PI) / TEETH;
+    frame.px(c + (RING + 1) * Math.cos(ta), c + (RING + 1) * Math.sin(ta), GREY);
+  }
+  const tip = along(ARM);
+  const tail = along(-2);
+  frame.thick(...tail, ...tip, 6, CLEAR);
+  box(frame, tip[0], tip[1], PEDAL[0] + 1, PEDAL[1] + 1, CLEAR);
+  frame.thick(...tail, ...tip, 4, WHITE);
+  box(frame, tip[0], tip[1], PEDAL[0], PEDAL[1], PEDAL_INK);
+  frame.px(c, c, CLEAR);
+  return frame;
+}
+
+/** 24 frames in a row. White ink: tinted when drawn, so stale cadence dims it. */
 function crankImage() {
   const canvas = new Canvas(ICON * CRANK_FRAMES, ICON);
   for (let k = 0; k < CRANK_FRAMES; k++) {
-    const frame = new Canvas(ICON, ICON);
-    const c = (ICON - 1) / 2;
-    frame.ring(c, c, 3, WHITE, 2);
-    const a = crankTheta(k);
-    const tip = (r, sign) => [c + sign * r * Math.cos(a), c + sign * r * Math.sin(a)];
-    const far = tip(5, -1);
-    frame.line(c, c, far[0], far[1], GREY);
-    const near = tip(5, 1);
-    frame.thick(c, c, near[0], near[1], 2, WHITE);
-    frame.rect(Math.round(near[0]) - 2, Math.round(near[1]), 5, 1, WHITE);
-    frame.px(c, c, GREY);
+    const frame = crankFrame(k);
     for (let y = 0; y < ICON; y++) {
       for (let x = 0; x < ICON; x++) {
         const v = frame.get(x, y);
