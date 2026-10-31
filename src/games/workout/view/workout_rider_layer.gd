@@ -2,18 +2,25 @@ class_name WorkoutRiderLayer
 extends Node2D
 ## The riders: wheels on the road at their own contact, the baked rider frame over them, sheared
 ## column by column on a slope (never rotated, so every pixel stays on the art grid), and the state
-## bubble. Every whip pennant paints first, so a pole or a flag never crosses anybody's body, and the
-## caret that says "you" paints last, over the local rider's own helmet. Riders off screen are the
-## pennant and an arrow only. It draws the model the WorkoutRideView computed and nothing else; the
-## time of day's tint is this node's modulate.
+## bubble. Two cues say "you", and neither needs colour: a ring of light on the road under the local
+## rider's wheels paints first, under everybody, and a caret paints last, over its own helmet. Every
+## whip pennant paints before the bodies, so a pole or a flag never crosses anybody's body. Riders off
+## screen are the pennant and an arrow only. It draws the model the WorkoutRideView computed and
+## nothing else; the time of day's tint is this node's modulate.
 
 const GREY_TINT := Color(0.55, 0.57, 0.62)
 ## Flag columns past this x (art px from the pole) flutter.
 const FLUTTER_X := 3.5
 ## The caret's rows, top down: half-width of its white. Its tip stands CARET_GAP px over the helmet.
-const CARET_HALF: Array[int] = [3, 2, 1, 0]
+const CARET_HALF: Array[int] = [7, 6, 5, 4, 3, 2, 1, 0]
 const CARET_GAP := 2
 const CARET_DARK := Color("#1e1e24")
+## The road ring: half its height (art px) by columns in from either end, then MARK_HALF along the
+## bike; it stands MARK_PAST px past the tyres at both ends.
+const MARK_ENDS: Array[int] = [1, 2, 2, 3, 3, 3, 3]
+const MARK_HALF := 4
+const MARK_PAST := 4
+const MARK_FILL := Color(1.0, 1.0, 1.0, 0.55)
 ## From the mouth (kit.rider.mouth_by_pose) to the head's centre and from there to the helmet's top.
 const HEAD_FROM_MOUTH := Vector2i(-4, -2)
 const HELMET_ABOVE_HEAD := 6
@@ -40,6 +47,8 @@ func _draw() -> void:
 	for step: Array in paint_steps(_model):
 		var m: Dictionary = markers[int(step[1])]
 		match str(step[0]):
+			"mark":
+				_mark(m)
 			"edge":
 				_edge_rider(m)
 			"pennant":
@@ -52,21 +61,46 @@ func _draw() -> void:
 		_fx(str(puff["fx"]), int(puff["frame"]), puff["at"])
 
 
-## What the layer paints, in order, [kind, marker index]: riders off screen and every pennant first,
-## then the bikes and bodies by the model's draw order, then the local rider's caret.
+## What the layer paints, in order, [kind, marker index]: the local rider's road ring, then riders
+## off screen and every pennant, then the bikes and bodies by the model's draw order, then its caret.
 static func paint_steps(model: Dictionary) -> Array:
 	var markers: Array = model.get("markers", [])
 	var order: Array = model.get("draw_order", [])
 	var out: Array = []
+	for i: int in order:
+		if _is_local_on_screen(markers[i]):
+			out.append(["mark", i])
 	for i: int in order:
 		out.append(["edge" if int(markers[i]["edge"]) != 0 else "pennant", i])
 	for i: int in order:
 		if int(markers[i]["edge"]) == 0:
 			out.append(["rider", i])
 	for i: int in order:
-		var m: Dictionary = markers[i]
-		if int(m["edge"]) == 0 and bool(m.get("local", false)):
+		if _is_local_on_screen(markers[i]):
 			out.append(["caret", i])
+	return out
+
+
+static func _is_local_on_screen(m: Dictionary) -> bool:
+	return int(m["edge"]) == 0 and bool(m.get("local", false))
+
+
+## The road ring's columns, left to right, each Vector3i(x, top, bottom) in art px: a flat ellipse on
+## the road around both tyres' contact points, on the slope between them in whole-pixel steps.
+static func mark_columns(m: Dictionary, rider: Dictionary, radius: int) -> Array[Vector3i]:
+	var left := int(m["draw_x"]) - int(rider["origin"][0])
+	var rear_x := left + int(rider["rear_hub"][0])
+	var front_x := left + int(rider["front_hub"][0])
+	var rear_y := int(m["rear_y"])
+	var rise := float(int(m["front_y"]) - rear_y) / float(front_x - rear_x)
+	var x0 := rear_x - radius - MARK_PAST
+	var x1 := front_x + radius + MARK_PAST
+	var out: Array[Vector3i] = []
+	for x in range(x0, x1 + 1):
+		var from_end := mini(x - x0, x1 - x)
+		var half := MARK_ENDS[from_end] if from_end < MARK_ENDS.size() else MARK_HALF
+		var y := rear_y + roundi(rise * float(x - rear_x))
+		out.append(Vector3i(x, y - half, y + half))
 	return out
 
 
@@ -170,6 +204,21 @@ func _edge_rider(m: Dictionary) -> void:
 	for k in 3:
 		var half := 2 - k
 		draw_rect(Rect2(ax + k * edge, foot.y - 5 - half, 1, half * 2 + 1), WorkoutArt.WHITE)
+
+
+## The ring on the road under the local rider, wheels over it: a white rim, doubled on the near side
+## so that it still reads between the neighbours' tyres, and a pool of light inside, wide and solid
+## enough never to read as one of the road's own dashes.
+func _mark(m: Dictionary) -> void:
+	var columns := mark_columns(m, kit.rider, int(kit.data["wheel"]["radius"]))
+	for i in columns.size():
+		var c := columns[i]
+		if i == 0 or i == columns.size() - 1:
+			draw_rect(Rect2(c.x, c.y, 1, c.z - c.y + 1), WorkoutArt.WHITE)
+			continue
+		draw_rect(Rect2(c.x, c.y + 1, 1, c.z - c.y - 2), MARK_FILL)
+		draw_rect(Rect2(c.x, c.y, 1, 1), WorkoutArt.WHITE)
+		draw_rect(Rect2(c.x, c.z - 1, 1, 2), WorkoutArt.WHITE)
 
 
 ## The caret over the local rider: white, a dark line around it so it holds on any sky.
