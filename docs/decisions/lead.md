@@ -133,3 +133,9 @@
 - Decision: workflows go from 20 to 7 in the cleanup, with `lead.yml` running everything.
 - Alternatives: cap 4 (about 8 h longer); no CI allowance (CI stays red and hides real failures).
 - Reason: the owner asked for quick, concurrent, bulletproof work; none of this touches BRIEF 4.6 or a BRIEF 7 assertion.
+
+## 2026-10-31: Tank matrix rows re-pinned
+
+Decision: `tools/lib/gate_manifest.json` requires Tank's S14-S18 and 85 matrix runs, and the lead re-pinned `safety_pins.json`.
+Alternatives: leave the old 37 runs required, which would let the difficulty rows go missing unnoticed.
+Reason: a stricter gate; no threshold moved. The re-pin also took Tank v4's additive changes to `check_sims.mjs` (the Ambush laps, the Repairs engine code, the new rows).
