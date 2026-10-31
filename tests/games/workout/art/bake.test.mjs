@@ -8,9 +8,9 @@ import { dirname, join, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readPng } from '../../../../src/games/workout/art/png.mjs';
-import { BB, CRANK, CHAIN_PERIOD, CRANK_FRAMES, crankTheta, chainOffset, nearPedalTable, pedalAt } from '../../../../src/games/workout/art/rig.mjs';
-import { GLOW, MIST, MIST_GROUND, RESERVE, STAR, WALL, WINDOW } from '../../../../src/games/workout/art/palette.mjs';
-import { HOLLOW_BODY, PEDAL, SLOT_COLORS, slotLook } from '../../../../src/games/workout/art/riders.mjs';
+import { BB, CHAINRING_R, CRANK, CHAIN_PERIOD, CRANK_FRAMES, REAR_HUB, SADDLE, crankTheta, chainOffset, nearPedalTable, pedalAt } from '../../../../src/games/workout/art/rig.mjs';
+import { ASPHALT, GLOW, GRIT, MIST, MIST_GROUND, PAINT, POPLAR, RESERVE, RIDGE, RIDGE_NEAR, STAR, WALL, WINDOW } from '../../../../src/games/workout/art/palette.mjs';
+import { CHAIN_LIGHT, HOLLOW_BODY, PEDAL, SLOT_COLORS, slotLook } from '../../../../src/games/workout/art/riders.mjs';
 import { hex } from '../../../../src/games/workout/art/raster.mjs';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -329,4 +329,394 @@ test('every wheel frame has its valve and a different picture', () => {
     seen.add(s);
   }
   assert.equal(seen.size, kit.wheel.frames);
+});
+
+// --- Art critic round: what real frames showed, kept true -------------------------------------------
+
+const lumaOf = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+
+/** The [r, g, b, a] of a rider cell's pixel. */
+function cellPixel(sheet, frame, row, x, y) {
+  const { cell, cols } = kit.rider;
+  const i = (((row + Math.floor(frame / cols)) * cell[1] + y) * sheet.width + (frame % cols) * cell[0] + x) * 4;
+  return [sheet.data[i], sheet.data[i + 1], sheet.data[i + 2], sheet.data[i + 3]];
+}
+
+const same = (a, b) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+
+test('the drivetrain shows on the road: chain links lighter than any asphalt, a brass link that travels, a bright crank', () => {
+  const lut = readPng(fromRes(kit.lut.path));
+  let road = 0;
+  for (let r = 0; r < kit.lut.rows; r++) {
+    for (let i = ASPHALT; i < PAINT; i++) {
+      const q = (r * lut.width + i) * 4;
+      road = Math.max(road, lumaOf([lut.data[q], lut.data[q + 1], lut.data[q + 2]]));
+    }
+  }
+  const dimmest = Math.min(...kit.tod.map((t) => Math.min(...t.rider_tint)));
+  assert.ok(lumaOf(CHAIN_LIGHT) * dimmest > road * 1.5, `chain ${lumaOf(CHAIN_LIGHT) * dimmest}, road ${road}`);
+  assert.ok(CHAINRING_R >= 6, 'a chainring big enough for teeth and cutouts');
+  const sheet = readPng(fromRes(kit.rider.slots[0]));
+  const seat = kit.rider.pose_rows.seat;
+  const bottomRow = BB[1] + CHAINRING_R + 1;
+  const brassAt = (k) => {
+    const seen = [];
+    for (let x = REAR_HUB[0]; x <= BB[0]; x++) {
+      for (let y = 60; y <= bottomRow; y++) {
+        if (same(cellPixel(sheet, k, seat, x, y), hex('#ffcf6a'))) seen.push(`${x},${y}`);
+      }
+    }
+    return seen.join(' ');
+  };
+  const pictures = new Set();
+  let lightLinks = 0;
+  for (let k = 0; k < CRANK_FRAMES; k++) {
+    pictures.add(brassAt(k));
+    for (let x = REAR_HUB[0]; x <= BB[0]; x++) {
+      for (let y = 60; y <= bottomRow; y++) {
+        if (same(cellPixel(sheet, k, seat, x, y), CHAIN_LIGHT)) lightLinks++;
+      }
+    }
+  }
+  assert.ok(pictures.size >= 12, `the brass link moves with the crank: ${pictures.size} pictures`);
+  assert.ok(lightLinks / CRANK_FRAMES >= 5, `${lightLinks / CRANK_FRAMES} light links a frame`);
+  // Nothing on the bike is brighter than the near pedal.
+  for (const y of [BB[1] - 1, BB[1], BB[1] + 1]) {
+    for (let x = BB[0] - 5; x <= BB[0] + 5; x++) {
+      const p = cellPixel(sheet, 3, seat, x, y);
+      if (p[3] > 0) assert.ok(lumaOf(p) <= lumaOf(PEDAL), `${x},${y}`);
+    }
+  }
+});
+
+test('the chainring turns: its cutouts change as the crank goes round and hold both steel and dark', () => {
+  const sheet = readPng(fromRes(kit.rider.slots[1]));
+  const seat = kit.rider.pose_rows.stop;
+  assert.ok(seat === 12);
+  // On the frames where the near leg is forward of the ring, read the ring's rear half.
+  const stand = kit.rider.pose_rows.seat;
+  const rear = (k) => {
+    let s = '';
+    for (let y = BB[1] - CHAINRING_R; y <= BB[1] + CHAINRING_R; y++) {
+      for (let x = BB[0] - CHAINRING_R; x < BB[0]; x++) s += cellPixel(sheet, k, stand, x, y).join();
+    }
+    return s;
+  };
+  const seen = new Set();
+  for (let k = 0; k < CRANK_FRAMES; k++) seen.add(rear(k));
+  assert.ok(seen.size >= 20, `${seen.size} pictures of the ring`);
+});
+
+test('the frame triangle is open: a top tube of two pixels, a saddle with its own shape over a visible post', () => {
+  for (const s of [1, 3]) {
+    const sheet = readPng(fromRes(kit.rider.slots[s]));
+    const row = kit.rider.pose_rows.seat;
+    const steelLit = hex('#d0d8e0');
+    const steelDark = hex('#566070');
+    let columns = 0;
+    for (let x = 40; x <= 52; x++) {
+      for (let y = 46; y <= 52; y++) {
+        if (!same(cellPixel(sheet, 12, row, x, y), steelLit)) continue;
+        if (same(cellPixel(sheet, 12, row, x, y + 1), steelDark)) columns++;
+        const above = cellPixel(sheet, 12, row, x, y - 1);
+        const under = cellPixel(sheet, 12, row, x, y + 2);
+        assert.ok(!same(above, steelLit) && !same(above, steelDark), `slot ${s}: thicker than 2 at ${x}, above`);
+        assert.ok(!same(under, steelLit) && !same(under, steelDark), `slot ${s}: thicker than 2 at ${x}, under`);
+      }
+    }
+    assert.ok(columns >= 6, `slot ${s}: ${columns} columns of top tube show`);
+  }
+  // The saddle's pale tail shows behind the hips in every riding frame: no short or tube has that colour.
+  const sheet = readPng(fromRes(kit.rider.slots[0]));
+  for (let k = 0; k < CRANK_FRAMES; k++) {
+    assert.ok(same(cellPixel(sheet, k, kit.rider.pose_rows.seat, SADDLE[0] - 7, SADDLE[1] - 1), hex('#aeb2bc')), `frame ${k}`);
+  }
+  assert.ok(SADDLE[1] >= 44, 'the saddle sits under the hips, not inside them');
+});
+
+test('skin never goes grey: its shade stays warm, the far limbs keep three steps, and the chin is clean', () => {
+  for (let s = 0; s < 4; s++) {
+    const look = slotLook(s);
+    for (const c of look.skinRamp) assert.ok(c[0] - c[2] >= 24, `slot ${s}: ${c} reads grey`);
+    const [a, b, d] = look.skinRamp.map(lumaOf);
+    assert.ok(a < b && b < d, `slot ${s}: a ramp that climbs`);
+  }
+  for (let s = 0; s < 4; s++) {
+    const sheet = readPng(fromRes(kit.rider.slots[s]));
+    const skin = slotLook(s).skinRamp;
+    for (let k = 0; k < CRANK_FRAMES; k++) {
+      // Between the jaw and the chin, seat pose: head centre (49, 17), bobbing 1 px.
+      for (let y = 20; y <= 21; y++) {
+        for (let x = 49; x <= 52; x++) {
+          const p = cellPixel(sheet, k, kit.rider.pose_rows.seat, x, y);
+          if (p[3] === 0) continue;
+          if (lumaOf(p) < 40) continue; // the shoulder's outline
+          assert.ok(skin.some((c) => same(c, p)), `slot ${s} frame ${k} at ${x},${y}: ${p} on the face`);
+        }
+      }
+    }
+  }
+});
+
+test('the two arms are two: the far arm shows ahead of the near one', () => {
+  const sheet = readPng(fromRes(kit.rider.slots[0]));
+  const skin = slotLook(0).skinRamp;
+  const nearSkin = (p) => skin.some((c) => same(c, p));
+  // Along the forearm's middle, reading across: near skin, then at least one pixel of another skin tone.
+  let both = 0;
+  for (let y = 33; y <= 38; y++) {
+    let near = false;
+    let far = false;
+    for (let x = 44; x <= 70; x++) {
+      const p = cellPixel(sheet, 0, kit.rider.pose_rows.seat, x, y);
+      if (p[3] === 0) continue;
+      if (nearSkin(p)) near = true;
+      else if (near && lumaOf(p) > 60 && p[0] > p[2]) far = true;
+    }
+    if (near && far) both++;
+  }
+  assert.ok(both >= 3, `${both} rows show both arms`);
+});
+
+test('the crowd is at a believable scale, in groups, each body one piece, arms attached', () => {
+  const { path, cell, count, hand_up: hand } = kit.props.crowd;
+  const sheet = readPng(fromRes(path));
+  assert.deepEqual([sheet.width, sheet.height], [cell[0] * count, cell[1] * 2]);
+  const opaque = (s, row, x, y) => {
+    if (x < 0 || y < 0 || x >= cell[0] || y >= cell[1]) return false;
+    return sheet.data[((row * cell[1] + y) * sheet.width + s * cell[0] + x) * 4 + 3] === 255;
+  };
+  const tallest = [];
+  const widths = [];
+  for (let s = 0; s < count; s++) {
+    let top = cell[1];
+    let bottom = 0;
+    let left = cell[0];
+    let right = 0;
+    let total = 0;
+    let start = null;
+    for (let y = 0; y < cell[1]; y++) {
+      for (let x = 0; x < cell[0]; x++) {
+        if (!opaque(s, 0, x, y)) continue;
+        top = Math.min(top, y);
+        bottom = Math.max(bottom, y);
+        left = Math.min(left, x);
+        right = Math.max(right, x);
+        total++;
+        start ??= [x, y];
+      }
+    }
+    tallest.push(bottom - top + 1);
+    widths.push(right - left + 1);
+    for (const row of [0, 1]) {
+      // Flood from the first pixel of the row: every opaque pixel must be reached (8-connected).
+      let first = null;
+      let all = 0;
+      for (let y = 0; y < cell[1]; y++) {
+        for (let x = 0; x < cell[0]; x++) {
+          if (opaque(s, row, x, y)) {
+            all++;
+            first ??= [x, y];
+          }
+        }
+      }
+      const seen = new Set();
+      const todo = [first];
+      while (todo.length > 0) {
+        const [x, y] = todo.pop();
+        const key = y * cell[0] + x;
+        if (seen.has(key) || !opaque(s, row, x, y)) continue;
+        seen.add(key);
+        for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) if (i || j) todo.push([x + i, y + j]);
+      }
+      assert.equal(seen.size, all, `column ${s} row ${row}: ${all - seen.size} pixels float free of the group`);
+    }
+    // The lowered near hand sits where the view hangs a flag from it.
+    assert.ok(opaque(s, 0, hand[0], hand[1] + 17), `column ${s}: the lowered hand`);
+  }
+  // The riders stand about 65 art px; a spectator a few px behind them is no toy.
+  assert.ok(Math.min(...tallest) >= 38, `tallest in each column: ${tallest}`);
+  assert.ok(new Set(tallest).size >= 4, `heights vary: ${tallest}`);
+  assert.ok(new Set(widths).size >= 4, `some stand alone, some in groups: ${widths}`);
+});
+
+test('the gantry banner clears the helmets of the far lane, and is cloth, not a saturated slab', () => {
+  const g = kit.props.gantry;
+  const sheet = readPng(fromRes(g.path));
+  assert.deepEqual([sheet.width, sheet.height], g.size);
+  let lowest = 0;
+  for (let y = 0; y < sheet.height; y++) {
+    for (let x = 30; x < 170; x++) {
+      if (sheet.data[(y * sheet.width + x) * 4 + 3] > 0) lowest = Math.max(lowest, y);
+    }
+  }
+  const riders = readPng(fromRes(kit.rider.slots[0]));
+  let helmet = Infinity;
+  for (const name of ['seat', 'stand', 'situp']) {
+    for (let k = 0; k < CRANK_FRAMES; k++) {
+      for (let y = 0; y < kit.rider.cell[1] && y < helmet; y++) {
+        for (let x = 0; x < kit.rider.cell[0]; x++) {
+          if (cellPixel(riders, k, kit.rider.pose_rows[name], x, y)[3] > 0) helmet = Math.min(helmet, y);
+        }
+      }
+    }
+  }
+  const FAR_LANE = -9;
+  const bannerBottom = -g.foot_above_contact - g.size[1] + lowest;
+  const helmetTop = FAR_LANE - kit.rider.origin[1] + helmet;
+  assert.ok(bannerBottom + 8 <= helmetTop, `banner to ${bannerBottom}, helmets from ${helmetTop}, against the contact`);
+  const i = (20 * sheet.width + 40) * 4;
+  const c = [sheet.data[i], sheet.data[i + 1], sheet.data[i + 2]];
+  const sat = (Math.max(...c) - Math.min(...c)) / Math.max(...c);
+  assert.ok(sat < 0.6, `banner cloth saturation ${sat}`);
+});
+
+/** Of the pixels with an index in [lo, hi], the share with no such neighbour left or right. */
+function loneShare(png, lo, hi) {
+  let all = 0;
+  let lone = 0;
+  const hit = (x, y) => {
+    const p = pixel(png, (x + png.width) % png.width, y);
+    return p.alpha > 0 && p.index >= lo && p.index <= hi;
+  };
+  for (let y = 0; y < png.height; y++) {
+    for (let x = 0; x < png.width; x++) {
+      if (!hit(x, y)) continue;
+      all++;
+      if (!hit(x - 1, y) && !hit(x + 1, y)) lone++;
+    }
+  }
+  return { all, share: all === 0 ? 0 : lone / all };
+}
+
+test('mist hangs in long strands: no ordered dither in the near or the mid plane', () => {
+  for (const name of ['near_trees', 'mid_hills']) {
+    const png = readPng(join(assets, 'world', `${name}.png`));
+    const hanging = loneShare(png, MIST, MIST + 1);
+    assert.ok(hanging.all > 200, `${name} has mist`);
+    assert.ok(hanging.share < 0.12, `${name}: ${hanging.share} of the mist is checker`);
+  }
+  const png = readPng(join(assets, 'world', 'near_trees.png'));
+  const ground = loneShare(png, MIST_GROUND, MIST_GROUND + 1);
+  assert.ok(ground.all > 200);
+  assert.ok(ground.share < 0.12, `ground mist: ${ground.share} is checker`);
+});
+
+test('the far ridge has faces with hard edges, lit on the side away from the shade, with no dither', () => {
+  const png = readPng(join(assets, 'world', 'far_hills.png'));
+  // In a row across the rock, runs of one shade are long: a face, not a stipple or a streak of single pixels.
+  let runs = 0;
+  let px = 0;
+  for (let y = 50; y < 62; y++) {
+    let last = -1;
+    for (let x = 0; x < png.width; x++) {
+      const p = pixel(png, x, y);
+      if (p.alpha === 0 || p.index < RIDGE || p.index >= RIDGE_NEAR) {
+        last = -1;
+        continue;
+      }
+      px++;
+      if (p.index !== last) runs++;
+      last = p.index;
+    }
+  }
+  assert.ok(px > 1000, 'there is rock in those rows');
+  // Each face holds up to three tones, so this is well under its width; a dither would give under 2.
+  assert.ok(px / runs >= 3.5, `mean run ${px / runs} px`);
+});
+
+test('poplars carry their rim on the sun side only', () => {
+  const png = readPng(join(assets, 'world', 'near_trees.png'));
+  const isPoplar = (x, y) => {
+    const p = pixel(png, (x + png.width) % png.width, y);
+    return p.alpha > 0 && p.index >= POPLAR && p.index < POPLAR + 5;
+  };
+  let rim = 0;
+  let onLeft = 0;
+  for (let y = 0; y < png.height; y++) {
+    for (let x = 0; x < png.width; x++) {
+      const p = pixel(png, x, y);
+      if (p.alpha === 0 || p.index !== POPLAR + 5) continue;
+      rim++;
+      if (!isPoplar(x - 1, y) && isPoplar(x + 1, y)) onLeft++;
+    }
+  }
+  assert.ok(rim > 300, `${rim} rim pixels`);
+  assert.ok(onLeft / rim < 0.03, `${onLeft} of ${rim} on the left edge, away from the sun`);
+});
+
+test('no stray marks: the far verge holds no painted post, and the road paint stays on the road', () => {
+  for (let f = 0; f < 4; f++) {
+    const png = readPng(join(assets, 'world', `verge_far_${f}.png`));
+    for (let y = 0; y < png.height; y++) {
+      for (let x = 0; x < png.width; x++) {
+        const p = pixel(png, x, y);
+        if (p.alpha > 0) assert.ok(p.index < PAINT || p.index >= GRIT + 2, `verge_far_${f} at ${x},${y}: index ${p.index}`);
+      }
+    }
+  }
+});
+
+test('bubbles: three plates of three looks, each holding its own picture at 9 x 9', () => {
+  const fx = kit.fx;
+  const sheet = readPng(fromRes(fx.path));
+  const box = (name, f) => {
+    const [x, y, w, h] = fx[name];
+    let s = '';
+    for (let j = 0; j < h; j++) {
+      for (let i = 0; i < w; i++) {
+        const q = ((y + j) * sheet.width + x + f * w + i) * 4;
+        s += `${sheet.data[q]},${sheet.data[q + 1]},${sheet.data[q + 2]},${sheet.data[q + 3]};`;
+      }
+    }
+    return s;
+  };
+  for (const name of ['rescue', 'afk', 'link']) {
+    assert.deepEqual(fx[name].slice(2, 4), [9, 9]);
+    assert.notEqual(box(name, 0), box(name, 1), `${name} blinks`);
+  }
+  const plate = (name) => {
+    const q = ((fx[name][1] + 1) * sheet.width + fx[name][0] + 2) * 4;
+    return [sheet.data[q], sheet.data[q + 1], sheet.data[q + 2]].join();
+  };
+  assert.equal(new Set(['rescue', 'afk', 'link'].map(plate)).size, 3, 'plates differ');
+  // The Z: a top bar, a bottom bar, a diagonal from upper right to lower left.
+  const [ax, ay] = fx.afk;
+  const dark = (i, j) => sheet.data[((ay + j) * sheet.width + ax + i) * 4] < 60;
+  for (let i = 2; i <= 6; i++) assert.ok(dark(i, 2) && dark(i, 6), `Z bars at ${i}`);
+  assert.ok(dark(6, 3) && dark(4, 4) && dark(3, 5), 'Z diagonal');
+  assert.ok(!dark(2, 3) && !dark(6, 5), 'Z corners stay open');
+});
+
+test('dust is soft and breaks up: no box, thin edges, and fewer pixels each frame once it has grown', () => {
+  const [x0, y0, w, h, frames] = kit.fx.dust;
+  const sheet = readPng(fromRes(kit.fx.path));
+  const counts = [];
+  for (let f = 0; f < frames; f++) {
+    let n = 0;
+    let dense = 0;
+    let left = w;
+    let right = -1;
+    let top = h;
+    let bottom = -1;
+    for (let j = 0; j < h; j++) {
+      for (let i = 0; i < w; i++) {
+        const a = sheet.data[((y0 + j) * sheet.width + x0 + f * w + i) * 4 + 3];
+        if (a === 0) continue;
+        assert.ok(a < 255, 'dust is never opaque');
+        n++;
+        if (a > 150) dense++;
+        left = Math.min(left, i);
+        right = Math.max(right, i);
+        top = Math.min(top, j);
+        bottom = Math.max(bottom, j);
+      }
+    }
+    const fill = n / ((right - left + 1) * (bottom - top + 1));
+    assert.ok(fill < 0.8, `frame ${f} fills ${fill} of its box`);
+    counts.push({ n, dense });
+  }
+  assert.ok(counts[1].n > counts[0].n, 'it grows');
+  assert.ok(counts[3].n < counts[2].n && counts[2].n <= counts[1].n + 12, 'then thins');
+  assert.equal(counts[3].dense, 0, 'the last frame is only specks');
 });

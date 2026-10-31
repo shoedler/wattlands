@@ -131,9 +131,14 @@ export function scene(parts, kit, row, { contact = () => 384, scroll = 0, riders
   roadRows(out, vergeFar, contact, (c) => c - kit.road.verge_far.above, scroll);
   roadRows(out, road, contact, (c) => c - kit.road.contact_row, scroll);
   if (crowd) {
-    for (let i = 0; i < 40; i++) {
-      const x = 12 + i * 23;
-      stamp(out, parts.props.crowd, (i % 8) * 16, (i % 3 === 0 ? 1 : 0) * 30, 16, 30, x - 8, Math.round(contact(x)) - kit.props.crowd.foot_above_contact - 30, tod.rider_tint);
+    // Spaced as the view spaces them: one per 18 px bucket, up to 4 px either way, a kind by hash.
+    const [cw, ch] = kit.props.crowd.cell;
+    for (let i = 0; i < 56; i++) {
+      const h = Math.floor(((Math.sin((i + 3) * 91.17) + 1) * 43758.5) % 1000);
+      const x = i * 18 + (h % 9) - 4;
+      const kind = (h >> 3) % kit.props.crowd.count;
+      const row = h % 3 === 0 ? 1 : 0;
+      stamp(out, parts.props.crowd, kind * cw, row * ch, cw, ch, x, Math.round(contact(x + cw / 2)) - kit.props.crowd.foot_above_contact - ch, tod.rider_tint);
     }
   }
   const order = [...riders].sort((a, b) => a.lane - b.lane || a.x - b.x);

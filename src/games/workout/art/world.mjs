@@ -159,23 +159,92 @@ export const cloudsLoPlane = (seed) =>
     }
   });
 
+/**
+ * The far range as rock lit from the right: ribs run down from every crest and fan out away from their peak.
+ * East of a rib the face looks at the sun and is lit; west of it, it is in shade. Between two ribs a gully
+ * marks where one face meets the next, so light and shade change at a hard edge and follow the mountain's
+ * shape, with no streaks and no dither.
+ */
+function ridgeFaces(c, topOf, seed) {
+  const rnd = mulberry32(seed ^ 0x37);
+  const w = c.w;
+  // The crest's peaks: where the height turns over.
+  const peaks = [];
+  for (let x = 0; x < w; x++) {
+    const a = topOf(x);
+    if (a <= topOf(x - 1) && a < topOf(x + 1)) peaks.push(x);
+  }
+  const nearestPeak = (x) => {
+    let best = peaks[0] ?? 0;
+    let bestD = Infinity;
+    for (const p of peaks) {
+      const d = Math.abs(((x - p + w * 1.5) % w) - w / 2);
+      if (d < bestD) {
+        bestD = d;
+        best = p;
+      }
+    }
+    return ((x - best + w * 1.5) % w) - w / 2;
+  };
+  const ribs = [];
+  const rib = (x0, y0, spread, lit) => {
+    const phase = rnd() * Math.PI * 2;
+    const wob = 1.2 + rnd() * 2.2;
+    const bend = 0.05 + rnd() * 0.09;
+    ribs.push({ x0, y0, spread, lit, at: (y) => x0 + spread * (y - y0) + wob * Math.sin((y - y0) * bend + phase) });
+  };
+  for (const p of peaks) rib(p, topOf(p), (rnd() - 0.5) * 0.5, 3);
+  // Shoulder ribs along the whole crest, and spurs that start lower down and split the wider faces.
+  let x = 0;
+  while (x < w) {
+    const side = nearestPeak(x) < 0 ? -1 : 1;
+    rib(x, topOf(x) + 1, side * (0.55 + rnd() * 0.6), rnd() < 0.45 ? 3 : 2);
+    if (rnd() < 0.5) rib(x + rnd() * 12, topOf(x) + 10 + rnd() * 18, side * (0.7 + rnd() * 0.5), 2);
+    x += 24 + Math.floor(rnd() * 40);
+  }
+  for (let y = 0; y < c.h; y++) {
+    const live = [];
+    for (const r of ribs) {
+      if (y >= r.y0 && !r.dead) live.push({ x: ((r.at(y) % w) + w) % w, lit: r.lit, key: r.x0, rib: r });
+    }
+    live.sort((a, b) => a.x - b.x);
+    // Two ribs that run together end there, the younger one for good: ribs never cross.
+    const row = [];
+    for (const r of live) {
+      const prev = row[row.length - 1];
+      if (prev && r.x - prev.x <= 4) {
+        const younger = r.rib.y0 > prev.rib.y0 ? r : prev;
+        younger.rib.dead = true;
+        if (younger === prev) row[row.length - 1] = r;
+      } else {
+        row.push(r);
+      }
+    }
+    if (row.length === 0) continue;
+    for (let i = 0; i < row.length; i++) {
+      const a = row[i];
+      const b = row[(i + 1) % row.length];
+      const span = ((b.x - a.x + w) % w) || w;
+      const gully = 0.42 + 0.3 * hash2(Math.round(a.key), 11, seed);
+      for (let k = 0; k < Math.ceil(span); k++) {
+        const px = Math.round(a.x) + k;
+        const wx = ((px % w) + w) % w;
+        if (y < topOf(wx)) continue;
+        const t = k / span;
+        // Bright on the rib itself, the lit face behind it, then the shaded face up to the next rib.
+        const index = a.lit === 3 && k < 2 ? 3 : t < gully ? 2 : t < gully + (1 - gully) * 0.7 ? 1 : 0;
+        c.px(wx, y, ix(P.RIDGE + index));
+      }
+    }
+  }
+}
+
 export function farHillsPlane(seed) {
   const c = new Canvas(1440, 150, { wrapX: true });
   // Far range: sharp faces, close to the colour of the sky at the horizon.
   const range = waves(c.w, seed ^ 0x33, [3, 7, 13, 29, 61], 0.5);
-  const topA = (x) => 24 + 50 * range(x);
-  const gully = waves(c.w, seed ^ 0x34, [47, 83], 0.7);
-  for (let x = 0; x < c.w; x++) {
-    const top = Math.round(topA(x));
-    for (let y = top; y < c.h; y++) {
-      const d = y - top;
-      // Faces follow the slope down: read the slope up the hill from here.
-      const sx = x - d * 0.55;
-      const slope = topA(sx + 3) - topA(sx - 3);
-      const u = 1.5 + clamp(slope * 0.34, -1.3, 1.3) + (gully(sx) - 0.5) * 0.9 + d * 0.02;
-      c.px(x, y, ix(ditherShade(P.RIDGE, 4, u, x, y, 0.5)));
-    }
-  }
+  const topA = (x) => Math.round(24 + 50 * range(((x % c.w) + c.w) % c.w));
+  ridgeFaces(c, topA, seed);
   // Nearer range: rounder, wooded, with a fringe of tree tops on the crest and darker wood patches.
   const near = waves(c.w, seed ^ 0x35, [4, 9, 17], 0.5);
   const wood = waves(c.w, seed ^ 0x36, [11, 23, 41], 0.7);
@@ -190,7 +259,7 @@ export function farHillsPlane(seed) {
       let u = 1.7 + clamp(slope * 0.3, -0.9, 0.9) + d * 0.012;
       if (patch > 0.56) u -= 1.1;
       if (d < 2) u += 0.7;
-      c.px(x, y, ix(ditherShade(P.RIDGE_NEAR, 4, u, x, y, 0.5)));
+      c.px(x, y, ix(P.RIDGE_NEAR + clamp(Math.round(u), 0, 3)));
     }
   }
   // A far village: a church tower and a few roofs on the nearer crest.
@@ -235,7 +304,37 @@ function fieldPixel(type, x, y, depth, tone, c, seed) {
     const u = 2.4 + (hash2(x >> 1, y, seed) < 0.12 ? 1 : 0);
     c.px(x, y, ix(P.PASTURE + clamp(Math.floor(u), 0, 3)));
   } else {
-    c.px(x, y, ix(ditherShade(P.PASTURE, 4, 0.7 + tone * 0.8 + depth * 0.2, x, y, 0.4)));
+    // Grazed turf: a flat tone with short horizontal dabs of the next one.
+    const dab = hash2((x + y * 3) >> 2, y, seed + 21) < 0.2 ? 1 : 0;
+    c.px(x, y, ix(P.PASTURE + clamp(Math.round(0.4 + tone * 0.8 + depth * 0.2) + dab, 0, 3)));
+  }
+}
+
+/**
+ * One strand of mist: a long flat run, broken toward its ends by whole gaps of a few pixels. Hanging mist
+ * goes on empty pixels only; `over` lets ground mist lie on land.
+ */
+function wisp(c, cx, y, len, index, seed, over = false) {
+  const x0 = Math.round(cx - len / 2);
+  for (let k = 0; k <= len; k++) {
+    const t = k / len;
+    const px = x0 + k;
+    if (hash2(px >> 2, y, seed) > Math.sin(Math.PI * t) ** 0.55 * 1.12) continue;
+    if (!over && c.get(((px % c.w) + c.w) % c.w, y)[3] !== 0) continue;
+    c.px(px, y, ix(index));
+  }
+}
+
+/** Layers of strands at the given rows, thin and sparse; the odd core strand one shade lighter. */
+function mistLayer(c, seed, rows, count, minLen, maxLen) {
+  const rnd = mulberry32(seed);
+  for (let i = 0; i < count; i++) {
+    const y = rows[Math.floor(rnd() * rows.length)];
+    const len = minLen + rnd() * (maxLen - minLen);
+    const cx = rnd() * c.w;
+    wisp(c, cx, y, len, P.MIST, seed + i);
+    if (rnd() < 0.5) wisp(c, cx + rnd() * 16 - 8, y + 1, len * (0.45 + rnd() * 0.4), P.MIST, seed + i + 91);
+    if (rnd() < 0.3) wisp(c, cx + rnd() * 10 - 5, y, len * 0.35, P.MIST + 1, seed + i + 47);
   }
 }
 
@@ -306,14 +405,9 @@ export function midHillsPlane(seed) {
     c.px(x + 2, y + 2, ix(P.WINDOW));
     c.px(x + 5, y + 2, ix(P.WINDOW));
   }
-  // Valley fog behind the crest: on empty pixels only, so it burns off and leaves no holes.
-  for (let x = 0; x < c.w; x++) {
-    const top = Math.round(topOf(x));
-    for (let y = Math.max(top - 16, 0); y < top; y++) {
-      const density = (1 - (top - y) / 16) * 0.55;
-      if (density > bayer4(x, y)) c.px(x, y, ix(P.MIST + (density > 0.55 ? 1 : 0)));
-    }
-  }
+  // Valley fog: flat wisps at set heights, on empty pixels only, so it lies between the hills and burns off
+  // without leaving holes. No dither: it hangs in long strands.
+  mistLayer(c, seed ^ 0x47, [64, 72, 78, 84, 90, 96], 34, 40, 170);
   return c;
 }
 
@@ -341,18 +435,34 @@ function lump(c, cx, cy, rx, ry, base, seed, shift = 0) {
   }
 }
 
+/**
+ * A poplar shaded as one column from the upper right: the left side falls away into shadow, flame-shaped
+ * tufts in between, and a rim only down the right edge, the side the sun is on.
+ */
 function poplar(c, x, base, h, seed) {
   const width = 3.4 + h * 0.035;
+  const cx = x + 1;
   c.rect(x, base - 8, 2, 8, ix(P.WOOD + 1));
   c.px(x + 1, base - 8, ix(P.WOOD + 2));
-  const n = Math.round(h / 4);
-  for (let i = 0; i < n; i++) {
-    const t = i / (n - 1);
-    const y = base - 5 - t * (h - 8);
+  const y0 = base - 5;
+  const y1 = base - h;
+  for (let y = y1; y <= y0; y++) {
+    const t = (y0 - y) / (y0 - y1);
     const prof = Math.sin(Math.PI * clamp(0.1 + t * 0.9, 0, 1) ** 0.72) ** 0.7;
-    const rx = 1.2 + width * prof;
-    const jit = (hash2(i, x, seed) - 0.5) * 2.2;
-    lump(c, x + 1 + jit, y, rx, 4.2, P.POPLAR, seed + i, -0.1 + t * 0.5);
+    const hw = 1 + width * prof;
+    // The outline steps in clumps of a few rows, never pixel by pixel.
+    const clump = Math.floor((y + 40 + hash2(x, 5, seed) * 5) / 4);
+    const left = Math.round(cx - hw + hash2(clump, 1, seed + x) * 1.8 - 0.4);
+    const right = Math.round(cx + hw - hash2(clump, 2, seed + x) * 1.8 + 0.4);
+    for (let px = left; px <= right; px++) {
+      const n = (px - cx) / hw;
+      // Tufts: narrow cells offset row by row, each a little lighter or darker than its neighbour.
+      const col = Math.floor((px - cx + 16) / 2);
+      const tuft = hash2(col, Math.floor((y + col * 3 + 40) / 5), seed);
+      const u = 1.7 + n * 2.1 + (tuft - 0.5) * 1.0 + t * 0.3;
+      c.px(px, y, ix(P.POPLAR + clamp(Math.round(u), 0, 4)));
+    }
+    if (right - left >= 2 && hash2(clump, 3, seed + x) < 0.72) c.px(right, y, ix(P.POPLAR + 5));
   }
 }
 
@@ -542,19 +652,14 @@ export function nearTreesPlane(seed) {
     barn(c, fx + 50, fb, seed + n);
     poplar(c, fx + 90, groundAt(fx + 90) + 3, 58, seed + ++n * 29);
   }
-  // Ground mist in the field: opaque, it turns back into grass by day. Hanging mist on the empty pixels
-  // behind the trees burns off through LUT alpha.
-  const bank = waves(c.w, seed ^ 0x57, [5, 13, 29], 0.6);
-  for (let xx = 0; xx < c.w; xx++) {
-    const top = groundAt(xx);
-    const crest = top - 5 - 16 * bank(xx);
-    for (let y = Math.floor(crest); y < top; y++) {
-      const density = clamp((y - crest) / Math.max(top - crest, 1), 0, 1) * 0.85 + 0.1;
-      if (c.get(xx, y)[3] === 0 && density > bayer4(xx, y)) c.px(xx, y, ix(P.MIST + (density > 0.5 ? 1 : 0)));
-    }
-    for (let y = top; y < top + 5; y++) {
-      if (bayer4(xx, y) < 0.42 - (y - top) * 0.08) c.px(xx, y, ix(P.MIST_GROUND + ((y - top) % 2)));
-    }
+  // Ground mist in the field: opaque strands that turn back into grass by day. Hanging mist on the empty
+  // pixels between the trees burns off through LUT alpha. Long flat runs both, no dither.
+  mistLayer(c, seed ^ 0x57, [92, 97, 101, 104, 107, 109, 111], 46, 36, 150);
+  const rndGround = mulberry32(seed ^ 0x58);
+  for (let i = 0; i < 34; i++) {
+    const gx = rndGround() * c.w;
+    const gy = groundAt(Math.round(gx)) + 1 + Math.floor(rndGround() * 4);
+    wisp(c, gx, gy, 24 + rndGround() * 90, P.MIST_GROUND + (i % 3 === 0 ? 1 : 0), seed + i * 7, true);
   }
   return c;
 }
@@ -690,7 +795,7 @@ function blades(c, { rows, density, seed, frame, frames, base, spread, maxH, lif
   }
 }
 
-/** 240 x 26: fence posts, wire, a marker post, a marker of grass, wind frame f of 4. */
+/** 240 x 26: fence posts, wire, grass, wind frame f of 4. */
 export function vergeFarPlane(seed, f) {
   const c = new Canvas(240, 26, { wrapX: true });
   for (let x = 0; x < c.w; x++) {
@@ -712,9 +817,6 @@ export function vergeFarPlane(seed, f) {
     }
     c.px(x, 5, ix(P.WOOD + 2));
   }
-  // A white marker post with a dark band, once a tile.
-  c.rect(146, 8, 3, 13, ix(P.PAINT + 1));
-  c.rect(146, 10, 3, 2, ix(P.WIRE));
   blades(c, { rows: [11, 13, 15, 17, 19, 21, 23, 25], density: 0.32, seed: seed ^ 0x88, frame: f, frames: 4, base: P.GRASS + 2, spread: 3, maxH: 5 });
   // A few taller seed stalks along the fence.
   const rnd = mulberry32(seed ^ 0x89);

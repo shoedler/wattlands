@@ -2,12 +2,16 @@
 // gantry's pixel word. Sheet layouts agree with kit.json's props block (bake.mjs).
 // Shaded from the same light as the world: upper right. Colours sit a step quieter than the riders'.
 import { Canvas, hex } from './raster.mjs';
+import { mix } from './palette.mjs';
+import { ik } from './rig.mjs';
 
 const OUTLINE = hex('#1c1e24');
 
 /** Cell pixels the view lines sprites up by; kit.json publishes them. */
 export const SMOKE_ORIGIN = [5, 15]; // goes on a chimney's top pixel
-export const CROWD_HAND_UP = [15, 3]; // the raised near hand in row 1
+export const CROWD_CELL = [26, 52];
+export const CROWD_HAND_UP = [18, 6]; // the raised near hand in row 1
+export const CROWD_HAND_DOWN_DY = 17; // the view holds a flag this far under it when the hands are down
 export const FLAG_GRIP = [1, 15]; // goes on a raised hand
 
 /** Tower 30 x 70 at (0, 0), then the rotor's 8 frames of 26 x 26 from x 30. */
@@ -83,29 +87,36 @@ export function windpump() {
   return c;
 }
 
-/** 12 x 9, 2 frames (graze) across, 3 coats down. */
+/** 12 x 9, 2 frames (graze) across, 3 coats down: a rump, a sagging belly, a lit back, a head with an ear. */
 export function cattle() {
   const c = new Canvas(24, 27);
   const coats = [
-    [hex('#6c4a34'), hex('#4c3226'), hex('#8c6444')],
-    [hex('#d8d0c0'), hex('#a8a098'), hex('#f0ece0')],
-    [hex('#2a2a2e'), hex('#18181c'), hex('#4a4a50')],
+    { coat: hex('#6c4a34'), dark: hex('#4a3026'), lit: hex('#96704c') },
+    { coat: hex('#d8d0c0'), dark: hex('#a29a94'), lit: hex('#f4f0e4'), patch: hex('#4a4442') },
+    { coat: hex('#4c443e'), dark: hex('#2c2624'), lit: hex('#7c7268'), patch: hex('#d0c8ba') },
   ];
-  coats.forEach(([coat, dark, lit], row) => {
+  coats.forEach(({ coat, dark, lit, patch }, row) => {
     for (let f = 0; f < 2; f++) {
       const x = f * 12;
       const y = row * 9;
+      // Far legs first, then the barrel with its belly and a rounded rump.
+      c.px(x + 3, y + 7, dark);
+      c.px(x + 8, y + 7, dark);
       c.rect(x + 1, y + 3, 8, 4, coat);
-      c.rect(x + 1, y + 6, 8, 1, dark);
-      c.rect(x + 3, y + 3, 5, 1, lit);
-      if (row === 1) {
-        c.rect(x + 2, y + 4, 2, 2, hex('#3c3634'));
-        c.rect(x + 6, y + 3, 2, 2, hex('#3c3634'));
+      c.px(x + 1, y + 3, dark);
+      c.rect(x + 2, y + 7, 6, 0, dark);
+      c.rect(x + 2, y + 6, 7, 1, dark);
+      c.rect(x + 3, y + 3, 6, 1, lit);
+      if (patch) {
+        c.rect(x + 3, y + 4, 2, 2, patch);
+        c.px(x + 7, y + 4, patch);
+        c.px(x + 6, y + 5, patch);
       }
-      c.rect(x + 2, y + 7, 1, 2, dark);
-      c.rect(x + 4, y + 7, 1, 2, dark);
-      c.rect(x + 7, y + 7, 1, 2, dark);
-      c.rect(x + 8, y + 7, 1, 2, dark);
+      // Near legs with hooves, a tail down the rump.
+      c.rect(x + 2, y + 7, 1, 2, coat);
+      c.rect(x + 7, y + 7, 1, 2, coat);
+      c.px(x + 2, y + 8, dark);
+      c.px(x + 7, y + 8, dark);
       c.px(x, y + 4, dark);
       c.px(x, y + 5, dark);
       // Head up and looking, then down in the grass.
@@ -113,9 +124,11 @@ export function cattle() {
         c.rect(x + 9, y + 2, 2, 3, coat);
         c.px(x + 11, y + 3, dark);
         c.px(x + 9, y + 1, dark);
+        c.px(x + 10, y + 2, lit);
       } else {
         c.rect(x + 9, y + 5, 2, 3, coat);
         c.px(x + 11, y + 7, dark);
+        c.px(x + 9, y + 4, dark);
       }
     }
   });
@@ -231,61 +244,278 @@ export function balloon() {
   return c;
 }
 
-/** 16 x 30, 8 spectators across; row 0 hands down, row 1 hands up. */
-export function crowd() {
-  const c = new Canvas(128, 60);
-  const shirts = ['#b84c44', '#3c6ca4', '#c8a644', '#468c6c', '#7c5094', '#d4844c', '#4c90ac', '#c4c4b8'].map(hex);
-  const trousers = ['#26303e', '#3a3028', '#22242c', '#4a4c58', '#2c3648', '#26242a', '#58483a', '#32384a'].map(hex);
-  const skins = ['#e8b48c', '#c98e62', '#8e5c3a', '#f0c8a4'].map(hex);
-  const hairs = ['#3a2a20', '#16161a', '#8a6a40', '#c8c8c4', '#6c3a24', '#16161a', '#b89050', '#3a2a20'].map(hex);
-  const darker = (col, k) => col.map((u) => Math.round(u * k));
-  for (let s = 0; s < 8; s++) {
-    for (let row = 0; row < 2; row++) {
-      const x = s * 16 + 8;
-      const y = row * 30;
-      const skin = skins[s % 4];
-      const shirt = shirts[s];
-      const lit = shirt.map((u) => Math.min(Math.round(u * 1.25 + 14), 255));
-      // Legs: stance differs by person; shoes.
-      const wide = s % 3 === 0 ? 1 : 0;
-      c.rect(x - 2 - wide, y + 22, 2, 7, trousers[s]);
-      c.rect(x + 1 + wide, y + 22, 2, 7, darker(trousers[s], 0.75));
-      c.rect(x - 3 - wide, y + 29, 3, 1, OUTLINE);
-      c.rect(x + 1 + wide, y + 29, 3, 1, OUTLINE);
-      // Body, lit on the right, a jacket hem on some.
-      c.rect(x - 3, y + 11, 7, 11, shirt);
-      c.rect(x + 3, y + 11, 1, 11, lit);
-      c.rect(x - 3, y + 11, 1, 11, darker(shirt, 0.7));
-      if (s % 2 === 1) c.rect(x - 3, y + 20, 7, 2, darker(shirt, 0.75));
-      if (s === 2 || s === 5) c.rect(x - 1, y + 14, 3, 1, lit);
-      // Neck and head; hair or a cap.
-      c.rect(x, y + 10, 2, 1, darker(skin, 0.85));
-      c.disk(x, y + 7, 3, skin);
-      c.px(x - 2, y + 8, darker(skin, 0.8));
-      c.px(x - 1, y + 9, darker(skin, 0.8));
-      if (s % 4 === 3) {
-        c.rect(x - 3, y + 4, 6, 2, shirt);
-        c.rect(x + 1, y + 5, 3, 1, darker(shirt, 0.7));
-      } else {
-        c.rect(x - 2, y + 4, 5, 1, hairs[s]);
-        c.rect(x - 3, y + 5, 3, 2, hairs[s]);
-        if (s % 4 === 1) c.rect(x - 3, y + 7, 2, 3, hairs[s]);
-      }
-      if (row === 0) {
-        c.line(x - 4, y + 12, x - 5, y + 20, darker(shirt, 0.8));
-        c.line(x + 5, y + 12, x + 6, y + 20, shirt);
-        c.px(x - 5, y + 21, skin);
-        c.px(x + 6, y + 21, skin);
-      } else {
-        c.line(x - 4, y + 12, x - 6, y + 3, darker(skin, 0.9));
-        c.line(x + 4, y + 12, x - 8 + CROWD_HAND_UP[0], y + CROWD_HAND_UP[1], skin);
-        c.px(x - 4, y + 12, darker(shirt, 0.8));
-        c.px(x + 4, y + 12, shirt);
-        c.px(x - 6, y + 2, skin);
-        c.px(x - 8 + CROWD_HAND_UP[0], y + CROWD_HAND_UP[1] - 1, skin);
-      }
+const SKINS = ['#e4b08a', '#c48c62', '#8c5c3c', '#eec6a2'].map(hex);
+const HAIRS = { brown: hex('#46322a'), black: hex('#1e1c20'), sand: hex('#8e7048'), grey: hex('#b4b2ac'), red: hex('#7a4228') };
+const CREASE_DARK = [44, 32, 58];
+const SUNNY = [255, 238, 196];
+const CROWD_AIR = [168, 172, 160];
+
+/** Three shades: the shadow leans violet, the light warm. Quieter than the riders' kit, as befits a crowd. */
+const clothRamp = (s) => {
+  const c = mix(hex(s), [122, 120, 118], 0.22);
+  return [mix(c, CREASE_DARK, 0.5), c, mix(c, SUNNY, 0.34)];
+};
+const skinRamp = (c) => [mix(c, [120, 50, 62], 0.45), c, mix(c, SUNNY, 0.3)];
+
+// The cheering 8: each column is a small group, back figures first. `a` marks the figure whose near hand
+// is at CROWD_HAND_UP in row 1, and CROWD_HAND_DOWN_DY under it in row 0: the view gives that hand a flag.
+// x: feet in the cell. lift: stands that far behind the next one. f: looks left (-1, toward the riders
+// coming), ahead (0), right (1). arms: [near, far] by row, hands down then hands up.
+const GROUPS = [
+  [{ a: true, x: 10, lift: 0, h: 44, f: -1, skin: 0, top: 'tee', shirt: '#a85a44', legs: '#3c4250', hair: 'cap', tint: '#3c5a7c', hairCol: 'brown', far: ['hang', 'clap'] }],
+  [
+    { x: 3, lift: 2, h: 40, f: 0, skin: 3, top: 'tee', shirt: '#b49a58', legs: '#54483c', hair: 'long', hairCol: 'red', near: ['hang', 'hang'], far: ['hang', 'hang'] },
+    { a: true, x: 11, lift: 0, h: 45, f: -1, skin: 1, top: 'jacket', shirt: '#3e6a8c', inner: '#c8c4b4', legs: '#2c2e3a', hair: 'short', hairCol: 'black', far: ['hip', 'up'] },
+  ],
+  [
+    { a: true, x: 8, lift: 1, h: 43, f: -1, skin: 2, top: 'stripe', shirt: '#4a7c6a', inner: '#d8d4c4', legs: '#3a3a44', hair: 'short', hairCol: 'black', far: ['hang', 'up'] },
+    { x: 20, lift: 0, h: 26, f: -1, skin: 2, top: 'tee', shirt: '#c07840', legs: '#3c5a7c', hair: 'short', hairCol: 'black', near: ['hang', 'up'], far: ['hang', 'up'], shorts: true },
+  ],
+  [{ a: true, x: 7, lift: 3, h: 39, f: 0, skin: 3, top: 'jacket', shirt: '#7c7468', inner: '#a8a498', legs: '#4c4a4c', hair: 'bald', hairCol: 'grey', far: ['hang', 'hang'] }],
+  [
+    { x: 2, lift: 3, h: 42, f: 1, skin: 0, top: 'tee', shirt: '#6c5a84', legs: '#3a3c48', hair: 'short', hairCol: 'sand', near: ['cross', 'clap'], far: ['cross', 'clap'] },
+    { a: true, x: 10, lift: 1, h: 46, f: -1, skin: 0, top: 'tee', shirt: '#9c4a48', legs: '#2e3442', hair: 'short', hairCol: 'brown', far: ['hip', 'up'], shorts: true },
+  ],
+  [{ a: true, x: 12, lift: 2, h: 38, f: -1, skin: 3, top: 'dress', shirt: '#b4705c', legs: '#b4705c', hair: 'sunhat', tint: '#d0c49c', hairCol: 'sand', far: ['hip', 'clap'] }],
+  [
+    { a: true, x: 6, lift: 2, h: 46, f: -1, skin: 1, top: 'tee', shirt: '#4c7490', legs: '#3c3a38', hair: 'short', hairCol: 'grey', far: ['hang', 'up'] },
+    { x: 16, lift: 0, h: 34, f: -1, skin: 0, top: 'jacket', shirt: '#8c8c50', inner: '#d4d0bc', legs: '#46423a', hair: 'long', hairCol: 'black', near: ['hip', 'clap'], far: ['hip', 'clap'] },
+  ],
+  [{ a: true, x: 9, lift: 4, h: 42, f: 0, skin: 0, top: 'stripe', shirt: '#5c6c9c', inner: '#c8ccd4', legs: '#34343c', hair: 'beanie', tint: '#a8503c', hairCol: 'brown', far: ['hang', 'clap'], shorts: true }],
+];
+
+/** Paints a capsule from a to b, shaded from the right: the crowd's sun is the world's. */
+function limb(put, a, b, ra, rb, colour) {
+  const lim = Math.ceil(Math.max(ra, rb)) + 1;
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const len2 = Math.max(dx * dx + dy * dy, 1e-6);
+  for (let y = Math.floor(Math.min(a[1], b[1])) - lim; y <= Math.ceil(Math.max(a[1], b[1])) + lim; y++) {
+    for (let x = Math.floor(Math.min(a[0], b[0])) - lim; x <= Math.ceil(Math.max(a[0], b[0])) + lim; x++) {
+      const t = Math.min(Math.max(((x - a[0]) * dx + (y - a[1]) * dy) / len2, 0), 1);
+      const ex = x - (a[0] + dx * t);
+      const ey = y - (a[1] + dy * t);
+      const r = ra + (rb - ra) * t;
+      if (Math.hypot(ex, ey) > r) continue;
+      put(x, y, colour((ex * 0.8 - ey * 0.6) / Math.max(r, 0.5), t));
     }
   }
+}
+
+const shadeOf = (ramp, s) => (s > 0.42 ? ramp[2] : s < -0.3 ? ramp[0] : ramp[1]);
+
+/** Where a hand goes for a named arm pose, from the shoulder. `side`: +1 the figure's right on screen. */
+function handFor(pose, sh, side, f, h, chest) {
+  const reach = h * 0.37;
+  switch (pose) {
+    case 'up':
+      return [sh[0] + side * 3, Math.max(sh[1] - reach * 0.92, 2)];
+    case 'clap':
+      return [chest[0] + f * 3, chest[1] - h * 0.02];
+    case 'cross':
+      return [chest[0] - side * 2, chest[1] + h * 0.04];
+    case 'phone':
+      return [chest[0] + f * 4, sh[1] - h * 0.07];
+    case 'hip':
+      return [sh[0] + side * 0.5, sh[1] + h * 0.27];
+    default:
+      return [sh[0] + side * 1, sh[1] + reach * 0.97];
+  }
+}
+
+/** One spectator in three-quarter view on `c`, its own dark edge on the side away from the light. */
+function person(c, spec, row) {
+  const { x, lift, h, f } = spec;
+  const foot = CROWD_CELL[1] - 2 - lift;
+  const skin = skinRamp(SKINS[spec.skin]);
+  const shirt = clothRamp(spec.shirt);
+  const inner = clothRamp(spec.inner ?? spec.shirt);
+  const legs = clothRamp(spec.legs);
+  const hairCol = HAIRS[spec.hairCol];
+  const shoe = [hex('#16161c'), hex('#2c2c34'), hex('#5c5c66')];
+  const mask = new Map();
+  const put = (px, py, col) => {
+    const xi = Math.round(px);
+    const yi = Math.round(py);
+    if (xi < 0 || yi < 0 || xi >= c.w || yi >= c.h) return;
+    c.px(xi, yi, col);
+    mask.set(yi * c.w + xi, true);
+  };
+  const top = foot - h;
+  const headR = Math.max(h * 0.078, 2.4);
+  const headY = top + headR + (spec.hair === 'cap' || spec.hair === 'sunhat' ? 0 : 0.5);
+  const shoulderY = top + h * 0.2;
+  const waistY = top + h * 0.42;
+  const hipY = top + h * 0.5;
+  const kneeY = top + h * 0.74;
+  const cx = x;
+  const turn = f * 1; // the chest and the head sit a pixel toward where the figure looks
+  const shoulderW = h * 0.1;
+  const nearShoulder = [cx - (f || -1) * shoulderW, shoulderY + 1];
+  const farShoulder = [cx + (f || -1) * shoulderW * 0.75 + turn, shoulderY + 1];
+  const side = nearShoulder[0] > cx ? 1 : -1;
+  const chest = [cx + turn, shoulderY + h * 0.11];
+  const pose = (name) => (spec[name] ?? ['hang', 'hang'])[row];
+
+  // The far arm goes behind the body.
+  const armLen = h * 0.2;
+  const arm = (sh, hand0, elbow0, ramp, sleeveEnd) => {
+    // A limb stays in its cell: cut off at the edge, a hand would float free of its arm.
+    const keep = (q) => [Math.min(Math.max(q[0], 2), CROWD_CELL[0] - 3), q[1]];
+    const hand = keep(hand0);
+    const elbow = keep(elbow0);
+    limb(put, sh, elbow, 1.7, 1.3, (s, t) => (t < sleeveEnd ? shadeOf(ramp, s) : shadeOf(skin, s)));
+    limb(put, elbow, hand, 1.3, 1.0, (s) => shadeOf(skin, s));
+    put(hand[0], hand[1], skin[1]);
+    put(hand[0], hand[1] - 1, skin[2]);
+  };
+  const sleeveRamp = spec.top === 'dress' ? skin : shirt;
+  const farHand = handFor(pose('far'), farShoulder, -side, f || -1, h, chest);
+  const farElbow = ik(farShoulder, farHand, armLen, armLen, -side * (f === 0 ? 1 : -1));
+  arm(farShoulder, farHand, farElbow, shirt.map((u) => mix(u, CREASE_DARK, 0.25)), spec.top === 'jacket' ? 1 : 0.55);
+
+  // Legs, the far one a shade back; a wide stance on some.
+  const stance = h * 0.045 + (x % 3 === 0 ? 1 : 0);
+  const legEnd = spec.shorts ? 0.45 : 1;
+  const leg = (dx, footDx, ramp) => {
+    const hip = [cx + dx, hipY];
+    const knee = [cx + (dx + footDx) * 0.55, kneeY];
+    const ankle = [cx + footDx, foot - 2];
+    limb(put, hip, knee, h * 0.05, h * 0.036, (s) => shadeOf(ramp, s));
+    limb(put, knee, ankle, h * 0.036, h * 0.026, (s, t) => (t < (legEnd - 0.45) / 0.55 ? shadeOf(ramp, s) : shadeOf(spec.shorts || spec.top === 'dress' ? skin : ramp, s)));
+    const dir = f || -1;
+    for (let i = -1; i <= 2; i++) put(cx + footDx + dir * i, foot, shoe[1]);
+    for (let i = -1; i <= 1; i++) put(cx + footDx + dir * i, foot - 1, shoe[i === 0 ? 2 : 1]);
+  };
+  const legsDark = legs.map((u) => mix(u, CREASE_DARK, 0.28));
+  leg(side * -h * 0.05, side * -(stance + (x % 2 === 0 ? 1.5 : 0.5)), legsDark);
+  leg(side * h * 0.05, side * stance, legs);
+
+  // The torso: shoulders, a waist, hips; a body that turns, lit on its right side. A dress runs to the knee.
+  const bottom = spec.top === 'dress' ? kneeY + 1 : hipY + 1;
+  for (let y = Math.round(shoulderY); y <= bottom; y++) {
+    const u = (y - shoulderY) / (waistY - shoulderY);
+    const v = (y - waistY) / Math.max(bottom - waistY, 1);
+    let hw = u <= 1 ? shoulderW + 1 - u * h * 0.04 : shoulderW + 1 - h * 0.04 + v * (spec.top === 'dress' ? 3 : 1);
+    if (y === Math.round(shoulderY)) hw -= 1.5;
+    const mid = cx + turn * (1 - Math.min(u, 1));
+    for (let px = Math.round(mid - hw); px <= Math.round(mid + hw); px++) {
+      const n = (px - mid) / hw;
+      let col = n > 0.5 ? shirt[2] : n < -0.45 ? shirt[0] : shirt[1];
+      const rel = y - Math.round(shoulderY);
+      if (spec.top === 'stripe' && rel % 4 >= 2) col = n > 0.5 ? inner[2] : n < -0.45 ? inner[0] : inner[1];
+      if (spec.top === 'jacket' && Math.abs(px - (mid + turn * 2)) < 1.5) col = Math.abs(px - (mid + turn * 2)) < 0.6 ? inner[0] : inner[1];
+      // Two short folds that pull toward the waist.
+      if ((px + y * 1) % 9 === (x % 9) && n > -0.5 && n < 0.5 && rel > 4 && spec.top !== 'stripe') col = shirt[0];
+      if (y > hipY - 2 && spec.top !== 'dress') col = n > 0.5 ? legs[2] : legs[1];
+      put(px, y, col);
+    }
+  }
+
+  // Neck and head.
+  const headX = cx + turn;
+  limb(put, [headX, shoulderY - 1], [headX, headY + headR - 1], 1.3, 1.3, (s) => shadeOf(skin, s - 0.2));
+  for (let j = -Math.ceil(headR) - 1; j <= Math.ceil(headR) + 1; j++) {
+    for (let i = -Math.ceil(headR) - 1; i <= Math.ceil(headR) + 1; i++) {
+      if ((i * i) / (headR * headR * 0.86) + (j * j) / (headR * headR * 1.1) > 1) continue;
+      const s = (i * 0.8 - j * 0.45) / headR;
+      put(headX + i, headY + j, s > 0.5 ? skin[2] : s < -0.42 ? skin[0] : skin[1]);
+    }
+  }
+  const hx = Math.round(headX);
+  const hy = Math.round(headY);
+  const rr = Math.round(headR);
+  // The face turned the way the figure looks: an eye, a nose past the cheek, a mouth open on the cheer.
+  const eyeDark = hex('#26202a');
+  if (h > 34) {
+    put(hx + (f || -1) * (rr - 2), hy - 1, eyeDark);
+    if (f === 0) put(hx - (rr - 2) + 2 * (rr - 2), hy - 1, eyeDark);
+    if (f !== 0) put(hx + f * (rr + 0), hy, skin[1]);
+    put(hx + (f || 0) * (rr - 2), hy + 1 + (row === 1 ? 0 : 0), row === 1 ? hex('#6c2c30') : skin[0]);
+  } else {
+    put(hx + (f || -1) * (rr - 1), hy, eyeDark);
+  }
+  // Hair and hats, from behind the face.
+  const back = -(f || -1);
+  const hairLit = mix(hairCol, SUNNY, 0.25);
+  const hairDark = mix(hairCol, CREASE_DARK, 0.3);
+  const hatCols = clothRamp(spec.tint ?? '#808080');
+  const capRow = (y, x0, x1, ramp) => {
+    for (let i = x0; i <= x1; i++) put(hx + i, y, i > (x0 + x1) * 0.5 + 1 ? ramp[2] : i < x0 + 2 ? ramp[0] : ramp[1]);
+  };
+  if (spec.hair === 'bald') {
+    capRow(hy - rr, -rr + 1, rr - 1, skin);
+    put(hx + back * rr, hy, hairCol);
+    put(hx + back * rr, hy + 1, hairDark);
+  } else if (spec.hair === 'cap' || spec.hair === 'beanie') {
+    capRow(hy - rr - 1, -rr + 1, rr - 1, hatCols);
+    capRow(hy - rr, -rr, rr, hatCols);
+    capRow(hy - rr + 1, -rr, rr, hatCols);
+    if (spec.hair === 'cap') for (let i = 1; i <= rr + 2; i++) put(hx + (f || -1) * i, hy - rr + 2, hatCols[0]);
+    else capRow(hy - rr + 2, -rr, rr, hatCols.map((u) => mix(u, CREASE_DARK, 0.2)));
+    put(hx + back * rr, hy, hairDark);
+  } else if (spec.hair === 'sunhat') {
+    capRow(hy - rr - 2, -rr + 1, rr - 1, hatCols);
+    capRow(hy - rr - 1, -rr, rr, hatCols);
+    capRow(hy - rr, -rr, rr, hatCols);
+    capRow(hy - rr + 1, -rr - 3, rr + 3, hatCols);
+    for (let j = 0; j <= 3; j++) put(hx + back * rr, hy - rr + 2 + j, hairDark);
+  } else {
+    capRow(hy - rr - 1, -rr + 1, rr - 1, [hairDark, hairCol, hairLit]);
+    capRow(hy - rr, -rr, rr, [hairDark, hairCol, hairLit]);
+    for (let j = -rr + 1; j <= (spec.hair === 'long' ? rr + 4 : 0); j++) {
+      put(hx + back * rr, hy + j, j > 2 ? hairDark : hairCol);
+      if (j < rr) put(hx + back * (rr - 1), hy + j, hairCol);
+      if (spec.hair === 'long') put(hx + back * (rr + 1), hy + j, hairDark);
+    }
+  }
+
+  // The near arm, on top of the body; where it crosses, a dark crease keeps it apart.
+  const nearHand = spec.a
+    ? [CROWD_HAND_UP[0], CROWD_HAND_UP[1] + (row === 0 ? CROWD_HAND_DOWN_DY : 0)]
+    : handFor(pose('near'), nearShoulder, side, f || -1, h, chest);
+  // The flag hand: the upper arm hangs and the forearm comes forward, or the forearm stands straight up.
+  const flagElbow = row === 0 ? [nearShoulder[0] + 1.5, nearShoulder[1] + armLen] : [nearHand[0] + 1, nearShoulder[1] + 2];
+  const elbow = spec.a ? flagElbow : ik(nearShoulder, nearHand, armLen, armLen, side);
+  limb(put, nearShoulder, elbow, 2.0, 1.6, () => shirt[0]);
+  limb(put, elbow, nearHand, 1.6, 1.3, () => skin[0]);
+  arm(nearShoulder, nearHand, elbow, sleeveRamp, spec.top === 'jacket' ? 1 : 0.55);
+
+  // The figure's dark edge, to the left of and under it, drawn over whoever stands behind.
+  const out = [];
+  for (let y = 0; y < c.h; y++) {
+    for (let px = 0; px < c.w; px++) {
+      if (mask.has(y * c.w + px)) continue;
+      if ((px + 1 < c.w && mask.has(y * c.w + px + 1)) || (y > 0 && mask.has((y - 1) * c.w + px))) out.push([px, y]);
+    }
+  }
+  for (const [px, y] of out) c.px(px, y, OUTLINE);
+}
+
+/** 26 x 56, 8 small groups across; row 0 hands down, row 1 hands up. */
+export function crowd() {
+  const [w, h] = CROWD_CELL;
+  const c = new Canvas(w * GROUPS.length, h * 2);
+  GROUPS.forEach((group, s) => {
+    for (let row = 0; row < 2; row++) {
+      const cell = new Canvas(w, h);
+      // A soft patch of trodden shade under the feet.
+      for (const spec of group) {
+        const fy = h - 1 - spec.lift;
+        for (let i = -6; i <= 6; i++) if (i % 2 === 0 || Math.abs(i) < 3) cell.px(spec.x + i, fy, [20, 24, 26, 90]);
+      }
+      for (const spec of group) person(cell, spec, row);
+      // One step back in the air: the crowd stays behind the riders in value, too.
+      for (let i = 0; i < cell.data.length; i += 4) {
+        if (cell.data[i + 3] !== 255) continue;
+        const u = mix([cell.data[i], cell.data[i + 1], cell.data[i + 2]], CROWD_AIR, 0.14);
+        cell.data[i] = u[0];
+        cell.data[i + 1] = u[1];
+        cell.data[i + 2] = u[2];
+      }
+      c.blit(cell, s * w, row * h);
+    }
+  });
   return c;
 }
 
@@ -310,6 +540,8 @@ export function flag() {
   return c;
 }
 
+export const GANTRY_H = 124;
+
 const GLYPHS = {
   S: ['01111', '10000', '10000', '01110', '00001', '00001', '11110'],
   P: ['11110', '10001', '10001', '11110', '10000', '10000', '10000'],
@@ -319,22 +551,22 @@ const GLYPHS = {
   T: ['11111', '00100', '00100', '00100', '00100', '00100', '00100'],
 };
 
-/** 200 x 90: the sprint banner on two lattice masts, with a pixel word and a line of pennants. */
+/** 200 x 124: the sprint banner high on two lattice masts, well over the riders' helmets. Dusty cloth, no slab. */
 export function gantry() {
-  const c = new Canvas(200, 90);
+  const c = new Canvas(200, GANTRY_H);
   const steel = hex('#4a4e58');
   const lit = hex('#8a8e98');
   const dark = hex('#2a2c34');
   for (const x of [5, 190]) {
     // A lattice mast on a weighted foot.
-    c.rect(x, 4, 1, 84, steel);
-    c.rect(x + 4, 4, 1, 84, lit);
-    for (let y = 8; y < 86; y += 6) {
+    c.rect(x, 4, 1, GANTRY_H - 6, steel);
+    c.rect(x + 4, 4, 1, GANTRY_H - 6, lit);
+    for (let y = 8; y < GANTRY_H - 4; y += 6) {
       c.line(x, y, x + 4, y + 3, dark);
       c.line(x + 4, y + 3, x, y + 6, dark);
     }
-    c.rect(x - 3, 87, 11, 3, dark);
-    c.rect(x - 3, 87, 11, 1, steel);
+    c.rect(x - 3, GANTRY_H - 3, 11, 3, dark);
+    c.rect(x - 3, GANTRY_H - 3, 11, 1, steel);
   }
   // The truss over the road.
   c.rect(5, 4, 190, 1, lit);
@@ -343,20 +575,23 @@ export function gantry() {
     c.line(x, 5, x + 3, 7, dark);
     c.line(x + 3, 7, x + 6, 5, dark);
   }
-  // The banner, with a white hem and sagging shade under its edge.
-  const red = [hex('#8c3424'), hex('#c04e34'), hex('#dc6c48')];
-  c.rect(14, 10, 172, 26, red[1]);
-  c.rect(14, 10, 172, 2, hex('#ecece4'));
-  c.rect(14, 34, 172, 2, hex('#ecece4'));
-  c.rect(14, 33, 172, 1, red[0]);
-  c.rect(14, 12, 172, 1, red[2]);
-  c.rect(14, 10, 3, 26, red[0]);
-  c.rect(183, 10, 3, 26, red[2]);
-  // Fold shadows in the cloth.
-  for (const x of [52, 96, 140]) {
-    c.rect(x, 13, 1, 20, red[0]);
-    c.rect(x + 1, 13, 1, 20, red[2]);
+  // The banner: faded cloth with a sag along its bottom edge, ties to the truss, folds that catch the light.
+  const red = [hex('#5c3430'), hex('#8a4c40'), hex('#a8664e')];
+  const hem = hex('#cfc6b0');
+  const sag = (x) => Math.round(2 * Math.sin(((x - 14) / 172) * Math.PI));
+  for (let x = 14; x < 186; x++) {
+    const bottom = 33 + sag(x);
+    for (let y = 11; y <= bottom; y++) {
+      // Soft vertical folds, each with one lit and one shaded column.
+      const f = (x - 14) % 43;
+      let col = f === 0 || f === 22 ? red[0] : f === 1 || f === 23 ? red[2] : red[1];
+      if (y === 11) col = hem;
+      if (y === bottom) col = hem;
+      if (y === bottom - 1) col = red[0];
+      c.px(x, y, col);
+    }
   }
+  for (const x of [14, 57, 100, 143, 185]) c.rect(x, 9, 1, 2, dark);
   const word = 'SPRINT';
   const scale = 2;
   let x = 100 - Math.floor((word.length * 6 * scale - scale) / 2);
@@ -364,17 +599,17 @@ export function gantry() {
     GLYPHS[ch].forEach((row, j) => {
       [...row].forEach((bit, i) => {
         if (bit !== '1') return;
-        c.rect(x + i * scale + 1, 16 + j * scale + 1, scale, scale, red[0]);
-        c.rect(x + i * scale, 16 + j * scale, scale, scale, hex('#f6f6f0'));
+        c.rect(x + i * scale + 1, 15 + j * scale + 1, scale, scale, red[0]);
+        c.rect(x + i * scale, 15 + j * scale, scale, scale, hem);
       });
     });
     x += 6 * scale;
   }
   // A string of small pennants under the banner.
-  const cols = ['#ecece4', '#3870b0', '#c8a644', '#468c6c'].map(hex);
+  const cols = ['#cfc6b0', '#4a7096', '#b09a50', '#4c8066'].map(hex);
   for (let i = 0; i < 16; i++) {
     const px = 16 + i * 11;
-    const y = 38 + Math.round(3 * Math.sin((i / 15) * Math.PI));
+    const y = 40 + Math.round(3 * Math.sin((i / 15) * Math.PI));
     c.px(px, y - 1, dark);
     c.px(px + 5, y - 1, dark);
     for (let j = 0; j < 4; j++) {

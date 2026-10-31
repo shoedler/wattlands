@@ -14,9 +14,9 @@ export const WHEEL_R = 13;
 export const TYRE_ROW = 79;
 export const BB = [38, 69];
 export const CRANK = 7;
-export const CHAINRING_R = 5;
+export const CHAINRING_R = 6;
 export const COG_R = 2;
-export const SADDLE = [29, 42];
+export const SADDLE = [29, 44];
 export const BARS = [54, 43];
 export const HOODS = [59, 42];
 export const THIGH = 17;
@@ -26,12 +26,15 @@ export const UPPER_ARM = 13;
 export const FOREARM = 13;
 export const HEAD_R = 4;
 export const PENNANT_FOOT = [15, 54];
-export const BUBBLE = [44, 2];
+// Over the sat-up head (the pose a bubble comes with), clear of the next rider's pennant pole.
+export const BUBBLE = [38, 2];
 export const REAR_CONTACT = [20, 79];
 
 /** Chain pattern: 2 dark, 2 light, moving exactly this many px per crank revolution. */
 export const CHAIN_PERIOD = 4;
 export const CHAIN_PX_PER_REV = 32;
+/** A brass link comes round every this many px, so the eye can follow the chain. */
+export const CHAIN_LINK_PERIOD = 16;
 /** The rear cog turns this many times per crank revolution. */
 export const COG_TURNS = 4;
 
@@ -52,6 +55,9 @@ export const nearPedalTable = () =>
 
 /** Chain pattern offset at frame k, whole px. Frame CRANK_FRAMES gives 0 modulo the period. */
 export const chainOffset = (k) => Math.round((k * CHAIN_PX_PER_REV) / CRANK_FRAMES) % CHAIN_PERIOD;
+
+/** Chain travel at frame k, whole px: frame CRANK_FRAMES closes on 0 modulo CHAIN_LINK_PERIOD. */
+export const chainTravel = (k) => Math.round((k * CHAIN_PX_PER_REV) / CRANK_FRAMES) % CHAIN_PX_PER_REV;
 
 const POSES = {
   seat: { hip: [30, 40], shoulder: [45, 23], hands: [59, 42], head: [49, 17] },
