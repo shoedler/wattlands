@@ -274,6 +274,75 @@ func test_the_caret_sits_over_the_local_riders_own_helmet() -> void:
 	)
 
 
+func test_the_caret_is_big_enough_to_find_from_the_saddle() -> void:
+	var rows := WorkoutRiderLayer.CARET_HALF
+	assert_gte(rows.size(), 8, "at least 8 art px tall, 16 on screen before its dark line")
+	assert_gte(rows[0] * 2 + 1, 15, "at least 15 art px wide, 30 on screen before its dark line")
+	assert_eq(rows.back(), 0, "it comes to a point")
+	for r in range(1, rows.size()):
+		assert_eq(rows[r], rows[r - 1] - 1, "an even slope on the art grid")
+
+
+func test_the_road_ring_marks_only_the_local_rider_and_paints_under_everybody() -> void:
+	var view := _view(8, 0, 4)
+	var steps := WorkoutRiderLayer.paint_steps(view.model)
+	assert_eq(str(steps[0][0]), "mark", "before every pennant, wheel and body")
+	assert_eq(steps.filter(func(s: Array) -> bool: return s[0] == "mark").size(), 1)
+	var markers: Array = view.model["markers"]
+	assert_eq(int(markers[int(steps[0][1])]["peer"]), 4, "under the local rider")
+
+
+func test_the_road_ring_surrounds_both_contact_points() -> void:
+	var view := _view(4)
+	var kit := view.kit
+	var radius := int(kit.data["wheel"]["radius"])
+	var me := view.marker(1)
+	me["rear_y"] = 384
+	me["front_y"] = 384
+	var left := int(me["draw_x"]) - int(kit.rider["origin"][0])
+	var rear_x := left + int(kit.rider["rear_hub"][0])
+	var front_x := left + int(kit.rider["front_hub"][0])
+	var columns := WorkoutRiderLayer.mark_columns(me, kit.rider, radius)
+	assert_lt(columns.front().x, rear_x - radius, "past the rear tyre")
+	assert_gt(columns.back().x, front_x + radius, "past the front tyre")
+	for i in columns.size():
+		var c: Vector3i = columns[i]
+		var mirror: Vector3i = columns[columns.size() - 1 - i]
+		assert_eq(c.x, columns[0].x + i, "one column per art px")
+		assert_eq(c.y + c.z, 2 * 384, "centred on the contact line")
+		assert_lte(c.z - 384, WorkoutRiderLayer.MARK_HALF)
+		assert_eq(mirror.z - mirror.y, c.z - c.y, "the same at both ends")
+		if c.x == rear_x or c.x == front_x:
+			assert_eq(c.z - 384, WorkoutRiderLayer.MARK_HALF, "open around each contact point")
+
+
+func test_the_road_ring_follows_the_slope_and_stays_on_the_road() -> void:
+	var view := _view(8)
+	var kit := view.kit
+	var radius := int(kit.data["wheel"]["radius"])
+	var me := view.marker(1)
+	me["rear_y"] = 384
+	me["front_y"] = 390
+	var left := int(me["draw_x"]) - int(kit.rider["origin"][0])
+	var rear_x := left + int(kit.rider["rear_hub"][0])
+	var front_x := left + int(kit.rider["front_hub"][0])
+	for c: Vector3i in WorkoutRiderLayer.mark_columns(me, kit.rider, radius):
+		if c.x == rear_x:
+			assert_eq(c.y + c.z, 2 * 384, "on the rear contact")
+		if c.x == front_x:
+			assert_eq(c.y + c.z, 2 * 390, "on the front contact")
+	var tile_h := int(kit.road["tile"][1])
+	var contact_row := int(kit.road["contact_row"])
+	for ordinal in 8:
+		var m := me.duplicate()
+		var y := int(WorkoutRideView.ROAD_Y) + WorkoutRig.lane_dy(ordinal)
+		m["rear_y"] = y
+		m["front_y"] = y
+		for c: Vector3i in WorkoutRiderLayer.mark_columns(m, kit.rider, radius):
+			assert_gte(c.y, int(WorkoutRideView.ROAD_Y) - contact_row, "under the far verge")
+			assert_lt(c.z, int(WorkoutRideView.ROAD_Y) - contact_row + tile_h, "over the near one")
+
+
 func test_the_local_rider_is_on_its_spot_and_last_for_every_ordinal() -> void:
 	for local in 8:
 		var peer := local + 1
