@@ -1,0 +1,1288 @@
+{
+ "version": 1,
+ "base": [
+  960,
+  540
+ ],
+ "lut": {
+  "path": "res://assets/workout/world/tod_lut.png",
+  "size": 128,
+  "rows": 32
+ },
+ "tod": [
+  {
+   "sky_top": [
+    0.106,
+    0.137,
+    0.251
+   ],
+   "rider_tint": [
+    0.74,
+    0.76,
+    0.92
+   ],
+   "bank": [
+    0.063,
+    0.094,
+    0.122
+   ],
+   "bank_hi": [
+    0.133,
+    0.188,
+    0.227
+   ],
+   "sun": [
+    700,
+    345
+   ],
+   "breath": true
+  },
+  {
+   "sky_top": [
+    0.145,
+    0.161,
+    0.298
+   ],
+   "rider_tint": [
+    0.772,
+    0.773,
+    0.901
+   ],
+   "bank": [
+    0.075,
+    0.106,
+    0.133
+   ],
+   "bank_hi": [
+    0.149,
+    0.212,
+    0.235
+   ],
+   "sun": [
+    695,
+    330
+   ],
+   "breath": true
+  },
+  {
+   "sky_top": [
+    0.184,
+    0.184,
+    0.345
+   ],
+   "rider_tint": [
+    0.805,
+    0.786,
+    0.881
+   ],
+   "bank": [
+    0.082,
+    0.118,
+    0.145
+   ],
+   "bank_hi": [
+    0.169,
+    0.235,
+    0.239
+   ],
+   "sun": [
+    690,
+    314
+   ],
+   "breath": true
+  },
+  {
+   "sky_top": [
+    0.224,
+    0.204,
+    0.396
+   ],
+   "rider_tint": [
+    0.837,
+    0.799,
+    0.862
+   ],
+   "bank": [
+    0.094,
+    0.133,
+    0.157
+   ],
+   "bank_hi": [
+    0.188,
+    0.255,
+    0.247
+   ],
+   "sun": [
+    685,
+    299
+   ],
+   "breath": true
+  },
+  {
+   "sky_top": [
+    0.259,
+    0.267,
+    0.439
+   ],
+   "rider_tint": [
+    0.879,
+    0.829,
+    0.85
+   ],
+   "bank": [
+    0.106,
+    0.149,
+    0.149
+   ],
+   "bank_hi": [
+    0.216,
+    0.282,
+    0.235
+   ],
+   "sun": [
+    679,
+    283
+   ],
+   "breath": true
+  },
+  {
+   "sky_top": [
+    0.294,
+    0.329,
+    0.482
+   ],
+   "rider_tint": [
+    0.922,
+    0.861,
+    0.84
+   ],
+   "bank": [
+    0.122,
+    0.165,
+    0.141
+   ],
+   "bank_hi": [
+    0.243,
+    0.306,
+    0.216
+   ],
+   "sun": [
+    674,
+    268
+   ],
+   "breath": true
+  },
+  {
+   "sky_top": [
+    0.329,
+    0.396,
+    0.529
+   ],
+   "rider_tint": [
+    0.965,
+    0.894,
+    0.829
+   ],
+   "bank": [
+    0.137,
+    0.184,
+    0.129
+   ],
+   "bank_hi": [
+    0.275,
+    0.333,
+    0.196
+   ],
+   "sun": [
+    669,
+    253
+   ],
+   "breath": true
+  },
+  {
+   "sky_top": [
+    0.365,
+    0.459,
+    0.573
+   ],
+   "rider_tint": [
+    1,
+    0.923,
+    0.826
+   ],
+   "bank": [
+    0.149,
+    0.2,
+    0.118
+   ],
+   "bank_hi": [
+    0.302,
+    0.357,
+    0.173
+   ],
+   "sun": [
+    664,
+    238
+   ],
+   "breath": true
+  },
+  {
+   "sky_top": [
+    0.376,
+    0.49,
+    0.616
+   ],
+   "rider_tint": [
+    1,
+    0.937,
+    0.858
+   ],
+   "bank": [
+    0.153,
+    0.208,
+    0.118
+   ],
+   "bank_hi": [
+    0.31,
+    0.38,
+    0.173
+   ],
+   "sun": [
+    659,
+    225
+   ],
+   "breath": true
+  },
+  {
+   "sky_top": [
+    0.392,
+    0.522,
+    0.659
+   ],
+   "rider_tint": [
+    1,
+    0.951,
+    0.89
+   ],
+   "bank": [
+    0.157,
+    0.22,
+    0.118
+   ],
+   "bank_hi": [
+    0.322,
+    0.4,
+    0.176
+   ],
+   "sun": [
+    654,
+    213
+   ],
+   "breath": true
+  },
+  {
+   "sky_top": [
+    0.404,
+    0.557,
+    0.702
+   ],
+   "rider_tint": [
+    1,
+    0.966,
+    0.923
+   ],
+   "bank": [
+    0.161,
+    0.231,
+    0.118
+   ],
+   "bank_hi": [
+    0.333,
+    0.424,
+    0.176
+   ],
+   "sun": [
+    648,
+    200
+   ],
+   "breath": false
+  },
+  {
+   "sky_top": [
+    0.416,
+    0.592,
+    0.749
+   ],
+   "rider_tint": [
+    1,
+    0.98,
+    0.955
+   ],
+   "bank": [
+    0.169,
+    0.243,
+    0.118
+   ],
+   "bank_hi": [
+    0.345,
+    0.447,
+    0.173
+   ],
+   "sun": [
+    643,
+    188
+   ],
+   "breath": false
+  },
+  {
+   "sky_top": [
+    0.431,
+    0.624,
+    0.792
+   ],
+   "rider_tint": [
+    1,
+    0.994,
+    0.987
+   ],
+   "bank": [
+    0.173,
+    0.255,
+    0.118
+   ],
+   "bank_hi": [
+    0.357,
+    0.471,
+    0.173
+   ],
+   "sun": [
+    638,
+    175
+   ],
+   "breath": false
+  },
+  {
+   "sky_top": [
+    0.427,
+    0.635,
+    0.816
+   ],
+   "rider_tint": [
+    1,
+    1,
+    1
+   ],
+   "bank": [
+    0.173,
+    0.259,
+    0.118
+   ],
+   "bank_hi": [
+    0.357,
+    0.478,
+    0.173
+   ],
+   "sun": [
+    633,
+    167
+   ],
+   "breath": false
+  },
+  {
+   "sky_top": [
+    0.412,
+    0.627,
+    0.82
+   ],
+   "rider_tint": [
+    1,
+    1,
+    1
+   ],
+   "bank": [
+    0.173,
+    0.263,
+    0.118
+   ],
+   "bank_hi": [
+    0.353,
+    0.482,
+    0.173
+   ],
+   "sun": [
+    628,
+    161
+   ],
+   "breath": false
+  },
+  {
+   "sky_top": [
+    0.396,
+    0.62,
+    0.82
+   ],
+   "rider_tint": [
+    1,
+    1,
+    1
+   ],
+   "bank": [
+    0.169,
+    0.263,
+    0.122
+   ],
+   "bank_hi": [
+    0.345,
+    0.482,
+    0.176
+   ],
+   "sun": [
+    623,
+    156
+   ],
+   "breath": false
+  },
+  {
+   "sky_top": [
+    0.376,
+    0.612,
+    0.824
+   ],
+   "rider_tint": [
+    1,
+    1,
+    1
+   ],
+   "bank": [
+    0.169,
+    0.267,
+    0.122
+   ],
+   "bank_hi": [
+    0.341,
+    0.486,
+    0.176
+   ],
+   "sun": [
+    617,
+    151
+   ],
+   "breath": false
+  },
+  {
+   "sky_top": [
+    0.361,
+    0.604,
+    0.827
+   ],
+   "rider_tint": [
+    1,
+    1,
+    1
+   ],
+   "bank": [
+    0.169,
+    0.267,
+    0.122
+   ],
+   "bank_hi": [
+    0.333,
+    0.486,
+    0.176
+   ],
+   "sun": [
+    612,
+    145
+   ],
+   "breath": false
+  },
+  {
+   "sky_top": [
+    0.345,
+    0.596,
+    0.831
+   ],
+   "rider_tint": [
+    1,
+    1,
+    1
+   ],
+   "bank": [
+    0.169,
+    0.271,
+    0.122
+   ],
+   "bank_hi": [
+    0.329,
+    0.49,
+    0.176
+   ],
+   "sun": [
+    607,
+    140
+   ],
+   "breath": false
+  },
+  {
+   "sky_top": [
+    0.329,
+    0.584,
+    0.835
+   ],
+   "rider_tint": [
+    1,
+    1,
+    1
+   ],
+   "bank": [
+    0.165,
+    0.271,
+    0.125
+   ],
+   "bank_hi": [
+    0.322,
+    0.49,
+    0.18
+   ],
+   "sun": [
+    602,
+    135
+   ],
+   "breath": false
+  },
+  {
+   "sky_top": [
+    0.314,
+    0.576,
+    0.839
+   ],
+   "rider_tint": [
+    1,
+    1,
+    1
+   ],
+   "bank": [
+    0.165,
+    0.275,
+    0.125
+   ],
+   "bank_hi": [
+    0.314,
+    0.494,
+    0.18
+   ],
+   "sun": [
+    597,
+    129
+   ],
+   "breath": false
+  },
+  {
+   "sky_top": [
+    0.306,
+    0.573,
+    0.839
+   ],
+   "rider_tint": [
+    1,
+    1,
+    1
+   ],
+   "bank": [
+    0.165,
+    0.275,
+    0.125
+   ],
+   "bank_hi": [
+    0.314,
+    0.494,
+    0.18
+   ],
+   "sun": [
+    592,
+    124
+   ],
+   "breath": false
+  },
+  {
+   "sky_top": [
+    0.298,
+    0.569,
+    0.839
+   ],
+   "rider_tint": [
+    1,
+    1,
+    1
+   ],
+   "bank": [
+    0.165,
+    0.278,
+    0.125
+   ],
+   "bank_hi": [
+    0.314,
+    0.498,
+    0.18
+   ],
+   "sun": [
+    586,
+    118
+   ],
+   "breath": false
+  },
+  {
+   "sky_top": [
+    0.294,
+    0.565,
+    0.839
+   ],
+   "rider_tint": [
+    1,
+    1,
+    1
+   ],
+   "bank": [
+    0.165,
+    0.278,
+    0.129
+   ],
+   "bank_hi": [
+    0.31,
+    0.498,
+    0.184
+   ],
+   "sun": [
+    581,
+    113
+   ],
+   "breath": false
+  },
+  {
+   "sky_top": [
+    0.286,
+    0.557,
+    0.839
+   ],
+   "rider_tint": [
+    1,
+    1,
+    1
+   ],
+   "bank": [
+    0.165,
+    0.278,
+    0.129
+   ],
+   "bank_hi": [
+    0.31,
+    0.498,
+    0.184
+   ],
+   "sun": [
+    576,
+    108
+   ],
+   "breath": false
+  },
+  {
+   "sky_top": [
+    0.282,
+    0.553,
+    0.839
+   ],
+   "rider_tint": [
+    1,
+    1,
+    1
+   ],
+   "bank": [
+    0.165,
+    0.282,
+    0.129
+   ],
+   "bank_hi": [
+    0.31,
+    0.502,
+    0.184
+   ],
+   "sun": [
+    571,
+    102
+   ],
+   "breath": false
+  },
+  {
+   "sky_top": [
+    0.275,
+    0.549,
+    0.839
+   ],
+   "rider_tint": [
+    1,
+    1,
+    1
+   ],
+   "bank": [
+    0.165,
+    0.282,
+    0.129
+   ],
+   "bank_hi": [
+    0.31,
+    0.502,
+    0.184
+   ],
+   "sun": [
+    566,
+    97
+   ],
+   "breath": false
+  },
+  {
+   "sky_top": [
+    0.271,
+    0.545,
+    0.839
+   ],
+   "rider_tint": [
+    1,
+    1,
+    1
+   ],
+   "bank": [
+    0.165,
+    0.286,
+    0.129
+   ],
+   "bank_hi": [
+    0.31,
+    0.506,
+    0.184
+   ],
+   "sun": [
+    561,
+    92
+   ],
+   "breath": false
+  },
+  {
+   "sky_top": [
+    0.263,
+    0.541,
+    0.839
+   ],
+   "rider_tint": [
+    1,
+    1,
+    1
+   ],
+   "bank": [
+    0.165,
+    0.286,
+    0.129
+   ],
+   "bank_hi": [
+    0.31,
+    0.506,
+    0.184
+   ],
+   "sun": [
+    555,
+    86
+   ],
+   "breath": false
+  },
+  {
+   "sky_top": [
+    0.259,
+    0.533,
+    0.839
+   ],
+   "rider_tint": [
+    1,
+    1,
+    1
+   ],
+   "bank": [
+    0.165,
+    0.286,
+    0.133
+   ],
+   "bank_hi": [
+    0.306,
+    0.506,
+    0.188
+   ],
+   "sun": [
+    550,
+    81
+   ],
+   "breath": false
+  },
+  {
+   "sky_top": [
+    0.251,
+    0.529,
+    0.839
+   ],
+   "rider_tint": [
+    1,
+    1,
+    1
+   ],
+   "bank": [
+    0.165,
+    0.29,
+    0.133
+   ],
+   "bank_hi": [
+    0.306,
+    0.51,
+    0.188
+   ],
+   "sun": [
+    545,
+    75
+   ],
+   "breath": false
+  },
+  {
+   "sky_top": [
+    0.247,
+    0.525,
+    0.839
+   ],
+   "rider_tint": [
+    1,
+    1,
+    1
+   ],
+   "bank": [
+    0.165,
+    0.29,
+    0.133
+   ],
+   "bank_hi": [
+    0.306,
+    0.51,
+    0.188
+   ],
+   "sun": [
+    540,
+    70
+   ],
+   "breath": false
+  }
+ ],
+ "rider": {
+  "cell": [
+   88,
+   84
+  ],
+  "cols": 6,
+  "frames": 24,
+  "origin": [
+   40,
+   79
+  ],
+  "rear_hub": [
+   20,
+   66
+  ],
+  "front_hub": [
+   60,
+   66
+  ],
+  "pennant_foot": [
+   15,
+   54
+  ],
+  "mouth": [
+   53,
+   19
+  ],
+  "bubble": [
+   44,
+   2
+  ],
+  "rear_contact": [
+   20,
+   79
+  ],
+  "pose_rows": {
+   "seat": 0,
+   "stand": 4,
+   "situp": 8,
+   "stop": 12
+  },
+  "slots": [
+   "res://assets/workout/riders/slot_0.png",
+   "res://assets/workout/riders/slot_1.png",
+   "res://assets/workout/riders/slot_2.png",
+   "res://assets/workout/riders/slot_3.png",
+   "res://assets/workout/riders/slot_4.png",
+   "res://assets/workout/riders/slot_5.png",
+   "res://assets/workout/riders/slot_6.png",
+   "res://assets/workout/riders/slot_7.png"
+  ],
+  "slot_colors": [
+   "#D55E00",
+   "#0072B2",
+   "#F0E442",
+   "#009E73"
+  ],
+  "near_pedal": [
+   [
+    38,
+    62
+   ],
+   [
+    40,
+    62
+   ],
+   [
+    42,
+    63
+   ],
+   [
+    43,
+    64
+   ],
+   [
+    44,
+    66
+   ],
+   [
+    45,
+    67
+   ],
+   [
+    45,
+    69
+   ],
+   [
+    45,
+    71
+   ],
+   [
+    44,
+    73
+   ],
+   [
+    43,
+    74
+   ],
+   [
+    42,
+    75
+   ],
+   [
+    40,
+    76
+   ],
+   [
+    38,
+    76
+   ],
+   [
+    36,
+    76
+   ],
+   [
+    35,
+    75
+   ],
+   [
+    33,
+    74
+   ],
+   [
+    32,
+    73
+   ],
+   [
+    31,
+    71
+   ],
+   [
+    31,
+    69
+   ],
+   [
+    31,
+    67
+   ],
+   [
+    32,
+    66
+   ],
+   [
+    33,
+    64
+   ],
+   [
+    35,
+    63
+   ],
+   [
+    36,
+    62
+   ]
+  ]
+ },
+ "wheel": {
+  "path": "res://assets/workout/riders/wheel.png",
+  "cell": [
+   27,
+   27
+  ],
+  "frames": 16,
+  "center": [
+   13,
+   13
+  ],
+  "radius": 13
+ },
+ "fx": {
+  "path": "res://assets/workout/riders/fx.png",
+  "breath": [
+   0,
+   0,
+   8,
+   6,
+   4
+  ],
+  "dust": [
+   0,
+   6,
+   10,
+   6,
+   4
+  ],
+  "rescue": [
+   0,
+   12,
+   9,
+   9,
+   2
+  ],
+  "afk": [
+   18,
+   12,
+   9,
+   9,
+   2
+  ],
+  "link": [
+   36,
+   12,
+   9,
+   9,
+   2
+  ]
+ },
+ "planes": [
+  {
+   "name": "sky",
+   "path": "res://assets/workout/world/sky.png",
+   "y": -180,
+   "factor": 0,
+   "drift": 0
+  },
+  {
+   "name": "stars",
+   "path": "res://assets/workout/world/stars.png",
+   "y": -180,
+   "factor": 0,
+   "drift": 0
+  },
+  {
+   "name": "clouds_hi",
+   "path": "res://assets/workout/world/clouds_hi.png",
+   "y": 20,
+   "factor": 0.01,
+   "drift": 1.5
+  },
+  {
+   "name": "clouds_lo",
+   "path": "res://assets/workout/world/clouds_lo.png",
+   "y": 90,
+   "factor": 0.02,
+   "drift": 2.5
+  },
+  {
+   "name": "far_hills",
+   "path": "res://assets/workout/world/far_hills.png",
+   "y": 170,
+   "factor": 0.03,
+   "drift": 0
+  },
+  {
+   "name": "mid_hills",
+   "path": "res://assets/workout/world/mid_hills.png",
+   "y": 215,
+   "factor": 0.07,
+   "drift": 0
+  },
+  {
+   "name": "near_trees",
+   "path": "res://assets/workout/world/near_trees.png",
+   "y": 225,
+   "factor": 0.18,
+   "drift": 0
+  },
+  {
+   "name": "poles",
+   "path": "res://assets/workout/world/poles.png",
+   "y": 235,
+   "factor": 0.45,
+   "drift": 0
+  },
+  {
+   "name": "foreground",
+   "paths": [
+    "res://assets/workout/world/foreground_0.png",
+    "res://assets/workout/world/foreground_1.png"
+   ],
+   "y": 396,
+   "factor": 1.35,
+   "drift": 0
+  }
+ ],
+ "sun": {
+  "path": "res://assets/workout/world/sun.png",
+  "size": [
+   40,
+   40
+  ]
+ },
+ "road": {
+  "path": "res://assets/workout/world/road.png",
+  "tile": [
+   240,
+   30
+  ],
+  "contact_row": 14,
+  "verge_far": {
+   "paths": [
+    "res://assets/workout/world/verge_far_0.png",
+    "res://assets/workout/world/verge_far_1.png",
+    "res://assets/workout/world/verge_far_2.png",
+    "res://assets/workout/world/verge_far_3.png"
+   ],
+   "tile": [
+    240,
+    26
+   ],
+   "above": 40
+  },
+  "verge_near": {
+   "paths": [
+    "res://assets/workout/world/verge_near_0.png",
+    "res://assets/workout/world/verge_near_1.png",
+    "res://assets/workout/world/verge_near_2.png",
+    "res://assets/workout/world/verge_near_3.png"
+   ],
+   "tile": [
+    240,
+    16
+   ],
+   "below": 16
+  }
+ },
+ "props": {
+  "windpump": {
+   "path": "res://assets/workout/props/windpump.png",
+   "plane": "near_trees",
+   "tower": [
+    0,
+    0,
+    30,
+    70
+   ],
+   "rotor": [
+    30,
+    0,
+    26,
+    26,
+    8
+   ],
+   "hub": [
+    15,
+    8
+   ],
+   "base_y": 345
+  },
+  "cattle": {
+   "path": "res://assets/workout/props/cattle.png",
+   "plane": "mid_hills",
+   "cell": [
+    12,
+    9
+   ],
+   "frames": 2,
+   "colors": 3,
+   "base_y": 320
+  },
+  "tractor": {
+   "path": "res://assets/workout/props/tractor.png",
+   "cell": [
+    36,
+    22
+   ],
+   "frames": 4,
+   "base_y": 310
+  },
+  "smoke": {
+   "path": "res://assets/workout/props/smoke.png",
+   "cell": [
+    10,
+    16
+   ],
+   "frames": 6
+  },
+  "flock": {
+   "path": "res://assets/workout/props/flock.png",
+   "cell": [
+    5,
+    3
+   ],
+   "frames": 2
+  },
+  "balloon": {
+   "path": "res://assets/workout/props/balloon.png",
+   "cell": [
+    18,
+    26
+   ],
+   "frames": 1,
+   "tod_min_row": 16
+  },
+  "crowd": {
+   "path": "res://assets/workout/props/crowd.png",
+   "cell": [
+    16,
+    30
+   ],
+   "count": 8,
+   "foot_above_contact": 16
+  },
+  "flag": {
+   "path": "res://assets/workout/props/flag.png",
+   "cell": [
+    12,
+    16
+   ],
+   "frames": 4
+  },
+  "gantry": {
+   "path": "res://assets/workout/props/gantry.png",
+   "size": [
+    200,
+    90
+   ],
+   "foot_above_contact": 12
+  }
+ }
+}

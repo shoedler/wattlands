@@ -60,7 +60,7 @@ func _initialize() -> void:
 	game.configure(ctx)
 	game.apply_snapshot(_int_fields(snap))
 	_viewport = SubViewport.new()
-	_viewport.size = Vector2i(640, 360)
+	_viewport.size = Vector2i(WorkoutArt.W, WorkoutArt.H)
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	_viewport.canvas_item_default_texture_filter = (
 		Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST

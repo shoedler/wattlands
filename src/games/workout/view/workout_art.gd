@@ -1,16 +1,16 @@
 class_name WorkoutArt
 extends RefCounted
-## Workout's procedural pixel art (BRIEF 3.7 ride view, 640 x 360 art pixels): sky,
+## Workout's procedural pixel art (BRIEF 3.7 ride view, 960 x 540 art pixels): sky,
 ## clouds, three seamless hill and tree strips for the parallax, the pennant marker
-## geometry (slot color + shape + pattern, BRIEF 3.9), zone colors for the interval blocks,
-## and the game picker card. Everything is drawn from fixed seeds, so it is identical on
-## every run and every machine. No people are drawn.
+## geometry (slot color + shape + pattern, BRIEF 3.9) and zone colors for the interval blocks.
+## Everything is drawn from fixed seeds, so it is identical on every run and every machine.
+## The picker card comes from src/games/workout/art/bake.mjs.
 ##
 ## Pennant geometry is a list of filled polygons in paint order ({points, color}), so the
-## view draws it with draw_colored_polygon and the picker card rasterizes the same shapes.
+## view draws it with draw_colored_polygon.
 
-const W := 640
-const H := 360
+const W := 960
+const H := 540
 
 const SKY_TOP := Color("#5b8fc7")
 const SKY_HORIZON := Color("#f2d9a8")
@@ -89,7 +89,7 @@ static func phase_color(p: PlanPhase) -> Color:
 
 static func sky_image() -> Image:
 	var img := Image.create(W, H, false, Image.FORMAT_RGBA8)
-	var horizon := 230
+	var horizon := 345
 	for y in H:
 		var f := clampf(float(y) / float(horizon), 0.0, 1.0)
 		# Quantize to 12 bands for a pixel-art gradient.
@@ -357,79 +357,6 @@ static func shape_points(shape: String, c: Vector2, r: float) -> PackedVector2Ar
 	return pts
 
 
-# --- picker card ----------------------------------------------------------------------
-
-
-## The 16:9 game picker card (640 x 360): the ride view's landscape with four pennants on
-## a rolling road and a row of interval blocks. Deterministic.
-static func picker_card() -> Image:
-	var img := sky_image()
-	_blit_tiled(img, clouds_image(), 30, 37)
-	_blit_tiled(img, far_hills_image(), 230 - FAR_SIZE.y, 90)
-	_blit_tiled(img, mid_hills_image(), 238 - MID_SIZE.y, 140)
-	_blit_tiled(img, trees_image(), 246 - NEAR_SIZE.y, 60)
-	var course := WorkoutCourse.from_spec(
-		{
-			"seed": 7342,
-			"length_m": 4000.0,
-			"step_m": 250.0,
-			"min_grade_pct": -2.0,
-			"max_grade_pct": 6.0
-		}
-	)
-	var road := PackedFloat64Array()
-	road.resize(W)
-	for x in W:
-		var e := course.elevation_at(float(x) * 2.0) - course.elevation_at(400.0)
-		road[x] = clampf(236.0 - e * 1.5, 196.0, 252.0)
-	for x in W:
-		var y := int(road[x])
-		img.fill_rect(Rect2i(x, y, 1, H - y), GRASS)
-		img.fill_rect(Rect2i(x, y - 2, 1, 5), ASPHALT)
-		img.set_pixel(x, y - 3, ROAD_EDGE)
-		if posmod(x, 16) < 6:
-			img.set_pixel(x, y, ROAD_DASH)
-	img.fill_rect(Rect2i(0, 262, W, 38), DIRT)
-	var blocks := [
-		[0, 50, 60, 65],
-		[60, 150, 90, 90],
-		[150, 190, 55, 55],
-		[190, 280, 90, 90],
-		[280, 300, 130, 130],
-		[300, 380, 98, 98],
-		[380, 420, 55, 55],
-		[420, 470, 110, 110],
-		[470, 510, 50, 50],
-		[510, 560, 110, 110],
-		[560, 640, 50, 50]
-	]
-	for b: Array in blocks:
-		var x0 := int(b[0])
-		var x1 := int(b[1])
-		var pct := float(b[3])
-		var hgt := int(round(clampf(pct / 150.0 * 32.0, 3.0, 32.0)))
-		var col := ZONE_SPRINT if pct >= 130.0 else zone_color(pct)
-		img.fill_rect(Rect2i(x0 + 1, 298 - hgt, x1 - x0 - 1, hgt), col)
-		img.fill_rect(Rect2i(x0 + 1, 298 - hgt, x1 - x0 - 1, 1), col.lightened(0.3))
-	img.fill_rect(Rect2i(200, 258, 1, 42), WHITE)
-	# Pennants at twice the ride view's size, so they read on a small card.
-	var xs := [300, 236, 172, 118]
-	for i in 4:
-		var x := int(xs[i])
-		var foot := Vector2(float(x), road[x] - 2.0)
-		var shapes := pennant_shapes(
-			Wl.slot_look(i),
-			i,
-			{"in_band": i != 3, "local": i == 0, "style": "pennant_swallowtail" if i == 0 else ""}
-		)
-		for s: Dictionary in shapes:
-			var big := PackedVector2Array()
-			for p in s["points"] as PackedVector2Array:
-				big.append(p * 2.0)
-			fill_polygon(img, big, s["color"], foot)
-	return img
-
-
 # --- rasterizing helpers (Image) -----------------------------------------------------
 
 
@@ -477,14 +404,6 @@ static func _ellipse_wrapped(img: Image, c: Vector2, rx: float, ry: float, color
 			var dy := (float(y) + 0.5 - c.y) / ry
 			if dx * dx + dy * dy <= 1.0:
 				_blend(img, posmod(x, w), y, color)
-
-
-static func _blit_tiled(dst: Image, src: Image, y: int, x_offset: int) -> void:
-	var w := src.get_width()
-	var x := -posmod(x_offset, w)
-	while x < dst.get_width():
-		dst.blend_rect(src, Rect2i(0, 0, w, src.get_height()), Vector2i(x, y))
-		x += w
 
 
 static func _blend(img: Image, x: int, y: int, color: Color) -> void:

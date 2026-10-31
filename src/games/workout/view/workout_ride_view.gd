@@ -1,6 +1,6 @@
 class_name WorkoutRideView
 extends Node2D
-## Workout's ride view (BRIEF 3.7): a 640 x 360 side-scrolling landscape. Sky, clouds and
+## Workout's ride view (BRIEF 3.7): a 960 x 540 side-scrolling landscape. Sky, clouds and
 ## three parallax strips (world2d ParallaxStrip, BRIEF 3.9) scroll with the local rider's
 ## distance; one pennant per rider
 ## (slot color + shape + pattern, BRIEF 3.9) sits on the road at its distance from the local
@@ -14,19 +14,19 @@ extends Node2D
 ## the local rider from its own prediction blended softly toward the host's value. The host and
 ## SOLO draw the state as it is.
 
-const RIDER_X := 200.0
-const ROAD_Y := 236.0
-const ROAD_MIN_Y := 186.0
-const ROAD_MAX_Y := 256.0
+const RIDER_X := 300.0
+const ROAD_Y := 384.0
+const ROAD_MIN_Y := 300.0
+const ROAD_MAX_Y := 400.0
 ## Course and markers: metres per art pixel, vertical exaggeration (px per metre).
 const MAP_M_PER_PX := 2.0
-const ELEV_PX_PER_M := 2.5
+const ELEV_PX_PER_M := 1.0
 ## Parallax: art pixels per metre at factor 1 (gives a sense of speed).
-const VISUAL_PX_PER_M := 3.0
-## Interval strip: art pixels per plan second (640 px is about 21 minutes).
-const STRIP_PX_PER_S := 0.5
-const STRIP_BASE := 298.0
-const STRIP_MAX_H := 32.0
+const VISUAL_PX_PER_M := 14.0
+## Interval strip: art pixels per plan second (960 px is about 21 minutes).
+const STRIP_PX_PER_S := 0.75
+const STRIP_BASE := 460.0
+const STRIP_MAX_H := 40.0
 ## Strip heights (% FTP scale) of FREE phases, which have no target: a sprint stands tall, free
 ## riding (a FreeRide longer than a sprint, W4r2 R15) sits low and hatched.
 const SPRINT_STRIP_PCT := 130.0
@@ -34,8 +34,8 @@ const FREE_STRIP_PCT := 55.0
 ## Pennants are drawn at this scale of WorkoutArt's base geometry.
 const PENNANT_SCALE := 1.5
 ## Off-screen riders sit this far inside the left and right edges (the flag points right).
-const EDGE_MARGIN_LEFT := 10.0
-const EDGE_MARGIN_RIGHT := 30.0
+const EDGE_MARGIN_LEFT := 44.0
+const EDGE_MARGIN_RIGHT := 44.0
 ## Client display, other riders: render_t runs on the frame clock interp_delay() behind the
 ## newest snapshot's host time (a game has no NetSession handle, so the snapshot's tick is the
 ## host time) and never passes the newest snapshot (no extrapolation). The delay is the mean
@@ -99,9 +99,11 @@ func _process(delta: float) -> void:
 	advance(delta)
 
 
-## One frame of `delta` seconds: on a client the render clock and the local rider's drawn
-## distance move on, then refresh(). The host and SOLO only refresh.
+## One frame of `delta` seconds: every rider's cranks turn on, on a client the render clock and
+## the local rider's drawn distance move on, then refresh(). The host and SOLO only refresh.
 func advance(delta: float) -> void:
+	if game != null:
+		game.tick_cranks(delta)
 	if _is_client() and game.state != null:
 		_advance_clock(delta)
 		_advance_local(delta)
@@ -184,16 +186,16 @@ func _build() -> void:
 	_built = true
 	sky = _strip(WorkoutArt.sky_image(), 0.0, 0.0)
 	clouds = _strip(WorkoutArt.clouds_image(), 0.02, 30.0)
-	far_hills = _strip(WorkoutArt.far_hills_image(), 0.06, 230.0 - WorkoutArt.FAR_SIZE.y)
-	mid_hills = _strip(WorkoutArt.mid_hills_image(), 0.18, 238.0 - WorkoutArt.MID_SIZE.y)
-	near_trees = _strip(WorkoutArt.trees_image(), 0.5, 244.0 - WorkoutArt.NEAR_SIZE.y)
+	far_hills = _strip(WorkoutArt.far_hills_image(), 0.06, 345.0 - WorkoutArt.FAR_SIZE.y)
+	mid_hills = _strip(WorkoutArt.mid_hills_image(), 0.18, 357.0 - WorkoutArt.MID_SIZE.y)
+	near_trees = _strip(WorkoutArt.trees_image(), 0.5, 366.0 - WorkoutArt.NEAR_SIZE.y)
 	track = WorkoutTrackLayer.new()
 	for layer: Node2D in [sky, clouds, far_hills, mid_hills, near_trees, track]:
 		add_child(layer)
 
 
 ## A world2d ParallaxStrip of a seamless procedural image, its top edge at `top_y`, covering
-## the 640 px view and scrolled only by the world x refresh() sets (deterministic, no drift).
+## the view and scrolled only by the world x refresh() sets (deterministic, no drift).
 static func _strip(image: Image, factor: float, top_y: float) -> ParallaxStrip:
 	var strip := ParallaxStrip.new()
 	strip.texture = ImageTexture.create_from_image(image)

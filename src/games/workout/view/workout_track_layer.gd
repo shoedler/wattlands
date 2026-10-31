@@ -10,10 +10,10 @@ extends Node2D
 var model: Dictionary = {}
 
 const COLUMN_W := 2
-## Bottom of the near tree strip (WorkoutRideView places it at 244).
-const BANK_Y := 243.0
-const STRIP_TOP := 262.0
-const STRIP_BOTTOM := 300.0
+## Bottom of the near tree strip (WorkoutRideView places it at 366).
+const BANK_Y := 365.0
+const STRIP_TOP := 418.0
+const STRIP_BOTTOM := 460.0
 
 
 func set_model(m: Dictionary) -> void:
@@ -57,7 +57,7 @@ func _draw() -> void:
 				)
 				hx += 3.0
 		draw_line(pts[0], pts[1], color.lightened(0.35), 1.0)
-	var now_x := float(model.get("now_x", 200.0))
+	var now_x := float(model.get("now_x", 300.0))
 	draw_rect(Rect2(now_x, STRIP_TOP - 4.0, 1.0, STRIP_BOTTOM - STRIP_TOP + 4.0), WorkoutArt.WHITE)
 	draw_colored_polygon(
 		PackedVector2Array(

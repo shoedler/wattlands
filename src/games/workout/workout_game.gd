@@ -12,11 +12,18 @@ extends GameModule
 ## the local marker toward the host (WorkoutRideView). Rules live in rules/, the HUD layout in
 ## hud/, the view in view/.
 
+## A game event, on the host beside its announcement and on a client as it arrives, for the
+## audio adapter (the same shape as TankGame's and SiegeGame's).
+signal cue(kind: String, data: Dictionary)
+
 const GAME_ID := "workout"
 ## A snapshot carries the timeline every this many snapshots (2 s at 10 Hz), so a client
 ## that can't read the content itself (a .zwo only the host has) still gets it. A long one
 ## goes in parts on the snapshots right after (WorkoutSnapshot.timeline_parts).
 const TIMELINE_EVERY := 20
+## With no sim_step, client_predict or snapshot for this long the session is paused or over, and
+## every rider's legs stop: the GameHost stops calling the game while `state` keeps the last cadence.
+const SIM_ALIVE_S := 0.25
 
 var session: WorkoutSession = null
 var state: WorkoutState = WorkoutState.new()
@@ -28,6 +35,15 @@ var _snapshots: int = 0
 ## Client: the riders' distances of the last snapshots by host time, for the ride view's
 ## interpolation (WorkoutSnapHistory).
 var history: WorkoutSnapHistory = WorkoutSnapHistory.new()
+## Every rider's crank revolutions, the one integrator the view, the HUD and the audio read.
+## Only tick_cranks() steps it, from the view's frame clock.
+var cranks: WorkoutCrankClock = WorkoutCrankClock.new()
+## Client: the local rider's own cadence from its last prediction (-1 before the first).
+var local_rpm: float = -1.0
+## The local rider's latest telemetry (null before the first, or for a spectator).
+var local_tm: Telemetry = null
+## Seconds of frame time since the sim last showed signs of life.
+var sim_quiet_s: float = 0.0
 
 
 func configure(p_ctx: GameContext) -> void:
@@ -38,6 +54,10 @@ func configure(p_ctx: GameContext) -> void:
 	_status_sent.clear()
 	_snapshots = 0
 	history.clear()
+	cranks.clear()
+	local_rpm = -1.0
+	local_tm = null
+	sim_quiet_s = 0.0
 
 
 ## The same %FTP plan for every rider (bots included); the PlanValidator appends the
@@ -55,9 +75,13 @@ func build_effort_plans() -> Dictionary:
 
 
 func sim_step(dt: float, frame: InputFrame) -> void:
+	sim_alive()
+	if ctx != null:
+		local_tm = frame.telemetry(ctx.local_peer)
 	var events := WorkoutRules.step(state, frame, dt)
 	for e in events:
 		send_event(e)
+		cue.emit(str(e.get("type", "")), e)
 		_announce(e)
 	_hud_tick()
 
@@ -98,6 +122,7 @@ func snapshot() -> Dictionary:
 
 
 func apply_snapshot(snap: Dictionary) -> void:
+	sim_alive()
 	WorkoutSnapshot.apply(state, snap)
 	history.push(float(state.tick) * Wl.SIM_DT, state)
 	var r := state.rider(ctx.local_peer) if ctx != null else null
@@ -108,6 +133,7 @@ func apply_snapshot(snap: Dictionary) -> void:
 
 
 func apply_event(event: Dictionary) -> void:
+	cue.emit(str(event.get("type", "")), event)
 	match str(event.get("type", "")):
 		WorkoutRules.EV_INTERVAL_START:
 			state.phase_index = maxi(state.phase_index, int(event.get("i", -1)))
@@ -118,6 +144,10 @@ func apply_event(event: Dictionary) -> void:
 
 
 func client_predict(dt: float, local: Telemetry) -> void:
+	sim_alive()
+	local_tm = local
+	if local != null:
+		local_rpm = local.cadence_rpm
 	if ctx != null:
 		WorkoutRules.predict(state, ctx.local_peer, dt, local)
 
@@ -138,7 +168,7 @@ func make_view() -> Node:
 
 
 func hud_spec() -> HudSpec:
-	return WorkoutHud.spec()
+	return WorkoutHud.spec(self)
 
 
 func results() -> GameResults:
@@ -174,6 +204,47 @@ func view_peer() -> int:
 ## The local rider's equipped pennant style ("" for the plain one).
 func view_pennant() -> String:
 	return WorkoutProgress.equipped(ctx.progress if ctx != null else null)
+
+
+# --- cranks -------------------------------------------------------------------------
+
+
+## The sim is running: sim_step, client_predict and apply_snapshot call this first. Tests that
+## drive the view without a sim call it each frame.
+func sim_alive() -> void:
+	sim_quiet_s = 0.0
+
+
+## One frame of `delta` seconds on every rider's cranks. The view calls it, on every role, so
+## headless has no strokes.
+func tick_cranks(delta: float) -> void:
+	sim_quiet_s += delta
+	for peer: int in state.order:
+		cranks.step(peer, cadence_of(peer), delta)
+
+
+## The cadence `peer`'s legs turn at: 0 when the sim is quiet (paused or over) or the rider has
+## dropped (its row is frozen); on a client the local rider's own telemetry, never a snapshot up
+## to a second old; else the state's.
+func cadence_of(peer: int) -> float:
+	if sim_quiet_s > SIM_ALIVE_S:
+		return 0.0
+	var r := state.rider(peer)
+	if r == null or not r.connected:
+		return 0.0
+	if ctx != null and ctx.role == Wl.CLIENT and peer == ctx.local_peer and local_rpm >= 0.0:
+		return local_rpm
+	return r.cadence_rpm
+
+
+## `peer`'s crank revolutions so far (for the audio machine, with rider_rpm).
+func rider_revs(peer: int) -> float:
+	return cranks.revs(peer)
+
+
+## The cadence `peer`'s cranks turn at now: cadence_of(), named for the audio kit's drive().
+func rider_rpm(peer: int) -> float:
+	return cadence_of(peer)
 
 
 # --- host-side HUD -----------------------------------------------------------------

@@ -32,7 +32,7 @@ func test_make_view_returns_a_node2d_with_layers() -> void:
 	add_child_autofree(view)
 	assert_eq(view.get_child_count(), 6, "sky, clouds, three parallax strips, track")
 	var rv := view as WorkoutRideView
-	assert_eq(rv.sky.texture.get_size(), Vector2(640, 360))
+	assert_eq(rv.sky.texture.get_size(), Vector2(WorkoutArt.W, WorkoutArt.H))
 	assert_eq(rv.far_hills.factor, 0.06)
 	assert_false(rv.model.is_empty(), "the first refresh ran in _ready")
 
@@ -53,7 +53,9 @@ func test_builds_from_a_fixture_snapshot() -> void:
 	assert_almost_eq(float(view.marker(-1)["x"]), WorkoutRideView.RIDER_X + 110.0, 0.001)
 	var far := view.marker(-2)
 	assert_eq(int(far["edge"]), 1, "off screen to the right")
-	assert_almost_eq(float(far["x"]), 640.0 - WorkoutRideView.EDGE_MARGIN_RIGHT, 0.001)
+	assert_almost_eq(
+		float(far["x"]), float(WorkoutArt.W) - WorkoutRideView.EDGE_MARGIN_RIGHT, 0.001
+	)
 
 
 func test_pennants_carry_the_slot_look() -> void:
@@ -91,7 +93,7 @@ func test_every_slot_look_is_distinct() -> void:
 func test_the_road_follows_the_course_in_rolling_road() -> void:
 	var view := _client_view()
 	var road: PackedFloat64Array = view.model["road"]
-	assert_eq(road.size(), 640 / WorkoutTrackLayer.COLUMN_W)
+	assert_eq(road.size(), WorkoutArt.W / WorkoutTrackLayer.COLUMN_W)
 	var lo := INF
 	var hi := -INF
 	for y in road:
@@ -134,8 +136,8 @@ func test_parallax_scrolls_with_the_local_rider() -> void:
 	assert_almost_eq(view.near_trees.world_x, d * WorkoutRideView.VISUAL_PX_PER_M, 0.01)
 	assert_eq(
 		view.near_trees.scroll(),
-		roundf(d * WorkoutRideView.VISUAL_PX_PER_M * 0.5),
-		"factor 0.5, whole art pixels"
+		roundf(d * WorkoutRideView.VISUAL_PX_PER_M * view.near_trees.factor),
+		"by its factor, whole art pixels"
 	)
 	assert_eq(view.sky.scroll(), 0.0, "the sky never moves")
 	assert_eq(float(view.sky.visible_tiles()[0]["x"]), 0.0)
@@ -144,7 +146,7 @@ func test_parallax_scrolls_with_the_local_rider() -> void:
 	var last: Dictionary = tiles[tiles.size() - 1]
 	assert_true(
 		float(last["x"]) + view.near_trees.tile_width() >= float(WorkoutArt.W),
-		"the strip covers the 640 px view"
+		"the strip covers the view"
 	)
 
 

@@ -23,7 +23,7 @@ const SPRINT_BAND := [1.2, 1.6]
 const WARMUP_S := 300.0
 
 
-static func spec() -> HudSpec:
+static func spec(_game: WorkoutGame = null) -> HudSpec:
 	return (
 		HudSpec
 		. new()
