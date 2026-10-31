@@ -28,4 +28,4 @@
 
 - **Decision:** `toolsrc_reach.mjs` adds `assets/tank/v4/tools_src/*.gd` as entry points, as the spec asks, and also walks the constants and inner classes of each reached module, with strings and comments stripped.
 - **Alternatives:** walk column-zero functions only, as the original did.
-- **Reason:** `preview.gd` calls out from an inner class, and the walk decides deletions that no gate checks, so an error must fall on the side of keeping a function.
+- **Reason:** a generator's inner class or constant can name a function too, and the walk decides deletions that no gate checks, so an error must fall on the side of keeping a function.
