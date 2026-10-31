@@ -19,6 +19,8 @@ const REAL_MANIFEST = JSON.parse(fs.readFileSync(path.join(TOOLS, 'lib', 'gate_m
 const GODOT = godotBin();
 const skipNoGodot = (!GODOT && 'no Godot binary') || (!BASH && 'bash not found');
 const temps = [];
+// No process has this pid: a pid taken from a process that just exited can be in use again on a busy machine.
+const UNUSED_PID = 99999996;
 
 after(() => {
   for (const d of temps) rmQuiet(d);
@@ -626,7 +628,7 @@ describe('usage and refusals', { concurrency: 4 }, () => {
     }
     assert.equal(fs.readFileSync(lock, 'utf8'), String(process.pid), "the holder's lock stays");
     fs.rmSync(path.join(dir, 'tests'), { recursive: true });
-    const dead = spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8' }).stdout;
+    const dead = String(UNUSED_PID);
     write(dir, { 'build/gate/run.lock': dead, 'build/gate/strict.json': '{}' });
     const r = await gate(dir, ['floor', '--label=x']);
     assert.doesNotMatch(r.stderr, /another gate/);
@@ -1189,7 +1191,7 @@ describe('worktree chores', () => {
 
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wgate-tmp-'));
     temps.push(tmp);
-    const dead = Number(spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8' }).stdout);
+    const dead = UNUSED_PID;
     const old = new Date(Date.now() - 48 * 3600 * 1000);
     for (const [name, mtime] of [[`wattlands_sim_${dead}_0`, old], [`wattlands_sim_${process.pid}_0`, old], [`wattlands_new_${dead}_1`, new Date()], ['wattlands-godot', old]]) {
       fs.mkdirSync(path.join(tmp, name));
