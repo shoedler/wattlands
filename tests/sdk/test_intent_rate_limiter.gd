@@ -1,5 +1,5 @@
 extends GutTest
-## IntentRateLimiter: BRIEF 2.6's per-peer limit on game ticks, and the flag reader games share.
+## IntentRateLimiter: BRIEF 2.6's per-peer limit on game ticks.
 
 
 func test_the_window_is_one_second_of_ticks() -> void:
@@ -61,18 +61,3 @@ func test_any_window_holds_at_most_the_limit() -> void:
 			IntentRateLimiter.WINDOW_TICKS,
 			"six accepted intents never fit one window"
 		)
-
-
-func test_truthy_reads_bools_and_numbers() -> void:
-	assert_true(IntentRateLimiter.truthy(true))
-	assert_false(IntentRateLimiter.truthy(false))
-	assert_true(IntentRateLimiter.truthy(1))
-	assert_true(IntentRateLimiter.truthy(-1))
-	assert_false(IntentRateLimiter.truthy(0))
-	assert_true(IntentRateLimiter.truthy(0.5))
-	assert_false(IntentRateLimiter.truthy(0.0))
-
-
-func test_truthy_is_false_for_anything_else() -> void:
-	for junk: Variant in ["1", "true", null, [1], {"a": 1}, Vector2.ONE]:
-		assert_false(IntentRateLimiter.truthy(junk), "%s is not a flag" % str(junk))

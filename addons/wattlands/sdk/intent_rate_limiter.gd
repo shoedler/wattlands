@@ -22,12 +22,3 @@ func allow(peer: int, tick: int) -> bool:
 		return false
 	list.append(tick)
 	return true
-
-
-## An intent's flag as a bool: a bool as is, a number when it is not zero, anything else false.
-static func truthy(v: Variant) -> bool:
-	if v is bool:
-		return v
-	if v is int or v is float:
-		return float(v) != 0.0
-	return false
