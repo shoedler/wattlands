@@ -2,7 +2,8 @@ class_name TankHudBoard
 extends TankHudCtl
 ## The free-roam board, top right (brief 2.10, 3.6; TankHud.LAYOUT "roam_board", 200 x 44 art px):
 ## the time left as a key number (OVERTIME in red past time up while a fight finishes), the crew's
-## points and kills, the difficulty (amber on Hard) and the tanks lost under them. It draws only what its setters gave it; refresh() feeds them from the state
+## points and kills, the difficulty (amber on Hard) and the tanks lost under them. It draws only what
+## its setters gave it; refresh() feeds them from the state
 ## (feed()). The hull plate without its kills (TankHudHull.show_kills = false) sits at "roam_hull"
 ## under it.
 

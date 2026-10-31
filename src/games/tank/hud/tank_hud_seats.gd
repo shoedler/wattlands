@@ -3,7 +3,8 @@ extends TankHudCtl
 ## The seat panel, bottom middle (v3 brief "HUD": seat panel A, in place of v2's crew row): one card
 ## per seat in TankIds.SEATS order (Drive, Gun, Loader, Lights, Secondaries, Repairs), each a live
 ## machine window (TankMech, 112 x 64 art px: diesel, dynamo, steam, arc, the feed for the Secondaries
-## and the rivet hammer for Repairs; one Image + ImageTexture per card, repainted every frame while manned) in a riveted frame with
+## and the rivet hammer for Repairs; one Image + ImageTexture per card, repainted every frame while
+## manned) in a riveted frame with
 ## the seat's icon and name on a brass tab and a tiny ERG / SIM tag (the seat's trainer mode,
 ## TankHudModel.SEAT_MODE), and a footer: the rider's slot chip and name in their slot colour (cut
 ## with an ellipsis to fit), their watts, and a 2 px strip (green in band, blue under, red over).

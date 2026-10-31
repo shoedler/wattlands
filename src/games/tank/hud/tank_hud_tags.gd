@@ -298,6 +298,8 @@ static func warn_layout(
 ) -> Dictionary:
 	var tw := size.x
 	var th := size.y
+	# a sprite can reach past its panel (the Behemoth at close range): the pointer stays inside
+	anchor.x = clampf(anchor.x, zone.position.x + 2.0, zone.end.x - 2.0)
 	var tr := Rect2(roundf(anchor.x - tw * 0.5), roundf(anchor.y - th - TAG_LIFT), tw, th)
 	tr.position.x = clampf(tr.position.x, zone.position.x + 4.0, zone.end.x - 4.0 - tw)
 	tr.position.y = maxf(tr.position.y, zone.position.y + 4.0)

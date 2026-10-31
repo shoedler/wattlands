@@ -73,21 +73,21 @@ const PALETTE := {
 const HELP_V4 := [
 	["TANK_HELP_RANGE", Vector2(780, 300), Vector2(800, 350)],
 	["TANK_HELP_PIP", Vector2(760, 240), Vector2(760, 200)],
-	["TANK_HELP_NEAR", Vector2(540, 340), Vector2(560, 395)],
-	["TANK_HELP_REPAIR", Vector2(610, 418), Vector2(690, 470)],
+	["TANK_HELP_NEAR", Vector2(540, 345), Vector2(600, 385)],
+	["TANK_HELP_REPAIR", Vector2(760, 400), Vector2(690, 470)],
 ]
 ## The help overlay: [string key, at, arrow_to] in art px of the base (each arrow ends inside
 ## the plate it explains, so it moves with that plate).
 const HELP := [
 	["TANK_HELP_NUMBERS", Vector2(150, 404), Vector2(90, 452)],
-	["TANK_HELP_SEATS", Vector2(470, 400), Vector2(420, 452)],
-	["TANK_HELP_HULL", Vector2(770, 128), Vector2(880, 40)],
+	["TANK_HELP_SEATS", Vector2(450, 400), Vector2(420, 452)],
+	["TANK_HELP_HULL", Vector2(800, 132), Vector2(880, 40)],
 	["TANK_HELP_SURGE", Vector2(330, 300), Vector2(60, 506)],
 ]
 ## Free roam's help: the map strip and the board instead of the hull plate, and the turn.
 const ROAM_HELP := [
 	["TANK_HELP_NUMBERS", Vector2(150, 404), Vector2(90, 452)],
-	["TANK_HELP_SEATS", Vector2(470, 400), Vector2(420, 452)],
+	["TANK_HELP_SEATS", Vector2(450, 400), Vector2(420, 452)],
 	["TANK_HELP_ROAM_MAP", Vector2(240, 120), Vector2(300, 40)],
 	["TANK_HELP_ROAM_BOARD", Vector2(700, 128), Vector2(850, 40)],
 	["TANK_HELP_TURN", Vector2(330, 300), Vector2(60, 506)],

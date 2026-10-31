@@ -9,7 +9,8 @@ extends TankHudCtl
 ## (shaded, a 1 px needle), the cadence as a key number over its band gauge, ONE instruction line in
 ## large type for your seat (TankHudModel.instruction: Drive HOLD 152-210 W or SURGE 240+ W 0:04,
 ## Gun HOLD (ERG), Loader BUILD 216+ W or OVER 264+ W 0:04, Lights HOLD, Secondaries SPIN 60+
-## 180/MIN, Repairs HOLD (ERG), RESERVE, KEEP RIDING under a tow), and SPRINT (W') and the virtual gear as small bars (the gear lit in SIM).
+## 180/MIN, Repairs HOLD (ERG), RESERVE, KEEP RIDING under a tow), and SPRINT (W') and the virtual
+## gear as small bars (the gear lit in SIM).
 ## The local rider's numbers come from their own telemetry (set_telemetry), the bands from the
 ## HudLayer (power_band_of, cadence_band_of) and the plan. The spec sets shows_power: this plate
 ## always shows raw W and %FTP.

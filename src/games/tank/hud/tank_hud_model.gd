@@ -4,7 +4,8 @@ extends RefCounted
 ## static, so tests read it without drawing; brief 2.3, 2.4, 3.6): the local rider's band and their
 ## one instruction line (v3 per seat: HOLD / SURGE / BUILD / OVER / SPIN / RESERVE), the seat panel's
 ## cards in seat order, the rack, the feed's rate and the Repairs card's numbers,
-## the telegraphing shooters and the incoming evadable shell, the difficulty and the losses, the mission plate's stage strip and objective, the halt distance and
+## the telegraphing shooters and the incoming evadable shell, the difficulty and the losses, the
+## mission plate's stage strip and objective, the halt distance and
 ## the boss bars. It only reads the state.
 
 ## The sprint rule's threshold (brief 2.4: >= 1.2 x FTP over the last 3 s, raw W).

@@ -127,6 +127,19 @@ func test_a_far_shooters_tag_stands_in_the_far_panel_clear_of_the_pip() -> void:
 				assert_false(ri.intersects(rj), "dir %d: tags %d and %d overlap" % [dir, i, j])
 
 
+func test_the_behemoths_pointer_stays_in_the_far_panel() -> void:
+	var s := TankFixturesV4.make("boss_far", 3)
+	s.boss.range_m = 1000.0
+	var tags := _tags(autofree(X.game(s)))
+	tags.refresh()
+	var far: Rect2 = tags.m["panels"]["far"]
+	var warn: Array = tags.m["layout"]["warn"]
+	assert_eq(warn.size(), 1, "the main gun's telegraph")
+	assert_gt((warn[0]["pointer"] as Array).size(), 0)
+	for p: Vector2i in warn[0]["pointer"]:
+		assert_true(far.has_point(Vector2(p)), "%s in the far panel" % p)
+
+
 func test_without_a_view_a_far_enemy_stands_where_the_map_says() -> void:
 	var s := TankFixturesV4.make("far_duel", 3)
 	var e := s.enemy(21)

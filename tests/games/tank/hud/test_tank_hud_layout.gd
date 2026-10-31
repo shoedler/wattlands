@@ -1,7 +1,8 @@
 extends GutTest
 ## The HudSpec and its layout (brief 3.6; GAME_SDK 10.1): only the game's own Controls, no kit
 ## widget; shows_power; the palette themes the platform's toasts, banners and help; the help's
-## entries with keys in strings.csv and arrows on the plates or panels they explain; every rect on the canvas after the HUD's anchoring from
+## entries with keys in strings.csv and arrows on the plates or panels they explain; every rect on
+## the canvas after the HUD's anchoring from
 ## 852 x 480 up to 1146 x 480; nothing in the bottom-right 200 x 60; no plate over the tank's
 ## band (y 150-360) but the world tags; the seat panel's cards clear of my numbers and the corner.
 
