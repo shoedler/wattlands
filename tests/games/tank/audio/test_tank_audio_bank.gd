@@ -183,18 +183,29 @@ func test_the_steam_engine_chuffs_at_each_end_of_its_stroke() -> void:
 	_assert_wraps_at(stroke, chuffs, "chuff")
 
 
-func test_the_arc_zaps_as_it_starts_up_the_ladder() -> void:
+func test_the_arc_ticks_as_it_starts_up_the_ladder() -> void:
 	# tank_mech_arc.gd: climb = fposmod(ph * 2 + ai * 0.5, 1), a second arc over 0.3; the belt: fposmod(ph * 12, 3).
 	_assert_art_says("arc", "fposmod(ph * 2.0 + ")
 	_assert_art_says("arc", "fposmod(ph * 12.0, 3.0)")
 	var first := func(ph: float) -> float: return fposmod(ph * 2.0, 1.0)
 	var second := func(ph: float) -> float: return fposmod(ph * 2.0 + 0.5, 1.0)
 	var belt := func(ph: float) -> float: return fposmod(ph * 12.0, 3.0)
-	_assert_wraps_at(first, _fractions("arc", "arc_zap"), "first arc")
-	_assert_wraps_at(second, _fractions("arc", "arc_zap_over"), "second arc")
+	_assert_wraps_at(first, _fractions("arc", "arc_relay"), "first arc")
+	_assert_wraps_at(second, _fractions("arc", "arc_relay_over"), "second arc")
 	_assert_wraps_at(belt, _fractions("arc", "belt_tick"), "belt")
-	assert_almost_eq(float(_event("arc", "arc_zap_over")["when"]["min"]), 0.3, 0.001)
-	assert_almost_eq(float(_event("arc", "arc_zap")["when"]["min"]), 0.12, 0.001)
+	assert_almost_eq(float(_event("arc", "arc_relay_over")["when"]["min"]), 0.3, 0.001)
+	assert_almost_eq(float(_event("arc", "arc_relay")["when"]["min"]), 0.12, 0.001)
+
+
+func test_the_arc_sparks_near_the_top_of_the_horns() -> void:
+	# tank_mech_arc.gd sprays its sparks over hk > 0.7 of the climb: the sound's spark falls in the same stretch.
+	_assert_art_says("arc", "over > 0.3 and hk > 0.7")
+	var sparks := _fractions("arc", "arc_spark")
+	assert_eq(sparks.size(), 2)
+	for at: Variant in sparks:
+		assert_gt(fposmod(float(at) * 2.0, 1.0), 0.7, "high on the ladder")
+	assert_gte(float(_event("arc", "arc_spark")["when"]["min"]), 0.7, "only at high reach")
+	assert_true(bool(_event("arc", "arc_spark").get("lead_only", false)), "a rider's own detail")
 
 
 func test_the_feed_fires_when_its_bolts_come_home() -> void:
@@ -283,7 +294,7 @@ func test_a_loops_slow_movement_runs_with_the_machines_own_rhythm() -> void:
 
 func test_a_machines_slow_movement_makes_whole_cycles_in_its_file() -> void:
 	# A rate that does not fit the file clicks at the seam, and on a loop pitched by rpm it would leave the revolution.
-	for id: String in ["dynamo_whine", "arc_hum", "ladder_buzz", "repair_compressor"]:
+	for id: String in ["dynamo_whine", "arc_thrum", "arc_thrum_open", "repair_compressor"]:
 		var sound: Dictionary = _bank.sounds[id]
 		var dur := float(sound["dur"])
 		var moves := 0
@@ -377,7 +388,7 @@ func test_nothing_locked_above_two_kilohertz_outshouts_its_machine() -> void:
 	# SPEC_AUDIO 5, fatigue: an hour of a 110 rpm tick must stay a texture.
 	var ticks := {
 		"dynamo": ["brush_tick"],
-		"arc": ["belt_tick"],
+		"arc": ["belt_tick", "arc_spark"],
 		"feed": ["link_clink", "casing_tink"],
 	}
 	for machine: String in ticks:

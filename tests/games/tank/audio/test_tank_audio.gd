@@ -145,7 +145,7 @@ func test_the_lead_is_louder_than_any_other_on_every_machine() -> void:
 		"drive": "diesel_fire_a",
 		"gun": "cap_dump",
 		"loader": "chuff_a",
-		"lights": "arc_zap",
+		"lights": "arc_relay",
 		"sec": "bow_shot",
 		"repair": "repair_idle",
 	}
@@ -329,21 +329,30 @@ func test_the_safety_valve_lifts_when_over() -> void:
 	assert_gt(_layer_db("loader", "safety_valve"), -30.0, "over power, as the art")
 
 
-func test_the_arc_zaps_twice_a_turn_and_doubles_when_over() -> void:
+func test_the_arc_ticks_twice_a_turn_and_doubles_when_over() -> void:
 	_run("lights", 60.0, 1.0, 4.0)
-	assert_between(_audio.played.count("arc_zap"), 7, 9)
-	assert_does_not_have(_audio.played, "arc_zap_over")
+	assert_between(_audio.played.count("arc_relay"), 7, 9)
+	assert_does_not_have(_audio.played, "arc_relay_over")
 	assert_between(_audio.played.count("belt_tick"), 15, 17)
 	_audio.kit.clear_played()
 	_run("lights", 60.0, 1.5, 4.0)
-	assert_between(_audio.played.count("arc_zap_over"), 7, 9)
+	assert_between(_audio.played.count("arc_relay_over"), 7, 9)
 	assert_almost_eq(TankAudio.ladder_reach(0.9), 1.0, 1e-6, "the art's reach")
 	assert_almost_eq(TankAudio.ladder_reach(0.3), 0.25, 1e-6)
 
 
 func test_the_arc_is_silent_under_its_threshold() -> void:
 	_run("lights", 60.0, 0.1, 3.0)
-	assert_does_not_have(_audio.played, "arc_zap", "strength 0 in the art")
+	assert_does_not_have(_audio.played, "arc_relay", "strength 0 in the art")
+	assert_does_not_have(_audio.played, "arc_spark", "no reach, no spark")
+
+
+func test_the_arc_sparks_only_near_the_top_of_its_reach() -> void:
+	_run("lights", 60.0, 0.6, 4.0)
+	assert_does_not_have(_audio.played, "arc_spark", "reach 0.63 at power 0.6")
+	_audio.kit.clear_played()
+	_run("lights", 60.0, 1.0, 4.0)
+	assert_has(_audio.played, "arc_spark")
 
 
 func test_the_feed_clacks_fires_and_ejects_with_its_rounds() -> void:

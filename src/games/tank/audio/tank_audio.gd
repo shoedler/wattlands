@@ -182,7 +182,7 @@ static func crackle_level(lift: float, power: float) -> float:
 	return maxf(lift, SPIT_LEVEL * smoothstep(SPIT_POWER.x, SPIT_POWER.y, power))
 
 
-## How far the arc climbs its ladder (TankMech's `reach`): what its zap's level follows.
+## How far the arc climbs its ladder (TankMech's `reach`): what its relay's level and its spark follow.
 static func ladder_reach(power: float) -> float:
 	return 0.25 + 0.75 * smoothstep(0.3, 0.9, power)
 

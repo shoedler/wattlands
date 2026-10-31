@@ -53,8 +53,9 @@ const WORKING := {
 		"power": 1.5,
 		"strokes":
 		{
-			"arc_zap": [0.0, 0.5],
-			"arc_zap_over": [0.25, 0.75],
+			"arc_relay": [0.0, 0.5],
+			"arc_relay_over": [0.25, 0.75],
+			"arc_spark": [0.44, 0.94],
 			"belt_tick": [0.0, 0.25, 0.5, 0.75],
 		},
 	},
