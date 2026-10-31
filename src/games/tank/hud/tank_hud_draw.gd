@@ -57,38 +57,18 @@ const ELLIPSIS := "…"
 const TALL_CAP := 9
 const TALL_H := 11
 
-static var _font: Font = null
-static var _tall: Font = null
 static var _digits: Texture2D = null
 
 
 ## The stencil 5 x 7 face: the space narrowed and every glyph hung from the baseline by the cap
 ## height (the Image Font importer hangs a glyph by half its cell).
 static func font() -> Font:
-	if _font == null:
-		_font = load(TankHudFont.TEXT_PNG) as Font
-		var ff := _font as FontFile
-		if ff != null:
-			for i in ff.get_cache_count():
-				for sz in ff.get_size_cache_list(i):
-					for g in ff.get_glyph_list(i, sz):
-						ff.set_glyph_offset(i, sz, g, Vector2(0, -CAP))
-					ff.set_glyph_advance(i, sz.x, 32, Vector2(SPACE_ADVANCE, 0))
-	return _font
+	return PixelFont.hang(TankHudFont.TEXT_PNG, CAP, SPACE_ADVANCE)
 
 
 ## The tall 5 x 9 face (TankHudFont.TALL_PNG), hung from the baseline like font().
 static func font_tall() -> Font:
-	if _tall == null:
-		_tall = load(TankHudFont.TALL_PNG) as Font
-		var ff := _tall as FontFile
-		if ff != null:
-			for i in ff.get_cache_count():
-				for sz in ff.get_size_cache_list(i):
-					for g in ff.get_glyph_list(i, sz):
-						ff.set_glyph_offset(i, sz, g, Vector2(0, -TALL_CAP))
-					ff.set_glyph_advance(i, sz.x, 32, Vector2(SPACE_ADVANCE + 1, 0))
-	return _tall
+	return PixelFont.hang(TankHudFont.TALL_PNG, TALL_CAP, SPACE_ADVANCE + 1)
 
 
 ## Tall-face text (9 px cap) with its cap top at `top`. Returns its width.
@@ -120,11 +100,6 @@ static func tall_c(c: CanvasItem, cx: float, top: float, s: String, col: Color =
 	var w := tall_w(s)
 	tall(c, roundf(cx - w * 0.5), top, s, col)
 	return w
-
-
-static func tall_shadow(c: CanvasItem, x: float, top: float, s: String, col: Color = TEXT) -> float:
-	tall(c, x + 1, top + 1, s, SHADOW)
-	return tall(c, x, top, s, col)
 
 
 ## A gauge: the track, the band [lo, hi] (0..1 of the scale) shaded with brass ends, ticks every
@@ -234,22 +209,13 @@ static func big_w(s: String) -> float:
 	return maxf(w - 2.0, 0.0)
 
 
-static func big_r(c: CanvasItem, right: float, top: float, s: String, col: Color = TEXT) -> float:
-	var w := big_w(s)
-	big(c, right - w, top, s, col)
-	return w
-
-
 static func rect(c: CanvasItem, r: Rect2, col: Color) -> void:
 	c.draw_rect(r, col)
 
 
 ## A one-pixel frame just inside `r`.
 static func frame(c: CanvasItem, r: Rect2, col: Color) -> void:
-	c.draw_rect(Rect2(r.position, Vector2(r.size.x, 1)), col)
-	c.draw_rect(Rect2(r.position.x, r.end.y - 1, r.size.x, 1), col)
-	c.draw_rect(Rect2(r.position.x, r.position.y + 1, 1, r.size.y - 2), col)
-	c.draw_rect(Rect2(r.end.x - 1, r.position.y + 1, 1, r.size.y - 2), col)
+	HudArtDraw.frame(c, r, col)
 
 
 ## A 2 x 2 rivet, lit from the top left.
@@ -297,11 +263,7 @@ static func bar(c: CanvasItem, r: Rect2, frac: float, col: Color, track: Color =
 
 ## A pixel pattern ("#" ink), top-left at `p`, `m` px per pattern pixel.
 static func pixels(c: CanvasItem, rows: Array, p: Vector2, col: Color, m: float = 1.0) -> void:
-	for y in rows.size():
-		var row: String = rows[y]
-		for x in row.length():
-			if row[x] == "#":
-				c.draw_rect(Rect2(p + Vector2(x, y) * m, Vector2(m, m)), col)
+	HudArtDraw.pixels(c, rows, p, col, m)
 
 
 static func icon(c: CanvasItem, engine: String, p: Vector2, col: Color) -> void:

@@ -1,5 +1,5 @@
 class_name TankHudCtl
-extends Control
+extends HudArtControl
 ## Base of Diesel Domestiques' own HUD Controls (brief 3.6; the way Turbo Reel's FishingHudControl
 ## works). Each sits alone in a Rect2i of the HudSpec (`art_rect`, art px of the 960 x 540 base,
 ## TankHud.LAYOUT); the HudLayer anchors that rect on the current art canvas
@@ -12,74 +12,13 @@ extends Control
 const D := preload("res://src/games/tank/hud/tank_hud_draw.gd")
 
 var game: TankGame = null
-## The rect the spec places it in (art px of the 960 x 540 base).
-var art_rect: Rect2i = Rect2i(0, 0, TankHud.BASE.x, TankHud.BASE.y)
-## The local rider's latest telemetry (null until the HUD sends one; the rider state stands in).
-var tm: Telemetry = null
-## How many times _draw ran (tests).
-var draws: int = 0
-var _layer: HudLayer = null
-
-
-func _init() -> void:
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	size_flags_horizontal = Control.SIZE_FILL
-	size_flags_vertical = Control.SIZE_EXPAND_FILL
-	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	clip_contents = false
 
 
 ## Sets the game and the rect the spec places the Control in, names it after its class.
 func setup(p_game: TankGame, rect: Rect2i) -> TankHudCtl:
 	game = p_game
-	art_rect = rect
-	var s: Variant = get_script()
-	if s is Script:
-		name = (s as Script).get_global_name()
+	place_at(rect)
 	return self
-
-
-## The HudLayer's per-tick local telemetry.
-func set_telemetry(t: Telemetry) -> void:
-	tm = t
-
-
-func _process(delta: float) -> void:
-	tick(delta)
-	if has_state():
-		refresh()
-	queue_redraw()
-
-
-## Wall-clock animation (the crew row's engines); tests call it directly.
-func tick(_delta: float) -> void:
-	pass
-
-
-## Recomputes what the Control shows from the state (subclasses).
-func refresh() -> void:
-	pass
-
-
-## Screen px per art px (2 at 1080p).
-func u() -> float:
-	if size.x <= 0.0 or art_rect.size.x <= 0:
-		return 2.0
-	return size.x / float(art_rect.size.x)
-
-
-func _draw() -> void:
-	draws += 1
-	if not has_state():
-		return
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2(u(), u()))
-	paint()
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-
-
-## Draws in art px of art_rect (subclasses).
-func paint() -> void:
-	pass
 
 
 func has_state() -> bool:
@@ -102,25 +41,9 @@ func local_rider() -> TankRiderState:
 	return r
 
 
-## The HudLayer this Control sits in (null without one).
-func hud_layer() -> HudLayer:
-	if _layer == null or not is_instance_valid(_layer):
-		_layer = null
-		var p := get_parent()
-		while p != null and not p is HudLayer:
-			p = p.get_parent()
-		_layer = p as HudLayer
-	return _layer
-
-
 ## The art canvas the HUD lays out on (the HudLayer's flex size; the 960 x 540 base without one).
 func canvas() -> Vector2i:
-	var hl := hud_layer()
-	if hl != null:
-		var a := hl.art_size()
-		if a.x > 0 and a.y > 0:
-			return a
-	return TankHud.BASE
+	return canvas_or(TankHud.BASE)
 
 
 ## Where this Control's rect sits on the canvas (anchored like the HUD does).
