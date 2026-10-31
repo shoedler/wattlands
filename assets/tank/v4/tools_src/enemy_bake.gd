@@ -493,12 +493,15 @@ func _weather(img: Image, _mask: PackedByteArray, sz: Vector2i, seed: int) -> vo
 			if y > 0 and src.get_pixel(x, y - 1).a < 0.5 and Px.h2(x, y, seed + 2) > 0.8:
 				continue
 			# a streak under a bright fastener
-			if c.is_equal_approx(Hull.RIV_HI_EN) and Px.h2(x, y, seed + 3) > 0.62:
-				var ln := 3 + floori(Px.h2(y, x, seed + 4) * 8.0)
+			if c.is_equal_approx(Hull.RIV_HI_EN) and Px.h2(x, y, seed + 3) > 0.55:
+				var ln := 3 + floori(Px.h2(y, x, seed + 4) * 9.0)
 				for k2 in ln:
 					var yy := y + 2 + k2
 					if yy < sz.y and src.get_pixel(x, yy).a > 0.5:
-						Px.mix(img, x, yy, COLD[2], 0.6 * (1.0 - float(k2) / ln))
+						Px.mix(img, x, yy, COLD[1], 0.8 * (1.0 - float(k2) / ln))
+			# worn bare in patches: a pale scuff where the noise says, never on the darkest seams
+			if _lum(c) > 0.1 and Px.vnoise(x, y, 5.0, seed + 5) > 0.74 and Px.h2(x, y, seed + 6) > 0.72:
+				Px.mix(img, x, y, COLD[13], 0.5)
 
 
 func _lum(c: Color) -> float:

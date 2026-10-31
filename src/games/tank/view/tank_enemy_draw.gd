@@ -501,9 +501,14 @@ static func _fire(ci: CanvasItem, row: Dictionary, foot: Vector2, pose: Dictiona
 	var fl := 0.65 + 0.35 * sin(t * 11.0 + foot.x) * sin(t * 4.3)
 	var d := 1.0 - clampf(float(pose.get("dim", 0.0)), 0.0, 1.0)
 	_set_xf(ci, _flat(row, foot, pose))
-	var c: Vector2 = row["wreck_fire"]
-	ci.draw_rect(Rect2(c - Vector2(4, 3), Vector2(8, 6)), FIRE * (0.22 * fl * d))
-	ci.draw_rect(Rect2(c - Vector2(2, 1), Vector2(4, 3)), FIRE * (0.7 * fl * d))
+	var c: Vector2 = (row["wreck_fire"] as Vector2).floor()
+	# a tongue of flame out of the torn hatch: wide at the foot, licking to one side, no box
+	var lick := roundf(sin(t * 6.0 + foot.x * 0.3))
+	var base_k := fl * d
+	ci.draw_rect(Rect2(c + Vector2(-4, -1), Vector2(9, 3)), FIRE * (0.16 * base_k))
+	ci.draw_rect(Rect2(c + Vector2(-2, 0), Vector2(5, 2)), FIRE * (0.55 * base_k))
+	ci.draw_rect(Rect2(c + Vector2(-1 + lick, -2), Vector2(3, 2)), FIRE * (0.5 * base_k))
+	ci.draw_rect(Rect2(c + Vector2(lick, -4), Vector2(1, 2)), FIRE * (0.3 * base_k))
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
 
 

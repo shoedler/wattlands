@@ -19,13 +19,20 @@ class Stage:
 	var bg: Array = []
 	var text: Array = []
 	var kit: TankEnemyKit
-	var lit: Array = []
+	var timed: Array = []
 
 	func _draw() -> void:
+		var t0 := Time.get_ticks_usec()
+		for c0: Array in timed:
+			TankEnemyDraw.draw(self, kit, str(c0[0]), c0[1], c0[2])
+		if not timed.is_empty():
+			print("draw of %d enemies: %d us" % [timed.size(), Time.get_ticks_usec() - t0])
 		for b: Array in bg:
 			if b[0] is Texture2D:
 				var t: Texture2D = b[0]
-				if b.size() > 2:
+				if b.size() == 4:
+					draw_texture_rect_region(t, Rect2(b[2], b[3], b[1].size.x, b[1].size.y), b[1])
+				elif b.size() > 2:
 					draw_texture_rect(t, b[1], true)
 				else:
 					draw_texture(t, b[1])
@@ -83,6 +90,8 @@ func _run() -> void:
 	_sheet("wrecks_3x", Vector2i(470, 330), 3, _wrecks)
 	_sheet("motion_3x", Vector2i(470, 310), 3, _motion)
 	_sheet("far_852", Vector2i(286, 480), 2, _far852)
+	_sheet("bushes_3x", Vector2i(330, 80), 3, _bushes)
+	_sheet("cap_cost", Vector2i(960, 540), 1, _cap)
 	_repair_strip()
 	for i in 6:
 		await process_frame
@@ -197,6 +206,25 @@ func _motion(st: Stage, _vp: SubViewport) -> void:
 		var shifted := func(x: float) -> float: return float(bump.call(x + i4 * 12.0)) + 180.0
 		st.calls.append(["heavy", Vector2(90 + i4 * 100 + (i4 % 2) * 20, 240), {"ground": shifted, "travel": i4 * 2.0}])
 	st.calls.append(["recon", Vector2(60, 300), {"ground": func(x: float) -> float: return 300.0 + 3.0 * sin(x * 0.3), "turret_sx": -1.0}])
+
+
+func _bushes(st: Stage, _vp: SubViewport) -> void:
+	_ground(st, 70.0, 330.0)
+	var x := 8.0
+	for r: Rect2 in _kit.bush_rects():
+		st.bg.append([_kit.bushes(), r, x, 72.0 - r.size.y])
+		x += r.size.x + 8.0
+
+
+## SPEC_TANK 4.2's cap: 8 far and 8 near, moving, on a bumpy road: what TankEnemyDraw costs a frame.
+func _cap(st: Stage, _vp: SubViewport) -> void:
+	var g := func(x: float) -> float: return 400.0 + 2.0 * sin(x * 0.07)
+	var far: Array[String] = ["light", "medium", "heavy", "destroyer", "light", "medium", "heavy", "destroyer"]
+	for i in far.size():
+		st.timed.append([far[i], Vector2(100 + i * 100, 300), {"travel": 9.0 + i, "haze": 0.3, "elev_deg": 7.0}])
+	for i2 in 8:
+		var k := "recon" if i2 % 2 == 0 else "tankette"
+		st.timed.append([k, Vector2(100 + i2 * 90, 400), {"travel": 3.0 + i2, "ground": g, "turret_sx": -1.0}])
 
 
 func _far852(st: Stage, _vp: SubViewport) -> void:

@@ -1701,7 +1701,7 @@ const R_RIVET_PITCH := 5.0
 const R_PRESS_X := 104
 const R_LAMP := 62
 const R_POT := Rect2i(38, 50, 11, 7)
-const R_DIAL := Vector2i(45, 11)
+const R_DIAL := Vector2i(15, 13)
 ## The share of a revolution the hammer takes to fall.
 const R_FALL := 0.12
 ## Sparks last this share of a revolution after the strike.
@@ -1786,7 +1786,7 @@ static func _repair_static(cv: Cv) -> void:
 static func _repair_lights(cv: Cv, pw: float) -> void:
 	var heat := 0.3 + 0.7 * smoothstep(0.0, 1.3, pw)
 	# the flywheel's own caged lamp, so the crank end reads
-	cv.light(R_FW.x + 4.0, 24.0, 32.0, _key * (0.6 * (0.85 + 0.15 * minf(pw, 1.0))))
+	cv.light(R_FW.x + 6.0, 36.0, 24.0, _key * (0.5 * (0.85 + 0.15 * minf(pw, 1.0))))
 	cv.light(
 		R_POT.position.x + 5,
 		R_POT.position.y - 1,
@@ -1860,8 +1860,8 @@ static func _repair(cv: Cv, ph: float, pw: float, t: float, slot: Color, rate: f
 	cv.vl(head.end.x - 1, head.position.y, head.end.y - 1, STEEL[0])
 	cv.hl(head.position.x, head.end.x - 1, head.end.y - 1, STEEL[4])
 	cv.hl(head.position.x + 2, head.end.x - 3, head.end.y - 3, STEEL[1])
-	cv.rivet(head.position.x + 2, head.position.y + 2)
-	cv.rivet(head.end.x - 4, head.position.y + 2)
+	cv.vl(head.position.x + 3, head.position.y + 1, head.end.y - 4, STEEL[1])
+	cv.vl(head.end.x - 4, head.position.y + 1, head.end.y - 4, STEEL[1])
 	# the patch plate on the anvil, stepping one rivet along per stroke; the newest rivet is hot
 	var step := smoothstep(0.1, 0.5, fposmod(ph, 1.0)) * R_RIVET_PITCH
 	cv.rect(62, R_PLATE_Y, 34, 2, COPPER[1])
