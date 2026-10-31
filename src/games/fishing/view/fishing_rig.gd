@@ -84,9 +84,8 @@ const ROD_HARD: Array[int] = [1, 1, 1, 1, 1, -2, -2, -2, -2, -2]
 ## Tension from which the raised rod shows the bent and the hard-bent frame.
 const ROD_BENT_AT := 0.35
 const ROD_HARD_AT := 0.7
-## Where the wake starts (behind the outboard, on the waterline) and the bow's waterline.
+## Where the wake starts (behind the outboard, on the waterline).
 const WAKE_AT := Vector2i(19, WATERLINE)
-const SPRAY_AT := Vector2i(87, WATERLINE)
 
 
 ## The drivetrain's pixels at crank angle `angle` (radians, clockwise on screen), crew-local,
@@ -209,25 +208,7 @@ static func raster(a: Vector2i, b: Vector2i) -> Array[Vector2i]:
 
 ## Every pixel of the Bresenham line from `a` to `b`, both ends included.
 static func bresenham(a: Vector2i, b: Vector2i) -> Array[Vector2i]:
-	var out: Array[Vector2i] = []
-	var dx := absi(b.x - a.x)
-	var dy := -absi(b.y - a.y)
-	var sx := 1 if a.x < b.x else -1
-	var sy := 1 if a.y < b.y else -1
-	var err := dx + dy
-	var p := a
-	for _i in dx - dy + 1:
-		out.append(p)
-		if p == b:
-			break
-		var e2 := 2 * err
-		if e2 >= dy:
-			err += dy
-			p.x += sx
-		if e2 <= dx:
-			err += dx
-			p.y += sy
-	return out
+	return PixelPainter.line_pixels(a, b)
 
 
 ## Every pixel of the runs through `points` (each joint once).

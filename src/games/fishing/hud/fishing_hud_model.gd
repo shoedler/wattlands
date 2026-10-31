@@ -116,10 +116,7 @@ static func own_rider(game: FishingGame) -> FishingRiderState:
 
 ## "m:ss" below an hour, else "h:mm:ss".
 static func clock(seconds: float) -> String:
-	var s := maxi(ceili(seconds), 0)
-	if s >= 3600:
-		return "%d:%02d:%02d" % [s / 3600, (s / 60) % 60, s % 60]
-	return "%d:%02d" % [s / 60, s % 60]
+	return HudWidget.clock_text(seconds)
 
 
 ## The action a rider shows: AFK, paused, sprint (driving above 105 %), else its action.
