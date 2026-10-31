@@ -2,7 +2,7 @@
 	"id": "workout",
 	"title": "Workout",
 	"summary": "Group interval rides: everyone rides the same timeline at their own % of FTP, with ERG intervals, free sprints and a rolling road.",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"min_players": 1,
 	"max_players": 8,
 	"bots": true,

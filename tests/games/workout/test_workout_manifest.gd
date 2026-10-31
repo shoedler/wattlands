@@ -32,7 +32,7 @@ func test_manifest_fields() -> void:
 	assert_eq(m["id"], "workout")
 	assert_eq(m["title"], "Workout")
 	assert_true(str(m["summary"]).length() > 10)
-	assert_eq(m["version"], "0.2.0")
+	assert_eq(m["version"], "0.3.0")
 	assert_eq(int(m["min_players"]), 1)
 	assert_eq(int(m["max_players"]), 8)
 	assert_eq(m["bots"], true)

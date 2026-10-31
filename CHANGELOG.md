@@ -2,6 +2,33 @@
 
 Releases, newest first. Modules and games write fragments in `docs/changelog.d/<module or game id>.md`; the lead merges them here at each release and empties them.
 
+## v0.9.1 (2026-10-31)
+
+The games get their sound. Turbo Reel, Castellum Rotae and Workout now have sound rendered from recipes in the repository, locked 1:1 to each rider's crank. Diesel Domestiques gets its sound with its overhaul in the next prerelease. No one has heard this yet: the numbers come from offline measurements, and each game's `HARDWARE_TEST.md` has a Listen step.
+
+### Turbo Reel 0.3.0
+
+- A pedal outboard that putts once per foot, with valve ticks, brass gear ticks, exhaust crackle and a gear whistle that rises with your power. The reel ratchets six clicks a revolution; the line creaks and sings higher under tension, the rod groans under a hard pull and the drag screams on a run.
+- A sea with swell, foam and wind by speed, a harbour that fades as you leave it, a knocking hull at rest, gulls, a buoy bell, rigging ticks and a fish breaking the surface now and then. A long crossing rides a swell, and the sea gets heavier far from land.
+- Each leap of a jumping fish lands with its own splash, a trophy gets a top note, the gaff sprint has its call and a replacement fish hooks itself aloud. Other riders' boats sit under yours and fade with distance.
+
+### Castellum Rotae 0.4.0
+
+- A timber treadwheel locked 1:1 to each rider's cadence (pawl, footfall, creak, axle knock, groan), with the walkers stepping on the same crank, and a mine and pump locked to their art.
+- A ballista's twang, whistling arrows, a tumbling stone with its delayed landing, tar, horns, the ram, a walking tower and the Breach, set over a gusting hill wind with crows, banners, war drums, a far anvil and a lark. The wheel strains under hard effort, and a pause silences the battle.
+
+### Workout 0.3.0
+
+- Chain tick and pedal press locked 1:1 to each rider's cranks, a whirr and rattle by cadence and power, tyres and wind by speed, gusts and rough road so a steady block never freezes, a freewheel that ticks only when you coast, gear clicks and your breath on hard efforts.
+- A morning around you: wind that moves with the grass on screen, a dawn chorus that thins as the day comes up, a rooster, a far dog and church bell, a tractor while one crosses. A crowd on scored sprints claps and rings its cowbell on your cadence and cheers at the finish.
+- The routine interval banner is silent, so the warning sound means a real safety prompt again.
+
+### Platform
+
+- Safety prompts stay clear at the loudest moment of a ride, not just a calm one: `warning` and `rescue` push everything else down further and for longer, in every game. Interface sounds step back too; a start countdown and the metronome keep their level.
+- A game can choose or silence the sound of its routine banners (`HudSpec.banner_sound`); safety banners always warn.
+- A long pause no longer saves up the far sounds of the landscape to play them all at once when you ride on.
+
 ## v0.9.0 (2026-10-31)
 
 The first v1 prerelease.
