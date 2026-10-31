@@ -71,7 +71,10 @@ func feed(s: TankState) -> void:
 	var aux_strong := s.roam.strong_id
 	for e in s.enemies:
 		if e.hp > 0.0 and not aux_strong.has(e.id) and e.mode != TankIds.EM_LEAVE:
-			pats.append(TankRoam.map_of(s, e.x_px + float(e.w) * 0.5))
+			if TankHudGeom.in_far_frame(e):
+				pats.append(s.roam.map_m + float(s.hull.dir) * e.range_m)
+			else:
+				pats.append(TankRoam.map_of(s, e.x_px + float(e.w) * 0.5))
 	var sps: Array = []
 	for i in map.strongpoints.size():
 		sps.append({"at_m": map.strongpoints[i], "alive": not s.roam.strong_down(i)})

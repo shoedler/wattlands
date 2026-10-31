@@ -1,7 +1,8 @@
 extends GutTest
 ## The HudSpec and its layout (brief 3.6; GAME_SDK 10.1): only the game's own Controls, no kit
-## widget; shows_power; the palette themes the platform's toasts, banners and help; 3-6 help
-## entries whose keys are in strings.csv; every rect on the canvas after the HUD's anchoring from
+## widget; shows_power; the palette themes the platform's toasts, banners and help; the help's
+## entries with keys in strings.csv and arrows on the plates or panels they explain; every rect on
+## the canvas after the HUD's anchoring from
 ## 852 x 480 up to 1146 x 480; nothing in the bottom-right 200 x 60; no plate over the tank's
 ## band (y 150-360) but the world tags; the seat panel's cards clear of my numbers and the corner.
 
@@ -12,11 +13,14 @@ const CANVASES: Array[Vector2i] = [
 ]
 ## The plates of the mission HUD and of free roam (each set shares one canvas).
 const MISSION_KEYS: Array[String] = [
-	"mission", "toasts", "hull", "boss", "banners", "mine", "seats"
+	"mission", "toasts", "hull", "boss", "banners", "lost", "mine", "seats"
 ]
 const ROAM_KEYS: Array[String] = [
-	"roam_strip", "roam_toasts", "roam_board", "roam_hull", "mine", "seats"
+	"roam_strip", "roam_toasts", "roam_board", "roam_hull", "lost", "mine", "seats"
 ]
+## The help's entries that explain a panel of the split screen, not a plate (TankHud.HELP_V4 without the
+## Repairs card; test_tank_hud_v4 checks where their arrows land).
+const PANEL_HELP: Array[String] = ["TANK_HELP_RANGE", "TANK_HELP_PIP", "TANK_HELP_NEAR"]
 
 
 static func keys() -> Dictionary:
@@ -48,7 +52,7 @@ func test_the_spec_has_only_the_games_own_controls() -> void:
 		assert_true(c["at"] is Rect2i)
 		kinds.append((c["control"] as Object).get_script().get_global_name())
 	for k: String in [
-		"TankHudMission", "TankHudHull", "TankHudBoss", "TankHudMine", "TankHudSeats"
+		"TankHudMission", "TankHudHull", "TankHudBoss", "TankHudMine", "TankHudSeats", "TankHudLost"
 	]:
 		assert_has(kinds, k)
 	assert_eq(kinds[-1], "TankHudTags", "the tags last: help points in a plate move with it")
@@ -77,10 +81,10 @@ func test_shows_power_and_the_palette_themes_toasts_banners_and_help() -> void:
 	assert_true(hs.palette["font"] is Font, "the game's stencil face")
 
 
-func test_help_has_three_to_six_entries_with_keys_in_the_strings() -> void:
+func test_help_has_eight_entries_with_keys_in_the_strings() -> void:
 	var hs := _spec()
 	var k := keys()
-	assert_between(hs.help.size(), 3, 6)
+	assert_eq(hs.help.size(), 8)
 	for e: Dictionary in hs.help:
 		var key := str(e["text"])
 		assert_true(key.begins_with("TANK_HELP_"), key)
@@ -88,6 +92,8 @@ func test_help_has_three_to_six_entries_with_keys_in_the_strings() -> void:
 		var at: Vector2 = e["at"]
 		var to: Vector2 = e["arrow_to"]
 		assert_true(Rect2(Vector2.ZERO, Vector2(TankHud.BASE)).has_point(at), key)
+		if PANEL_HELP.has(key):
+			continue
 		var inside := false
 		for c: Dictionary in hs.controls:
 			if c["control"] is TankHudTags:

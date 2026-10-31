@@ -2,7 +2,8 @@ class_name TankHudBoard
 extends TankHudCtl
 ## The free-roam board, top right (brief 2.10, 3.6; TankHud.LAYOUT "roam_board", 200 x 44 art px):
 ## the time left as a key number (OVERTIME in red past time up while a fight finishes), the crew's
-## points and kills. It draws only what its setters gave it; refresh() feeds them from the state
+## points and kills, the difficulty (amber on Hard) and the tanks lost under them. It draws only what
+## its setters gave it; refresh() feeds them from the state
 ## (feed()). The hull plate without its kills (TankHudHull.show_kills = false) sits at "roam_hull"
 ## under it.
 
@@ -12,6 +13,10 @@ var left_s: float = 0.0
 var overtime: bool = false
 var points: int = 0
 var kills: int = 0
+## The difficulty tag's string key, whether it is Hard, and the tanks lost.
+var diff_key: String = ""
+var hard: bool = false
+var losses: int = 0
 
 
 func refresh() -> void:
@@ -26,6 +31,10 @@ func feed(s: TankState) -> void:
 		return
 	set_time(time_left_s(s), s.roam.overtime)
 	set_score(s.roam.points, TankHudModel.kills(s))
+	var diff := TankHudModel.difficulty(s)
+	diff_key = str(diff["key"])
+	hard = bool(diff["hard"])
+	losses = s.score.losses
 
 
 ## Seconds of the ride left before time up (the drive-out counts toward it).
@@ -72,6 +81,10 @@ func paint() -> void:
 	D.rect(self, Rect2(150, 6, 1, h - 12), D.FRAME_IN)
 	D.tall(self, 156, 4, tx("TANK_HUD_KILLS"), D.DIM)
 	D.text(self, 156, 21, str(kills), D.NUM, 2)
+	if diff_key != "":
+		D.text_r(self, w - 6.0, 35, tx(diff_key), D.AMBER if hard else D.DIM)
+	if losses > 0:
+		D.text(self, 94, 35, tx("TANK_HUD_LOSSES", [losses]), D.OVER)
 
 
 ## `n` with a thin space every three digits ("12 340").

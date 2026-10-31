@@ -376,7 +376,7 @@ func test_the_fonts_cover_the_seat_panels_text() -> void:
 	keys.append_array(["TANK_HUD_SEAT_EMPTY", "TANK_HUD_SPRINT"])
 	keys.append_array(["TANK_HUD_DO_BUILD", "TANK_HUD_DO_OVER", "TANK_HUD_DO_FEED"])
 	keys.append("TANK_HUD_DO_FEED_IDLE")
-	keys.append_array(["TANK_HUD_PER_MIN", "TANK_HELP_SEATS", "TANK_HELP_SEAT_LOCK"])
+	keys.append_array(["TANK_HUD_PER_MIN", "TANK_HELP_SEATS"])
 	keys.append("TANK_HUD_NO_TARGET")
 	for e: String in TankIds.SEATS:
 		keys.append("TANK_HUD_TAB_" + e.to_upper())
@@ -437,7 +437,10 @@ func test_the_secondaries_dial_shows_while_their_seat_is_manned() -> void:
 	reseat(s, seats)
 	(s.station(TankIds.ENGINE_FEED) as TankFeedState).rpm = 180.0
 	tags.refresh()
-	assert_true(tags.m.has("sec"), "manned and firing")
+	assert_false(tags.m.has("sec"), "v4: firing at no near threat, no dial")
+	TankFixturesV4._near(s, 970, TankIds.ENEMY_RECON, 60.0, 0)
+	tags.refresh()
+	assert_true(tags.m.has("sec"), "manned and firing at a near threat")
 	var sec: Dictionary = tags.m["sec"]
 	assert_eq(float(sec["rpm"]), 180.0)
 	assert_between(float(sec["deg"]), TankHudTags.SEC_MIN, TankHudTags.SEC_MAX)

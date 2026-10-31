@@ -62,10 +62,12 @@ func test_the_roam_help_points_at_its_plates_with_keys_in_the_strings() -> void:
 	var got := _controls(_game(3))
 	var hs: HudSpec = got["_spec"]
 	var k := _keys()
-	assert_between(hs.help.size(), 3, 6)
+	assert_eq(hs.help.size(), 9, "the five of free roam and the four of v4")
 	for e: Dictionary in hs.help:
 		var key := str(e["text"])
 		assert_true(k.has(key), key + " in strings.csv")
+		if key in ["TANK_HELP_RANGE", "TANK_HELP_PIP", "TANK_HELP_NEAR"]:
+			continue
 		var inside := false
 		for c: Dictionary in hs.controls:
 			if c["control"] is TankHudTags:
