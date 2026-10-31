@@ -5,9 +5,10 @@ extends RefCounted
 ## (steam: the boiler fills it, Overpressure, the light latch) and the Lights (arc generator:
 ## searchlights, stall, the searchlight load), the Repairs (v4: the hull, per kJ in band). Drive is
 ## TankDrive, the main gun and its chambering TankGun, the Secondaries' bow guns TankBow. Every
-## energy is the seat's P_eff (reserve 60 W for an AFK rider, 0 when everyone is AFK); an empty seat (slot -1) has none and does nothing: the bank
-## holds, no shell is loaded, the searchlights are dark. Pure: no random draws; time only through
-## `dt`. v3 retired the Bulwark's gearbox and the gunner's hoist.
+## energy is the seat's P_eff (reserve 60 W for an AFK rider, 0 when everyone is AFK); an empty seat
+## (slot -1) has none and does nothing: the bank holds, no shell is loaded, the searchlights are dark.
+## Pure: no random draws; time only through `dt`. v3 retired the Bulwark's gearbox and the gunner's
+## hoist.
 
 
 static func step(
