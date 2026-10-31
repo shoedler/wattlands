@@ -28,7 +28,7 @@ Short ADRs for Diesel Domestiques' sound on the audio kit. "SPEC" is the run's S
 
 ## 2026-10-31 Levels per seat, and thinning
 
-- Decision: every machine leads at about -21 to -24 LUFS at 90 rpm (diesel -20.6, dynamo -21.4, steam -22.4, arc -22.5, feed -22.9, repair -24.4). `hoist_pawl` and `casing_tink` are `lead_only`, which SPEC 4.1 does not ask. `A13` is waived in the bank: 37 repeats among the 465 kept strokes of other riders in the preview, each from `other_min_gap_s` thinning the variant between. The lead has none.
+- Decision: every machine leads at about -21 to -24 LUFS at 90 rpm (diesel -20.6, dynamo -21.2, steam -22.4, arc -22.5, feed -22.9, repair -24.4). `hoist_pawl` and `casing_tink` are `lead_only`, which SPEC 4.1 does not ask. `A13` is waived in the bank: 37 repeats among the 465 kept strokes of other riders in the preview, each from `other_min_gap_s` thinning the variant between. The lead has none.
 - Alternatives: fewer riders in the preview, which hides how a full crew with bots sounds; more variants, which only makes the repeats rarer.
 - Reason: a rider on any seat should hear their machine at one level. With five others at 110 rpm the strokes ask more than the 16.7 a second D7 allows, so the smallest details go first. No listener can follow a variant through thinning at 14 dB under the lead.
 
