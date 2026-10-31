@@ -185,3 +185,12 @@ ADR "2026-10-29 v3.1 seats without a lock" holds the design; these are the contr
 - **Events.** `tank_lost`, `stage_restart`, `ambush`, `escaped`, `splash`. `shot` gains `rng_m` (always; 0 on a near shell) and, on a far shell only, `flight_s`, the one event number that is not an int (`TankEvents.FLOAT_FIELDS`, seconds to 0.01).
 - **Snapshot VERSION 5.** `tk` tow_ms; `e` range_m; `s` far, left_ms, evadable; `b` range_m; `sc` losses; the repair room's row (a patches, b press_pml, c duty_pml, `STF_WORKING`).
 - **Stubs until their builders.** `TankBots`, `TankEnemyKit`, `TankEnemyDraw`, `TankInterior.repair_bay`, `TankMech` (falls back to the diesel for "repair"). No rule works the Repairs seat yet: a rider there is in band and does nothing.
+- **Kit keys.** `TankEnemyKit.bushes()`, `bush_rects()`, `far_ground()` stub to null and empty; the manifest's top-level `bushes` and `far_ground` are in the class's header. A view guards on null.
+
+## v4 notes from the contract check (for the builders; nothing here is a rule yet)
+
+- **R.** Far kinds keep `size_px` in `enemies.json` until T: V, H and E test code (`TankViewUtil._roam_enemy`, `test_tank_hud_tags_clear`, `test_tank_net`) reads it, and the schema tolerates it. Every far shot passes `flight_s` and `rng_m` to `TankEvents.shot` (ours: where it lands; theirs: the shooter's range), with a test on both; they default to 0, so a missed call stays silent. Removing `INTENT_TRAVERSE` from `TankIntents.OWNERS` is the one edit R makes in that file.
+- **V.** `impact_r` is host only. Land our shell on `x + vx * left_s`, all snapshot fields.
+- **E.** `TankCues.on_event` handles `stage_restart`, `ambush` and `escaped` (`TANK_TOAST_RESTART`, `_AMBUSH`, `_ESCAPED`). H does not touch that file.
+- **H.** For `FAR_KINDS`, `enemy_rect` uses `TankFarMap` when the view's rect is not inside `panels.far`: until V merges, `_track_enemies` places far kinds through `sx(enemy_x)` with `x_px` 0. Far tags are not final before T-INT.
+- **S.** `test_tank_package.gd` changes at the `bots` assert and at the exact contents list (`ambush_15` second); its version assert stays with T's docs.

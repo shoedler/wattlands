@@ -195,8 +195,27 @@ func test_the_enemy_kit_has_every_kind_at_its_size() -> void:
 		assert_eq(kit.kind(k)["size"], sizes[k], k)
 	assert_eq(kit.kind("nothing")["size"], sizes["medium"], "size is always there")
 	assert_null(kit.texture(), "no atlas in the stub")
-	assert_eq(TankEnemyKit.check({"kinds": {}}).size(), 7)
+	assert_eq(TankEnemyKit.check({"kinds": {}}).size(), 9, "7 kinds, bushes, far_ground")
 	assert_eq(TankEnemyKit.check({}), ["no kinds"] as Array[String])
+
+
+## SPEC_TANK 4.3 and 4.7: A bakes these while V draws them, so V's branch must load nothing and guard on null.
+func test_the_enemy_kit_stubs_bushes_and_far_ground() -> void:
+	var kit := TankEnemyKit.shared()
+	assert_null(kit.bushes(), "no bush sheet in the stub")
+	assert_eq(kit.bush_rects().size(), 0, "no bush frames in the stub")
+	assert_null(kit.far_ground(), "no far ground in the stub")
+	var kinds := {}
+	for k: String in TankEnemyKit.SIZES:
+		kinds[k] = {"size": [1, 1]}
+	var problems := TankEnemyKit.check({"kinds": kinds})
+	assert_eq(problems, ["no bushes", "no far_ground"] as Array[String])
+	assert_eq(
+		TankEnemyKit.check({"kinds": kinds, "bushes": {"rects": []}, "far_ground": "g.png"}).size(),
+		1
+	)
+	var whole := {"kinds": kinds, "bushes": {"rects": [[0, 0, 8, 8]]}, "far_ground": "g.png"}
+	assert_eq(TankEnemyKit.check(whole).size(), 0, "a whole manifest")
 
 
 func test_the_enemy_draw_stub_draws_and_aims() -> void:

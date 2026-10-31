@@ -141,7 +141,11 @@ test('fields that are floats, strings or missing fail the schema', () => {
 });
 
 test('ranges: a kill of the wrong enemy code, a hit on nothing, a reserved lever or a seat out of range', () => {
-  assert.match(ec.eventErrors({ type: 'kill', id: 4, e: 9, by: 0, s: 0 }).join(), /e 9 outside 1\.\.6/);
+  assert.match(ec.eventErrors({ type: 'kill', id: 4, e: 9, by: 0, s: 0 }).join(), /e 9 outside 1\.\.8/);
+  // v4's near kinds (recon 7, tankette 8) shoot, die and get their shots evaded.
+  assert.deepEqual(ec.eventErrors({ type: 'kill', id: 4, e: 8, by: 0, s: 0 }), []);
+  assert.deepEqual(ec.eventErrors({ type: 'evade', id: 4, e: 7, ok: 1, s: 0 }), []);
+  assert.deepEqual(ec.eventErrors({ type: 'shot', s: -1, sh: 1, id: 9, src: 2, e: 8, rng_m: 0.0 }), []);
   assert.match(ec.eventErrors({ type: 'hit', on: 7, id: 0, dmg: 1, sh: 1, b: 0, x: 0 }).join(), /on 7 outside 0\.\.3/);
   assert.match(ec.eventErrors({ type: 'lever', s: 0, lv: 5 }).join(), /lv 5 outside 0\.\.2/);
   assert.match(ec.eventErrors({ type: 'seat', s: 0, from: 1, to: 8 }).join(), /to 8 outside 1\.\.7/);

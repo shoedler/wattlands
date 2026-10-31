@@ -145,7 +145,7 @@ export function eventErrors(e) {
       inRange('sh', e.sh, 1, 6);
       inRange('id', e.id, 1, 1e9);
       inRange('src', e.src, 0, 1e9);
-      inRange('e', e.e, 0, 6);
+      inRange('e', e.e, 0, 8);
       break;
     case 'hit':
       inRange('on', e.on, 0, 3);
@@ -155,7 +155,7 @@ export function eventErrors(e) {
       break;
     case 'kill':
       inRange('id', e.id, 1, 1e9);
-      inRange('e', e.e, 1, 6);
+      inRange('e', e.e, 1, 8);
       inRange('by', e.by, 0, 3);
       inRange('s', e.s, -1, 2);
       break;
@@ -167,7 +167,7 @@ export function eventErrors(e) {
       inRange('s', e.s, 0, 2);
       break;
     case 'evade':
-      inRange('e', e.e, 1, 6);
+      inRange('e', e.e, 1, 8);
       inRange('ok', e.ok, 0, 1);
       inRange('s', e.s, -1, 3);
       break;

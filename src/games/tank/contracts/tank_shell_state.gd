@@ -30,5 +30,6 @@ var far: bool = false
 var left_s: float = 0.0
 ## [snap] v4: an incoming telegraphed shot Surge can still make miss.
 var evadable: bool = false
-## v4: where it lands (m from the hull; host only).
+## v4: where it lands (m from the hull; host only: not in the snapshot, 0 on a client). A view derives
+## the landing range from snapshot fields: x + vx * left_s.
 var impact_r: float = 0.0
