@@ -846,11 +846,11 @@ func _plate_wear(
 		var s := pseed + id * 37
 		for n in pr.get_area() / CRUMB_AREA:
 			var at := pr.position + Vector2i(int(Px.h2(n, 1, s) * pr.size.x), int(Px.h2(n, 2, s) * pr.size.y))
-			if Px.vnoise(at.x, at.y, 11.0, s + 9) < 0.4:
+			if Px.vnoise(at.x, at.y, 11.0, s + 9) < 0.32:
 				continue
 			var roll := Px.h2(n, 3, s)
 			var pts := _walk(at, 2 + floori(Px.h2(n, 4, s) * 4.0), Vector2i.ZERO, s + n * 3)
-			_crumb(img, ids, id, pts, 3 if roll < 0.3 else (2 if roll < 0.55 else -2), skip, span)
+			_crumb(img, ids, id, pts, 3 if roll < 0.2 else (2 if roll < 0.4 else -2), skip, span)
 		if bool(part.get("cast", false)) or pr.size.x < 7 or pr.size.y < 5:
 			continue
 		_edge_crumbs(img, ids, id, pr, skip, span, s)
@@ -909,7 +909,8 @@ func _walk(at: Vector2i, n: int, bias: Vector2i, s: int) -> Array[Vector2i]:
 
 
 ## Lays a crumb on its plate, `steps` ramp steps from what is under it: bare metal with the paint's lip dark under it,
-## or dirt. It stops at the seam and at anything not paint. A dark plate has no dark left, so there it shows metal.
+## or dirt. It stops at the seam and at anything not paint. Paint at the ramp's floor has no dark left: there it shows
+## metal.
 ## Dimmer as the road's dark falls: never the brightest shape on a plate.
 func _crumb(
 	img: Image, ids: PackedInt32Array, id: int, pts: Array[Vector2i], steps: int, skip: Array[Rect2i], span: Vector2i
@@ -923,7 +924,7 @@ func _crumb(
 			ok.append(q)
 	for q2 in ok:
 		var i := _ramp_index(_lum(img.get_pixel(q2.x, q2.y)))
-		var st := absi(steps) if i <= 2 else steps
+		var st := absi(steps) if i <= 1 else steps
 		var fall := _night_k(q2.y, span.x, span.y) / NIGHT_K
 		var top := roundi(lerpf(4.0, 10.0, fall))
 		img.set_pixel(q2.x, q2.y, COLD[clampi(i + st, 1, maxi(top, i))])
