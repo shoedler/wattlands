@@ -8,6 +8,12 @@ const FIXTURES := "res://tests/audio/fixtures/"
 const SHARED := "res://assets/_shared/audio/"
 const PREROLL_S := 0.08
 const MANIFEST := FIXTURES + "import_proof_bank_manifest.json"
+const KIT_BANK := "res://addons/wattlands/audio/audio_bank.gd"
+const BANKS: Array[String] = [
+	SHARED + "audio.json",
+	FIXTURES + "import_proof_bank.json",
+	"res://tools/audio/test/fixtures/engine_bank.json",
+]
 
 
 func _wav(path: String) -> AudioStreamWAV:
@@ -108,6 +114,20 @@ func test_sidecars_hold_the_generator_params() -> void:
 		assert_true(
 			str(cfg.get_value("remap", "uid", "")).begins_with("uid://"), sound + " has a uid"
 		)
+
+
+## The generator's validator and the kit's must agree: a bank the pipeline renders has to load in the game.
+## The kit arrives at the audio base merge, so until then this has nothing to call.
+func test_the_kits_validator_accepts_the_pipelines_banks() -> void:
+	var script := load(KIT_BANK) as GDScript if ResourceLoader.exists(KIT_BANK) else null
+	if script == null:
+		assert_false(ResourceLoader.exists(KIT_BANK), "no AudioBank on this branch yet")
+		return
+	for path: String in BANKS:
+		var doc: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+		assert_true(doc is Dictionary, path)
+		var errors: Array = script.call("validate", doc)
+		assert_eq(errors, [], path)
 
 
 func test_every_shared_ui_sound_imports_as_16_bit_mono_22050() -> void:

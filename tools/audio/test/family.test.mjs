@@ -69,7 +69,7 @@ test('no sound is stereo unless it is a bed layer or a spot', () => {
       for (const s of b.spots ?? []) ok.add(s.sound);
     }
     for (const [id, s] of Object.entries(doc.sounds)) {
-      if ((s.ch ?? 1) === 2) assert.ok(ok.has(id), `${doc.game} ${id} is stereo outside a bed`);
+      if (s.ch === 2) assert.ok(ok.has(id), `${doc.game} ${id} is stereo outside a bed`);
     }
   }
 });

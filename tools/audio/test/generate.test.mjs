@@ -14,9 +14,9 @@ function run(...args) {
 }
 
 const SOUNDS = {
-  loop_a: { dur: 0.5, seed: 1, loop: true, layers: [{ src: 'noise' }] },
-  stroke: { dur: 0.1, seed: 2, locked: true, variants: 2, layers: [{ src: 'noise', env: { d: 0.05 } }] },
-  shot: { dur: 0.3, seed: 3, layers: [{ src: 'noise', env: { d: 0.2 } }] },
+  loop_a: { dur: 0.5, rate: 22050, ch: 1, seed: 1, loop: true, layers: [{ src: 'noise' }] },
+  stroke: { dur: 0.1, rate: 22050, ch: 1, seed: 2, locked: true, variants: 2, layers: [{ src: 'noise', env: { d: 0.05 } }] },
+  shot: { dur: 0.3, rate: 22050, ch: 1, seed: 3, layers: [{ src: 'noise', env: { d: 0.2 } }] },
 };
 
 function game(t) {
@@ -176,7 +176,7 @@ test('--game=all takes every bank; --bank takes one and prunes nothing', (t) => 
   const g = game(t);
   const shared = path.join(g.root, 'assets', '_shared', 'audio');
   fs.mkdirSync(shared, { recursive: true });
-  fs.writeFileSync(path.join(shared, 'audio.json'), JSON.stringify(bankOf({ tick: { dur: 0.05, seed: 3, layers: [{ src: 'noise' }] } }, { game: '_shared' })));
+  fs.writeFileSync(path.join(shared, 'audio.json'), JSON.stringify(bankOf({ tick: { dur: 0.05, rate: 22050, ch: 1, seed: 3, layers: [{ src: 'noise' }] } }, { game: '_shared' })));
   const r = run('--game=all', `--root=${g.root}`);
   assert.equal(r.code, 0, r.err);
   assert.match(r.out, /_shared: wrote 1[\s\S]*demo: wrote 4/);
@@ -192,7 +192,7 @@ test('--game=all takes every bank; --bank takes one and prunes nothing', (t) => 
 });
 
 test('a bad bank is exit 2 with its key path', (t) => {
-  const made = rootWithBank(t, 'demo', { schema: 1, game: 'demo', sounds: { a: { dur: 1, rate: 8000, layers: [{ src: 'noise' }] } } });
+  const made = rootWithBank(t, 'demo', { schema: 1, game: 'demo', sounds: { a: { dur: 1, rate: 8000, ch: 1, layers: [{ src: 'noise' }] } } });
   const r = run('--game=demo', `--root=${made.root}`);
   assert.equal(r.code, 2);
   assert.match(r.err, /sounds\.a\.rate: 8000/);

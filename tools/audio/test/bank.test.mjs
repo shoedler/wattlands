@@ -6,9 +6,9 @@ import { allFiles, findBanks, loadBank, manifestPathOf, soundFiles, validateBank
 import { encodeWav } from '../lib/wav.mjs';
 import { FIXTURE_BANK, PROOF_BANK, SHARED_BANK, bankOf, readJson, tempDir } from './helpers.mjs';
 
-const LOCKED = { dur: 0.1, locked: true, layers: [{ src: 'noise' }] };
-const LOOP = { dur: 1, loop: true, layers: [{ src: 'noise' }] };
-const ONE = { dur: 0.1, layers: [{ src: 'noise' }] };
+const LOCKED = { dur: 0.1, rate: 22050, ch: 1, locked: true, layers: [{ src: 'noise' }] };
+const LOOP = { dur: 1, rate: 22050, ch: 1, loop: true, layers: [{ src: 'noise' }] };
+const ONE = { dur: 0.1, rate: 22050, ch: 1, layers: [{ src: 'noise' }] };
 
 function problems(doc) {
   return validateBank(doc).join('\n');
@@ -32,10 +32,18 @@ test('rejects what AudioBank.validate rejects, naming the key path', () => {
   assert.match(problems(m({ at: [1.0], sound: 'a' })), /\.at: 1 is outside \[0, 1\)/);
   assert.match(problems(m({ at: [-0.1], sound: 'a' })), /outside/);
   assert.match(problems(m({ at: [0], sound: 's' })), /stereo/);
-  assert.match(problems(m({ at: 0.5, sound: 'a' })), /.at: must be an array/);
+  assert.match(problems(m({ at: 0.5, sound: 'a' })), /\.at: must be a list/);
   assert.deepEqual(validateBank(m({ at: [0, 0.5], sound: 'a' })), []);
   assert.match(problems(bankOf({ a: { ...ONE, rate: 44100 } })), /sounds\.a\.rate: 44100/);
   assert.match(problems(bankOf({ a: { ...ONE, ch: 3 } })), /sounds\.a\.ch: 3/);
+  const { rate: _r, ch: _c, ...bare } = ONE;
+  assert.match(problems(bankOf({ a: bare })), /sounds\.a\.rate: undefined/, 'rate is explicit, as AudioBank wants');
+  assert.match(problems(bankOf({ a: bare })), /sounds\.a\.ch: undefined/);
+  assert.match(problems(m({ at: [], sound: 'a' })), /must be a list/);
+  assert.match(problems(m({ at: [0.5, 0.5], sound: 'a' })), /appears twice/);
+  assert.match(problems(bankOf({ a: { ...LOCKED, compress: 'qoa' } })), /locked sound stays PCM/);
+  assert.match(problems(bankOf({ a: ONE }, { cues: { c: { hits: [{ sound: 'a', bus: 'Master' }] } } })), /unknown bus "Master"/);
+  assert.match(problems(bankOf({ a: ONE }, { cues: { c: { duck: [{ bus: 'UI', db: -3 }] } } })), /UI is never ducked/);
   assert.match(problems(bankOf({ a: ONE }, { machines: { d: { bus: 'Nope' } } })), /unknown bus "Nope"/);
   assert.match(problems(bankOf({ a: ONE }, { cues: { c: { hits: [{ sound: 'a', bus: 'Nope' }] } } })), /unknown bus/);
   assert.match(problems(bankOf({ a: ONE }, { cues: { c: { hits: [{ sound: 'zz' }] } } })), /cues\.c\.hits\[0\]\.sound/);
@@ -62,10 +70,10 @@ test('recipe rules: family band, depth, sources, effects, shape', () => {
   assert.match(problems(bankOf({ a: { ...ONE, rate: 11025, band: [40, 9000] } })), /family band 40\.\.5000/);
   assert.deepEqual(validateBank(bankOf({ a: { ...ONE, band: [200, 4000] } })), []);
   assert.match(problems(bankOf({ a: { ...ONE, crush: 16 } })), /crush/);
-  assert.match(problems(bankOf({ a: { dur: 1, layers: [{ src: 'kazoo' }] } })), /unknown source "kazoo"/);
-  assert.match(problems(bankOf({ a: { dur: 1, layers: [{ src: 'noise', fx: [{ wah: 1 }] }] } })), /unknown effect/);
-  assert.match(problems(bankOf({ a: { dur: 1, layers: [] } })), /needs at least one layer/);
-  assert.match(problems(bankOf({ a: { layers: [{ src: 'noise' }] } })), /dur: must be/);
+  assert.match(problems(bankOf({ a: { ...ONE, layers: [{ src: 'kazoo' }] } })), /unknown source "kazoo"/);
+  assert.match(problems(bankOf({ a: { ...ONE, layers: [{ src: 'noise', fx: [{ wah: 1 }] }] } })), /unknown effect/);
+  assert.match(problems(bankOf({ a: { ...ONE, layers: [] } })), /needs at least one layer/);
+  assert.match(problems(bankOf({ a: { ...ONE, dur: undefined } })), /dur: must be/);
   assert.match(problems(bankOf({ a: { ...LOCKED, loop: true } })), /locked or a loop/);
   assert.match(problems(bankOf({ a: { ...ONE, compress: 'ogg' } })), /not pcm or qoa/);
   assert.match(problems(bankOf({ a: { ...ONE, room: 'cave' } })), /unknown room/);

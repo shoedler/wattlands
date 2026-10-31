@@ -9,7 +9,8 @@ import { importParamMismatches, importParams, importSkeleton, updateImportParams
 import { FAMILY_BAND, FAMILY_BITS, SOURCES, renderSound } from './recipe.mjs';
 import { decodeWav, encodeWav } from './wav.mjs';
 
-export const BUSES = new Set(['Master', 'Machines', 'Ambience', 'Sfx', 'UI']);
+// Master is the platform's, for the safety prompts: no bank may name it (AudioBank._check_bus).
+export const BUSES = new Set(['Machines', 'Ambience', 'Sfx', 'UI']);
 export const RATES = new Set([11025, 22050]);
 export const MAX_LOOP_PLAYERS = 24;
 /** Two renders agree when no sample differs by more than one 12-bit step (SPEC 3.5). */
@@ -20,6 +21,7 @@ const COMPRESS = new Set(['pcm', 'qoa']);
 function validateRecipe(id, s, game, out) {
   const at = `sounds.${id}`;
   if (s.locked && s.loop) out.push(`${at}: a sound is locked or a loop, not both`);
+  if (s.locked && (s.compress ?? 'pcm') !== 'pcm') out.push(`${at}.compress: a locked sound stays PCM, its seek must be exact`);
   if (!(typeof s.dur === 'number' && s.dur > 0)) out.push(`${at}.dur: must be a number > 0`);
   if (s.variants !== undefined && !(Number.isInteger(s.variants) && s.variants >= 1)) out.push(`${at}.variants: must be an integer >= 1`);
   if (s.per_variant !== undefined && (!Array.isArray(s.per_variant) || s.per_variant.length !== (s.variants ?? 1))) {
@@ -31,7 +33,7 @@ function validateRecipe(id, s, game, out) {
   if (s.crush !== undefined && !(Number.isInteger(s.crush) && s.crush >= 2 && s.crush <= FAMILY_BITS)) {
     out.push(`${at}.crush: must be an integer in 2..${FAMILY_BITS}`);
   }
-  const rate = s.rate ?? 22050;
+  const rate = s.rate;
   if (!RATES.has(rate)) out.push(`${at}.rate: ${rate} is not 11025 or 22050`);
   else if (s.band !== undefined) {
     const top = FAMILY_BAND[rate];
@@ -39,7 +41,7 @@ function validateRecipe(id, s, game, out) {
       out.push(`${at}.band: must stay inside the family band ${top[0]}..${top[1]} Hz at ${rate} Hz`);
     }
   }
-  const ch = s.ch ?? 1;
+  const ch = s.ch;
   if (ch !== 1 && ch !== 2) out.push(`${at}.ch: ${ch} is not 1 or 2`);
   if (game === '_shared' && (ch !== 1 || rate !== 22050)) out.push(`${at}: _shared sounds are 22050 Hz mono`);
   if (!Array.isArray(s.layers) || s.layers.length === 0) {
@@ -88,12 +90,13 @@ export function validateBank(doc) {
       if (!s) out.push(`${where}.sound: "${e.sound}" is not in sounds`);
       else {
         if (s.locked !== true) out.push(`${where}.sound: "${e.sound}" is not locked`);
-        if ((s.ch ?? 1) !== 1) out.push(`${where}.sound: "${e.sound}" is stereo; machine events are mono`);
+        if (s.ch !== 1) out.push(`${where}.sound: "${e.sound}" is stereo; machine events are mono`);
       }
-      if (!Array.isArray(e.at)) out.push(`${where}.at: must be an array of revolution fractions`);
+      if (!Array.isArray(e.at) || e.at.length === 0) out.push(`${where}.at: must be a list of revolution fractions`);
       for (const a of [e.at].flat()) {
         if (!(typeof a === 'number' && a >= 0 && a < 1)) out.push(`${where}.at: ${a} is outside [0, 1)`);
       }
+      if (Array.isArray(e.at) && new Set(e.at).size !== e.at.length) out.push(`${where}.at: a fraction appears twice`);
     });
     (m.loops ?? []).forEach((l, i) => needLoop(`machines.${mid}.loops[${i}]`, l));
   }
@@ -112,7 +115,10 @@ export function validateBank(doc) {
       if (!sounds[h.sound]) out.push(`cues.${cid}.hits[${i}].sound: "${h.sound}" is not in sounds`);
       busOk(`cues.${cid}.hits[${i}]`, h.bus);
     });
-    (c.duck ?? []).forEach((d, i) => busOk(`cues.${cid}.duck[${i}]`, d.bus));
+    (c.duck ?? []).forEach((d, i) => {
+      busOk(`cues.${cid}.duck[${i}]`, d.bus);
+      if (d.bus === 'UI') out.push(`cues.${cid}.duck[${i}].bus: UI is never ducked`);
+    });
   }
   const maxLead = Math.max(0, ...Object.values(doc.machines ?? {}).map((m) => (m.loops ?? []).length));
   const loopLayers = Object.values(doc.loops ?? {}).reduce((n, l) => n + (l.layers ?? []).length, 0);
