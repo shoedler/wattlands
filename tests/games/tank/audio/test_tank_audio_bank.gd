@@ -1,11 +1,11 @@
 extends GutTest
 ## The tank's bank against the game: every sound imported as its manifest says, every event mapped, and every stroke's
 ## fraction against the formula that draws its machine (SPEC_AUDIO 2.3, 2.6). The art's formulas sit inside its draw
-## calls, so these tests restate each one and pin its line in tank_mech.gd: if an art formula moves, this says so.
+## calls, so these tests restate each one and pin its line in its machine's file: if an art formula moves, this says so.
 
 const BANK := "res://assets/tank/audio/audio.json"
 const MANIFEST := "res://assets/tank/audio/audio_manifest.json"
-const MECH := "res://src/games/tank/view/tank_mech.gd"
+const MECH := "res://src/games/tank/view/tank_mech_%s.gd"
 const EPS := 0.0005
 
 var _bank: AudioBank = null
@@ -49,10 +49,10 @@ func _assert_wraps_at(formula: Callable, expected: Array, text: String) -> void:
 	assert_eq(wraps, expected.size(), "%s: wraps per revolution" % text)
 
 
-## The art's formula, as tank_mech.gd spells it: the fractions below are only true while this line stands.
-func _assert_art_says(line: String) -> void:
-	var source := FileAccess.get_file_as_string(MECH)
-	assert_true(source.contains(line), "tank_mech.gd still says: %s" % line)
+## The art's formula, as its machine's file spells it: the fractions below are only true while this line stands.
+func _assert_art_says(machine: String, line: String) -> void:
+	var source := FileAccess.get_file_as_string(MECH % machine)
+	assert_true(source.contains(line), "tank_mech_%s.gd still says: %s" % [machine, line])
 
 
 func test_the_bank_loads_and_every_seat_has_its_machine() -> void:
@@ -132,9 +132,9 @@ func test_every_sound_is_used() -> void:
 
 
 func test_the_diesel_fires_when_its_flapper_lifts() -> void:
-	# tank_mech.gd _diesel: e = ph * RATIO["diesel"], since = fposmod(e * 360 - 200, 240).
-	_assert_art_says('var e := ph * float(RATIO["diesel"])')
-	_assert_art_says("var since := fposmod(e * 360.0 - 200.0, 240.0)")
+	# tank_mech_diesel.gd _diesel: e = ph * RATIO["diesel"], since = fposmod(e * 360 - 200, 240).
+	_assert_art_says("diesel", 'var e := ph * float(RATIO["diesel"])')
+	_assert_art_says("diesel", "var since := fposmod(e * 360.0 - 200.0, 240.0)")
 	var ratio := float(TankMech.RATIO["diesel"])
 	var since := func(ph: float) -> float: return fposmod(ph * ratio * 360.0 - 200.0, 240.0)
 	var fires: Array = []
@@ -160,11 +160,11 @@ func test_the_valves_stand_a_fixed_turn_from_the_fires() -> void:
 
 
 func test_the_dynamo_dumps_where_its_jars_empty() -> void:
-	# tank_mech.gd: cyc < 0.8 charges, then dumps; `max_fill = pw / 1.15`, the dump shows when max_fill > 0.4.
-	_assert_art_says("if cyc < 0.8:")
-	_assert_art_says("var max_fill := clampf(pw / 1.15, 0.0, 1.0)")
-	_assert_art_says("if dump > 0.0 and max_fill > 0.4:")
-	_assert_art_says("var rshift := fposmod(ph * 3.0, 1.0) * 3.0")
+	# tank_mech_dynamo.gd: cyc < 0.8 charges, then dumps; `max_fill = pw / 1.15`, the dump shows when max_fill > 0.4.
+	_assert_art_says("dynamo", "if cyc < 0.8:")
+	_assert_art_says("dynamo", "var max_fill := clampf(pw / 1.15, 0.0, 1.0)")
+	_assert_art_says("dynamo", "if dump > 0.0 and max_fill > 0.4:")
+	_assert_art_says("dynamo", "var rshift := fposmod(ph * 3.0, 1.0) * 3.0")
 	assert_eq(_fractions("dynamo", "cap_dump"), [0.8])
 	assert_almost_eq(float(_event("dynamo", "cap_dump")["when"]["min"]), 1.15 * 0.4, 0.001)
 	# The ring's teeth: fposmod(ph * 3, 1).
@@ -173,8 +173,8 @@ func test_the_dynamo_dumps_where_its_jars_empty() -> void:
 
 
 func test_the_steam_engine_chuffs_at_each_end_of_its_stroke() -> void:
-	# tank_mech.gd: stroke = fposmod(ph * 2, 1).
-	_assert_art_says("var stroke := fposmod(ph * 2.0, 1.0)")
+	# tank_mech_steam.gd: stroke = fposmod(ph * 2, 1).
+	_assert_art_says("steam", "var stroke := fposmod(ph * 2.0, 1.0)")
 	var stroke := func(ph: float) -> float: return fposmod(ph * 2.0, 1.0)
 	var chuffs: Array = []
 	chuffs.append_array(_fractions("steam", "chuff_a"))
@@ -184,9 +184,9 @@ func test_the_steam_engine_chuffs_at_each_end_of_its_stroke() -> void:
 
 
 func test_the_arc_zaps_as_it_starts_up_the_ladder() -> void:
-	# tank_mech.gd: climb = fposmod(ph * 2 + ai * 0.5, 1), a second arc over 0.3; the belt: fposmod(ph * 12, 3).
-	_assert_art_says("fposmod(ph * 2.0 + ")
-	_assert_art_says("fposmod(ph * 12.0, 3.0)")
+	# tank_mech_arc.gd: climb = fposmod(ph * 2 + ai * 0.5, 1), a second arc over 0.3; the belt: fposmod(ph * 12, 3).
+	_assert_art_says("arc", "fposmod(ph * 2.0 + ")
+	_assert_art_says("arc", "fposmod(ph * 12.0, 3.0)")
 	var first := func(ph: float) -> float: return fposmod(ph * 2.0, 1.0)
 	var second := func(ph: float) -> float: return fposmod(ph * 2.0 + 0.5, 1.0)
 	var belt := func(ph: float) -> float: return fposmod(ph * 12.0, 3.0)
@@ -198,8 +198,8 @@ func test_the_arc_zaps_as_it_starts_up_the_ladder() -> void:
 
 
 func test_the_feed_fires_when_its_bolts_come_home() -> void:
-	# tank_mech.gd: u = fposmod(ph - 0.5 * k, 1), the shot at u = 0, for k 0 and 1.
-	_assert_art_says("fposmod(ph - 0.5 * ")
+	# tank_mech_feed.gd: u = fposmod(ph - 0.5 * k, 1), the shot at u = 0, for k 0 and 1.
+	_assert_art_says("feed", "fposmod(ph - 0.5 * ")
 	assert_eq(_fractions("feed", "bolt_clack"), [0.0, 0.5])
 	assert_eq(_fractions("feed", "bow_shot"), [0.0, 0.5])
 	assert_eq(_fractions("feed", "link_clink"), [0.25, 0.75])
