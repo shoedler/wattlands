@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Renders the picker card and the content cards (assets/tank/cards/picker_card.png, card_mission.png,
-# card_ambush.png, card_drill.png, card_roam.png) in-engine: the view's fixture scene without its HUD at 960 x 540 through
+# Renders the content cards (assets/tank/cards/card_mission.png, card_ambush.png, card_drill.png,
+# card_roam.png) in-engine. The picker card is tools/picker_cards' now, so this never touches it: the view's fixture scene without its HUD at 960 x 540 through
 # tools/screenshot --scene (a window: headless captures are blank), then cards.gd crops and scales
 # each render to 320 x 180. Run from the repository root in Git Bash:
 #   bash assets/tank/v3/tools_src/cards.sh
@@ -22,7 +22,6 @@ render() { # <name> <fixture options>
 		n=$((n + 1)); [ $n -ge 5 ] && return 75
 	done
 }
-render picker "crew=3;kind=v4:far_duel;nopip" || exit 1
 render mission "crew=3;kind=v4:boss_far;nopip" || exit 1
 render ambush "crew=3;kind=v4:bow_duel;nopip" || exit 1
 render drill "crew=1;kind=v4:advance_far" || exit 1
