@@ -1,8 +1,8 @@
 {
   "id": "tank",
   "title": "Diesel Domestiques",
-  "summary": "Crew a pedal-powered landship through a starry forest night. One engine per rider: diesel, dynamo, steam, arc generator.",
-  "version": "0.3.1",
+  "summary": "Crew a pedal-powered landship through a starry forest night. Six seats, one rider each, and the enemy far across the valley.",
+  "version": "0.4.0",
   "min_players": 1,
   "max_players": 4,
   "bots": true,
