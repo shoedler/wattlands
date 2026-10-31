@@ -1,5 +1,5 @@
 extends GutTest
-## The boat view's parts, the sprite loader, the line colours and the audio cue map.
+## The boat view's parts, the sprite loader and the line colours.
 
 const FX := preload("res://tests/games/fishing/view/fishing_view_fixtures.gd")
 
@@ -138,27 +138,6 @@ func test_the_default_line_cosmetic_is_the_bright_line() -> void:
 	add_child_autofree(v)
 	v.advance(0.05)
 	assert_eq(v.boat_view(0).line_color, FishingPalette.LINE)
-
-
-func test_cues_play_their_sounds_and_other_riders_are_quieter() -> void:
-	var a := FishingAudio.new()
-	add_child_autofree(a)
-	a.cue({"k": FishingCues.CUE_CAST, "l": 0}, true)
-	assert_eq(a.played.slice(-2), ["fishing_clunk", "fishing_plop"])
-	a.cue({"k": FishingCues.CUE_SNAP, "l": 1}, false)
-	assert_eq(a.played[-1], "fishing_twang")
-	a.cue({"k": FishingCues.CUE_TRIP_OVER, "l": -1}, false)
-	assert_eq(a.played[-1], "fishing_horn")
-	assert_lt(FishingAudio.OTHER_DB, 0.0)
-
-
-func test_gulls_call_only_near_the_harbour() -> void:
-	var a := FishingAudio.new()
-	add_child_autofree(a)
-	var r := FishingRiderState.new()
-	r.x_m = 50.0
-	a.update(0.05, r, 0.0)
-	assert_has(a.played, "fishing_gull")
 
 
 func test_the_decoration_hash_is_deterministic() -> void:

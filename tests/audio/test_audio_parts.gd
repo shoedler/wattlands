@@ -239,6 +239,23 @@ func test_bed_spot_when_gates_and_loops_run() -> void:
 	assert_gt(_bed_run(bed, 10.0, {"night": 1.0}).size(), 0)
 
 
+## Split in two by a `when`, one sound keeps one round: no variant twice running at the switch.
+func test_bed_sound_split_by_when_keeps_its_round_robin() -> void:
+	var spec := {
+		"spots":
+		[
+			{"sound": "a", "gap_s": 1.0, "when": {"param": "x", "max": 0.5}},
+			{"sound": "a", "gap_s": 1.0, "when": {"param": "x", "min": 0.5}},
+		]
+	}
+	var bed := AmbienceBed.new(spec, 3)
+	var out := _bed_run(bed, 5.0, {"x": 0.0})
+	out.append_array(_bed_run(bed, 5.0, {"x": 1.0}))
+	assert_gte(out.size(), 8)
+	for i in out.size():
+		assert_eq(int(out[i]["variant"]), i)
+
+
 ## The bank has no gap_by: a gap that follows speed is one spot per band (hull_slap, SPEC_AUDIO 4.2).
 func test_bed_gap_by_speed_is_one_spot_per_band() -> void:
 	var spec := {
@@ -252,6 +269,36 @@ func test_bed_gap_by_speed_is_one_spot_per_band() -> void:
 	var fast := _bed_run(AmbienceBed.new(spec, 5), 40.0, {"speed": 6.0})
 	assert_between(slow.size(), 9, 10, "every 4 s below the band's edge")
 	assert_between(fast.size(), 39, 40, "every second above it")
+
+
+func test_bed_spot_min_gap_keeps_details_apart_and_leaves_a_texture_alone() -> void:
+	var spec := {
+		"layers": [],
+		"spot_min_gap_s": 2.0,
+		"spots":
+		[
+			{"sound": "a", "gap_s": [3.0, 5.0], "burst": 2, "burst_gap_s": 0.7},
+			{"sound": "b", "gap_s": [3.0, 5.0]},
+			{"sound": "c", "gap_s": [3.0, 5.0]},
+			{"sound": "tex", "gap_s": [0.5, 1.0]},
+		],
+	}
+	var bed := AmbienceBed.new(spec, 5)
+	var details: Array[Dictionary] = []
+	var textures := 0
+	for f in 60 * 300:
+		for s: Dictionary in bed.update({}, 1.0 / 60.0):
+			if s["sound"] == "tex":
+				textures += 1
+			else:
+				details.append({"sound": s["sound"], "t": float(f) / 60.0 + float(s["at_s"])})
+	assert_gt(details.size(), 45)
+	assert_gt(textures, 300, "a texture keeps its pace")
+	details.sort_custom(func(x: Dictionary, y: Dictionary) -> bool: return x["t"] < y["t"])
+	for i in range(1, details.size()):
+		if details[i]["sound"] != details[i - 1]["sound"]:
+			var gap: float = details[i]["t"] - details[i - 1]["t"]
+			assert_gte(gap, 2.0 - 1.0 / 60.0, "two details apart at %.2f" % details[i]["t"])
 
 
 func test_bed_trim_reaches_layers_and_spots() -> void:

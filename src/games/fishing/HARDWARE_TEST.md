@@ -56,4 +56,19 @@ Before you start: set your FTP and preferred cadence in your profile, haptics on
 - [ ] Two PCs (`docs/HARDWARE_TEST_PLAN.md` section 10): host `roam_30` with a bot, join. Expected: every boat on the same ocean, your camera on your boat; each rider's pull is a share of their own FTP.
 - [ ] Kill the client mid-fight and restart it. Expected: its boat goes AFK (no pulls, no snap), it rejoins and the fight continues.
 
+## 10. Listen
+
+No machine can judge these, so they stay open until someone has ridden with sound on. First play `build/audio_preview/fishing.mp3` (`node tools/audio/preview.mjs --game=fishing`) on the speakers you ride with.
+
+- [ ] Pedal at 60, then 110 rpm while driving. Expected: one putt per foot, in step with the crank on screen; it stops as soon as the reading reaches 0 (on a real KICKR that lags your feet by up to about a second, BRIEF 4.5; the sound locks to the screen).
+- [ ] Sprint, then lift off. Expected: the gear whistle and crackle rise with your power; lifting off burbles once, even if you keep easing off. Stop dead instead: no burble after the crank stands still.
+- [ ] Land a fish. Expected: a clunk as the clutch lever flips back to the prop. Pause at speed: the engine stops, and the sea does not keep slapping as if the boat still ran.
+- [ ] Reel in a fight. Expected: the ratchet and the line's creak keep time with your feet; the line sings higher as the pull rises, the rod groans near the top; on a run the clicks stop and the drag screams.
+- [ ] Ride the boat out of the harbour. Expected: gulls and rigging fade with the dock; the open sea has swell, foam, wind by speed and an occasional far gull. Do the waves read as waves and the gull as a gull?
+- [ ] Trigger a rescue (section 7) in a fight on a run, and a warning while cruising near other boats. Expected: the safety prompt is plainly over everything, and the mix dips under it.
+- [ ] Hold 250 W for several minutes on a long crossing. Expected: the engine and the water rise and fall every few seconds with a hull slap off the waves, with no tape-like repeat in the wash, and the strokes stay on the crank.
+- [ ] Reach a Landing. Expected: a call at the start of the gaff sprint, and the catch's fanfare 15 s later. Snap a line in a fight: the new fish hooks itself aloud 5 s on.
+- [ ] Wait for a bite with another rider far off. Expected: the bell you hear loud is yours.
+- [ ] After an hour: is the tick a texture, or does it tire? Note the balance over your fan and trainer, and any setting you changed in the audio sliders.
+
 Log: date, trainer firmware, FTP (verified or not), preferred cadence, haptic intensity, pedal navigation on or off, and each step's result in the plan's template.

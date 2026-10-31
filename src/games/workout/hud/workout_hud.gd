@@ -75,6 +75,8 @@ static func spec(game: WorkoutGame = null) -> HudSpec:
 	hs.banners_at(LAYOUT["banners"])
 	hs.shows_power = true
 	hs.show_safety_banners = true
+	# A phase change has its chime, dyad and bell. "warning" stays the sound of a safety prompt.
+	hs.banner_sound = ""
 	hs.help = help()
 	var pal := PALETTE.duplicate()
 	pal["font"] = WorkoutHudDraw.font()

@@ -7,8 +7,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { allFiles, bankWavBytes, loadBank } from './bank.mjs';
 import { bandShareDb, fft, gainToDb, powerSpectrum } from './dsp.mjs';
-import { integratedLufs, loudnessRange, momentaryMaxLufs, truePeakDb } from './lufs.mjs';
-import { BankAudio, MIX_RATE, PROMPT_VOICE_DB, mixdown, segmentsLength, simulate } from './offline_mix.mjs';
+import { integratedLufs, loudnessRange, momentaryMaxLufs, momentaryTrack, truePeakDb } from './lufs.mjs';
+import { BankAudio, MIX_RATE, PROMPT_VOICE_DB, STROKE_HORIZON_S, mixdown, segmentsLength, simulate } from './offline_mix.mjs';
 import { curvePasses } from './pattern.mjs';
 
 /** Repo WAV caps in MB (SPEC 3.4). */
@@ -43,6 +43,40 @@ function peakDb(x) {
   return gainToDb(m);
 }
 
+const D5_WINDOW_S = 0.6;
+const D5_OTHER_BUSES = ['Machines', 'Ambience', 'Sfx', 'UI'];
+/** Where D5 plays a prompt, from the start of the loudest 400 ms, and from each moment HudLayer sounds. */
+const D5_AROUND_LOUDEST_S = [-0.4, -0.2, 0];
+const D5_AROUND_HUD_S = [-0.4, -0.2, 0];
+/** D4 reads the Machines bus this long after the stop. */
+const D4_LATER_S = 0.4;
+/** Long enough for a machine's strokes to go through their variants and pitch tables. */
+const D4_SWEEP_S = 25;
+/** D6: the ride, then a coast if the preview has one. */
+const D6_RIDE_S = 30;
+const D6_STOP_S = 10;
+
+function sumOfBuses(mix, buses, from, to) {
+  const out = [new Float64Array(to - from), new Float64Array(to - from)];
+  for (const bus of buses) {
+    for (let c = 0; c < 2; c++) {
+      const b = mix.stems[bus][c];
+      for (let i = from; i < to; i++) out[c][i - from] += b[i];
+    }
+  }
+  return out;
+}
+
+/** The start of the loudest 400 ms of everything a safety prompt plays over. */
+function loudestMomentS(mix) {
+  let best = { t: 0, lufs: -Infinity };
+  const n = mix.stems.Machines[0].length;
+  for (const m of momentaryTrack(sumOfBuses(mix, D5_OTHER_BUSES, 0, n), MIX_RATE)) {
+    if (m.lufs > best.lufs) best = m;
+  }
+  return best.t;
+}
+
 function leadMachine(p) {
   return { id: 'lead', machine: p.lead, lead: true };
 }
@@ -61,7 +95,81 @@ export function previewScenario(doc, { rpms = null } = {}) {
     bed_params: p.bed_params,
     cues: p.events ?? [],
     loops: p.loops ?? [],
+    hud: p.hud ?? [],
     seed: p.seed ?? 1,
+  };
+}
+
+/** The Machines bus's loudest 20 ms from `later` s after a stop on, for `span` s. */
+function levelAfterStop(mix, stopAt, later, span) {
+  const m = mono(mix.stems.Machines);
+  const from = Math.round((stopAt + later) * MIX_RATE);
+  const to = Math.min(m.length, Math.round((stopAt + later + span) * MIX_RATE));
+  let level = -300;
+  for (let i = from; i + 882 <= to; i += 882) level = Math.max(level, rmsDb(m, i, i + 882));
+  return level;
+}
+
+/** The loudest 20 ms of a stroke's own ring, `after` s from its start on. */
+function ringDb(file, v, after) {
+  const step = (file.rate * v.pitch) / MIX_RATE;
+  const x = file.data[0];
+  let worst = -300;
+  for (let at = Math.round(after * MIX_RATE); ; at += 882) {
+    const pos = file.preroll + at * step;
+    if (pos >= file.frames) break;
+    let e = 0;
+    let n = 0;
+    for (let i = 0; i < 882; i++) {
+      const k = Math.floor(pos + i * step);
+      if (k >= file.frames) break;
+      e += x[k] * x[k];
+      n++;
+    }
+    worst = Math.max(worst, 10 * Math.log10(e / n + 1e-30) + v.db);
+  }
+  return worst;
+}
+
+/**
+ * D4 for a stop anywhere in the cycle, not only where the preview happens to stop, without rendering a
+ * stop per stroke: the worst stop for a stroke is the one just before it, which starts it up to a horizon
+ * late. Every stroke of the machines at each cadence, under the preview's hardest load, its last segment's.
+ */
+function d4Sweep(bank, p, moving) {
+  const params = moving[moving.length - 1]?.params ?? {};
+  let worst = { level: -300, note: '' };
+  for (const rpm of new Set(moving.map((s) => s.rpm))) {
+    const sim = simulate(bank, { segments: [{ rpm, s: D4_SWEEP_S, params }], machines: [leadMachine(p), ...otherMachines(p)] });
+    for (const v of sim.voices) {
+      if (v.bus !== 'Machines') continue;
+      const level = ringDb(bank.file(v.sound, v.variant), v, D4_LATER_S - STROKE_HORIZON_S);
+      if (level > worst.level) worst = { level, note: `${v.sound} at ${rpm} rpm` };
+    }
+  }
+  return worst;
+}
+
+/** D6's eight riders as the game has them: the lead's own other machines, its loops, its cues, and a coast. */
+function eightRiderScenario(p, moving, seg) {
+  const ride = moving[moving.length - 1]?.params ?? {};
+  const stop = seg.find((s) => s.rpm <= 0);
+  const pool = (p.others ?? []).filter((o) => o.lead !== true);
+  const riders = [];
+  for (let i = 0; i < 7; i++) {
+    const o = pool.length > 0 ? pool[i % pool.length] : { machine: p.lead };
+    riders.push({ id: `rider${i}`, machine: o.machine, lead: false, rpm_scale: (88 + (24 * i) / 6) / 100, params: o.params });
+  }
+  const held = new Map();
+  for (const l of p.loops ?? []) held.set(l.id, { ...l, t0: 0, t1: Infinity });
+  return {
+    segments: [{ rpm: 100, s: D6_RIDE_S, params: ride }, ...(stop ? [{ rpm: 0, s: D6_STOP_S, params: stop.params }] : [])],
+    machines: [leadMachine(p), ...otherMachines(p).filter((m) => m.lead), ...riders],
+    bed: p.bed,
+    bed_params: p.bed_params,
+    loops: [...held.values()],
+    cues: (p.events ?? []).map((e) => ({ ...e, t: e.t % D6_RIDE_S })),
+    seed: 2,
   };
 }
 
@@ -398,52 +506,48 @@ export function scoreBank(doc, dir, { shared, root = null, rpms = null, stems = 
   })();
   if (stopAt === null) rows.push({ id: 'D4', pass: false, value: 'no stop', target: 'preview needs a 0 rpm segment' });
   else {
-    const m = mono(mix.stems.Machines);
-    const from = Math.round((stopAt + 0.4) * mixRate);
-    const to = Math.min(m.length, Math.round((stopAt + 0.4 + 2) * mixRate));
-    let level = -300;
-    for (let i = from; i + 882 <= to; i += 882) level = Math.max(level, rmsDb(m, i, i + 882));
-    rows.push({ id: 'D4', pass: level < -60, value: round(level), target: 'Machines below -60 dBFS 400 ms after the stop' });
+    const here = levelAfterStop(mix, stopAt, D4_LATER_S, 2);
+    const swept = d4Sweep(bank, p, moving);
+    const level = Math.max(here, swept.level);
+    rows.push({ id: 'D4', pass: level < -60, value: round(level), target: 'Machines below -60 dBFS 400 ms after a stop anywhere in the cycle', note: swept.note });
   }
 
-  // D5: the safety prompts over the mix, ducking counted.
+  // D5: the safety prompts over the mix, ducking counted: at the mix's midpoint, and on and just before its loudest moment, where a duck that is already releasing meets what is coming.
   if (shared) {
     let worst = Infinity;
-    const midT = segmentsLength(seg.filter((s) => s.rpm > 0)) / 2;
+    let worstAt = null;
+    const midT = segmentsLength(moving) / 2;
+    const loudest = loudestMomentS(mix);
+    const lengthS = segmentsLength(seg);
+    const atHud = (p.hud ?? []).flatMap((h) => D5_AROUND_HUD_S.map((d) => h.t + d));
+    const times = [...new Set([midT, ...D5_AROUND_LOUDEST_S.map((d) => loudest + d), ...atHud])].filter((t) => t >= 0 && t + D5_WINDOW_S <= lengthS);
     for (const name of ['warning', 'rescue']) {
-      const promptSim = simulate(bank, { ...scenario, prompts: [{ t: midT, name }], shared });
-      const pm = mixdown(bank, promptSim, { shared });
-      const from = Math.round(midT * mixRate);
-      const to = Math.round((midT + 0.6) * mixRate);
-      const slice = (st) => [st[0].subarray(from, to), st[1].subarray(from, to)];
-      const others = [new Float64Array(to - from), new Float64Array(to - from)];
-      for (const bus of ['Machines', 'Ambience', 'Sfx', 'UI']) {
-        const b = slice(pm.stems[bus]);
-        for (let i = 0; i < to - from; i++) {
-          others[0][i] += b[0][i];
-          others[1][i] += b[1][i];
+      for (const t of times) {
+        const promptSim = simulate(bank, { ...scenario, prompts: [{ t, name }], shared });
+        const pm = mixdown(bank, promptSim, { shared });
+        const from = Math.round(t * mixRate);
+        const to = Math.round((t + D5_WINDOW_S) * mixRate);
+        const slice = (st) => [st[0].subarray(from, to), st[1].subarray(from, to)];
+        const others = sumOfBuses(pm, D5_OTHER_BUSES, from, to);
+        const diff = momentaryMaxLufs(slice(pm.stems.Master), mixRate) - momentaryMaxLufs(others, mixRate);
+        if (diff < worst) {
+          worst = diff;
+          worstAt = `${name} at ${round(t)} s`;
         }
       }
-      const diff = momentaryMaxLufs(slice(pm.stems.Master), mixRate) - momentaryMaxLufs(others, mixRate);
-      worst = Math.min(worst, diff);
     }
-    rows.push({ id: 'D5', pass: worst >= 6, value: round(worst), target: 'warning, rescue >= +6 LU over the mix' });
+    rows.push({ id: 'D5', pass: worst >= 6, value: round(worst), target: 'warning, rescue >= +6 LU over the mix, midpoint and loudest moment', note: worstAt });
   } else {
-    rows.push({ id: 'D5', pass: false, value: 'no _shared bank', target: 'warning, rescue >= +6 LU over the mix' });
+    rows.push({ id: 'D5', pass: false, value: 'no _shared bank', target: 'warning, rescue >= +6 LU over the mix, midpoint and loudest moment' });
   }
 
   // D6, D7: eight riders.
   const pool = (p.others ?? []).filter((o) => o.lead !== true);
-  const eight = [leadMachine(p)];
-  for (let i = 0; i < 7; i++) {
-    const o = pool.length > 0 ? pool[i % pool.length] : { machine: p.lead };
-    eight.push({ id: `rider${i}`, machine: o.machine, lead: false, rpm_scale: (88 + (24 * i) / 6) / 100, params: o.params });
-  }
-  const ridersSim = simulate(bank, { segments: [{ rpm: 100, s: 30, params: moving[moving.length - 1]?.params ?? {} }], machines: eight, bed: p.bed, bed_params: p.bed_params, seed: 2 });
+  const ridersSim = simulate(bank, eightRiderScenario(p, moving, seg));
   const d6Pass = ridersSim.voicePeak.Machines <= 16 && ridersSim.voicePeak.Sfx <= 16 && ridersSim.loopPeak <= (doc.mix?.max_loop_players ?? 24);
   rows.push({ id: 'D6', pass: d6Pass, value: `${ridersSim.voicePeak.Machines}/${ridersSim.voicePeak.Sfx}/${ridersSim.loopPeak}`, target: 'Machines <= 16, Sfx <= 16, loops <= 24' });
   const otherStarts = ridersSim.events.filter((e) => e.kind === 'stroke' && e.lead === false && !e.thinned).length;
-  const perS = otherStarts / 30;
+  const perS = otherStarts / D6_RIDE_S;
   rows.push({ id: 'D7', pass: perS <= 16.7 + 1e-6, value: round(perS), target: 'other strokes <= 16.7 per s' });
 
   // A1, A2, A8, A15.

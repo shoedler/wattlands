@@ -39,7 +39,12 @@ const SHARED_DIR := "res://assets/_shared/audio/"
 const SAFETY_SOUNDS: Array[String] = ["warning", "rescue"]
 const SFX_BUILTINS: Array[String] = ["coin", "hit", "boom", "whoosh"]
 const SAFETY_DUCK_ATTACK_S := 0.02
-const SAFETY_DUCK_RELEASE_S := 1.2
+const SAFETY_DUCK_RELEASE_S := 2.0
+## A prompt also trims the UI's own voices, on the ducks' envelope, so a phase chime and a toast cannot cover it.
+## Per voice, because the UI bus is never ducked: the start count and the metronome are timing, not news, and keep
+## their level.
+const SAFETY_UI_DB := -10.0
+const SAFETY_UI_SPARED: Array[String] = ["countdown", "click"]
 
 ## Added to every play() volume.
 var master_db: float = 0.0
@@ -58,6 +63,9 @@ var _metro_t: float = 0.0
 var _metro_clicks: int = 0
 var _warned: Dictionary = {}
 var _registered: Dictionary = {}
+## Player -> the level it was asked to play at, for every voice a prompt trims.
+var _ui_voices: Dictionary = {}
+var _since_prompt: float = INF
 
 
 func _ready() -> void:
@@ -87,12 +95,17 @@ func play(sound: String, volume_db: float = 0.0, pitch: float = 1.0) -> void:
 	p.stream = s
 	p.bus = bus_of(sound)
 	p.volume_db = volume_db + master_db
+	_ui_voices.erase(p)
+	if p.bus == AudioBuses.UI and not SAFETY_UI_SPARED.has(sound):
+		_ui_voices[p] = p.volume_db
+		p.volume_db += prompt_ui_db()
 	p.pitch_scale = clampf(pitch, 0.05, 4.0)
 	p.play()
 	if SAFETY_SOUNDS.has(sound):
-		AudioBuses.duck(AudioBuses.MACHINES, -6.0, SAFETY_DUCK_ATTACK_S, SAFETY_DUCK_RELEASE_S)
-		AudioBuses.duck(AudioBuses.AMBIENCE, -6.0, SAFETY_DUCK_ATTACK_S, SAFETY_DUCK_RELEASE_S)
-		AudioBuses.duck(AudioBuses.SFX, -4.0, SAFETY_DUCK_ATTACK_S, SAFETY_DUCK_RELEASE_S)
+		_since_prompt = 0.0
+		AudioBuses.duck(AudioBuses.MACHINES, -14.0, SAFETY_DUCK_ATTACK_S, SAFETY_DUCK_RELEASE_S)
+		AudioBuses.duck(AudioBuses.AMBIENCE, -14.0, SAFETY_DUCK_ATTACK_S, SAFETY_DUCK_RELEASE_S)
+		AudioBuses.duck(AudioBuses.SFX, -20.0, SAFETY_DUCK_ATTACK_S, SAFETY_DUCK_RELEASE_S)
 
 
 ## The bus a play(sound) goes to. A safety prompt goes to Master: only the master volume governs it, no sub-slider can
@@ -162,8 +175,17 @@ func metronome_clicks() -> int:
 	return _metro_clicks
 
 
-## Advance the metronome by dt seconds (_process calls it with the frame delta).
+## The trim on the UI's voices now: 0 unless a prompt played in the last SAFETY_DUCK_RELEASE_S.
+func prompt_ui_db() -> float:
+	if _since_prompt < SAFETY_DUCK_ATTACK_S:
+		return SAFETY_UI_DB * _since_prompt / SAFETY_DUCK_ATTACK_S
+	var left := 1.0 - (_since_prompt - SAFETY_DUCK_ATTACK_S) / SAFETY_DUCK_RELEASE_S
+	return SAFETY_UI_DB * left if left > 0.0 else 0.0
+
+
+## Advance the metronome and a prompt's trim by dt seconds (_process calls it with the frame delta).
 func tick(dt: float) -> void:
+	_tick_prompt_trim(dt)
 	if not _metro_on or dt <= 0.0:
 		return
 	_metro_t += dt
@@ -197,6 +219,17 @@ func synth(
 func stop_all() -> void:
 	for p in _players:
 		p.stop()
+
+
+func _tick_prompt_trim(dt: float) -> void:
+	if is_inf(_since_prompt):
+		return
+	_since_prompt += maxf(dt, 0.0)
+	var trim := prompt_ui_db()
+	for p: AudioStreamPlayer in _ui_voices:
+		p.volume_db = float(_ui_voices[p]) + trim
+	if trim == 0.0:
+		_since_prompt = INF
 
 
 func _shared_stream(sound: String) -> AudioStream:

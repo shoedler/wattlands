@@ -181,11 +181,12 @@ All in `docs/decisions/siege.md`:
 | `net/` | `SiegeSnapshot` (encode and apply), `SiegeSnapHistory` (client interpolation), `SiegeRoutePredict` |
 | `view/` | `SiegeView` and `SiegeViewMath`; `v2/` holds the bake bank, the depth-tested batch and sprite, the shaders, the world layer, machines, crowd, shots and shot replay, the tilt-shift pass and a standalone demo scene |
 | `hud/` | `SiegeHud` (the `HudSpec`, palette and help); `SiegeHudCtl` (the base Control) and the plates `SiegeHudSession`, `SiegeHudCrew`, `SiegeHudColumn`, `SiegeHudCockpit`, `SiegeHudWorld`, `SiegeShopPanel`; `SiegeHudModel`, `SiegeCockpitModel` and `SiegeShopModel` (what they say, as data); `SiegeHudDraw` and `SiegeHudType` (the materials and the baked letter) |
-| `audio/` | `SiegeAudio`: all sounds synthesized with `Sfx.synth` |
+| `audio/` | `SiegeAudio`: the adapter around `GameAudioKit`; the sounds are data in `assets/siege/audio/audio.json` |
 | `art/` | The CPU rasterizer and its tools: `mock.mjs`, `hud_mock.mjs` (the HUD's approved mock), `hud_font.mjs`, `hud_parts.mjs`, `hud_bake.mjs`, `bake.mjs`, `export_map.mjs`, and `scene.mjs`, `life.mjs`, `world.mjs`, `shade.mjs`, `raster.mjs`, `sprites.mjs`, `png.mjs`, `v3.mjs`; `PROPOSAL.md` is the mockup proposal |
 | `content/siege/` | `shifts.json`, `balance.json`, `stations.json`, `enemies.json`, `waves.json`, `cosmetics.json`, `maps/rotae.json`, `strings.csv` |
 | `assets/siege/bake/` | `world.png`, `world_depth.png`, `atlas_0.png` and `atlas_1.png` with their `_depth` twins, `manifest.json` |
 | `assets/siege/hud/` | `hud_atlas.png` and `hud_atlas.json`: the HUD's letter, icons and slot shapes |
+| `assets/siege/audio/` | `audio.json` (recipes, stroke patterns, loops, bed, cues) and the WAVs it renders to |
 | `tests/games/siege/` | `contracts/`, `rules/`, `combat/`, `autopilot/`, `module/`, `hud/`, `view2/`, `integration/`, `sim/` (matrix, checker, headless rules sim), `static/`, `fixtures/`, `siege_fakes.gd`, `siege_kit.gd`, `test_siege_package.gd`, `e2e_check.mjs`, `map_check.test.mjs` |
 
 The rules (`rules/`, `combat/`) are pure `step(state, inputs, dt)` classes at dt 0.05 s. They use only `ctx.rng` (seeded) and `SiegeHashRng`, with no clock and no global random; `tests/games/siege/static` enforces it. Nothing here touches the trainer; Siege reaches it only through `ctx.directives`.
@@ -338,7 +339,7 @@ In PowerShell: `tools/godot.ps1 --path . -- --mock-trainer=erg`. Other profiles 
 - **Endurance is uneven for a compliant team.** At `budget_factor` 0.72 seeds 1-3 grade D (one Breach), A and B. 0.70 gave B, B, B but put endurance 35% under the T3 mean; 0.74 kept T3 but graded D, C, D (ADR "Final T3 factors").
 - **Untested on hardware.** Every run used MockTrainer. The ERG targets, the 50 to 117% step, the Overdrive switches, rescue, coasting and panic have not met a KICKR CORE (`HARDWARE_TEST.md`).
 - **The renderer is unmeasured on integrated graphics.** The view has only been measured on an NVIDIA GPU. 60 fps at 1080p on integrated graphics with 150 enemies, and the depth test (the anchor depth travels in the modulate colour), need a real check (`HARDWARE_TEST.md` sections 12 and 13).
-- **The synthesized audio is unheard.** The sounds are generated and tested for their triggers, never listened to on speakers.
+- **The audio is unheard.** The bank passes its scorecard and the triggers are tested, but nobody has listened to it on speakers (`HARDWARE_TEST.md` section 14).
 - **`bake.mjs --check` checks the version and the files, not the pixels.** A change to the art code without a version bump and a re-bake passes the check.
 - **Cosmetics unlock but can't be equipped.**
 
@@ -353,3 +354,17 @@ All of P0 is built. From P1 these are not:
 P2 notes:
 - A night siege. The view only reads state, but the art is baked, so it needs a second bake (world, atlases and ramps) and a switch in the view.
 - An endless mode: waves with no end, where B keeps growing. It needs an open-ended phase and a way to finish.
+
+## Audio
+
+Everything is rendered from `assets/siege/audio/audio.json` by `tools/audio` (`docs/AUDIO_PIPELINE.md`): no samples, no downloads. `SiegeAudio` only maps state to parameters and events to cues.
+
+- **The wheel, 1:1 with cadence.** `SiegeView.cranks[slot]` integrates the rider's cadence; the walkers' frames and the strokes read the same `revs`, so they cannot drift. Each revolution: pawl and footfall at 0 and .5, the creak at .25, the axle's knock at .75. A groan runs under them, and from about 170 W your own wheel starts to strain, brighter the harder you ride. The strokes stop dead at 0 rpm. The wheel's own turning stays by watts: the wheel is load, the walkers are legs. FTMS reports cadence about once a second, so the strokes lock to the walkers on screen exactly and to the rider's feet in rate only.
+- **Others' wheels** play pawl, creak and groan 10 dB under, without footfalls or the knock.
+- **Detail locked to the art:** the mine's picks and the pump's strokes follow their own drawn phase.
+- **Shots:** the ballista's twang and whoosh, the Scorpion's snap, the onager's release, its stone's flight and landing, a volley's three whistling arrows and their patter when the flight is over. The arrow organ whistles on an uneven cycle, 4.5 to 9 s apart at its full rate: its other racks are the release and the patter.
+- **The siege:** far horns on a wave, a push and a rush, each ducking the wheel while it blows, hooves, the ram, a walking tower's creak and its docking, gate hits (at most one a ram stroke, the same for a host and a client), the Breach (ducks everything but the prompts), tar bubbling, pouring and hissing, the junction's clatter by team watts.
+- **The hill:** gusting wind in two layers of co-prime length, brighter between waves, the far crowd and war drums by enemy count, crows and banners; a far anvil and a lark in the warm-up and the breaks.
+- **A pause** stops the battle's sound with the picture, drums included; a safety prompt reads at least 6 LU over the horns, the volleys and the wheel at the cadences and powers the preview rides (the numbers, and the low-cadence, high-power and busy-wave moments that stay under until the prompts duck deeper: `docs/decisions/audio-siege.md`).
+
+`node tools/audio/preview.mjs --game=siege` writes `build/audio_preview/siege.mp3`.

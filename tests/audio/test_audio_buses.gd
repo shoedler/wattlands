@@ -134,9 +134,9 @@ func test_sfx_warning_ducks_the_rest_not_ui() -> void:
 	var sfx := _sfx()
 	sfx.play("warning")
 	AudioBuses.tick(0.02)
-	assert_almost_eq(AudioBuses.duck_db(AudioBuses.MACHINES), -6.0, 0.01)
-	assert_almost_eq(AudioBuses.duck_db(AudioBuses.AMBIENCE), -6.0, 0.01)
-	assert_almost_eq(AudioBuses.duck_db(AudioBuses.SFX), -4.0, 0.01)
+	assert_almost_eq(AudioBuses.duck_db(AudioBuses.MACHINES), -14.0, 0.01)
+	assert_almost_eq(AudioBuses.duck_db(AudioBuses.AMBIENCE), -14.0, 0.01)
+	assert_almost_eq(AudioBuses.duck_db(AudioBuses.SFX), -20.0, 0.01)
 	assert_eq(AudioBuses.duck_db(AudioBuses.UI), 0.0)
 	assert_eq(AudioBuses.duck_db(AudioBuses.MASTER), 0.0)
 

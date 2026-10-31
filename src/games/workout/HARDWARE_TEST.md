@@ -39,3 +39,20 @@ Commands that drive the trainer pass `--allow-hw` to the wrapper (`tools/godot.p
 - [ ] Press F1 in a ride. Expected: the help overlay names watts, cadence, the timeline, the blocks on the ground, the crew and the gears; on a rider's first session it opens once by itself.
 - [ ] Over a whole Easy 30, watch the sky. Expected: blue hour at the start, rose and gold through the main set, clear day by the cool-down; windows lit at dawn and dark by day.
 - [ ] Vary your cadence from 60 to 110 rpm. Expected: the crank icon on your plate and your rider's legs follow at once, one turn per pedal stroke, and stay in step with your feet for a full minute.
+
+## 8. Listen
+
+Nobody has heard this audio: every number behind it was measured offline. Listen with the sound on, over the fan and the trainer.
+
+- [ ] Before riding, play `build/audio_preview/workout.mp3` (`node tools/audio/preview.mjs --game=workout`). Expected: a bike, not an engine: a chain, a soft push on each pedal, tyres and wind that grow with speed, birds in the grass.
+- [ ] Ride Easy 30 at 60, then 90, then 110 rpm. Expected: tick and press stay with the legs on screen at every cadence and stop as your legs stop; the sound follows your feet in rate, not in phase (FTMS reports cadence about once a second).
+- [ ] Stop pedalling at speed. Expected: the chain stops dead, the freewheel ticks on, evenly, slowing with the wheel; tyres and wind fade as you slow.
+- [ ] Ride ten minutes of a steady block with 7 bots. Expected: it does not freeze: gusts in the wind, patches of rougher road in the tyres and the chain, a creak on the roughest of them, a far bell or dog now and then. If the creak sounds like a broken bike rather than a rough road, or the press's strong and weak leg like a limp, say so: both are one level in `audio.json`. Whether the press reads as a wooden thunk or as boxy is open too (a fixed hump near 317 Hz). The group is a light scattered ticking around you, in a band of its own, that you notice when it stops. Your own strokes stay the clearest rhythm, and it does not swell when everyone starts or resumes together.
+- [ ] Go through a phase change. Expected: the chime, a beat later the bell, the banner silent. The warning sound plays only for a real safety prompt.
+- [ ] Stop pedalling for two minutes in the middle of a block so the ride pauses, then ride on. Expected: the birds and the far sounds carry on quietly under the pause, and nothing bursts when you start again.
+- [ ] In a sprint, pull the trainer's power or link so a real safety prompt fires. Expected: the warning stands clear of everything, the bike, the road and the interface sounds drop away at once and come back over two seconds; a start countdown keeps its level. If it is hard to hear over your fan, say so: this is the one sound that must never be missed.
+- [ ] Ride all of Easy 30 listening to the birds. Expected: a busy dawn chorus at the start that thins out as the sky brightens, with single calls by the cool-down, and never a stretch that sounds empty.
+- [ ] Shift in a sprint. Expected: a click, then the chain crossing a moment later, up and down audibly different.
+- [ ] Ride a scored sprint (the first in Easy 30). Expected: the crowd grows as it comes on screen, claps and rings its bell on your cadence, cheers at the finish, and fades as it leaves the screen. There is no crowd in the warm-up.
+- [ ] Ride above FTP for three minutes. Expected: your breath and the bottom bracket come up with the effort. If the breath tires you, say so: it gets deleted, not hidden.
+- [ ] Note what tires you over half an hour, and set the levels in Settings > Audio (Machines holds your legs and chain: it goes silent when you stop pedalling; Effects the tyres, wind, freewheel, bell and crowd; Ambience the birds, grass and what is far off).
