@@ -402,6 +402,8 @@ describe('checkPaths', () => {
     const noescape = checkPaths({ changes: [change('src/games/siege/a.gd')], commits: [{ sha: 'abc', subject: 'platform: x', paths: ['src/games/siege/a.gd'] }], manifest, ws: 'tank' });
     assert.equal(noescape.length, 1, 'a platform: subject does not open another game');
     assert.deepEqual(paths('audio', ['src/games/siege/audio/a.gd', 'tests/games/tank/audio/test_a.gd']), []);
+    assert.deepEqual(paths('audio', ['docs/decisions/tank.md', 'docs/changelog.d/workout.md', 'docs/credits.d/siege.md']), [], 'EXECUTION_DAG 1: audio appends to these after the game lands');
+    assert.match(paths('audio', ['docs/decisions/siege.md'])[0], /belongs to game siege/);
     assert.deepEqual(paths('tank', ['src/games/tank/a.gd', 'assets/tank/a.png', '.github/workflows/game-tank.yml', 'docs/credits.d/tank.md']), []);
   });
 

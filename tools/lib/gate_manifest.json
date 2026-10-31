@@ -16,7 +16,7 @@
     "fishing": { "game": "fishing" },
     "audio":   { "paths": ["tools/audio/**", "addons/wattlands/audio/**", "addons/wattlands/core/settings.gd", "tests/audio/**", "assets/_shared/audio/**", "assets/*/audio/**",
                  "src/games/*/**", "tests/games/*/**", "src/app/**", "tests/app/**", "content/strings/**", "docs/AUDIO_PIPELINE.md", "docs/GAME_SDK.md",
-                 "docs/decisions/audio*.md", "docs/changelog.d/audio*.md", "docs/credits.d/*.md", ".github/workflows/game-*.yml"],
+                 "docs/decisions/audio*.md", "docs/changelog.d/audio*.md", "docs/credits.d/*.md", "docs/{decisions,changelog.d}/{tank,workout}.md", ".github/workflows/game-*.yml"],
                  "also": ["tools/lib/run_tests.mjs"] },
     "cleanup": { "paths": ["**"], "deny": ["addons/wattlands/trainer/**", "tests/governor/**", "tests/control/**", "tests/arch/**"] },
     "docs":    { "paths": ["docs/**", ".claude/agents/**", "assets/readme/**"], "also": ["README.md", "CLAUDE.md", "CHANGELOG.md", "CREDITS.md"] },
