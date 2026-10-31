@@ -327,7 +327,7 @@
         {"src": "sine", "f": [66, 40], "glide": "exp", "gain": 0.8, "env": {"a": 0.006, "d": 0.36}},
         {"src": "noise", "color": "brown", "gain": 1.6, "env": {"a": 0.006, "d": 0.42}, "fx": [{"lp": {"f": 280}}]}
       ]},
-    "incoming_whistle": {"dur": 2.5, "rate": 22050, "ch": 1, "seed": 1151, "compress": "pcm",
+    "incoming_whistle": {"dur": 2.5, "rate": 22050, "ch": 1, "seed": 1151,
       "layers": [
         {"src": "chirp", "points": [[0, 1750], [1.4, 1380], [2.5, 720]], "vibrato": {"hz": 9, "cents": 14}, "gain": 0.8, "env": {"points": [[0, 0], [0.3, 0.12], [1.4, 0.5], [2.2, 1], [2.47, 1], [2.5, 0]]}},
         {"src": "noise", "color": "white", "gain": 1.0, "env": {"points": [[0, 0], [0.3, 0.1], [1.4, 0.4], [2.2, 1], [2.47, 1], [2.5, 0]]}, "fx": [{"bp": {"f": [2200, 900], "q": 2.0}}]}
@@ -494,9 +494,9 @@
   "machines": {
     "diesel": {"bus": "Machines", "priority": 5,
       "events": [
-        {"at": [0.2778], "sound": "diesel_fire_a", "db": 2.5, "db_by": [{"param": "power", "points": [[0, -9], [1.2, 0]]}], "pitch_table": [0, -0.015, 0.01], "priority": 5},
-        {"at": [0.6111], "sound": "diesel_fire_b", "db": 1.0, "db_by": [{"param": "power", "points": [[0, -9], [1.2, 0]]}], "pitch_table": [0.005, -0.01, 0], "priority": 5},
-        {"at": [0.9444], "sound": "diesel_fire_c", "db": 1.8, "db_by": [{"param": "power", "points": [[0, -9], [1.2, 0]]}], "pitch_table": [-0.01, 0.005, 0.012], "priority": 5},
+        {"at": [0.2778], "sound": "diesel_fire_a", "db": 2.5, "db_by": [{"param": "power", "points": [[0, -9], [1.2, 0]]}], "pitch_by": [{"param": "rpm", "points": [[40, 0.94], [120, 1.06]]}], "pitch_table": [0, -0.015, 0.01], "priority": 5},
+        {"at": [0.6111], "sound": "diesel_fire_b", "db": 1.0, "db_by": [{"param": "power", "points": [[0, -9], [1.2, 0]]}], "pitch_by": [{"param": "rpm", "points": [[40, 0.94], [120, 1.06]]}], "pitch_table": [0.005, -0.01, 0], "priority": 5},
+        {"at": [0.9444], "sound": "diesel_fire_c", "db": 1.8, "db_by": [{"param": "power", "points": [[0, -9], [1.2, 0]]}], "pitch_by": [{"param": "rpm", "points": [[40, 0.94], [120, 1.06]]}], "pitch_table": [-0.01, 0.005, 0.012], "priority": 5},
         {"at": [0.2778, 0.6111, 0.9444], "sound": "diesel_fire_hard", "db": -3, "db_by": [{"param": "power", "points": [[1.0, -6], [1.4, 0]]}], "when": {"param": "power", "min": 1.0}, "priority": 5},
         {"at": [0.3, 0.6333, 0.9667], "sound": "diesel_valve_ex", "db": 0, "db_by": [{"param": "rpm", "points": [[50, -18], [110, -12]]}], "lead_only": true, "priority": 4},
         {"at": [0.1111, 0.4444, 0.7778], "sound": "diesel_valve_in", "db": 0, "db_by": [{"param": "rpm", "points": [[50, -20], [110, -14]]}], "lead_only": true, "priority": 4},
@@ -549,8 +549,8 @@
       "events": [
         {"at": [0, 0.5], "sound": "bow_shot", "db": -3, "db_by": [{"param": "power", "points": [[0, -6], [1.2, 0]]}], "when": {"param": "firing", "min": 0.5}, "priority": 5},
         {"at": [0, 0.5], "sound": "bolt_clack", "db": -6, "db_by": [{"param": "power", "points": [[0, -8], [1.2, 0]]}], "priority": 5},
-        {"at": [0.25, 0.75], "sound": "link_clink", "db": -16, "lead_only": true, "priority": 4},
-        {"at": [0.2, 0.7], "sound": "casing_tink", "db": -18, "when": {"param": "rounds", "min": 1}, "lead_only": true, "priority": 4}
+        {"at": [0.25, 0.75], "sound": "link_clink", "db": -19, "lead_only": true, "priority": 4},
+        {"at": [0.2, 0.7], "sound": "casing_tink", "db": -22, "when": {"param": "rounds", "min": 1}, "lead_only": true, "priority": 4}
       ],
       "loops": []},
     "repair": {"bus": "Machines", "priority": 5,
