@@ -5,8 +5,10 @@ extends Node
 ## Silent in headless runs and at --sim-speed other than 1: no player, no stream, no error, and every record still kept.
 ## Sync: every locked file starts with 80 ms of silence. Strokes are planned one horizon ahead and the player starts at
 ## once from a seek into that silence, which becomes the sub-frame delay (SPEC_AUDIO 2.4; tools/audio/jitter_bench.gd
-## measures it). What this cannot do: FTMS reports cadence about once a second, not crank angle (BRIEF 4.5), so the
-## sound locks to the on-screen crank exactly and to the rider's feet in rate only.
+## measures it). The strokes take the sawtooth of Godot's delta smoothing out of `revs` with one time offset for the
+## whole kit (FrameClockLock), so commit(dt) takes the delta the views integrate: strokes run on real time, within a
+## frame of the picture, and never drift from it. What this cannot do: FTMS reports cadence about once a second, not
+## crank angle (BRIEF 4.5), so the sound locks to the on-screen crank and to the rider's feet in rate only.
 const PREROLL_S := 0.080
 ## One mix step of silence always stays before the attack, in case the first mix step of a new playback ramps up.
 const ATTACK_GUARD_S := 0.012
@@ -61,6 +63,8 @@ var _pools: Dictionary = {}
 var _loop_used: int = 0
 var _loop_free: Array[AudioStreamPlayer] = []
 var _loop_count: int = 0
+var _frame_lock: FrameClockLock = FrameClockLock.new()
+var _last_commit_us: int = -1
 
 
 ## One player in a voice pool.
@@ -101,6 +105,7 @@ class MachineSlot:
 	var params: Dictionary = {}
 	var lead: bool = false
 	var driven: bool = false
+	var lead_revs: float = 0.0  ## how far `revs` runs ahead of the strokes; held while the crank stands
 	var stopping: bool = false
 
 
@@ -134,6 +139,8 @@ func setup(bank_path: String, p_seed: int) -> bool:
 func setup_bank(bank: AudioBank, p_seed: int) -> bool:
 	stop_all()
 	AudioBuses.ensure()
+	_frame_lock.reset()
+	_last_commit_us = -1
 	_bank = bank
 	_seed = p_seed
 	_connect_pause()
@@ -258,12 +265,19 @@ func sound(
 	_fire(sound_id, _next_variant(sound_id), db, pitch, bus, CUE_PRIORITY, true)
 
 
-## Exactly once per frame, after every drive().
+## Exactly once per frame, after every drive(), with the delta the views integrated their cranks with. Silent, it reads
+## no clock: real time is the delta, and strokes fall exactly on `revs`.
 func commit(dt: float) -> void:
+	commit_timed(dt, dt if silent else _real_elapsed(dt))
+
+
+## commit() with the frame's real seconds given (tests, which have no real frames).
+func commit_timed(dt: float, real_dt: float) -> void:
 	_t += dt
 	_frame_s = dt if _frame_s <= 0.0 else lerpf(_frame_s, dt, FRAME_ALPHA)
 	if _bank == null:
 		return
+	_frame_lock.update(dt, real_dt)
 	var horizon := clampf(1.5 * _frame_s, HORIZON_MIN_S, HORIZON_MAX_S)
 	var strokes := _drive_machines(horizon, dt)
 	strokes.sort_custom(_sooner)
@@ -300,6 +314,11 @@ func stop_all() -> void:
 	_pending.clear()
 
 
+## Seconds the views run ahead of the clock strokes are timed on, this frame (tests, the bench).
+func frame_lead_s() -> float:
+	return _frame_lock.lead_s
+
+
 ## The voice of a driven instance, null when there is none (tests).
 func machine_voice(instance: String) -> CadenceVoice:
 	var slot: MachineSlot = _machines.get(instance)
@@ -326,6 +345,13 @@ func current_bed() -> AmbienceBed:
 ## Pool slots in use by loops at this moment (tests).
 func loops_in_use() -> int:
 	return _loop_used
+
+
+func _real_elapsed(dt: float) -> float:
+	var now := Time.get_ticks_usec()
+	var was := _last_commit_us
+	_last_commit_us = now
+	return dt if was < 0 else float(now - was) / 1000000.0
 
 
 func _quiet_run() -> bool:
@@ -382,7 +408,10 @@ func _drive_machines(horizon: float, dt: float) -> Array[Dictionary]:
 			slot.loops.loop.update(slot.params, trim, slot.lead, dt)
 		_sync_loops(slot.loops)
 		var rpm := 0.0 if _paused else slot.rpm
-		for ev: Dictionary in slot.voice.plan(slot.revs, rpm, horizon, slot.params, slot.lead):
+		if rpm > CrankClock.STOP_RPM:
+			slot.lead_revs = rpm / 60.0 * _frame_lock.lead_s
+		var revs := slot.revs - slot.lead_revs
+		for ev: Dictionary in slot.voice.plan(revs, rpm, horizon, slot.params, slot.lead):
 			ev["lead"] = slot.lead
 			ev["bus"] = slot.bus
 			ev["db"] = float(ev["db"]) + trim

@@ -4,16 +4,21 @@ extends SceneTree
 ## A temporary bus with an AudioEffectCapture (muted, so nothing reaches the speakers: the capture sits before the bus
 ## volume) records what the kit's voices mix. The bench drives a CrankClock at each rpm for 25 s, finds the click onsets
 ## by sample index, fits a line to them and takes the residual as the jitter. It needs no WAV: its stream is built in
-## code. Three runs per rpm:
+## code. Three runs per rpm, then one sprint:
 ## - "engine": the pre-roll seek, with the frame delta a game's view integrates. This one decides the exit code.
 ## - "real": the same, with the crank integrated from real elapsed time, so revs is a straight line in time. Godot's
 ##   delta smoothing hands out whole vsyncs and carries the rest over, which puts a sawtooth of up to one vsync on revs
-##   in an "engine" run. The picture has that sawtooth too (S1 holds), but it hides what this run shows: kit and driver.
+##   in an "engine" run. The picture keeps that sawtooth; the kit's FrameClockLock keeps it off the strokes. This run
+##   has none to remove, so it shows the kit and the driver alone.
 ## - "baseline": the engine's delta and every stroke started at PREROLL_S, no seek: what the pre-roll is compared with.
-## Exit 0 only if every "engine" run holds p99 <= 12 ms, stddev <= 4 ms and a slope within 0.1 % of 60/rpm; 1 on a miss
-## (the numbers go in the report, the thresholds do not move); 3 on the Dummy driver, where nothing was measured.
-## For a quick look: --rpms=90,140, --run-s=<n>, --no-baseline. --no-delta-smoothing turns Godot's smoothing off for
-## this run, which shows what application/run/delta_smoothing=false would do to the "engine" numbers.
+## - "sprint": the engine's delta, 70 rpm, then to 130 rpm in 2 s. Also decides the exit code: every stroke fired must
+##   be heard, and what follows SPRINT_SETTLED_S is held to the limits at 130 rpm.
+## Exit 0 only if every "engine" and "sprint" run holds p99 <= 12 ms, stddev <= 4 ms and a slope within 0.1 % of 60/rpm,
+## and a commit of 8 machines stays inside D10; 1 on a miss (the numbers go in the report, the thresholds do not move);
+## 3 on the Dummy driver, where nothing was measured.
+## view_lead_ms_max in a run is how far the picture's crank came from the strokes' clock, in time.
+## For a quick look: --rpms=90,140, --run-s=<n>, --no-baseline, --no-sprint. --no-delta-smoothing turns Godot's
+## smoothing off for this run, which shows what application/run/delta_smoothing=false would do to the "engine" numbers.
 
 const RPMS: Array[float] = [60.0, 90.0, 110.0, 140.0]
 const RUN_S := 25.0
@@ -31,6 +36,13 @@ const CLICK_RATE := 22050
 const CLICK_LEVEL := 0.6
 const COMMIT_BENCH_S := 5.0
 const COMMIT_MACHINES := 8
+const COMMIT_MAX_MS := 0.5
+const SPRINT_FROM_RPM := 70.0
+const SPRINT_TO_RPM := 130.0
+const SPRINT_START_S := 5.0
+const SPRINT_RAMP_S := 2.0
+const SPRINT_SETTLED_S := 8.0
+const SPRINT_MIN_RUN_S := 15.0
 
 var _kit: GameAudioKit = null
 var _capture: AudioEffectCapture = null
@@ -57,6 +69,8 @@ var _instance: String = "bench"
 var _mode: String = ""
 var _last_us: int = 0
 var _real_dts: PackedFloat64Array = PackedFloat64Array()
+var _leads: PackedFloat64Array = PackedFloat64Array()
+var _settled_from: int = -1
 
 
 func _initialize() -> void:
@@ -84,6 +98,8 @@ func _initialize() -> void:
 		_plan.append({"mode": "real", "rpm": rpm})
 		if not CmdLine.get_bool("no-baseline"):
 			_plan.append({"mode": "baseline", "rpm": rpm})
+	if not CmdLine.get_bool("no-sprint"):
+		_plan.append({"mode": "sprint", "rpm": SPRINT_TO_RPM})
 	_kit = GameAudioKit.new()
 	_kit.force_audio = true
 	root.add_child(_kit)
@@ -109,12 +125,16 @@ func _process(delta: float) -> bool:
 			_deltas.append(delta)
 			_real_dts.append(real_dt)
 			_ttnm.append(AudioServer.get_time_to_next_mix())
-			_clock.advance(_rpm, dt)
-			_kit.drive(_instance, "bench", _clock.revs, _rpm, {}, true)
+			var rpm := sprint_rpm(_run_t) if _mode == "sprint" else _rpm
+			_clock.advance(rpm, dt)
+			_kit.drive(_instance, "bench", _clock.revs, rpm, {}, true)
 			_kit.commit(dt)
+			_leads.append(absf(_kit.frame_lead_s()))
 			_pull()
 			_run_t += dt
-			if _run_t >= _run_s:
+			if _settled_from < 0 and _run_t >= SPRINT_SETTLED_S:
+				_settled_from = _onsets.size()
+			if _run_t >= (maxf(_run_s, SPRINT_MIN_RUN_S) if _mode == "sprint" else _run_s):
 				_run_t = 0.0
 				_state = "settle"
 		"settle":
@@ -141,6 +161,8 @@ func _begin_run() -> void:
 	_deltas.clear()
 	_ttnm.clear()
 	_real_dts.clear()
+	_leads.clear()
+	_settled_from = -1
 	_pull()
 	_onsets.clear()
 	_run_t = 0.0
@@ -151,11 +173,14 @@ func _begin_run() -> void:
 func _end_run() -> void:
 	var voice := _kit.machine_voice(_instance)
 	var run := analyse(_rpm, _onsets, voice.fired)
+	if _mode == "sprint":
+		run = analyse_sprint(_onsets, _settled_from, voice.fired)
 	run["mode"] = _mode
 	run["late"] = voice.late
 	run["dropped"] = voice.dropped
 	run["voiceless"] = _kit.voiceless
 	run["discarded_frames"] = _capture.get_discarded_frames()
+	run["view_lead_ms_max"] = percentile(_leads, 1.0) * 1000.0
 	run["frame_ms_mean"] = mean(_deltas) * 1000.0
 	run["frame_ms_p99"] = percentile(_deltas, 0.99) * 1000.0
 	run["frame_ms_max"] = percentile(_deltas, 1.0) * 1000.0
@@ -178,7 +203,7 @@ func _end_run() -> void:
 		_state = "commit"
 
 
-## D10 of the scorecard: a kit commit with 8 machines (a bench number, not a gate).
+## D10 of the scorecard: a kit commit with 8 machines, mean at most COMMIT_MAX_MS.
 func _step_commit_bench(delta: float) -> void:
 	var t0 := Time.get_ticks_usec()
 	for i in COMMIT_MACHINES:
@@ -197,10 +222,12 @@ func _finish() -> void:
 	var ok := true
 	var ok_real := true
 	for run: Dictionary in _runs:
-		if run["mode"] == "engine" and not bool(run["pass"]):
+		if (run["mode"] == "engine" or run["mode"] == "sprint") and not bool(run["pass"]):
 			ok = false
 		if run["mode"] == "real" and not bool(run["pass"]):
 			ok_real = false
+	var commit_ms := mean(_commit_us) / 1000.0
+	ok = ok and commit_ms <= COMMIT_MAX_MS
 	var report := {
 		"driver": AudioServer.get_driver_name(),
 		"mix_rate": _mix_rate,
@@ -212,8 +239,9 @@ func _finish() -> void:
 			"p99_ms": P99_MAX_MS,
 			"stddev_ms": STDDEV_MAX_MS,
 			"slope_tolerance": SLOPE_TOLERANCE,
+			"commit_ms": COMMIT_MAX_MS,
 		},
-		"commit_8_machines_mean_ms": mean(_commit_us) / 1000.0,
+		"commit_8_machines_mean_ms": commit_ms,
 		"runs": _runs,
 		"pass": ok,
 		"pass_real_clock": ok_real,
@@ -261,6 +289,12 @@ func _pull() -> void:
 			_onsets.append(float(at) / _mix_rate)
 		_last_onset = at
 	_index += n
+
+
+## The sprint's cadence at `t` seconds into its run.
+static func sprint_rpm(t: float) -> float:
+	var u := clampf((t - SPRINT_START_S) / SPRINT_RAMP_S, 0.0, 1.0)
+	return lerpf(SPRINT_FROM_RPM, SPRINT_TO_RPM, u)
 
 
 ## One machine, the diesel's three strokes a revolution (firings 143 ms apart at 140 rpm), on `bus`.
@@ -331,6 +365,16 @@ static func analyse(rpm: float, onsets: PackedFloat64Array, fired: int) -> Dicti
 	out["slope_s_per_rev"] = line["b"]
 	out["slope_error_pct"] = slope_error * 100.0
 	out["pass"] = p99 <= P99_MAX_MS and sd <= STDDEV_MAX_MS and slope_error <= SLOPE_TOLERANCE
+	return out
+
+
+## A sprint's numbers: the limits at SPRINT_TO_RPM on the onsets from `settled_from` on, and every stroke was heard.
+static func analyse_sprint(onsets: PackedFloat64Array, settled_from: int, fired: int) -> Dictionary:
+	var settled := onsets.slice(settled_from) if settled_from >= 0 else PackedFloat64Array()
+	var out := analyse(SPRINT_TO_RPM, settled, fired)
+	out["onsets"] = onsets.size()
+	out["onsets_settled"] = settled.size()
+	out["pass"] = bool(out["pass"]) and onsets.size() == fired
 	return out
 
 

@@ -107,7 +107,7 @@ Repo WAV caps, `tools/audio/test/budget.test.mjs`: tank 7.0, fishing 4.5, siege 
 
 It writes to `build/audio_preview/`: `<game>.wav` and `.mp3`, `<game>_<machine>_<rpm>.wav` (the lead alone, 10 revolutions), `<game>_bed.wav` (30 s), `<game>_events.json`, and with ffmpeg `<game>.png`, a spectrogram per solo and `<game>.ebur128.txt`. ffmpeg is optional and used nowhere else; the JS loudness numbers agree with its `ebur128` to 0.1 LU on the fixture. `build/.gdignore` is created first, or the next `--import` would take every preview WAV in.
 
-`scorecard` computes the game developer (D) and audio creator (A) rows and exits non-zero on any failure with no waiver. `tools/audio/test/scorecard_gate.test.mjs` holds every bank on disk with a `preview` block to it, so these are permanent gates. D rows never take a waiver, and neither do A1, A9, A11 or A15. D8 (event coverage) is each game's GUT test; D10 is a bench.
+`scorecard` computes the game developer (D) and audio creator (A) rows and exits non-zero on any failure with no waiver. `tools/audio/test/scorecard_gate.test.mjs` holds every bank on disk with a `preview` block to it, so these are permanent gates. D rows never take a waiver, and neither do A1, A9, A11 or A15. D8 (event coverage) is each game's GUT test; D10 is the jitter bench's: a kit commit with 8 machines, 0.5 ms at most on average.
 
 Levels add up tightly: Machines at -22 and Ambience at -32 sum to about -21.5 LUFS, under A1's -20 floor unless events are frequent. The fixture reaches -19.3 with Machines at -20.4, the top of their window, so start a bank there.
 
@@ -122,8 +122,16 @@ How a row reads the audio, where the name alone doesn't say:
 - A12: the bed's 50 ms envelope, autocorrelated at each layer's own length. A second layer of a co-prime length and the spots are what bring it down.
 - A16: at least 3 different spot sounds in 60 s, and no 2 different spots within 2 s. A spot whose own gap can be under 2 s (cricket trains) is a texture and counts only toward the 3. Spots run on independent timers, so one seed passing says little: a bed's optional `spot_min_gap_s` (2.2 is enough, a little over the row's 2 s) makes it hold on every seed, by holding a due detail back until that long after the last one's last burst. A texture neither waits nor holds others up.
 
+## Stroke timing
+
+A game's view integrates its crank from the frame delta and hands the kit `revs`, `rpm` and, in `commit(dt)`, that same delta. Godot's delta smoothing hands out whole vsyncs and carries the rest: on a 59.94 Hz display that frame clock falls 1 ms/s behind real time and pays 16 ms back in a few frames, every 16 s. That sawtooth is on `revs`, and the picture keeps it.
+
+The strokes do not. `FrameClockLock`, one per kit, keeps the frame clock's distance from real time (`commit` reads `Time.get_ticks_usec`) less a 20 s mean of it, the `lead_s`. A machine's strokes are planned at `revs - rpm / 60 * lead_s`, so they run on real time, 16 ms or so at most from the crank on screen. Nothing is integrated per machine, so nothing can drift, and a jump in `revs` passes straight through. With smoothing off, or a display at its nominal rate, the lead is 0. Past 40 ms the frames and real time have really parted (a gap between commits), and the lock follows the frames at once.
+
+A silent kit reads no clock: its real time is the delta, its lead 0, its strokes exactly on `revs`, so headless runs stay deterministic. The preview has no frame clock to correct and runs the same way. `tools/audio/jitter_bench.gd` measures it all on the real driver; `tests/audio/test_frame_clock_lock.gd` holds the stops, jumps, sprints and pauses to it with a simulated frame clock.
+
 ## What no number here can say
 
 Whether a diesel reads as a diesel or a gull as a gull, whether an hour of it is pleasant, the balance on real speakers over a real trainer and fan, driver latency on a real device, and how it feels against your own feet. The critics check coherence, not beauty. Those stay open until someone listens to `build/audio_preview/*.mp3` and rides.
 
-FTMS reports cadence, not crank angle, about once a second. The audio locks to the on-screen crank exactly and to the feet in rate only.
+FTMS reports cadence, not crank angle, about once a second. The audio locks to the on-screen crank, within a frame and with no drift, and to the feet in rate only.
