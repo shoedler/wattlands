@@ -37,23 +37,12 @@ const FREE_STRIP_PCT := 55.0
 ## Off-screen riders sit this far inside the left and right edges (a rider sprite is 88 wide).
 const EDGE_MARGIN_LEFT := 44.0
 const EDGE_MARGIN_RIGHT := 44.0
-## Client display, other riders: render_t runs on the frame clock interp_delay() behind the
-## newest snapshot's host time (a game has no NetSession handle, so the snapshot's tick is the
-## host time) and never passes the newest snapshot (no extrapolation). The delay is the mean
-## spacing of the snapshot history, at least INTERP_DELAY_S (NetSession's documented 100 ms
-## interpolation at 10 Hz, host_time() - 0.1) and at most INTERP_DELAY_MAX_S. Under the 8-rider
-## load snapshots arrive about once a second; a 0.1 s delay would hold the other riders at the
-## newest snapshot for most of each second and then hurry them on.
-const INTERP_DELAY_S := 0.1
-## render_t further than this from where it belongs (the first snapshot, a rejoin, a stall)
-## jumps there.
-const CLOCK_RESYNC_S := 1.5
-## The longest delay. It stays under CLOCK_RESYNC_S, so a render_t held at the newest snapshot
-## is never resynced (sent back) when the delay grows.
-const INTERP_DELAY_MAX_S := CLOCK_RESYNC_S - 0.1
-## A render_t that fell behind (a late snapshot held it at the newest) catches up with this
-## time constant.
-const CLOCK_CATCHUP_TAU_S := 0.25
+## Client display, other riders: a SnapRenderClock. Its constants under the names this view's tests
+## read.
+const INTERP_DELAY_S := SnapRenderClock.CLIENT_DELAY_S
+const CLOCK_RESYNC_S := SnapRenderClock.RESYNC_S
+const INTERP_DELAY_MAX_S := SnapRenderClock.MAX_DELAY_S
+const CLOCK_CATCHUP_TAU_S := SnapRenderClock.CATCHUP_TAU_S
 ## Client display, local rider: drawn from its own prediction (moved by its predicted speed
 ## each frame) and blended toward the client state's value (the host's latest plus the
 ## prediction since) with this time constant. It never moves backwards; it jumps to the state
@@ -117,7 +106,11 @@ var audio: WorkoutAudio = null
 ## The latest model (tests and screenshots read it).
 var model: Dictionary = {}
 ## Client: the host time (s) the other riders are drawn at.
-var render_t: float = 0.0
+var render_t: float:
+	get:
+		return _clock.render_t
+	set(value):
+		_clock.render_t = value
 ## Client: the distance (m) the local rider is drawn at.
 var local_d: float = 0.0
 ## The canvas (art px) to draw on instead of the SubViewport's (tests, render_frames).
@@ -126,7 +119,7 @@ var canvas_override: Vector2 = Vector2.ZERO
 var env_t: float = 0.0
 var _canvas: Vector2 = Vector2(WorkoutArt.W, WorkoutArt.H)
 var _built: bool = false
-var _clock_set: bool = false
+var _clock: SnapRenderClock = SnapRenderClock.new()
 var _local_set: bool = false
 ## Client: the local rider's state distance last frame, and for how long it has not moved.
 var _local_seen: float = 0.0
@@ -173,7 +166,7 @@ func advance(delta: float) -> void:
 		game.tick_cranks(delta)
 	_env_step(delta)
 	if _is_client() and game.state != null:
-		_advance_clock(delta)
+		_clock.advance(delta, game.history)
 		_advance_local(delta)
 	_breath_step(delta)
 	_glide_dt = delta
@@ -185,32 +178,10 @@ func _is_client() -> bool:
 	return game != null and game.ctx != null and game.ctx.role == Wl.CLIENT
 
 
-## Client: how far render_t runs behind the newest snapshot (s): the snapshot history's mean
-## spacing, clamped to INTERP_DELAY_S..INTERP_DELAY_MAX_S (INTERP_DELAY_S before two snapshots
-## are in). 0.1 at 10 Hz, 1.0 for snapshots a second apart.
+## Client: how far render_t runs behind the newest snapshot (s): 0.1 at 10 Hz, 1.0 for snapshots a
+## second apart.
 func interp_delay() -> float:
-	var spacing := game.history.mean_spacing() if game != null and game.history != null else 0.0
-	return clampf(spacing, INTERP_DELAY_S, INTERP_DELAY_MAX_S)
-
-
-## render_t moves with the frame clock, catches up softly when it is behind the newest
-## snapshot's time minus interp_delay(), and stops at the newest snapshot. A delay that grows
-## leaves render_t ahead of its goal: it runs on and waits at the newest snapshot, never back.
-func _advance_clock(delta: float) -> void:
-	var history := game.history
-	if history == null or history.is_empty():
-		return
-	var newest := history.newest_t()
-	var goal := newest - interp_delay()
-	if not _clock_set or absf(goal - render_t) > CLOCK_RESYNC_S:
-		render_t = goal
-		_clock_set = true
-		return
-	render_t += delta
-	var behind := goal - render_t
-	if behind > 0.0:
-		render_t += behind * (1.0 - exp(-delta / CLOCK_CATCHUP_TAU_S))
-	render_t = minf(render_t, newest)
+	return _clock.delay(game.history if game != null else null)
 
 
 ## The local rider moves on by its predicted speed, then blends toward the state's distance;
@@ -246,7 +217,7 @@ func shown_distance(peer: int) -> float:
 		return r.distance_m()
 	if peer == game.ctx.local_peer:
 		return local_d if _local_set else r.distance_m()
-	if _clock_set and game.history != null:
+	if _clock.is_set() and game.history != null:
 		return game.history.distance_at(peer, render_t, r.distance_m())
 	return r.distance_m()
 
