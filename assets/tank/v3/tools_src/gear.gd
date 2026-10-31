@@ -1,7 +1,7 @@
 extends RefCounted
-## Running gear for the v3 tank mock: the track as a belt round its wheels (road wheels, sprocket,
+## Running gear for the tank generators: the track as a belt round its wheels (road wheels, sprocket,
 ## idler, return rollers), links that travel with the hull's travel, wheels drawn per pixel at
-## their rotation angle, and suspension that follows a ground profile.
+## their rotation angle.
 
 const Px = preload("res://assets/tank/v3/tools_src/px.gd")
 
@@ -247,87 +247,3 @@ static func draw_wheel(img: Image, c: Vector2, r: float, ang: float, kind: Strin
 							continue
 			if col.a > 0.0:
 				Px.put(img, x, y, col)
-
-
-## Suspension: the road wheels' centres in target coords for the hull transform `xf` (local ->
-## target) over `ground` (Callable: target x -> target ground y), each kept within its travel.
-static func wheel_centres(gear: Dictionary, xf: Transform2D, ground: Callable) -> Array[Vector2]:
-	var out: Array[Vector2] = []
-	var t := float(gear["T"])
-	for w: Dictionary in gear["wheels"]:
-		var mount: Vector2 = xf * Vector2(float(w["x"]), float(w["y"]))
-		var r := float(w["r"])
-		var want := float(ground.call(mount.x)) - r - t
-		var s := clampf(want - mount.y, -float(gear["up"]), float(gear["droop"]))
-		out.append(mount + Vector2(0, s))
-	return out
-
-
-## Draws the running gear (behind the hull: road wheels, arms, the track; in front: sprocket,
-## idler) into `img`. `wc` = the road wheels' centres (target coords), `xf` local -> target.
-static func draw_back(
-	img: Image, gear: Dictionary, xf: Transform2D, wc: Array[Vector2], travel: float, enemy := false
-) -> void:
-	var circles := _circles(gear, xf, wc)
-	var b := belt(circles)
-	var ang := travel
-	var t := float(gear["T"])
-	# suspension: a trailing arm from each hub to its pivot on the hull, a coil spring above the hub
-	var dark := Color("#1a130d") if not enemy else Color("#151915")
-	var mid := Color("#3a2c1e") if not enemy else Color("#2c332c")
-	var lit := Color("#6a5236") if not enemy else Color("#4f574f")
-	for i in wc.size():
-		var w: Dictionary = gear["wheels"][i]
-		var r := float(w["r"])
-		var piv: Vector2 = xf * Vector2(float(w["x"]) - r + 0.5, float(w["y"]) - r * 0.6)
-		var stop: Vector2 = xf * Vector2(float(w["x"]) + 2.5, float(w["y"]) - r - 7.0)
-		var n := maxi(ceili(wc[i].distance_to(stop)), 1)
-		for k in n + 1:
-			var q := wc[i].lerp(stop, float(k) / n) + Vector2(1, 0)
-			Px.put(img, floori(q.x), floori(q.y), lit if k % 2 == 0 else dark)
-			Px.put(img, floori(q.x) + 1, floori(q.y), mid if k % 2 == 0 else dark)
-		Px.linef(img, wc[i] + Vector2(0, 1), piv + Vector2(0, 1), dark)
-		Px.linef(img, wc[i], piv, mid)
-		Px.put(img, floori(piv.x), floori(piv.y), lit)
-	DARK = bool(gear.get("dark", false))
-	if not bool(gear.get("track_front", false)):
-		draw_track(img, b, travel, t, enemy)
-	if bool(gear.get("idler_back", false)):
-		var idb: Dictionary = gear["idler"]
-		draw_wheel(img, xf * (idb["c"] as Vector2), float(idb["r"]), travel / float(idb["r"]) + xf.get_rotation(), "idler", enemy)
-	for i in wc.size():
-		var w2: Dictionary = gear["wheels"][i]
-		draw_wheel(img, wc[i], float(w2["r"]), ang / float(w2["r"]), "road", enemy)
-	for rl: Dictionary in gear["rollers"]:
-		draw_wheel(img, xf * (rl["c"] as Vector2), float(rl["r"]), ang / float(rl["r"]), "roller", enemy)
-
-
-static func draw_front(
-	img: Image, gear: Dictionary, xf: Transform2D, wc: Array[Vector2], travel: float, enemy := false
-) -> void:
-	DARK = bool(gear.get("dark", false))
-	if bool(gear.get("track_front", false)):
-		draw_track(img, belt(_circles(gear, xf, wc)), travel, float(gear["T"]), enemy)
-	var rot := xf.get_rotation()
-	var sp: Dictionary = gear["sprocket"]
-	var idl: Dictionary = gear["idler"]
-	draw_wheel(img, xf * (sp["c"] as Vector2), float(sp["r"]), travel / float(sp["r"]) + rot, "sprocket", enemy)
-	if not bool(gear.get("idler_back", false)):
-		draw_wheel(img, xf * (idl["c"] as Vector2), float(idl["r"]), travel / float(idl["r"]) + rot, "idler", enemy)
-
-
-static func _circles(gear: Dictionary, xf: Transform2D, wc: Array[Vector2]) -> Array:
-	var circles: Array = []
-	var idl: Dictionary = gear["idler"]
-	var sp: Dictionary = gear["sprocket"]
-	circles.append({"c": xf * (idl["c"] as Vector2), "r": float(idl["r"]) + 0.5})
-	for rl: Dictionary in gear["rollers"]:
-		circles.append({"c": xf * (rl["c"] as Vector2), "r": float(rl["r"]) + 0.5})
-	if gear.has("horn_front"):
-		var hf: Dictionary = gear["horn_front"]
-		circles.append({"c": xf * (hf["c"] as Vector2), "r": float(hf["r"]) + 0.5})
-	circles.append({"c": xf * (sp["c"] as Vector2), "r": float(sp["r"]) + 0.5})
-	for i in range(wc.size() - 1, -1, -1):
-		var w: Dictionary = gear["wheels"][i]
-		circles.append({"c": wc[i], "r": float(w["r"]) + 0.5})
-	return circles

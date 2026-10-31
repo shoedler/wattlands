@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://d1feuc5a2gte7"
-path="res://.godot/imported/card_roam.png-4073cb36bef1d610c842e272747ce27b.ctex"
+uid="uid://40mbun2pfs0"
+path="res://.godot/imported/card_ambush.png-2fe26f312f15e3ddcf65ea4003cff12e.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/tank/v2/card_roam.png"
-dest_files=["res://.godot/imported/card_roam.png-4073cb36bef1d610c842e272747ce27b.ctex"]
+source_file="res://assets/tank/cards/card_ambush.png"
+dest_files=["res://.godot/imported/card_ambush.png-2fe26f312f15e3ddcf65ea4003cff12e.ctex"]
 
 [params]
 

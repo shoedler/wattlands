@@ -1,7 +1,7 @@
 class_name TankRig
 extends RefCounted
 ## The v3 tank kit (docs/games/tank.md v3 "The tank, in the view"; assets/tank/v3/kit.json, baked by
-## assets/tank/v3/tools_src/bake.gd from the r6 generator): the base art (the reference's landship
+## assets/tank/v3/tools_src/bake.gd): the base art (the reference's landship
 ## re-pixelled, 63 colours, with its static dressing), the live parts' sprites (road wheels,
 ## sprocket, idler and rollers in frames over their symmetry, one track shoe, the main gun and the
 ## bow guns at 0 degrees, the turret searchlight's lit lens), the main gun's blast sheets, the forest

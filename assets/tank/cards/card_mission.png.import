@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://td7fwkgs5wce"
-path="res://.godot/imported/picker_card.png-2a82fdc34a2f61c278c8109157a5080b.ctex"
+uid="uid://dcqk8klalln7k"
+path="res://.godot/imported/card_mission.png-df57ddae0f7d31f56987a4f9d1922f73.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/tank/v2/picker_card.png"
-dest_files=["res://.godot/imported/picker_card.png-2a82fdc34a2f61c278c8109157a5080b.ctex"]
+source_file="res://assets/tank/cards/card_mission.png"
+dest_files=["res://.godot/imported/card_mission.png-df57ddae0f7d31f56987a4f9d1922f73.ctex"]
 
 [params]
 

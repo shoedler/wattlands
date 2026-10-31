@@ -3,7 +3,7 @@ extends RefCounted
 ## The v3 world around the tank (docs/games/tank.md v3 "World"): a pine forest road at night, bluer
 ## and greener, with a moderate tilt-shift baked into the planes (TankRig.planes: far sky and
 ## mountains, a misty ridge, the forest along the road, the verge, the near shoulder, the dark
-## foreground; assets/tank/v3/tools_src/env_planes.gd); the road band (gravel, ruts and pebbles,
+## foreground; assets/tank/v3/tools_src/env/env_planes.gd); the road band (gravel, ruts and pebbles,
 ## regraded blue-green) following the relief (TankGround) with its slopes lit and its dips shaded;
 ## the soft near shoulder over its near rows; and the little bases (a fenced clearing with a
 ## bunker, a hooded lamp, crates, drums and a raised barrier; no text, no people) at the depot

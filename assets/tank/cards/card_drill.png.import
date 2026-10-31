@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://lrorw610xctp"
-path="res://.godot/imported/tank_digits_14x24.png-e1d249231ede75b1d4ee26f7145a3e96.ctex"
+uid="uid://bht7ppn3grkgp"
+path="res://.godot/imported/card_drill.png-7fefa816fa12e02e6bda10d3f20aa88a.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/tank/v2/hud/tank_digits_14x24.png"
-dest_files=["res://.godot/imported/tank_digits_14x24.png-e1d249231ede75b1d4ee26f7145a3e96.ctex"]
+source_file="res://assets/tank/cards/card_drill.png"
+dest_files=["res://.godot/imported/card_drill.png-7fefa816fa12e02e6bda10d3f20aa88a.ctex"]
 
 [params]
 

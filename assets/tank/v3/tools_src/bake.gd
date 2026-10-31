@@ -1,5 +1,5 @@
 extends SceneTree
-## Bakes the production v3 tank kit (assets/tank/v3/) from the r6 generator:
+## Bakes the production v3 tank kit (assets/tank/v3/) from the generator (tank_gen.gd):
 ##   tank_base.png        the r6 base (the reference's tank re-pixelled, 63 colours) with its static
 ##                        dressing: the quarters' sitters, the commander in the cupola, the rear
 ##                        searchlight on its post and the turret searchlight, both unlit; then
@@ -22,14 +22,15 @@ extends SceneTree
 ##                        in single-pixel stipple)
 ##   (planes/*.png, the forest planes at moderate tilt-shift, come from env_planes.gd; kit.json lists them)
 ##   kit.json             every rect, anchor, room, wheel, window, lamp and sheet the view reads
+## r6_hitbox.json is checked-in data, no longer generated: kit.json names it and
+## test_tank_v3_contracts.gd ties it to content/tank/tanks.json.
 ## Run: bash assets/tank/v3/tools_src/bake.sh (it runs r6_base.sh first).
 
 const Px = preload("res://assets/tank/v3/tools_src/px.gd")
 const Gear = preload("res://assets/tank/v3/tools_src/gear.gd")
 const Dress = preload("res://assets/tank/v3/tools_src/dress.gd")
 const Finish = preload("res://assets/tank/v3/tools_src/finish.gd")
-const Tank5 = preload("res://assets/tank/v3/tools_src/tank_r5.gd")
-const Tank6 = preload("res://assets/tank/v3/tools_src/tank_r6.gd")
+const TankGen = preload("res://assets/tank/v3/tools_src/tank_gen.gd")
 
 const OUT := "res://assets/tank/v3/"
 ## The forest planes (env_planes.gd bakes them into planes/): stage y of their top on the 960 x 540
@@ -64,7 +65,7 @@ var B: Dictionary
 
 
 func _init() -> void:
-	B = Tank6.build()
+	B = TankGen.build()
 	L = B["L"]
 	var kit := {}
 	kit["note"] = "The v3 tank kit (assets/tank/v3/tools_src/bake.gd). Sprite px, origin top-left, facing right."
@@ -104,7 +105,7 @@ func _dressed(lit: bool, rear_lit: bool = false) -> Image:
 	var q: Rect2i = L["rooms"]["quarters"]
 	for k in [0, 2, 3, 5]:
 		Dress.sitter(img, q.position.x + 14 + k * 20, q.end.y - 1, 1 if k % 2 == 0 else -1, k)
-	Tank5.roof(img, {"search_on": lit, "rear_on": rear_lit})
+	TankGen.roof(img, {"search_on": lit, "rear_on": rear_lit})
 	return img
 
 
@@ -253,7 +254,7 @@ func _track(kit: Dictionary) -> void:
 func _guns(kit: Dictionary) -> void:
 	var g: Dictionary = L["gun"]
 	var ln := float(g["len"])
-	var c: Array = Tank6.BARREL
+	var c: Array = TankGen.BARREL
 	var lit := Color("#8a7458")
 	var o := Vector2(0.0, 7.0)
 	var img := Px.blank(int(ceil(ln)) + 3, 14)
@@ -266,7 +267,7 @@ func _guns(kit: Dictionary) -> void:
 		[ln * 0.62, ln * 0.62 + 1.0, 3.0, 3.0, lit, c[0], c[2]],
 		[ln * 0.71, ln - 7.0, 2.0, 1.9, c[0], c[1], c[2]],
 		[ln - 7.0, ln, 3.2, 3.2, c[0], c[1], c[2]],
-		[ln - 4.5, ln - 3.5, 3.2, 3.2, Tank6.OUT, Tank6.OUT, Tank6.OUT],
+		[ln - 4.5, ln - 3.5, 3.2, 3.2, TankGen.OUT, TankGen.OUT, TankGen.OUT],
 		[ln - 1.0, ln, 3.2, 3.2, lit, c[0], c[2]],
 	])
 	save(img, "barrel.png")
@@ -334,7 +335,7 @@ func _put(sheet: Image, one: Image, k: int, sz: Vector2i) -> void:
 	sheet.blend_rect(one, Rect2i(Vector2i.ZERO, sz), Vector2i((k % SHEET_COLS) * sz.x, (k / SHEET_COLS) * sz.y))
 
 
-## Tank6.blast() along the bore (angle 0) on the muzzle: the fire ball and its fragments, the star
+## The main gun's blast along the bore (angle 0) on the muzzle: the fire ball and its fragments, the star
 ## flash with the brake's jets (the smoke is blast_smoke(), the dust blast_ground(), the sparks the
 ## view's).
 func blast_air(img: Image, m: Vector2, ft: float) -> void:
@@ -345,13 +346,13 @@ func blast_air(img: Image, m: Vector2, ft: float) -> void:
 		var u := ft - 0.05
 		var fb := m + d * (12.0 + 90.0 * u)
 		var fr := 19.0 - 30.0 * u
-		Tank6.puff(img, fb, fr + 3.0, [Tank6.F_DRED, Tank6.F_RED, Tank6.F_ORA, Tank6.F_YEL], clampf((u - 0.12) / 0.07, 0.0, 1.0) * 0.6, 77)
-		Tank6.puff(img, fb - d * 2.0 + n * 3.0, fr * 0.62, [Tank6.F_ORA, Tank6.F_YEL, Tank6.F_WHITE, Tank6.F_WHITE], 0.0, 78)
-		Tank6.puff(img, fb + d * (fr * 0.7) - n * 5.0, fr * 0.45, [Tank6.F_RED, Tank6.F_ORA, Tank6.F_YEL, Tank6.F_YEL], 0.0, 79)
+		TankGen.puff(img, fb, fr + 3.0, [TankGen.F_DRED, TankGen.F_RED, TankGen.F_ORA, TankGen.F_YEL], clampf((u - 0.12) / 0.07, 0.0, 1.0) * 0.6, 77)
+		TankGen.puff(img, fb - d * 2.0 + n * 3.0, fr * 0.62, [TankGen.F_ORA, TankGen.F_YEL, TankGen.F_WHITE, TankGen.F_WHITE], 0.0, 78)
+		TankGen.puff(img, fb + d * (fr * 0.7) - n * 5.0, fr * 0.45, [TankGen.F_RED, TankGen.F_ORA, TankGen.F_YEL, TankGen.F_YEL], 0.0, 79)
 		for j in 7:
 			var fa := a + (Px.h2(j, 11, 49) - 0.5) * 2.4
 			var fp := m + Vector2(cos(fa), sin(fa)) * (20.0 + 160.0 * u) + Vector2(0, 50.0 * u * u)
-			Tank6.puff(img, fp, 2.5 + 1.5 * Px.h2(j, 12, 49), [Tank6.F_DRED, Tank6.F_RED, Tank6.F_ORA, Tank6.F_YEL], 0.0, 80 + j)
+			TankGen.puff(img, fp, 2.5 + 1.5 * Px.h2(j, 12, 49), [TankGen.F_DRED, TankGen.F_RED, TankGen.F_ORA, TankGen.F_YEL], 0.0, 80 + j)
 	if ft < 0.075:
 		var big := 1.0 if ft < 0.04 else 0.75
 		var bk := m - d * 4.0
@@ -365,19 +366,19 @@ func blast_air(img: Image, m: Vector2, ft: float) -> void:
 				var jet := absf(vb.dot(d)) < 2.5 - absf(vb.dot(n)) * 0.06 and absf(vb.dot(n)) < 24.0 * big
 				if rho > R + 1.5 and not jet:
 					continue
-				var col := Tank6.F_ORA
+				var col := TankGen.F_ORA
 				if jet:
-					col = Tank6.F_YEL if absf(vb.dot(n)) < 14.0 * big else Tank6.F_ORA
+					col = TankGen.F_YEL if absf(vb.dot(n)) < 14.0 * big else TankGen.F_ORA
 				elif rho > R:
-					col = Tank6.F_RED
+					col = TankGen.F_RED
 				elif rho < R * 0.45:
-					col = Tank6.F_WHITE
+					col = TankGen.F_WHITE
 				elif rho < R * 0.72:
-					col = Tank6.F_YEL
+					col = TankGen.F_YEL
 				Px.put(img, x, y, col)
 
 
-## Tank6.blast()'s smoke along the bore (angle 0): the billowing cloud drifting up and spreading
+## The blast's smoke along the bore (angle 0): the billowing cloud drifting up and spreading
 ## as it thins, the smoke ring. Each is drawn opaque on its own layer, then laid on faded (fade()).
 func blast_smoke(img: Image, m: Vector2, ft: float) -> void:
 	if ft <= 0.08:
@@ -394,7 +395,7 @@ func blast_smoke(img: Image, m: Vector2, ft: float) -> void:
 		# the drift: the cloud rises and spreads a little more as it thins
 		c += Vector2((Px.h2(j, 5, 41) - 0.5) * 10.0 * age * age, -5.0 * age * age)
 		var r := 4.0 + 13.0 * minf(age * 1.1, 1.0) + Px.h2(j, 4, 41) * 4.0 + 2.0 * maxf(age - 0.9, 0.0)
-		Tank6.puff(cloud, c, r, Tank6.SMOKE, 0.0, j * 13)
+		TankGen.puff(cloud, c, r, TankGen.SMOKE, 0.0, j * 13)
 	fade(img, cloud, clampf((age - 0.9) / 1.0, 0.0, 1.0), m.y, 90.0)
 	var ring := Px.blank(img.get_width(), img.get_height())
 	var rc := m + d * (8.0 + 60.0 * age / (1.0 + age)) + Vector2(0, -4.0 * age * age)
@@ -403,7 +404,7 @@ func blast_smoke(img: Image, m: Vector2, ft: float) -> void:
 		var t := TAU * k / 72.0
 		for w in 2:
 			var q := rc + d * cos(t) * (rr * 0.42 + w) + n * sin(t) * (rr + w)
-			Px.put(ring, floori(q.x), floori(q.y), Tank6.SMOKE[2] if sin(t) < 0 else Tank6.SMOKE[1])
+			Px.put(ring, floori(q.x), floori(q.y), TankGen.SMOKE[2] if sin(t) < 0 else TankGen.SMOKE[1])
 	fade(img, ring, clampf((age - 0.5) / 0.8, 0.0, 1.0), m.y, 60.0)
 
 
@@ -433,25 +434,25 @@ func fade(img: Image, layer: Image, k: float, top_y: float, reach: float) -> voi
 			img.set_pixel(x, y, out)
 
 
-## Tank6.blast()'s dust with the road at `m.y` (m.x under the muzzle): the dust cloud and the
+## The blast's dust with the road at `m.y` (m.x under the muzzle): the dust cloud and the
 ## shockwave each faded as a layer (fade()), the pebbles kicked up (2 px each).
 func blast_ground(img: Image, m: Vector2, ft: float) -> void:
 	var gy := m.y
 	if ft <= 0.02 or ft >= 1.6:
 		return
-	var dust := [Tank6.DUST[0], Tank6.DUST[0], Tank6.DUST[1], Tank6.DUST[2]]
+	var dust := [TankGen.DUST[0], TankGen.DUST[0], TankGen.DUST[1], TankGen.DUST[2]]
 	var age2 := ft - 0.02
 	var cloud := Px.blank(img.get_width(), img.get_height())
 	for j in 9:
 		var c2 := Vector2(m.x - 30.0 + j * 9.0 + 14.0 * age2, gy - 3.0 - 22.0 * age2 * (0.4 + Px.h2(j, 5, 43)))
-		Tank6.puff(cloud, c2, 3.0 + 7.0 * minf(age2 * 1.8, 1.0), dust, 0.0, j * 7 + 100)
+		TankGen.puff(cloud, c2, 3.0 + 7.0 * minf(age2 * 1.8, 1.0), dust, 0.0, j * 7 + 100)
 	fade(img, cloud, clampf((age2 - 0.6) / 0.8, 0.0, 1.0), gy, 40.0)
 	if age2 < 0.9:
 		var wave := Px.blank(img.get_width(), img.get_height())
 		for side in [-1.0, 1.0]:
 			for j in 4:
 				var xr: float = m.x + side * (14.0 + 150.0 * age2 - j * 7.0)
-				Tank6.puff(wave, Vector2(xr, gy - 2.0), 2.0 + 1.5 * Px.h2(j, 6, 44), dust, 0.0, j * 5 + 200 + int(side))
+				TankGen.puff(wave, Vector2(xr, gy - 2.0), 2.0 + 1.5 * Px.h2(j, 6, 44), dust, 0.0, j * 5 + 200 + int(side))
 		fade(img, wave, clampf(age2 / 0.9, 0.0, 1.0), gy, 20.0)
 	if age2 < 0.8:
 		for j in 12:
@@ -459,8 +460,8 @@ func blast_ground(img: Image, m: Vector2, ft: float) -> void:
 			var vy := -70.0 - 80.0 * Px.h2(j, 8, 45)
 			var pp := Vector2(m.x - 10.0 + j * 3.0, gy - 1.0) + Vector2(vx, vy) * age2 + Vector2(0, 260.0 * age2 * age2)
 			if pp.y <= gy:
-				Px.put(img, floori(pp.x), floori(pp.y), Tank6.DUST[0] if j % 2 else Color("#1a140e"))
-				Px.put(img, floori(pp.x) + 1, floori(pp.y), Tank6.DUST[1])
+				Px.put(img, floori(pp.x), floori(pp.y), TankGen.DUST[0] if j % 2 else Color("#1a140e"))
+				Px.put(img, floori(pp.x) + 1, floori(pp.y), TankGen.DUST[1])
 
 
 # --- planes -----------------------------------------------------------------------------------------------
