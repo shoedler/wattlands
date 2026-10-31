@@ -1,7 +1,7 @@
 class_name CrankClock
 extends RefCounted
 ## One rider's crank phase, integrated from cadence. Pure. One per phase source: audio and view read
-## the same `revs`, so they cannot drift apart. At or below STOP_RPM it stands still (tank_view.gd:634's rule).
+## the same `revs`, so they cannot drift apart. At or below STOP_RPM it stands still (TankViewSeats._seats runs on it).
 const STOP_RPM := 1.0
 var revs: float = 0.0
 
