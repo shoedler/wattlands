@@ -60,8 +60,6 @@ const SHAPES_HOLLOW := [
 const LAMP_ROWS := [".###.", "#####", "#####", "#####", ".###."]
 const HATCH_SIZE := 4
 
-static var _font: Font = null
-static var _tall: Font = null
 static var _digits: Texture2D = null
 static var _crank: Texture2D = null
 static var _hatch: ImageTexture = null
@@ -70,29 +68,12 @@ static var _hatch: ImageTexture = null
 ## The 5 x 7 face: the space narrowed and every glyph hung from the baseline by the cap height (the
 ## Image Font importer hangs a glyph by half its cell).
 static func font() -> Font:
-	if _font == null:
-		_font = load(TEXT_PNG) as Font
-		_hang(_font, CAP, SPACE_ADVANCE)
-	return _font
+	return PixelFont.hang(TEXT_PNG, CAP, SPACE_ADVANCE)
 
 
 ## The tall 5 x 9 face, hung from the baseline like font().
 static func font_tall() -> Font:
-	if _tall == null:
-		_tall = load(TALL_PNG) as Font
-		_hang(_tall, TALL_CAP, SPACE_ADVANCE + 1)
-	return _tall
-
-
-static func _hang(f: Font, cap: int, space: int) -> void:
-	var ff := f as FontFile
-	if ff == null:
-		return
-	for i in ff.get_cache_count():
-		for sz in ff.get_size_cache_list(i):
-			for g in ff.get_glyph_list(i, sz):
-				ff.set_glyph_offset(i, sz, g, Vector2(0, -cap))
-			ff.set_glyph_advance(i, sz.x, 32, Vector2(space, 0))
+	return PixelFont.hang(TALL_PNG, TALL_CAP, SPACE_ADVANCE + 1)
 
 
 static func digits() -> Texture2D:
@@ -145,12 +126,6 @@ static func tall_r(c: CanvasItem, right: float, top: float, s: String, col: Colo
 	return w
 
 
-static func tall_c(c: CanvasItem, cx: float, top: float, s: String, col: Color = TEXT) -> float:
-	var w := tall_w(s)
-	tall(c, roundf(cx - w * 0.5), top, s, col)
-	return w
-
-
 ## Text with its cap top at `top`, left at `x`, `m` glyph px per art px. Returns its width.
 static func text(
 	c: CanvasItem, x: float, top: float, s: String, col: Color = TEXT, m: int = 1
@@ -173,15 +148,6 @@ static func text_r(
 ) -> float:
 	var w := text_w(s, m)
 	text(c, right - w, top, s, col, m)
-	return w
-
-
-## Text centred on `cx`.
-static func text_c(
-	c: CanvasItem, cx: float, top: float, s: String, col: Color = TEXT, m: int = 1
-) -> float:
-	var w := text_w(s, m)
-	text(c, roundf(cx - w * 0.5), top, s, col, m)
 	return w
 
 
@@ -231,10 +197,7 @@ static func rect(c: CanvasItem, r: Rect2, col: Color) -> void:
 
 ## A one-pixel frame just inside `r`.
 static func frame(c: CanvasItem, r: Rect2, col: Color) -> void:
-	c.draw_rect(Rect2(r.position, Vector2(r.size.x, 1)), col)
-	c.draw_rect(Rect2(r.position.x, r.end.y - 1, r.size.x, 1), col)
-	c.draw_rect(Rect2(r.position.x, r.position.y + 1, 1, r.size.y - 2), col)
-	c.draw_rect(Rect2(r.end.x - 1, r.position.y + 1, 1, r.size.y - 2), col)
+	HudArtDraw.frame(c, r, col)
 
 
 ## An enamel plate filling `r`: the panel, a 1 px frame (`edge`) with the darker inner line, a lighter
@@ -291,11 +254,7 @@ static func gauge(
 
 ## A pixel pattern ("#" ink), top-left at `p`, `m` px per pattern pixel.
 static func pixels(c: CanvasItem, rows: Array, p: Vector2, col: Color, m: float = 1.0) -> void:
-	for y in rows.size():
-		var row: String = rows[y]
-		for x in row.length():
-			if row[x] == "#":
-				c.draw_rect(Rect2(p + Vector2(x, y) * m, Vector2(m, m)), col)
+	HudArtDraw.pixels(c, rows, p, col, m)
 
 
 ## Slot `slot`'s chip: its shape in its colour, hollow for slots 4-7.
