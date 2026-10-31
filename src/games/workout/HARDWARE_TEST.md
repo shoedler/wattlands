@@ -33,3 +33,14 @@ Commands that drive the trainer pass `--allow-hw` to the wrapper (`tools/godot.p
 ## 6. A .zwo of your own
 
 - [ ] Start the app with `--content=zwo:<absolute path to a .zwo>` (or pick Sample .zwo in the lobby). Expected: the session preview lists every clamped block with its reason and every skipped tag; the ride follows the clamped targets.
+
+## 7. Listen
+
+Nobody has heard this audio: every number behind it was measured offline. Listen with the sound on, over the fan and the trainer.
+
+- [ ] Before riding, play `build/audio_preview/workout.mp3` (`node tools/audio/preview.mjs --game=workout`). Expected: a bike, not an engine: a chain, a soft push on each pedal, tyres and wind that grow with speed, birds in the grass.
+- [ ] Ride Easy 30 at 60, then 90, then 110 rpm. Expected: tick and press stay with the legs on screen at every cadence and stop as your legs stop; the sound follows your feet in rate, not in phase (FTMS reports cadence about once a second).
+- [ ] Stop pedalling at speed. Expected: the chain stops dead, the freewheel ticks on, slowing with the wheel; tyres and wind fade as you slow.
+- [ ] Shift in a sprint. Expected: a click, then the chain crossing a moment later, up and down audibly different.
+- [ ] Ride a scored sprint (the first in Easy 30). Expected: the crowd grows as it comes on screen, claps and rings its bell on your cadence, cheers at the finish, and fades as it leaves the screen. There is no crowd in the warm-up.
+- [ ] Note what tires you over half an hour, and set the levels in Settings > Audio (Machines holds the chain, tyres and wind; Ambience the birds and grass; Effects the bell and crowd).

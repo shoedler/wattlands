@@ -172,6 +172,7 @@ func test_the_audio_reads_the_one_number_the_legs_are_drawn_from() -> void:
 	var revs := view.game.cranks.revs(1)
 	var to := view.audio.kit.machine_voice("bike1").planned_to()
 	assert_almost_eq(revs, 10.5, 1e-6)
+	assert_almost_eq(view.audio.kit._t, 7.0, 1e-6, "commit once a frame")
 	assert_between(to - revs, 0.0, 1.5 * 0.05, "the plan is at most one horizon ahead")
 	var kit := view.audio.kit
 	var tick := 0
@@ -403,9 +404,9 @@ func test_a_shift_with_still_legs_clicks_and_the_chain_stays() -> void:
 	var g := view.game
 	g.local_tm = Telemetry.new()
 	g.local_tm.gear = 12
-	_ride(view, 0.0, 0.2)
+	_ride(view, 5.0, 0.2)
 	g.local_tm.gear = 14
-	_ride(view, 0.0, 1.0)
+	_ride(view, 5.0, 4.0)
 	assert_eq(_count(view, "gear_click_up"), 1, "the lever moves")
 	assert_eq(_count(view, "chain_shift"), 0, "the chain does not")
 
@@ -636,6 +637,36 @@ func test_headless_it_is_silent_and_keeps_its_records() -> void:
 	assert_eq(kit.get_child_count(), 0, "no player was created")
 	assert_gt(view.audio.played.size(), 0)
 	assert_eq(view.audio.played, kit.played)
+
+
+func test_with_real_players_every_voice_starts_and_none_goes_missing() -> void:
+	var view := _view("easy_30", U.players(1, 3))
+	var g := view.game
+	var kit := view.audio.kit
+	kit.force_audio = true
+	assert_true(kit.setup(WorkoutAudio.BANK_PATH, 1))
+	kit.set_bed(WorkoutAudio.BED)
+	assert_false(kit.silent)
+	g.local_tm = Telemetry.new()
+	g.local_tm.gear = 12
+	g.local_tm.power_w = g.state.rider(1).ftp * 1.3
+	var me := g.state.rider(1)
+	me.speed.v_mps = 12.0
+	var x := WorkoutRideView.RIDER_X
+	view.crowd_layer.windows = [{"w0": x - 500.0, "w1": x + 500.0, "open": false, "i": 99}]
+	_ride(view, 90.0, 0.2)
+	g.local_tm.gear = 13
+	g.cue.emit(WorkoutRules.EV_INTERVAL_END, {"i": 0, "r": []})
+	g.cue.emit(WorkoutRules.EV_INTERVAL_START, {"i": 1})
+	# Frames outrun the clock here, so voices never end: a short ride stays inside the pools.
+	view.crowd_layer.windows = [{"w0": x - 500.0, "w1": x + 500.0, "open": false, "i": 99}]
+	_frames(view, 1.3)
+	assert_gt(kit.get_child_count(), 5, "players ran")
+	assert_true(kit.played.has("crowd_clap"), "the crowd machine played")
+	assert_true(kit.played.has("interval_bell"), "the delayed hit started")
+	assert_eq(kit.voiceless, 0, "every stroke and event found a voice")
+	assert_gt(kit.loops_in_use(), 3)
+	kit.stop_all()
 
 
 func test_it_never_touches_the_games_rng_or_state() -> void:

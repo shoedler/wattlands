@@ -36,3 +36,15 @@ The reference game (BRIEF 3.7): a group interval ride for 1–8 riders, bots opt
 - e2e report check: `node tests/games/workout/e2e_check.mjs build/e2e/workout/report.json` (its tests: `node --test tests/games/workout/e2e_check.test.mjs`).
 
 Real-trainer checklist: `HARDWARE_TEST.md`. Decisions: `docs/decisions/workout.md`.
+
+## Audio
+
+`audio/workout_audio.gd` (`WorkoutAudio`) maps game state to the bank `assets/workout/audio/audio.json`, rendered by `tools/audio` (`docs/AUDIO_PIPELINE.md`). It reads three clocks, the view's own:
+
+- **Cadence**, `game.cranks` and `game.cadence_of`, the numbers the rider sheets are drawn from, so sound and legs cannot drift. `chain_tick` at revolution fraction 0 (the near pedal on top), `pedal_press` at .25 and .75 (a pedal furthest forward), `bb_creak` under load, `chain_hum` and `chain_rattle` by rpm and power, `breath` every second revolution above FTP, and in a scored sprint `crowd_clap` and `cowbell` on the hands the crowd is drawn with. All of it stops dead at 0 rpm. Other riders carry the tick and a quiet whirr.
+- **Speed**, `shown_distance`: `tyre_hum`, `wind_rush`, and `freewheel_tick` per 0.35 m while coasting.
+- **The view's `env_t`**: the breeze in the grass follows the same gust as the picture. The bed `dawn_road` crossfades `birds_dawn` to `birds_day` with session progress; spots are `lark`, `rooster` (start only), `dog_far`, `power_line_hum`, `chirrup`, and `tractor_far` only while a tractor crosses the screen.
+
+The crowd and its cheer exist only where the view draws a crowd, so never in the warm-up (BRIEF 4.6.8), and you hear it as far as you can see it. `chain_shift` follows `gear_click_up` or `gear_click_down` a quarter of a revolution later. Events: `interval_chime`, then `interval_bell` a beat later; `crowd_cheer` and `cowbell` at a scored sprint's finish.
+
+FTMS reports cadence about once a second, not crank angle: the sound locks to the crank on screen exactly and to your feet in rate only. Hear it: `node tools/audio/preview.mjs --game=workout`, then `build/audio_preview/workout.mp3`.
