@@ -40,6 +40,9 @@ const OVER_PITCH := 0.8
 const GUN_PITCHES: Array[float] = [1.0, 0.97, 1.025, 0.985, 1.01]
 const GUN_BOOSTS_DB: Array[float] = [0.0, -0.8, 0.4]
 const SMALL_PITCHES: Array[float] = [1.0, 0.94, 1.07, 0.97, 1.03]
+## The reload and an impact beside or on the hull, one file each: the next of these, as for the gun.
+const LOAD_PITCHES: Array[float] = [1.0, 0.975, 1.02]
+const IMPACT_PITCHES: Array[float] = [1.0, 0.96, 1.05, 0.98]
 ## A barrage (an overrun clearing the road) has no shell and no range: its kills roll in one after another.
 const BARRAGE_DELAY_S := 1.0
 const BARRAGE_STEP_S := 0.35
@@ -104,6 +107,11 @@ var _far_kills: int = 0
 var _barrage_kills: int = 0
 var _shots: int = 0
 var _small_kills: int = 0
+var _loads: int = 0
+var _impacts: int = 0
+## Near threats killed since the last update(). The rules erase one before they send the HIT that killed it, so the
+## HIT can only know its target was near from here.
+var _near_killed: Dictionary = {}
 var _t: float = 0.0
 
 
@@ -230,13 +238,36 @@ func _enemy_shot(data: Dictionary) -> void:
 func _hit(data: Dictionary) -> void:
 	var on := int(data.get("on", -1))
 	if on == TankEvents.ON_TANK:
-		kit.cue("hit_tank", {"dmg_db": dmg_db(float(data.get("dmg", 0)))})
-	elif on == TankEvents.ON_OBSTACLE or int(data.get("sh", 0)) == TankIds.SHELL_BOW:
+		var dmg := dmg_db(float(data.get("dmg", 0)))
+		kit.cue("hit_tank", {"dmg_db": dmg, "impact_pitch": _next_impact()})
+	elif (
+		on == TankEvents.ON_OBSTACLE
+		or int(data.get("sh", 0)) == TankIds.SHELL_BOW
+		or _is_near_target(int(data.get("id", 0)))
+	):
 		kit.cue("hit_near")
 	else:
 		var x := float(data.get("x", 0))
 		_last_far_m = x if x > 0.0 else FALLBACK_RANGE_M
 		kit.cue("hit_far", _far_vars(_last_far_m))
+
+
+## A near shell's HIT sends world px in `x`, not metres, so it must not read as a far boom: its target says which.
+func _is_near_target(id: int) -> bool:
+	if _near_killed.has(id):
+		return true
+	if game == null or game.state == null:
+		return false
+	for e: TankEnemyState in game.state.enemies:
+		if e.id == id:
+			return e.is_near()
+	return false
+
+
+func _next_impact() -> float:
+	var pitch := IMPACT_PITCHES[_impacts % IMPACT_PITCHES.size()]
+	_impacts += 1
+	return pitch
 
 
 ## A far kill goes up with the shell's own boom. The rules send the kill before the HIT or SPLASH that gives its range
@@ -248,6 +279,7 @@ func _kill(data: Dictionary) -> void:
 	elif TankIds.is_near_code(code) or int(data.get("by", 0)) == TankEvents.BY_BOW:
 		kit.cue("kill_near", {"small_pitch": SMALL_PITCHES[_small_kills % SMALL_PITCHES.size()]})
 		_small_kills += 1
+		_near_killed[int(data.get("id", 0))] = true
 	elif int(data.get("by", 0)) == TankEvents.BY_BARRAGE:
 		var delay := BARRAGE_DELAY_S + BARRAGE_STEP_S * float(_barrage_kills)
 		kit.cue("kill_far", {"delay": delay, "range_db": range_db(FALLBACK_RANGE_M)})
@@ -269,7 +301,7 @@ func _splash(data: Dictionary) -> void:
 		_last_far_m = r if r > 0.0 else FALLBACK_RANGE_M
 		kit.cue("splash_far", _far_vars(_last_far_m))
 	else:
-		kit.cue("splash_near")
+		kit.cue("splash_near", {"impact_pitch": _next_impact()})
 
 
 func _far_vars(range_m: float) -> Dictionary:
@@ -281,7 +313,11 @@ func _latch(own: bool) -> void:
 	var loader: TankStationState = null
 	if game != null and game.state != null:
 		loader = game.state.station(TankIds.ENGINE_STEAM)
-	kit.cue("latch_load" if loader != null and not loader.is_empty() else "latch_hoist", {}, own)
+	if loader == null or loader.is_empty():
+		kit.cue("latch_hoist", {}, own)
+		return
+	kit.cue("latch_load", {"load_pitch": LOAD_PITCHES[_loads % LOAD_PITCHES.size()]}, own)
+	_loads += 1
 
 
 func _is_own_slot(slot: int) -> bool:
@@ -301,6 +337,7 @@ func update(
 	local_peer = p_local_peer
 	_t += dt
 	_flush_far_kills()
+	_near_killed.clear()
 	for seat: String in MACHINE_OF_SEAT:
 		_drive_seat(state, seat, feed.get(seat, {}), dt)
 	_drive_track(state, travel_m, _has_seat(feed))

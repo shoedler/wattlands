@@ -505,6 +505,51 @@ func test_the_adapter_walks_the_guns_cycle_shot_by_shot() -> void:
 	assert_almost_eq(_level("gun_low"), levels[0], 0.001, "the fourth round starts the level again")
 
 
+func _pending_pitch(sound: String) -> float:
+	for p: Dictionary in _audio.kit._pending:
+		if str(p["sound"]) == sound:
+			return float(p["pitch"])
+	return -1.0
+
+
+func test_the_rounds_pitch_runs_through_the_shells_flight_and_its_ejection() -> void:
+	_audio.on_cue(TankEvents.SHOT, TankEvents.shot(0, TankIds.SHELL_LIGHT, 1))
+	_audio.kit._pending.clear()
+	_audio.on_cue(TankEvents.SHOT, TankEvents.shot(0, TankIds.SHELL_LIGHT, 2))
+	assert_almost_eq(_pending_pitch("shell_outgoing"), 0.97, 1e-5, "the second round's pitch")
+	assert_almost_eq(_pending_pitch("shell_eject"), 0.97, 1e-5)
+	_audio.kit._pending.clear()
+	_audio.on_cue(TankEvents.SHOT, TankEvents.shot(0, TankIds.SHELL_OVER, 3))
+	assert_almost_eq(_pending_pitch("shell_outgoing"), 1.025 * 0.8, 1e-5, "and the shell's own")
+
+
+func test_no_two_reloads_in_a_row_run_the_same() -> void:
+	var want: Array[float] = TankAudio.LOAD_PITCHES
+	assert_gte(want.size(), 3)
+	for n in want.size() * 2:
+		_audio.kit._pending.clear()
+		_audio.on_cue(TankEvents.LATCH, TankEvents.latch(1, TankIds.SHELL_HEAVY))
+		assert_almost_eq(
+			_pending_pitch("breech_close"), want[n % want.size()], 1e-5, "reload %d" % n
+		)
+
+
+func test_an_empty_loaders_click_does_not_spend_a_reloads_pitch() -> void:
+	var s := TankFixtures.state(2)
+	var a := _make(s)
+	a.on_cue(TankEvents.LATCH, TankEvents.latch(0, TankIds.SHELL_HEAVY))
+	assert_eq(a._loads, 0)
+
+
+func test_each_impact_at_the_hull_takes_the_next_pitch() -> void:
+	_audio.on_cue(TankEvents.SPLASH, TankEvents.splash(30.0, TankIds.SHELL_ENEMY, false))
+	_audio.on_cue(
+		TankEvents.HIT, TankEvents.hit(TankEvents.ON_TANK, 0, 8.0, TankIds.SHELL_ENEMY, 0.0, 0.0)
+	)
+	assert_eq(_audio._impacts, 2)
+	assert_eq(TankAudio.IMPACT_PITCHES.size(), 4)
+
+
 func test_only_the_gunners_own_shot_ducks_the_machines_and_the_wind() -> void:
 	_audio.on_cue(
 		TankEvents.SHOT, TankEvents.shot(_state.rider(1).slot + 1, TankIds.SHELL_LIGHT, 1)
@@ -623,6 +668,42 @@ func test_a_bow_round_on_a_near_threat_is_a_ping_with_no_delay() -> void:
 	)
 	assert_has(_audio.played, "far_hit_metal")
 	assert_does_not_have(_audio.played, "far_boom")
+
+
+func test_a_main_gun_round_on_a_living_near_threat_is_a_ping_with_no_delay() -> void:
+	# A near shell's HIT sends world px in x: read as metres this was a far boom 3.5 s later.
+	var e := TankEnemyState.new()
+	e.id = 77
+	e.code = TankIds.enemy_code(TankIds.ENEMY_RECON)
+	_state.enemies.append(e)
+	_audio.on_cue(
+		TankEvents.HIT,
+		TankEvents.hit(TankEvents.ON_ENEMY, 77, 20.0, TankIds.SHELL_HEAVY, 0.0, 2600.0)
+	)
+	assert_has(_audio.played, "far_hit_metal")
+	assert_eq(_pending_pitch("far_boom"), -1.0, "no boom on its way")
+
+
+func test_the_round_that_kills_a_near_threat_is_near_too_though_the_rules_erased_it() -> void:
+	var recon := TankIds.enemy_code(TankIds.ENEMY_RECON)
+	_audio.on_cue(TankEvents.KILL, TankEvents.kill(78, recon, TankEvents.BY_SHELL, 0))
+	_audio.on_cue(
+		TankEvents.HIT,
+		TankEvents.hit(TankEvents.ON_ENEMY, 78, 20.0, TankIds.SHELL_HEAVY, 0.0, 2600.0)
+	)
+	assert_has(_audio.played, "explode_small")
+	assert_eq(_pending_pitch("far_boom"), -1.0, "no boom on its way")
+	assert_eq(_pending_pitch("explode_big"), -1.0)
+	_idle(0.1)
+	assert_true(_audio._near_killed.is_empty(), "forgotten once the frame has run")
+
+
+func test_a_far_hit_is_still_a_far_boom() -> void:
+	_audio.on_cue(
+		TankEvents.HIT,
+		TankEvents.hit(TankEvents.ON_ENEMY, 79, 20.0, TankIds.SHELL_HEAVY, 0.0, 1360.0)
+	)
+	assert_ne(_pending_pitch("far_boom"), -1.0)
 
 
 # --- Other events -----------------------------------------------------------------------------------------

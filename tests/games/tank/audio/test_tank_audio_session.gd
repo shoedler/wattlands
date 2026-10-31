@@ -4,7 +4,9 @@ extends GutTest
 ## itself; this is the check that the far kill's order and the rules' numbers reach the sound.
 
 const F := preload("res://tests/games/tank/tank_fakes.gd")
+const U := preload("res://tests/games/tank/view/tank_view_util.gd")
 const FRAME_S := 1.0 / 20.0
+const CHECKPOINT := 3
 
 var _kinds: Dictionary = {}
 var _silent_heard: Array[String] = []
@@ -147,6 +149,85 @@ func test_on_the_real_rules_a_far_enemy_shot_brings_its_flight_and_range() -> vo
 	_compliant_session()
 	assert_gt(_far_enemy_shots, 0, "the enemy fired from far away")
 	assert_eq(_shots_with_flight, _far_enemy_shots, "SHOT carries flight_s and rng_m")
+
+
+## The one way a far boom could come from a near hit: the main gun with no target, its barrel laid low, a recon in the way.
+## Returns [the adapter, the events], the shell's whole flight handed over as the view would.
+func _near_shot(hp: float) -> Array:
+	var quiet := func(files: Dictionary) -> void:
+		(files["mission"]["segments"][CHECKPOINT] as Dictionary).merge(
+			{"encounters": [], "obstacles": []}, true
+		)
+	var rig := TankRulesRig.new(2, "ashfall_road", 7, quiet)
+	rig.enter(CHECKPOINT, 5.0)
+	rig.dynamo().bank = 100.0
+	var e := rig.near(TankIds.ENEMY_RECON, 90.0)
+	TankAux.of(rig.state).enemy_age[e.id] = -1.0e6
+	e.hp = hp
+	e.hp_max = maxf(hp, 1.0)
+	e.gun_s = 1.0e6
+	rig.hull().target_id = 0
+	rig.hull().elev_deg = -6.0
+	rig.hull().elev_target_deg = -6.0
+	rig.hull().aim_pause_s = 99.0
+	rig.load_shell(TankIds.SHELL_HEAVY)
+	var game := U.make_game(rig.state, Wl.HOST, 1)
+	autofree(game)
+	var a := TankAudio.new()
+	a.game = game
+	add_child_autofree(a)
+	var all: Array[Dictionary] = []
+	assert_true(TankGun.fire(rig.state, TankAux.of(rig.state), rig.dynamo(), false, all), "fired")
+	for _i in 60:
+		all.append_array(rig.run(0.05))
+	for ev: Dictionary in all:
+		a.on_cue(str(ev["type"]), ev)
+	return [a, all]
+
+
+func _main_gun_hits(events: Array) -> Array:
+	return events.filter(
+		func(ev: Dictionary) -> bool:
+			return (
+				str(ev["type"]) == TankEvents.HIT
+				and int(ev["on"]) == TankEvents.ON_ENEMY
+				and int(ev["sh"]) == TankIds.SHELL_HEAVY
+			)
+	)
+
+
+func _pending_of(a: TankAudio, sound: String) -> int:
+	var n := 0
+	for p: Dictionary in a.kit._pending:
+		if str(p["sound"]) == sound:
+			n += 1
+	return n
+
+
+func test_on_the_real_rules_a_main_gun_round_on_a_near_threat_is_near() -> void:
+	var run := _near_shot(5000.0)
+	var a: TankAudio = run[0]
+	var hits := _main_gun_hits(run[1])
+	assert_eq(hits.size(), 1, "the round hit the recon")
+	assert_gt(float(hits[0]["x"]), 0.0, "the rules send world px")
+	assert_has(a.played, "far_hit_metal", "at once")
+	assert_eq(_pending_of(a, "far_boom"), 0, "no boom on its way")
+	assert_eq(_pending_of(a, "far_hit_metal"), 0)
+	assert_does_not_have(a.played, "far_boom")
+
+
+func test_on_the_real_rules_the_round_that_kills_a_near_threat_is_near() -> void:
+	var run := _near_shot(1.0)
+	var a: TankAudio = run[0]
+	var kills: Array = (run[1] as Array).filter(
+		func(ev: Dictionary) -> bool: return str(ev["type"]) == TankEvents.KILL
+	)
+	assert_eq(kills.size(), 1, "the round killed the recon")
+	assert_eq(_main_gun_hits(run[1]).size(), 1, "and its HIT came after")
+	assert_has(a.played, "explode_small")
+	assert_eq(_pending_of(a, "far_boom"), 0, "no boom on its way")
+	assert_eq(_pending_of(a, "explode_big"), 0)
+	assert_does_not_have(a.played, "far_boom")
 
 
 func test_a_crew_that_gives_up_loses_the_tank_and_hears_it() -> void:

@@ -251,12 +251,13 @@ func test_every_pitch_table_is_coprime_with_its_variants_and_small() -> void:
 
 
 func test_the_diesel_has_no_short_bar_to_repeat() -> void:
-	# 5 takes against 4 and 7 table entries: 20 and 35 revolutions before any one cylinder repeats.
+	# Takes that share a factor line the three cylinders up into a bar: 5 each is 15 strokes, 3.3 s at 90 rpm, 540 times
+	# in 30 minutes. 6, 5 and 4 meet again only after 60 revolutions, and each against 7 table entries takes longer still.
+	assert_eq(_variants("diesel_fire_a"), 6)
+	assert_eq(_variants("diesel_fire_b"), 5)
+	assert_eq(_variants("diesel_fire_c"), 4)
 	for sound: String in ["diesel_fire_a", "diesel_fire_b", "diesel_fire_c"]:
-		assert_eq(_variants(sound), 5, sound)
-	assert_eq((_event("diesel", "diesel_fire_a")["pitch_table"] as Array).size(), 4)
-	assert_eq((_event("diesel", "diesel_fire_b")["pitch_table"] as Array).size(), 7)
-	assert_eq((_event("diesel", "diesel_fire_c")["pitch_table"] as Array).size(), 7)
+		assert_eq((_event("diesel", sound)["pitch_table"] as Array).size(), 7, sound)
 	assert_eq(_variants("diesel_fire_hard"), 4, "the overlay never falls in step with 3 cylinders")
 
 
@@ -276,6 +277,51 @@ func test_a_loops_slow_movement_runs_with_the_machines_own_rhythm() -> void:
 	var whine: Dictionary = _bank.sounds["dynamo_whine"]
 	assert_almost_eq(fposmod(27.0 * float(whine["dur"]), 1.0), 0.0, 0.001)
 	assert_almost_eq(fposmod(0.75 * float(whine["dur"]), 1.0), 0.0, 0.001)
+
+
+func test_a_machines_slow_movement_makes_whole_cycles_in_its_file() -> void:
+	# A rate that does not fit the file clicks at the seam, and on a loop pitched by rpm it would leave the revolution.
+	for id: String in ["dynamo_whine", "arc_hum", "ladder_buzz", "repair_compressor"]:
+		var sound: Dictionary = _bank.sounds[id]
+		var dur := float(sound["dur"])
+		var moves := 0
+		for layer: Dictionary in sound["layers"]:
+			var rates: Array[float] = []
+			if layer.has("vibrato"):
+				rates.append(float(layer["vibrato"]["hz"]))
+			for fx: Dictionary in layer.get("fx", []):
+				if fx.has("trem"):
+					rates.append(float(fx["trem"]["hz"]))
+			for hz in rates:
+				moves += 1
+				var cycles := hz * dur
+				assert_almost_eq(cycles, roundf(cycles), 0.001, "%s: %s Hz" % [id, str(hz)])
+		assert_gt(moves, 1, id)
+
+
+func test_the_whines_lines_each_move_on_their_own_rate() -> void:
+	# Fixed lines read as a test tone: tri 380, its octave and its twelfth swell apart, none in step with another.
+	var rates := {}
+	for layer: Dictionary in _bank.sounds["dynamo_whine"]["layers"]:
+		if layer.has("vibrato"):
+			rates[float(layer["vibrato"]["hz"])] = true
+	assert_eq(rates.size(), 3, "three lines, three vibratos")
+
+
+func test_the_guns_tail_and_the_reload_take_a_pitch_of_the_round() -> void:
+	var wants := {
+		"shot_main": {"shell_outgoing": "gun_pitch", "shell_eject": "gun_pitch"},
+		"latch_load": {"shell_load": "load_pitch", "breech_close": "load_pitch"},
+		"hit_tank": {"incoming_impact_near": "impact_pitch"},
+		"splash_near": {"near_miss_thud": "impact_pitch"},
+	}
+	for cue: String in wants:
+		for sound: String in wants[cue]:
+			var found := ""
+			for hit: Dictionary in _bank.cues[cue]["hits"]:
+				if str(hit["sound"]) == sound:
+					found = str(hit.get("pitch_var", ""))
+			assert_eq(found, str(wants[cue][sound]), "%s in %s" % [sound, cue])
 
 
 func test_what_a_full_crew_thins_first_is_only_the_leads_anyway() -> void:
@@ -301,6 +347,14 @@ func test_the_bed_has_three_layers_that_do_not_share_a_period() -> void:
 		lengths.append(float(_bank.sounds[layer["sound"]]["dur"]))
 	lengths.sort()
 	assert_eq(lengths, [5.0, 11.0, 13.0] as Array[float], "they meet again after 715 s")
+
+
+func test_the_frogs_stay_rare_now_that_they_can_be_heard() -> void:
+	# About 90 calls in 30 minutes. Louder and as frequent as they were, 160 would turn a detail into a tic.
+	for spot: Dictionary in _bank.beds["night_forest"]["spots"]:
+		if str(spot["sound"]) == "frog":
+			assert_gte(float(spot["gap_s"][0]), 14.0)
+			assert_gte(float(spot["gap_s"][1]), 34.0)
 
 
 func test_a_small_explosion_takes_the_adapters_counter() -> void:
