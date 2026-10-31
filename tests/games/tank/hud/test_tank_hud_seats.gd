@@ -68,7 +68,7 @@ static func _lum(t: ImageTexture) -> float:
 	return sum / float(img.get_width() * img.get_height() / 4)
 
 
-func test_every_crew_on_any_seats_builds_five_cards_with_the_empty_ones_dark() -> void:
+func test_every_crew_on_any_seats_builds_six_cards_with_the_empty_ones_dark() -> void:
 	var panels: Array[TankHudSeats] = []
 	for crew in range(1, 5):
 		for seats: Array in choices(crew):
@@ -78,8 +78,8 @@ func test_every_crew_on_any_seats_builds_five_cards_with_the_empty_ones_dark() -
 			p.tick(0.1)
 			p.refresh()
 			var what := "crew %d on %s" % [crew, seats]
-			assert_eq(p.cards.size(), 5, what)
-			for i in 5:
+			assert_eq(p.cards.size(), 6, what)
+			for i in 6:
 				var c: Dictionary = p.cards[i]
 				var engine := TankIds.SEATS[i]
 				assert_eq(str(c["engine"]), engine, what)
@@ -92,7 +92,7 @@ func test_every_crew_on_any_seats_builds_five_cards_with_the_empty_ones_dark() -
 					assert_eq(str(c["name"]), "Rider %d" % (int(c["slot"]) + 1), what)
 			p.queue_redraw()
 			panels.append(p)
-	assert_eq(panels.size(), 5 + 10 + 10 + 5, "every choice of seats")
+	assert_eq(panels.size(), 6 + 15 + 20 + 15, "every choice of seats")
 	await wait_physics_frames(2)
 	for p in panels:
 		assert_gt(p.draws, 0, "drew")
@@ -164,13 +164,13 @@ func test_the_picker_picks_empty_seats_and_confirm_sends_the_seat_intent() -> vo
 	assert_eq(pk.pick, TankIds.ENGINE_ARC)
 	pk.feed(s, r, left)
 	pk.feed(s, r, left)
-	assert_eq(pk.pick, TankIds.ENGINE_FEED, "wrapping past the manned seats and your own")
+	assert_eq(pk.pick, TankIds.ENGINE_REPAIR, "wrapping past the manned seats and your own")
 	out = pk.feed(s, r, ok)
-	assert_eq(out["intents"], [TankIntents.seat(TankIds.ENGINE_FEED)])
+	assert_eq(out["intents"], [TankIntents.seat(TankIds.ENGINE_REPAIR)])
 	assert_eq(out["taken"], [&"confirm"], "the confirm sits, it does nothing else")
 	assert_false(pk.is_open())
 	var n := TankIntents.normalize((out["intents"] as Array)[0])
-	assert_eq(int(n["to"]), TankIds.engine_code(TankIds.ENGINE_FEED))
+	assert_eq(int(n["to"]), TankIds.engine_code(TankIds.ENGINE_REPAIR))
 	assert_true(TankIntents.owned(TankIds.INTENT_SEAT, r.engine))
 	assert_true(TankIntents.is_deliberate(n), "a seat pick ends the Autopilot fallback")
 	# back closes; the picker closes itself when idle
@@ -217,7 +217,7 @@ func test_the_module_sends_the_seat_intent_and_drops_the_keys_it_took() -> void:
 	assert_eq(gg.local_intents(left, no), [], "the Gun's left opens the picker")
 	assert_true(gg.seat_picker.is_open())
 	var sit := gg.local_intents(ok, no)
-	assert_eq(sit, [TankIntents.seat(TankIds.ENGINE_FEED)], "a sit, never a shot")
+	assert_eq(sit, [TankIntents.seat(TankIds.ENGINE_REPAIR)], "a sit, never a shot")
 	assert_eq(gg.local_intents(ok, no), [TankIntents.make(TankIds.INTENT_FIRE)], "closed: fire")
 	var swap: Array[StringName] = [&"swap"]
 	assert_eq(
@@ -295,7 +295,11 @@ func test_every_seat_card_carries_its_erg_or_sim_tag() -> void:
 	var modes: Array[String] = []
 	for c: Dictionary in cards:
 		modes.append(str(c["mode"]))
-	assert_eq(modes, [Wl.SIM, Wl.ERG, Wl.SIM, Wl.ERG, Wl.SIM], "Drive, Gun, Loader, Lights, Sec.")
+	assert_eq(
+		modes,
+		[Wl.SIM, Wl.ERG, Wl.SIM, Wl.ERG, Wl.SIM, Wl.ERG],
+		"Drive, Gun, Loader, Lights, Sec., Rep."
+	)
 	assert_eq(Wl.SIM, "SIM")
 	assert_eq(Wl.ERG, "ERG")
 
@@ -307,6 +311,7 @@ func test_my_numbers_follow_the_seat() -> void:
 		TankIds.ENGINE_STEAM: TankHudModel.DO_BUILD,
 		TankIds.ENGINE_ARC: TankHudModel.DO_HOLD,
 		TankIds.ENGINE_FEED: TankHudModel.DO_FEED,
+		TankIds.ENGINE_REPAIR: TankHudModel.DO_HOLD,
 	}
 	for engine: String in TankIds.SEATS:
 		var s := X.state(1)
@@ -371,7 +376,7 @@ func test_the_fonts_cover_the_seat_panels_text() -> void:
 	keys.append_array(["TANK_HUD_SEAT_EMPTY", "TANK_HUD_SPRINT"])
 	keys.append_array(["TANK_HUD_DO_BUILD", "TANK_HUD_DO_OVER", "TANK_HUD_DO_FEED"])
 	keys.append("TANK_HUD_DO_FEED_IDLE")
-	keys.append_array(["TANK_HUD_PER_MIN", "TANK_HELP_SEATS", "TANK_HELP_SEAT_LOCK"])
+	keys.append_array(["TANK_HUD_PER_MIN", "TANK_HELP_SEATS"])
 	keys.append("TANK_HUD_NO_TARGET")
 	for e: String in TankIds.SEATS:
 		keys.append("TANK_HUD_TAB_" + e.to_upper())
@@ -432,7 +437,10 @@ func test_the_secondaries_dial_shows_while_their_seat_is_manned() -> void:
 	reseat(s, seats)
 	(s.station(TankIds.ENGINE_FEED) as TankFeedState).rpm = 180.0
 	tags.refresh()
-	assert_true(tags.m.has("sec"), "manned and firing")
+	assert_false(tags.m.has("sec"), "v4: firing at no near threat, no dial")
+	TankFixturesV4._near(s, 970, TankIds.ENEMY_RECON, 60.0, 0)
+	tags.refresh()
+	assert_true(tags.m.has("sec"), "manned and firing at a near threat")
 	var sec: Dictionary = tags.m["sec"]
 	assert_eq(float(sec["rpm"]), 180.0)
 	assert_between(float(sec["deg"]), TankHudTags.SEC_MIN, TankHudTags.SEC_MAX)

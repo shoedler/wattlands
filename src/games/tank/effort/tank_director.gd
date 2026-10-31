@@ -47,6 +47,12 @@ extends RefCounted
 ##    the dictionary). While a switch waits, the trainer keeps the plan's seat: its ERG pattern holds
 ##    (that seat stands empty, so its bank or load does not move) and its SIM grade goes flat (no
 ##    boiler grade, no terrain) until the switch.
+## 10. Repair (v4; the Repairs seat, ERG phases with a range_pct, never the depot or checkpoints): the
+##     same schedule (stations.json repair) toward repair_target_pct = 55 + 15 x duty, the share of the
+##     last 10 s the hull stood below its maximum (TankRepairState), clamped to the phase's range:
+##     {mode ERG, target_pct, reason "repair"}.
+## A tank under tow (v4, TankHullState.tow_s) gets course grade 0: the rider pedals flat, and no other
+## directive, plan or phase changes for it. Nothing in effort/ reads the game's difficulty level.
 ## Sprints (evade, Overpressure) send nothing: they are the rider's own in the phase's SIM.
 ## A rider on reserve (dropped or AFK) gets no bank, arc or boiler request: a dropped peer never
 ## receives them, so the director's idea of the held target would run away from the rider's real
@@ -63,6 +69,7 @@ const HAPTIC_BOSS_HIT := "boss_hit"
 const SOURCE := "tank"
 const REASON_BANK := "bank"
 const REASON_ARC := "arc"
+const REASON_REPAIR := "repair"
 const REASON_BOILER := "boiler"
 
 ## Changes smaller than this are float noise, not worth a directive.
@@ -93,7 +100,7 @@ var _started: Dictionary = {}
 ## peer -> the tick that phase started on.
 var _start_tick: Dictionary = {}
 ## peer -> {"cur": last sent %, "from": update start %, "goal": update goal %} of the rider's bank
-## (dynamo) or arc load (arc generator) pattern in its current phase.
+## (dynamo), arc load (arc generator) or repair pattern in its current phase.
 var _bank: Dictionary = {}
 ## peer -> the last boiler mode grade sent in this phase (the platform resets the channel
 ## at every phase change).
@@ -195,7 +202,7 @@ func _segment_start(ri: TankRiderInput) -> void:
 	ctx.hud.power_band(ri.peer, pb[0] / 100.0 * slot.ftp, pb[1] / 100.0 * slot.ftp)
 
 
-# --- Patterns 1 and 2: the bank and the arc load -------------------------------------------------
+# --- Patterns 1, 2 and 10: the bank, the arc load and the repair load -----------------------------
 
 
 ## True when pattern 1 runs in `ph` for a rider on `engine`: the dynamo in an ERG phase with a
@@ -210,6 +217,12 @@ static func arc_phase(engine: String, ph: PlanPhase) -> bool:
 	return engine == TankIds.ENGINE_ARC and _load_phase(ph)
 
 
+## True when pattern 10 runs in `ph` for a rider on `engine`: the Repairs seat in an ERG phase with a
+## range_pct, never the depot or a checkpoint.
+static func repair_phase(engine: String, ph: PlanPhase) -> bool:
+	return engine == TankIds.ENGINE_REPAIR and _load_phase(ph)
+
+
 static func _load_phase(ph: PlanPhase) -> bool:
 	if ph == null or ph.mode != Wl.ERG or ph.range_pct.size() != 2:
 		return false
@@ -217,8 +230,8 @@ static func _load_phase(ph: PlanPhase) -> bool:
 	return seg != TankIds.SEG_DEPOT and seg != TankIds.SEG_CHECKPOINT
 
 
-## Patterns 1 and 2 share one schedule: every <key>.every_s an update toward the engine's goal,
-## sent in <key>.substeps sub-steps <key>.substep_s apart (key "bank" or "arc").
+## Patterns 1, 2 and 10 share one schedule: every <key>.every_s an update toward the engine's goal,
+## sent in <key>.substeps sub-steps <key>.substep_s apart (key "bank", "arc" or "repair").
 func _bank_step(state: TankState, ri: TankRiderInput, ph: PlanPhase, e: int) -> void:
 	if ri.phase_mode != Wl.ERG:
 		return
@@ -226,6 +239,7 @@ func _bank_step(state: TankState, ri: TankRiderInput, ph: PlanPhase, e: int) -> 
 	var reason := ""
 	var dyn: TankDynamoState = null
 	var arc: TankArcState = null
+	var repair: TankRepairState = null
 	if bank_phase(ri.engine, ph):
 		key = "bank"
 		reason = REASON_BANK
@@ -237,6 +251,12 @@ func _bank_step(state: TankState, ri: TankRiderInput, ph: PlanPhase, e: int) -> 
 		reason = REASON_ARC
 		arc = state.station(TankIds.ENGINE_ARC) as TankArcState
 		if arc == null:
+			return
+	elif repair_phase(ri.engine, ph):
+		key = "repair"
+		reason = REASON_REPAIR
+		repair = state.station(TankIds.ENGINE_REPAIR) as TankRepairState
+		if repair == null:
 			return
 	else:
 		return
@@ -268,8 +288,10 @@ func _bank_step(state: TankState, ri: TankRiderInput, ph: PlanPhase, e: int) -> 
 		b["from"] = cur
 		if dyn != null:
 			b["goal"] = bank_goal_pct(content, dyn.bank, ph, cur)
-		else:
+		elif arc != null:
 			b["goal"] = arc_goal_pct(content, arc.duty, ph, cur)
+		else:
+			b["goal"] = repair_goal_pct(content, repair.duty, ph, cur)
 	if u % sub != 0 or u / sub >= n:
 		return
 	var from := float(b["from"])
@@ -313,6 +335,24 @@ static func arc_goal_pct(c: TankContent, duty: float, ph: PlanPhase, cur_pct: fl
 static func arc_target_pct(c: TankContent, duty: float, ph: PlanPhase) -> float:
 	var base := c.num("stations", "arc.base_pct", 65.0)
 	var span := c.num("stations", "arc.span_pct", 15.0)
+	var pct := base + span * clampf(duty, 0.0, 1.0)
+	var r := ph.effective_range()
+	return clampf(pct, float(r[0]), float(r[1]))
+
+
+## One repair update's goal: repair_target_pct, moved at most repair.max_step_pts from `cur_pct`.
+static func repair_goal_pct(c: TankContent, duty: float, ph: PlanPhase, cur_pct: float) -> float:
+	var step := c.num("stations", "repair.max_step_pts", 10.0)
+	var target := repair_target_pct(c, duty, ph)
+	return clampf(target, cur_pct - step, cur_pct + step)
+
+
+## Pattern 10: the Repairs seat's ERG target in % FTP, base + span x duty (55 + 15 x duty), clamped
+## to the phase's effective_range() (55..70 in a stage, 55..65 in the drill's skirmish). Apply it
+## before the <= max_step_pts limit and the sub-steps. Only for phases with a range_pct.
+static func repair_target_pct(c: TankContent, duty: float, ph: PlanPhase) -> float:
+	var base := c.num("stations", "repair.base_pct", 55.0)
+	var span := c.num("stations", "repair.span_pct", 15.0)
 	var pct := base + span * clampf(duty, 0.0, 1.0)
 	var r := ph.effective_range()
 	return clampf(pct, float(r[0]), float(r[1]))
@@ -398,6 +438,9 @@ func _terrain_step(state: TankState, ri: TankRiderInput, ph: PlanPhase, e: int) 
 	if _waits_for_seat(state, ri):
 		ctx.directives.course_grade(ri.peer, 0.0)  # the rider left Drive: flat until the switch
 		return
+	if state.hull.tow_s > 0.0:
+		ctx.directives.course_grade(ri.peer, 0.0)  # the tow: the rider pedals flat, TankDrive too
+		return
 	if state.roam.active:
 		g = TankRoam.grade_pct(state, ri.in_warmup())
 	else:
@@ -418,6 +461,8 @@ static func terrain_grade_pct(
 
 
 func _loader_step(state: TankState, ri: TankRiderInput) -> void:
+	if TankAux.of(state).cover.has(ri.peer):
+		return  # a bot covers this rider's seat: its band stays as it was until it is back
 	var want := false
 	var r := state.rider(ri.peer)
 	var seat := r.engine if r != null else ri.engine
@@ -446,6 +491,8 @@ func _haptics(state: TankState, inputs: TankInputs, events: Array[Dictionary]) -
 		if inputs.t + EPS < float(_haptic_end.get(ri.peer, -INF)) + cool:
 			continue  # inside the receiver's 15 s spacing: dropped, never queued
 		var d := haptic_directive(content, kind)
+		if haptic_outlasts_phase(ri, _phase(ri), float(d["duration_s"])):
+			continue  # it would still pull in what comes next, the cool-down at worst
 		if _request(ri.peer, d):
 			_haptic_end[ri.peer] = inputs.t + float(d["duration_s"])
 
@@ -472,6 +519,12 @@ static func haptic_allowed(ri: TankRiderInput, ph: PlanPhase, haptics_on: bool) 
 	if ri.phase_kind == "" or ri.phase_kind == Wl.WARMUP or ri.phase_kind == Wl.COOLDOWN:
 		return false
 	return not ri.in_first_window()
+
+
+## True when a haptic of `duration_s` (and a second of the directive's way to the trainer) could outlast
+## a phase that max_s is about to end: the next phase, the cool-down at worst, must not feel it.
+static func haptic_outlasts_phase(ri: TankRiderInput, ph: PlanPhase, duration_s: float) -> bool:
+	return ph != null and ph.max_s > 0.0 and ri.phase_elapsed_s + duration_s + 1.0 >= ph.max_s
 
 
 func _haptics_on(state: TankState, ri: TankRiderInput) -> bool:
@@ -512,7 +565,8 @@ static func power_band_pct(c: TankContent, ph: PlanPhase) -> Array[float]:
 
 ## end_phase for every rider of the group's segment in one step, once the objective is done, min_s
 ## has passed (until then the tank holds: "Regroup"), every rider of the segment is past its own
-## phase's min_s (v3: a seat switch's split phase may hold the end; TankSegments.riders_may_end)
+## phase's min_s (v3: a human's seat switch's split phase may hold the end, a bot's never does; its
+## end_phase simply waits for its own min_s: TankSegments.riders_may_end)
 ## and the segment's `end_hold_s` (mission file, default 0; the boss uses it for the Behemoth's
 ## death beat) has run since the objective was done. The hold never runs the segment into max_s:
 ## it ends END_MARGIN_S before it, so a won mission is not scored as an overrun. A rider whose
@@ -558,7 +612,7 @@ func _maybe_end_phase(state: TankState, inputs: TankInputs) -> bool:
 		var out_of_time := ph.max_s > 0.0 and ph.elapsed_s >= ph.max_s - END_MARGIN_S - EPS
 		if not held and not out_of_time:
 			return false
-		if not TankSegments.riders_may_end(inputs):
+		if not TankSegments.riders_may_end(state, inputs):
 			return false
 		if not out_of_time and _solo_seat_wait(state, ph, float(_done_at[ph.index])):
 			return false
@@ -579,7 +633,10 @@ func _maybe_end_phase(state: TankState, inputs: TankInputs) -> bool:
 	var left: Array = []
 	for peer: int in _end_pending[ph.index]:
 		# A rider that already moved on is never asked to end its next phase.
-		if here.has(peer) and not ctx.directives.end_phase(peer):
+		if not here.has(peer):
+			continue
+		# A bot still inside its own min_s is not asked yet: the platform would refuse it.
+		if not _past_min(inputs.rider(peer)) or not ctx.directives.end_phase(peer):
 			left.append(peer)
 	if left.is_empty():
 		_ended[ph.index] = true
@@ -590,6 +647,11 @@ func _maybe_end_phase(state: TankState, inputs: TankInputs) -> bool:
 	_end_retries[ph.index] = tries
 	_end_retry_tick[ph.index] = inputs.tick + (1 if tries <= 1 else _ticks(END_RETRY_S))
 	return first
+
+
+## True when `ri`'s own phase may take an end_phase by its min_s.
+static func _past_min(ri: TankRiderInput) -> bool:
+	return ri.phase_elapsed_s >= ri.phase_min_s - EPS
 
 
 # --- Pattern 9: seat switches (v3) ---------------------------------------------------------------
@@ -615,7 +677,8 @@ func _seat_step(state: TankState, inputs: TankInputs, ending: bool) -> void:
 			float(aux.last_switch_s.get(ri.peer, -INF)),
 			state.t,
 			ending or (state.seg.objective_done and state.seg.open_ended),
-			not ending
+			not ending,
+			r.is_bot
 		)
 		r.mode_wait_s = float(f["wait_s"])
 		r.mode_to = str(f["mode_to"])
@@ -644,10 +707,13 @@ func _seat_step(state: TankState, inputs: TankInputs, ending: bool) -> void:
 
 
 ## True while rider `ri` sits on another seat than the one its plan phase is set up for (its
-## trainer has not yet followed the seat; pattern 9).
+## trainer has not yet followed the seat; pattern 9). Never while a bot covers it: the swap is the bot's,
+## the plan stays the rider's own, and nothing on its trainer moves (TankBots.cover).
 static func _waits_for_seat(state: TankState, ri: TankRiderInput) -> bool:
 	var r := state.rider(ri.peer)
-	return r != null and r.engine != "" and r.engine != ri.engine
+	if r == null or r.engine == "" or r.engine == ri.engine:
+		return false
+	return not TankAux.of(state).cover.has(ri.peer)
 
 
 func _request(peer: int, fields: Dictionary) -> bool:

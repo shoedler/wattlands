@@ -15,17 +15,19 @@ extends RefCounted
 ##                                             "searchlight_turret_lens", "searchlight_rear_lens"
 ##   hud_barrel_length() -> float              the main gun, trunnion to muzzle
 ##   hud_bow_muzzles() -> Array[Vector2]       the bow guns' muzzles as drawn
-##   hud_enemy_rect(id: int) -> Rect2          an enemy's sprite (Rect2() when not drawn)
+##   hud_enemy_rect(id: int) -> Rect2          an enemy's sprite (Rect2() when not drawn); a far
+##                                             kind's lies in the far panel, on the canvas
 ##   hud_boss_rect() -> Rect2                  the Behemoth's sprite (Rect2() when not drawn)
-##   hud_barrel_dir() -> float                 the barrel as drawn: 1 right .. -1 left (traverse)
-##   hud_tank_rects() -> Array[Rect2]          the hitbox's turret (as it faces) and its hull with
-##                                             the track run, rotated with the hull: kept clear
+##   hud_tank_rects() -> Array[Rect2]          the hitbox's turret and its hull with the track run,
+##                                             rotated with the hull: kept clear
 ##   hud_mirrored() -> bool                    the world drawn mirrored (free roam, west)
 ## The HUD finds the view through the game's meta VIEW_META (the view sets it), else by looking
 ## for a node with hud_world_x() in the tree. Without one (tests, headless runs) the same comes
 ## from the state, TankConst and the v3 tank kit (TankRig: the r6 landship, its hitbox and
 ## anchors) at rest: rules px x SCALE with the hull's rear at canvas x REAR_X, the road at GROUND,
 ## the tank sprite's top left at TANK_POS (TankView.TANK_AT), unrotated.
+## v4: a far kind has no place in the rules px, so its rect comes from TankFarMap whenever the view's
+## is not on the far panel (no view, or a view that does not place far kinds there).
 
 const VIEW_META := "tank_view"
 const SCALE := 1.5
@@ -49,17 +51,24 @@ const ARC_GAP := 8.0
 const ARC_CLEAR := 2.0
 const ARC_STEP := 2.0
 const ARC_PUSH_MAX := 60.0
-## The view's barrel counts as turned (an arc drawn) once |hud_barrel_dir| reaches this.
-const TURNED := 0.98
+## The Behemoth's row in TankEnemyKit.
+const BOSS_KIND := "behemoth"
+## With no view: the Behemoth's muzzle, px in from its bow and a share of its height down.
+const BOSS_MUZZLE := Vector2(4, 0.2)
 
 var state: TankState = null
 ## The view when it has the API (else null: the fallback).
 var view: Object = null
+## The art canvas the tags lay out on (the panels' rects depend on it).
+var canvas: Vector2 = Vector2(960, 540)
 
 
-static func make(p_state: TankState, p_view: Object) -> TankHudGeom:
+static func make(
+	p_state: TankState, p_view: Object, p_canvas: Vector2 = Vector2(960, 540)
+) -> TankHudGeom:
 	var g := TankHudGeom.new()
 	g.state = p_state
+	g.canvas = p_canvas
 	if p_view != null and p_view.has_method("hud_world_x"):
 		g.view = p_view
 	return g
@@ -78,22 +87,19 @@ func ground_y() -> float:
 
 
 ## A tank point on the canvas (the names hud_tank_point() takes): the view's as drawn, else the
-## v3 kit's at rest (the turret's points mirrored about its pivot when the gun faces back).
+## v3 kit's at rest.
 func tank_point(anchor: String) -> Vector2:
 	if view != null:
 		return view.call("hud_tank_point", anchor)
 	var rig := TankRig.shared()
-	var left := state.hull.facing == TankIds.FACE_LEFT
 	var tp := rig.turret_pivot_x
 	var piv := rig.trunnion
-	if left:
-		piv.x = 2.0 * tp - piv.x
 	var p := Vector2(rig.size.x * 0.5, rig.ground)
 	match anchor:
 		"barrel_pivot", "trunnion":
 			p = piv
 		"muzzle":
-			p = piv + dir(state.hull.elev_deg, left) * (rig.gun_len + 1.0)
+			p = piv + dir(state.hull.elev_deg, false) * (rig.gun_len + 1.0)
 		"rear":
 			return Vector2(TANK_POS.x + ART_REAR, ground_y())
 		"turret_pivot":
@@ -109,8 +115,6 @@ func tank_point(anchor: String) -> Vector2:
 		"searchlight_turret_lens":
 			var d := rig.detail("searchlight")
 			p = TankRig.lens_of(d) if not d.is_empty() else p
-			if left:
-				p.x = 2.0 * tp - p.x
 		"searchlight_rear_lens":
 			var d2 := rig.detail("searchlight_rear")
 			p = TankRig.lens_of(d2) if not d2.is_empty() else p
@@ -126,7 +130,38 @@ static func _bow(rig: TankRig, k: int, muzzle: bool) -> Vector2:
 	return piv + dir(BOW_REST_DEG, false) * (float(b["len"]) + 1.0) if muzzle else piv
 
 
+## True for an enemy placed by range in the far panel. A far kind at range 0 is still in the old frame
+## (TankFixtures' states): the rules px place it, as for a near kind.
+static func in_far_frame(e: TankEnemyState) -> bool:
+	return not e.is_near() and e.range_m > 0.0
+
+
+## The split screen's rects on this canvas (TankFarMap.panels), mirrored with the world.
+func panels() -> Dictionary:
+	return TankFarMap.panels(canvas, mirrored())
+
+
+## A far sprite of `kind` at `range_m` in `lane` as TankFarMap places it (canvas art px): the foot's x
+## from the panel's near-side edge, the sprite standing on the foot's line.
+func far_sprite_rect(kind: String, range_m: float, lane: int) -> Rect2:
+	var far: Rect2 = panels()["far"]
+	var size: Vector2 = TankEnemyKit.shared().kind(kind)["size"]
+	var x := TankFarMap.range_x(range_m, far.size.x)
+	var cx := far.end.x - x if mirrored() else far.position.x + x
+	var foot := TankFarMap.foot_y(range_m, lane) + roundf((canvas.y - float(TankHud.BASE.y)) * 0.5)
+	return Rect2(cx - size.x * 0.5, foot - size.y, size.x, size.y)
+
+
+## `r` from the view when its middle lies on the far panel, else `fallback`.
+func _far_or(r: Rect2, fallback: Rect2) -> Rect2:
+	var far: Rect2 = panels()["far"]
+	return r if r.size != Vector2.ZERO and far.has_point(r.get_center()) else fallback
+
+
 func enemy_rect(e: TankEnemyState) -> Rect2:
+	if in_far_frame(e):
+		var at := far_sprite_rect(TankIds.enemy_of(e.code), e.range_m, e.lane)
+		return _far_or(view.call("hud_enemy_rect", e.id), at) if view != null else at
 	if view != null:
 		return view.call("hud_enemy_rect", e.id)
 	var w := float(e.w) * SCALE
@@ -136,39 +171,49 @@ func enemy_rect(e: TankEnemyState) -> Rect2:
 
 
 func boss_rect() -> Rect2:
+	if state.boss.range_m > 0.0:
+		var at := far_sprite_rect(BOSS_KIND, state.boss.range_m, 0)
+		return _far_or(view.call("hud_boss_rect"), at) if view != null else at
 	if view != null:
 		return view.call("hud_boss_rect")
 	return Rect2(world_x(state.boss.x_px), ground_y() - 150.0, 260.0, 150.0)
 
 
-## The barrel as drawn: {pivot, length (pivot to the muzzle at full length), left, turning}. The
-## side comes from the barrel the view draws (hud_barrel_dir), not from the ordered facing, so the
-## arc follows the gun through a traverse; `turning` while the turret is part way round (no arc).
+## Where a far enemy's gun ends as drawn (canvas art px), Vector2.ZERO without a view that places it.
+func enemy_muzzle(e: TankEnemyState) -> Vector2:
+	if view == null or not view.has_method("hud_enemy_muzzle"):
+		return Vector2.ZERO
+	var at: Vector2 = view.call("hud_enemy_muzzle", e.id)
+	return at if panels()["far"].has_point(at) else Vector2.ZERO
+
+
+## Where the Behemoth's main gun ends: as drawn, else on its rect's bow at the gun's height.
+func boss_muzzle() -> Vector2:
+	if view != null and view.has_method("hud_boss_muzzle"):
+		var at: Vector2 = view.call("hud_boss_muzzle")
+		if at != Vector2.ZERO and panels()["far"].has_point(at):
+			return at
+	var r := boss_rect()
+	var x := r.end.x - BOSS_MUZZLE.x if mirrored() else r.position.x + BOSS_MUZZLE.x
+	return Vector2(x, r.position.y + r.size.y * BOSS_MUZZLE.y)
+
+
+## The barrel as drawn: {pivot, length (pivot to the muzzle at full length), left}. v4: the gun only
+## ever points ahead, so `left` holds only while the world is drawn mirrored (free roam, west).
 func barrel() -> Dictionary:
-	var piv := tank_point("barrel_pivot")
-	var left := state.hull.facing == TankIds.FACE_LEFT
-	if mirrored():
-		left = not left
-	var turning := false
 	var length := TankRig.shared().gun_len + 1.0
-	if view != null and view.has_method("hud_barrel_dir"):
-		var d := float(view.call("hud_barrel_dir"))
-		left = d < 0.0
-		turning = absf(d) < TURNED
 	if view != null and view.has_method("hud_barrel_length"):
 		length = float(view.call("hud_barrel_length"))
-	return {"pivot": piv, "length": maxf(length, 1.0), "left": left, "turning": turning}
+	return {"pivot": tank_point("barrel_pivot"), "length": maxf(length, 1.0), "left": mirrored()}
 
 
-## The tank's body on the canvas (the hitbox's turret as it faces, the hull with the track run
-## below it): the world tags keep out of these rects.
+## The tank's body on the canvas (the hitbox's turret, the hull with the track run below it): the
+## world tags keep out of these rects.
 func tank_rects() -> Array[Rect2]:
 	if view != null and view.has_method("hud_tank_rects"):
 		return view.call("hud_tank_rects")
 	var rig := TankRig.shared()
 	var tr := rig.hit_rect("turret")
-	if state.hull.facing == TankIds.FACE_LEFT:
-		tr.position.x = 2.0 * rig.turret_pivot_x - tr.end.x
 	var hull := rig.hit_rect("hull").merge(rig.hit_rect("track_run"))
 	var out: Array[Rect2] = []
 	for r: Rect2 in [tr, hull]:

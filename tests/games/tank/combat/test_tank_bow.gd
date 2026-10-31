@@ -1,8 +1,9 @@
 extends GutTest
 ## The bow guns (v3: the Secondaries seat, TankBow): exactly 2 rounds per pedal revolution of its
-## rider (2 x cadence a minute), alternating guns, at the nearest enemy ahead 40-220 px off the hull
-## front; damage per round with the armour factors; power in band sets the slew speed (a round
-## hits once the guns point at the target); barricades cleared by rounds; kill credit; an empty
+## rider (2 x cadence a minute), alternating guns, at the nearest near threat 4-200 px off the hull
+## front (v4: never a far enemy or the Behemoth); damage per round with the armour factors; power in
+## band sets the slew speed (a round hits once the guns point at the target); barricades cleared by
+## rounds; kill credit; an empty
 ## seat, a breakdown, a rescue or a rider on reserve silences them. And the main gun's dispersion
 ## by the Lights seat (dark: x2).
 
@@ -27,9 +28,10 @@ func _rig(crew: int, feed: bool = true) -> TankRulesRig:
 	return rig
 
 
-## A tough enemy whose gun stays quiet, `dist` px off the hull front.
-func _target(rig: TankRulesRig, type: String, dist: float, side: int = 1) -> TankEnemyState:
-	var e := rig.spawn(type, side, dist)
+## A tough near threat whose gun stays quiet, `dist` px off the hull front.
+func _target(rig: TankRulesRig, type: String, dist: float) -> TankEnemyState:
+	var e := rig.near(type, dist)
+	TankAux.of(rig.state).enemy_age[e.id] = -1.0e6
 	e.hp = 5000.0
 	e.hp_max = 5000.0
 	e.gun_s = 1.0e6
@@ -40,7 +42,7 @@ func test_an_empty_secondaries_seat_is_silent() -> void:
 	for crew in [1, 2, 3, 4]:
 		var rig := _rig(crew, false)
 		assert_true(rig.feed().is_empty(), "crew %d starts with the Secondaries empty" % crew)
-		var e := _target(rig, TankIds.ENEMY_LIGHT, 130.0)
+		var e := _target(rig, TankIds.ENEMY_RECON, 130.0)
 		rig.run(5.0)
 		assert_eq(rig.feed().rounds, 0, "crew %d" % crew)
 		assert_eq(e.hp, 5000.0)
@@ -50,7 +52,7 @@ func test_two_rounds_per_pedal_revolution_alternating_guns() -> void:
 	var rig := _rig(2)
 	assert_eq(rig.feed().slot, 1, "peer 2 sits on the Secondaries")
 	assert_eq(rig.rider(2).engine, TankIds.ENGINE_FEED)
-	_target(rig, TankIds.ENEMY_LIGHT, 130.0)
+	_target(rig, TankIds.ENEMY_RECON, 130.0)
 	rig.run(10.0)
 	assert_between(rig.feed().rounds, 29, 30, "90 rpm: 3 rounds a second")
 	assert_eq(rig.feed().rpm, 180.0, "2 x cadence")
@@ -68,22 +70,14 @@ func test_damage_per_round_and_the_armour() -> void:
 	var c := TankFixtures.content()
 	var per := c.num("tanks", "bow.damage", 0.0)
 	assert_gt(per, 0.0)
-	var cases := {
-		TankIds.ENEMY_LIGHT: 1.0,
-		TankIds.ENEMY_DUGIN: 1.0,
-		TankIds.ENEMY_MEDIUM: 0.5,
-		TankIds.ENEMY_HEAVY: 0.25,
-		TankIds.ENEMY_DESTROYER: 0.25,
-	}
-	for type: String in cases:
+	for type: String in TankIds.NEAR_KINDS:
 		var rig := _rig(2)
-		var e := _target(rig, type, 100.0, 1)
+		var e := _target(rig, type, 100.0)
 		rig.run(4.0)
 		var hits := rig.state.score.bow_hits
 		assert_gt(hits, 0, type)
-		assert_almost_eq(5000.0 - e.hp, hits * per * float(cases[type]), 1e-4, type)
+		assert_almost_eq(5000.0 - e.hp, hits * per, 1e-4, type)
 		assert_eq(rig.rider(2).bow_hits, hits)
-	assert_eq(TankDamage.boss_mult(c, TankIds.SHELL_BOW), 0.25, "a Behemoth part")
 
 
 func test_power_in_band_sets_the_slew_speed() -> void:
@@ -99,7 +93,7 @@ func test_power_in_band_sets_the_slew_speed() -> void:
 		rig.p_eff[1] = 0.0
 		rig.enter(1, 1.0)
 		TankAux.of(rig.state).bow_deg = -30.0
-		_target(rig, TankIds.ENEMY_LIGHT, 130.0)
+		_target(rig, TankIds.ENEMY_RECON, 130.0)
 		rigs.append(rig)
 	var fast := rigs[0]
 	var slow := rigs[1]
@@ -112,23 +106,42 @@ func test_power_in_band_sets_the_slew_speed() -> void:
 	assert_gt(fast.state.score.bow_hits, slow.state.score.bow_hits, "in band it lays sooner")
 
 
-func test_only_the_nearest_enemy_ahead_in_40_to_220_px() -> void:
+func test_only_the_nearest_near_threat_in_4_to_200_px() -> void:
 	var rig := _rig(2)
-	var far := _target(rig, TankIds.ENEMY_LIGHT, 230.0)
-	var behind := _target(rig, TankIds.ENEMY_LIGHT, 40.0, -1)
+	var far := _target(rig, TankIds.ENEMY_RECON, 210.0)
 	rig.run(3.0)
-	assert_eq(rig.feed().rounds, 0, "230 px is out of range, behind is not ahead")
-	var close := _target(rig, TankIds.ENEMY_MEDIUM, 30.0)
-	close.lane = 1
+	assert_eq(rig.feed().rounds, 0, "210 px is out of range")
+	var close := _target(rig, TankIds.ENEMY_TANKETTE, 2.0)
 	rig.run(1.0)
-	assert_eq(rig.feed().rounds, 0, "nearer than 40 px is too close")
-	var near := _target(rig, TankIds.ENEMY_DUGIN, 180.0)
-	var nearer := _target(rig, TankIds.ENEMY_DUGIN, 60.0)
+	assert_eq(rig.feed().rounds, 0, "nearer than 4 px is too close")
+	var next := _target(rig, TankIds.ENEMY_RECON, 180.0)
+	var nearest := _target(rig, TankIds.ENEMY_RECON, 60.0)
 	rig.run(2.0)
 	assert_gt(rig.feed().rounds, 0)
-	assert_lt(nearer.hp, 5000.0, "the nearest")
-	assert_eq(near.hp, 5000.0)
-	assert_eq([far.hp, behind.hp, close.hp], [5000.0, 5000.0, 5000.0])
+	assert_lt(nearest.hp, 5000.0, "the nearest")
+	assert_eq(next.hp, 5000.0)
+	assert_eq([far.hp, close.hp], [5000.0, 5000.0])
+
+
+## v4: the far enemies and the Behemoth are out of the bow guns' reach and take nothing from them.
+func test_far_enemies_and_the_behemoth_are_not_bow_targets() -> void:
+	var rig := _rig(2)
+	var m := rig.far(TankIds.ENEMY_LIGHT, 900.0)
+	m.gun_s = 1.0e6
+	var hp := m.hp
+	rig.run(3.0)
+	assert_eq(rig.feed().rounds, 0, "silent with only a far enemy")
+	assert_eq(m.hp, hp)
+	var boss := TankRulesRig.new(2)
+	boss.no_fire = true
+	boss.seat(2, TankIds.ENGINE_FEED)
+	boss.enter(10, 1.0)
+	var aux := TankAux.of(boss.state)
+	TankTargets.build(boss.state, aux)
+	assert_null(TankBow.target(boss.state, aux), "the Behemoth is far")
+	boss.run(3.0)
+	assert_eq(boss.feed().rounds, 0)
+	assert_eq(boss.state.boss.bogie_hp[0], boss.state.boss.bogie_max)
 
 
 func test_rounds_that_hit_clear_a_barricade_in_range() -> void:
@@ -142,17 +155,17 @@ func test_rounds_that_hit_clear_a_barricade_in_range() -> void:
 	assert_eq(rig.state.score.bow_hits, int(need), "clear_rounds rounds that hit")
 	var far := _rig(2)
 	var w3 := TankEncounters.add_obstacle(
-		far.state, TankIds.OBST_WIRE, far.hull().x_px + far.hull().hull_w + 260.0
+		far.state, TankIds.OBST_WIRE, far.hull().x_px + far.hull().hull_w + 210.0
 	)
 	far.run(10.0)
 	assert_false(w3.cleared, "out of range")
 
 
-func test_an_enemy_in_range_comes_before_a_barricade() -> void:
+func test_a_near_threat_in_range_comes_before_a_barricade() -> void:
 	var rig := _rig(2)
 	var front := rig.hull().x_px + rig.hull().hull_w
 	var wire := TankEncounters.add_obstacle(rig.state, TankIds.OBST_WIRE, front + 100.0)
-	var e := _target(rig, TankIds.ENEMY_LIGHT, 180.0)
+	var e := _target(rig, TankIds.ENEMY_RECON, 180.0)
 	rig.run(8.0)
 	assert_false(wire.cleared)
 	assert_lt(e.hp, 5000.0)
@@ -160,7 +173,7 @@ func test_an_enemy_in_range_comes_before_a_barricade() -> void:
 
 func test_a_bow_kill_is_credited_by_bow_to_the_secondaries_rider() -> void:
 	var rig := _rig(2)
-	var e := rig.spawn(TankIds.ENEMY_LIGHT, 1, 130.0)
+	var e := rig.near(TankIds.ENEMY_RECON, 130.0)
 	e.hp = 1.0
 	e.gun_s = 1.0e6
 	rig.run(2.0)
@@ -172,7 +185,7 @@ func test_a_bow_kill_is_credited_by_bow_to_the_secondaries_rider() -> void:
 
 func test_nothing_fires_in_a_breakdown_a_rescue_or_on_reserve() -> void:
 	var rig := _rig(2)
-	_target(rig, TankIds.ENEMY_LIGHT, 130.0)
+	_target(rig, TankIds.ENEMY_RECON, 130.0)
 	rig.hull().breakdown = true
 	rig.run(3.0)
 	assert_eq(rig.feed().rounds, 0, "breakdown")
@@ -192,7 +205,7 @@ func test_nothing_fires_in_a_breakdown_a_rescue_or_on_reserve() -> void:
 
 ## Dark (the Lights seat empty or out of band) the main gun's dispersion doubles; lit it is the
 ## bank's own.
-func test_dark_searchlights_double_the_main_guns_dispersion() -> void:
+func test_dark_searchlights_widen_the_main_guns_dispersion() -> void:
 	var rig := _rig(4, false)
 	rig.run(0.1)
 	var arc := rig.arc()
@@ -204,16 +217,18 @@ func test_dark_searchlights_double_the_main_guns_dispersion() -> void:
 		for _i in 200:
 			rig.state.shells.clear()
 			rig.load_shell(TankIds.SHELL_LIGHT)
-			rig.hull().elev_deg = 10.0
+			rig.hull().elev_deg = 0.5
 			TankGun.fire(rig.state, TankAux.of(rig.state), rig.dynamo(), true, rig.events)
 			var s: TankShellState = rig.state.shells.back()
-			var a := rad_to_deg(atan2(-s.vy, s.vx * float(rig.hull().facing)))
-			worst = maxf(worst, absf(a - 10.0))
+			var a := rad_to_deg(atan2(-s.vy, s.vx))
+			worst = maxf(worst, absf(a - 0.5))
 		return worst
 	var lit_spread: float = spread.call(true)
 	var dark_spread: float = spread.call(false)
 	assert_almost_eq(lit_spread, 0.5, 0.05, "the full bank's 0.5 degrees")
-	assert_almost_eq(dark_spread, 1.0, 0.1, "doubled")
+	var mult := rig.content.num("tanks", "arc.dark_dispersion_mult")
+	assert_gt(mult, 1.0, "dark is worse than lit")
+	assert_almost_eq(dark_spread, 0.5 * mult, 0.1, "times arc.dark_dispersion_mult")
 	rig.cadence[rig.peer_of(TankIds.ENGINE_ARC)] = 40.0
 	rig.run(0.1)
 	assert_false(arc.lit, "under band: dark")

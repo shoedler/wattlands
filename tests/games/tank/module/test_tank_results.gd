@@ -10,6 +10,8 @@ const STAT_KEYS: Array[String] = [
 	"TANK_STAT_STEAM_S",
 	"TANK_STAT_ARC_S",
 	"TANK_STAT_FEED_S",
+	"TANK_STAT_REPAIR_S",
+	"TANK_STAT_REPAIRED",
 	"TANK_STAT_EVADES",
 	"TANK_STAT_BOW_HITS",
 	"TANK_STAT_BERM",
@@ -20,6 +22,8 @@ const STAT_KEYS: Array[String] = [
 ]
 const TEAM_KEYS: Array[String] = [
 	"TANK_TEAM_OUTCOME",
+	"TANK_TEAM_DIFFICULTY",
+	"TANK_TEAM_LOSSES",
 	"TANK_TEAM_HP",
 	"TANK_TEAM_BREAKDOWNS",
 	"TANK_TEAM_OVERRUNS",
@@ -27,6 +31,40 @@ const TEAM_KEYS: Array[String] = [
 	"TANK_TEAM_EVADES",
 	"TANK_TEAM_BOW_HITS",
 ]
+
+
+## The text on the results: the kill label names what tank_game.gd joins, in that order, a loss line that
+## reads for one tank, no key or word left of the dug-in gun, and no "gun line" where the mission now says
+## Holding action.
+func test_the_results_text_matches_what_the_game_writes() -> void:
+	var text := {}
+	var f := FileAccess.open(F.CONTENT_DIR.path_join("strings.csv"), FileAccess.READ)
+	while not f.eof_reached():
+		var row := f.get_csv_line()
+		if row.size() >= 2:
+			text[row[0]] = row[1]
+	var codes: Array[int] = [
+		TankIds.enemy_code(TankIds.ENEMY_LIGHT),
+		TankIds.enemy_code(TankIds.ENEMY_MEDIUM),
+		TankIds.enemy_code(TankIds.ENEMY_DESTROYER),
+		TankIds.enemy_code(TankIds.ENEMY_HEAVY),
+		TankIds.BOSS_CODE,
+		TankIds.enemy_code(TankIds.ENEMY_RECON),
+		TankIds.enemy_code(TankIds.ENEMY_TANKETTE),
+	]
+	assert_eq(TankGame.TEAM_KILL_CODES, codes, "the order the label names")
+	assert_eq(
+		text["TANK_TEAM_KILLS"], "Kills (light/medium/destroyer/heavy/Behemoth/recon/tankette)"
+	)
+	assert_eq(text["TANK_TEAM_ROAM_KILLS"], "Kills (light/medium/destroyer/heavy/recon/tankette)")
+	assert_false(text.has("TANK_ENEMY_DUGIN"))
+	assert_eq(str(text["TANK_RIDE_LOSSES"]).format([1]), "Tanks lost: 1")
+	for key: String in text:
+		var low := str(text[key]).to_lower()
+		assert_false(low.contains("gun line"), key)
+		assert_false(low.contains("gun-line"), key)
+		assert_false(low.contains("dug-in"), key)
+		assert_false(low.contains("dugin"), key)
 
 
 func _played(crew: int, kj: float = 300.0) -> TankGame:
@@ -277,3 +315,21 @@ func test_the_strava_tag_and_lines() -> void:
 	drill.state.seg.seg = TankIds.SEG_COOLDOWN
 	drill.state.outcome = TankIds.OUTCOME_COMPLETE
 	assert_eq(drill.results().ride_tag, "Depot drill - complete")
+
+
+## v4: the level and the tanks lost reach the results screen and Strava; the repair stats reach the rows.
+func test_the_difficulty_losses_and_repairs_in_the_results() -> void:
+	var perfect := _perfect(3)
+	perfect.state.difficulty = TankIds.DIFF_HARD
+	assert_eq(perfect.results().team["TANK_TEAM_LOSSES"], 0)
+	assert_eq(perfect.results().ride_lines.size(), 4, "no line for no loss")
+	perfect.state.score.losses = 2
+	perfect.state.riders[1].engine_s[6] = 71.6
+	perfect.state.riders[1].repaired_hp = 33.4
+	var res := perfect.results()
+	assert_eq(res.team["TANK_TEAM_LOSSES"], 2)
+	assert_eq(res.team["TANK_TEAM_DIFFICULTY"], "Hard")
+	assert_eq(res.ride_lines.size(), 5)
+	assert_eq(res.ride_lines[4], "Tanks lost: 2")
+	assert_eq(res.row(2)["stats"]["TANK_STAT_REPAIR_S"], 72)
+	assert_eq(res.row(2)["stats"]["TANK_STAT_REPAIRED"], 33)

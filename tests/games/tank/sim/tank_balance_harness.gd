@@ -9,6 +9,7 @@ extends RefCounted
 ##   segments        per plan segment: start, end, duration and how it ended (end_phase / max_s /
 ##                   duration), so T1's ranges and overruns read straight off
 ##   overruns, breakdowns, score, grade, outcome, kills by enemy code
+##   difficulty, losses, near_killed, near_escaped, hp_at (v4: the hull at each segment's end)
 ## dynamo          per fight phase of the dynamo's rider: seconds with the applied ERG target above
 ##                   80% FTP, and seconds from the fight's end until it is back at <= 65% (T2)
 ##   shells          per steam shell: the seconds from "ready to build" to the latch (the 5 s
@@ -25,8 +26,9 @@ extends RefCounted
 ## contract classes, so it works the same on the G0 stubs and on the merged rules.
 ##
 ## Config keys (all optional): crew (1), seed (1), compliance (1.0), content ("ashfall_road"),
-## enemy_mult (1: every encounter and gun-line count x n, in memory), via_module
-## (false), snapshots (true: encode a snapshot every 2nd tick), max_seconds (the session limit).
+## enemy_mult (1: every encounter, gun-line and near count x n, in memory), via_module
+## (false), snapshots (true: encode a snapshot every 2nd tick), max_seconds (the session limit),
+## difficulty (the option's value; "auto", the default, takes the mission's difficulty_default).
 
 const SESSION_LIMIT_S := 2460.0 + 180.0 + 30.0
 const FIGHT_SEGS: Array[String] = [TankIds.SEG_ADVANCE, TankIds.SEG_GUN_LINE, TankIds.SEG_BOSS]
@@ -64,7 +66,8 @@ var _phase_t: float = 0.0
 var _drive: Dictionary = {}
 var _arc: Dictionary = {}
 var _adv: Dictionary = {}
-var _kills: Array[int] = [0, 0, 0, 0, 0, 0, 0]
+var _kills: Array[int] = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+var _hp_at: Array[Dictionary] = []
 
 
 ## One run: returns the result dictionary (see the class doc).
@@ -73,25 +76,44 @@ static func run(config: Dictionary = {}) -> Dictionary:
 	return h.execute(config)
 
 
-## The mission patch (GameContext.content_overrides) that multiplies every Advance encounter and
-## gun-line enemy count of `content_id` by `mult`, in memory: gun lines get extra positions 40 px
-## further along for each extra copy. The Behemoth and the segment table are untouched.
+## The mission patch (GameContext.content_overrides) that multiplies every Advance encounter,
+## gun-line enemy and near threat count of `content_id` by `mult`, in memory. The Behemoth and the
+## segment table are untouched.
 static func enemy_mult_overrides(content_id: String, mult: int) -> Dictionary:
 	var mission: Dictionary = TankContent.read_files(content_id)["mission"]
-	var segs: Array = (mission["segments"] as Array).duplicate(true)
+	return {
+		TankContent.mission_path(content_id):
+		{"segments": multiplied_segments(mission["segments"] as Array, mult)}
+	}
+
+
+## `segments` with every count x `mult`: a holding force gets extra positions (`hold_m` 60 m further
+## out, the old rules' `at_px` 40 px further along) for each extra copy, so it never holds nearer
+## than its kind allows.
+static func multiplied_segments(segments: Array, mult: int) -> Array:
+	var segs: Array = segments.duplicate(true)
 	for s: Dictionary in segs:
-		for e: Dictionary in s.get("encounters", []):
-			e["count"] = int(e["count"]) * mult
+		for key: String in ["encounters", "near"]:
+			for e: Dictionary in s.get(key, []):
+				e["count"] = int(e.get("count", 1)) * mult
 		for e: Dictionary in s.get("enemies", []):
-			var base: Array = (e.get("at_px", []) as Array).duplicate()
-			var n := int(e["count"])
-			var out: Array = base.duplicate()
-			for k in range(base.size(), n * mult):
-				out.append(float(base[k % base.size()]) + 40.0 * float(k / base.size()))
+			var n := int(e.get("count", 1))
+			_spread(e, "at_px", 40.0, n * mult)
+			_spread(e, "hold_m", 60.0, n * mult)
 			e["count"] = n * mult
-			if not base.is_empty():
-				e["at_px"] = out
-	return {TankContent.mission_path(content_id): {"segments": segs}}
+	return segs
+
+
+## Grows the position list `key` of a holding-force entry to `total`, repeating it `step` further out.
+static func _spread(e: Dictionary, key: String, step: float, total: int) -> void:
+	var list: Array = (e.get(key, []) as Array).duplicate()
+	var size := list.size()
+	if size == 0:
+		return
+	for k in range(size, total):
+		var round_trip: int = floori(float(k) / size)
+		list.append(float(list[k % size]) + step * round_trip)
+	e[key] = list
 
 
 func execute(config: Dictionary) -> Dictionary:
@@ -107,6 +129,8 @@ func execute(config: Dictionary) -> Dictionary:
 		ctx.content_overrides = enemy_mult_overrides(content_id, mult)
 	dirs = ctx.directives as TankFakes.Directives
 	hud = ctx.hud as TankFakes.Hud
+	if cfg.has("difficulty"):
+		ctx.options["difficulty"] = str(cfg["difficulty"])
 	if bool(cfg.get("via_module", false)):
 		game = TankFakes.make_game(ctx)
 		game.cue.connect(_on_cue)
@@ -118,6 +142,7 @@ func execute(config: Dictionary) -> Dictionary:
 	else:
 		content = TankContent.load_for(ctx)
 		state = TankRules.new_state(content, ctx.players, content_id, ctx.rng)
+		state.difficulty = TankDifficulty.resolve(ctx.options.get("difficulty", ""), content)
 		plans = TankPlanBuilder.build_all(content, ctx.players)
 		director = TankDirector.new(ctx, content, plans)
 		var with_cd := {}
@@ -204,6 +229,9 @@ func _observe(t: float, evs: Array[Dictionary]) -> void:
 	if sg.phase_index != _phase_seen:
 		_phase_seen = sg.phase_index
 		_phase_t = t
+		_hp_at.append({"seg": sg.seg, "stage": sg.stage, "hp": state.hull.hp})
+	if not _hp_at.is_empty():
+		_hp_at[_hp_at.size() - 1]["hp"] = state.hull.hp
 	var dyn := state.station(TankIds.ENGINE_DYNAMO)
 	if dyn != null and dyn.peer != 0 and FIGHT_SEGS.has(sg.seg):
 		var pct := riders.applied_pct(dyn.peer)
@@ -355,11 +383,20 @@ func _result(end_t: float) -> Dictionary:
 		"seed": int(cfg.get("seed", 1)),
 		"compliance": float(cfg.get("compliance", 1.0)),
 		"content": str(cfg.get("content", "ashfall_road")),
+		"difficulty": state.difficulty,
 		"enemy_mult": int(cfg.get("enemy_mult", 1)),
 		"end_t": end_t,
 		"segments": segments,
 		"overruns": state.score.overruns,
 		"breakdowns": state.score.breakdowns,
+		"losses": state.score.losses,
+		"near_killed":
+		(
+			_kills[TankIds.enemy_code(TankIds.ENEMY_RECON)]
+			+ _kills[TankIds.enemy_code(TankIds.ENEMY_TANKETTE)]
+		),
+		"near_escaped": state.score.near_escaped,
+		"hp_at": _hp_at.duplicate(true),
 		"score": float(sum["score"]),
 		"grade": str(sum["grade"]),
 		"band": float(sum["band"]),
@@ -390,6 +427,44 @@ func _result(end_t: float) -> Dictionary:
 	return res
 
 
+## One run on one line, the tuning loop's view (SPEC_TANK 9.4): crew, seed and difficulty, then
+## losses, breakdowns, near threats killed/escaped, the hull at the end of each fight, grade, times.
+static func line(r: Dictionary) -> String:
+	if r.has("error"):
+		return "error: %s" % r["error"]
+	var hps: PackedStringArray = []
+	for h: Dictionary in r["hp_at"]:
+		if FIGHT_SEGS.has(str(h["seg"])):
+			hps.append("%s%d:%.0f" % [str(h["seg"]).substr(0, 3), h["stage"], h["hp"]])
+	var times: PackedStringArray = []
+	for s: Dictionary in r["segments"]:
+		times.append(
+			(
+				"%s%d:%.0f%s"
+				% [str(s["seg"]).substr(0, 3), s["stage"], s["dur_s"], "!" if s["overran"] else ""]
+			)
+		)
+	return (
+		"crew %d seed %d %s c%.2f %s: losses %d breakdowns %d near %d/%d hp %s %d grade %s %s times %s"
+		% [
+			r["crew"],
+			r["seed"],
+			r["difficulty"],
+			r["compliance"],
+			r["content"],
+			r["losses"],
+			r["breakdowns"],
+			r["near_killed"],
+			r["near_escaped"],
+			",".join(hps),
+			r["score"],
+			r["grade"],
+			r["outcome"],
+			",".join(times),
+		]
+	)
+
+
 ## A readable block for one result: segment times, then the T1-T5 inputs.
 static func format(r: Dictionary) -> String:
 	if r.has("error"):
@@ -399,15 +474,17 @@ static func format(r: Dictionary) -> String:
 		lines
 		. append(
 			(
-				"crew %d seed %d compliance %.2f %s: %.0f s, score %.0f grade %s, breakdowns %d, overruns %d, outcome %s"
+				"crew %d seed %d compliance %.2f %s %s: %.0f s, score %.0f grade %s, losses %d, breakdowns %d, overruns %d, %s"
 				% [
 					r["crew"],
 					r["seed"],
 					r["compliance"],
 					r["content"],
+					r["difficulty"],
 					r["end_t"],
 					r["score"],
 					r["grade"],
+					r["losses"],
 					r["breakdowns"],
 					r["overruns"],
 					r["outcome"],

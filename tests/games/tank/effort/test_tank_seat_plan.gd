@@ -12,6 +12,7 @@ const ADVANCE := 1
 const GUN_LINE := 2
 const CHECKPOINT := 3
 const BOSS := 10
+const SessionKit := preload("res://tests/sdk/helpers/session_kit.gd")
 
 
 func _content(mission: String = "ashfall_road") -> TankContent:
@@ -102,6 +103,157 @@ func test_a_fixed_phase_splits_into_a_fixed_rest() -> void:
 	assert_true(TankSeatPlan.check(TankSeatPlan.whole(plan, DEPOT, rest), DEPOT, 100.0))
 	var cp := TankSeatPlan.tail(c, plan, CHECKPOINT, TankIds.ENGINE_STEAM, true, 20.0, 20.0)
 	assert_eq([cp.phase(0).mode, cp.phase(0).duration_s], [Wl.ERG, 40.0])
+
+
+## A depot split to a seat with a range_pct: the platform's own model (the phase closed at the elapsed
+## time) reaches the warm-up's edge, so the split goes, and real time reaches it too (BRIEF 4.6.8).
+func test_a_depot_split_reaches_the_warm_ups_edge_for_every_seat() -> void:
+	for mission: String in ["ashfall_road", "ambush_15"]:
+		var c := _content(mission)
+		for slot: int in 3:
+			var plan := _plan(c, slot)
+			for seat: String in TankIds.SEATS:
+				if str(plan.phase(0).meta.get("engine", "")) == seat:
+					continue
+				for elapsed: float in [40.0, 150.0, 290.0]:
+					_depot_split(
+						c, plan, seat, elapsed, "%s slot %d %.0f" % [mission, slot, elapsed]
+					)
+
+
+func _depot_split(
+	c: TankContent, plan: EffortPlan, seat: String, elapsed: float, at: String
+) -> void:
+	var ri := _ri(plan, 0, elapsed)
+	ri.plan_elapsed_s = elapsed
+	var f := TankSeatPlan.follow(c, ri, seat, -1000.0, 1000.0, false)
+	var where := "%s to %s" % [at, seat]
+	assert_eq(int(f["action"]), TankSeatPlan.FOLLOW_SPLIT, where)
+	if int(f["action"]) != TankSeatPlan.FOLLOW_SPLIT:
+		return
+	var rest: EffortPlan = f["plan"]
+	var model := PlanValidator.split_model(TankSeatPlan.whole(plan, 0, rest), 0, elapsed)
+	assert_true(bool(PlanValidator.validate(model)["ok"]), "the router's check " + where)
+	var depot := float(c.segment(0)["duration_s"])
+	assert_true(
+		elapsed + Wl.SIM_DT + rest.phase(0).duration_s >= depot - 1e-6,
+		"not short of the warm-up in real time " + where
+	)
+
+
+## The same split through the platform's own PhaseTracker and DirectiveRouter, not a model of them: every
+## seat is accepted, the rest's end stays in the depot's phase, and the next segment (the first that can
+## ask more than the warm-up's limit) starts at 300 s or later (BRIEF 4.6.8).
+func test_the_real_router_takes_a_depot_split_and_the_warm_up_holds() -> void:
+	var c := _content()
+	var plan := _plan(c, 0)
+	var from := str(plan.phase(0).meta["engine"])
+	for seat: String in TankIds.SEATS:
+		if seat != from:
+			_real_depot_split(c, plan, seat, 150.0)
+			_real_depot_split(c, plan, seat, 299.0)
+
+
+func _real_depot_split(c: TankContent, plan: EffortPlan, seat: String, at_s: float) -> void:
+	var root: Node = autofree(Node.new())
+	var clock := SimClock.create()
+	var tracker := PhaseTracker.new()
+	tracker.add_rider(1, PlanValidator.finalize(plan))
+	var router := DirectiveRouter.new()
+	router.role = Wl.HOST
+	router.tracker = tracker
+	router.clock = clock
+	router.slots = {1: SessionKit.human(1, 0, 200.0)}
+	router.bind_riders({})
+	router.bus = SessionKit.new_bus(root, "Bus")
+	router.remote_send = func(_peer: int, _payload: Dictionary) -> void: pass
+	router.telemetry_of = func(_peer: int) -> Variant: return null
+	tracker.start()
+	var advance := func(seconds: float) -> void:
+		for _i in PhaseTracker.ticks(seconds):
+			tracker.advance(clock.game_tick)
+			router.flush(clock.game_tick + 1)
+			tracker.update_modes(clock.game_tick + 1)
+			clock.step()
+	advance.call(at_s)
+	var elapsed := tracker.elapsed_s(1)
+	var ri := _ri(plan, 0, elapsed)
+	ri.plan_elapsed_s = elapsed
+	var f := TankSeatPlan.follow(c, ri, seat, -1000.0, elapsed, false)
+	var where := "%s at %.0f s" % [seat, at_s]
+	assert_eq(int(f["action"]), TankSeatPlan.FOLLOW_SPLIT, where)
+	assert_true(router.split(1, f["plan"]), "the router takes it: " + where)
+	advance.call(c.segment(0)["duration_s"] - elapsed + 1.0)
+	assert_eq(tracker.index_of(1), 2, "the rest, then the next segment: " + where)
+	var rest_row: Dictionary = tracker.history(1)[1]
+	assert_gte(float(rest_row["end"]), 300.0, "the next segment starts past the warm-up: " + where)
+	assert_lte(float(rest_row["end"]), 300.0 + 2.0 * Wl.SIM_DT, "and on time: " + where)
+
+
+## Past the warm-up a split keeps the segment's real length to the tick.
+func test_a_split_past_the_warm_up_ends_on_the_segments_tick() -> void:
+	var c := _content()
+	var plan := _plan(c, 0)
+	var ri := _ri(plan, CHECKPOINT, 20.0)
+	ri.plan_elapsed_s = 900.0
+	var f := TankSeatPlan.follow(c, ri, TankIds.ENGINE_STEAM, -1000.0, 1000.0, false)
+	assert_eq(int(f["action"]), TankSeatPlan.FOLLOW_SPLIT)
+	var rest: EffortPlan = f["plan"]
+	var seg_s := float(c.segment(CHECKPOINT)["duration_s"])
+	assert_almost_eq(20.0 + Wl.SIM_DT + rest.phase(0).duration_s, seg_s, 1e-6)
+
+
+## A whole Repairs plan runs through the validator on every mission, inside its 55-70 band.
+func test_a_repairs_plan_passes_every_mission() -> void:
+	for mission: String in ["ashfall_road", "ambush_15", "drill", "roam_10", "roam_30", "roam_60"]:
+		var c := _content(mission)
+		var whole := EffortPlan.new()
+		for i in c.segments().size():
+			whole.add(TankPlanBuilder.phase_for(c, c.segment(i), TankIds.ENGINE_REPAIR, i))
+		assert_true(TankSeatPlan.check(whole), "%s: a whole plan on Repairs" % mission)
+		for i in whole.size():
+			var ph := whole.phase(i)
+			if ph.mode == Wl.ERG and ph.kind == Wl.WORK:
+				assert_eq(float(ph.range_pct[0]), 55.0, "%s phase %d" % [mission, i])
+				assert_true(float(ph.range_pct[1]) <= 70.0, "%s phase %d" % [mission, i])
+
+
+func test_repairs_follows_a_seat_move_as_the_gun_does() -> void:
+	var c := _content()
+	var plan := _plan(c, 0)
+	var gun := _follow(c, plan, ADVANCE, 100.0, TankIds.ENGINE_DYNAMO, 45.0)
+	var repair := _follow(c, plan, ADVANCE, 100.0, TankIds.ENGINE_REPAIR, 45.0)
+	assert_eq(int(repair["action"]), int(gun["action"]))
+	assert_eq(float(repair["wait_s"]), float(gun["wait_s"]))
+	assert_eq((repair["plan"] as EffortPlan).phase(0).mode, Wl.ERG)
+	assert_eq(str((repair["plan"] as EffortPlan).phase(0).meta["engine"]), TankIds.ENGINE_REPAIR)
+
+
+## no_hold: a bot's split whose rest would outlast the segment's own min_s waits for the segment's end;
+## while the segment's own min_s still covers it, or when the rest has no min_s of its own, it goes.
+func test_a_bots_split_never_holds_the_segment() -> void:
+	var c := _content("ambush_15")
+	var plan := _plan(c, 0)
+	var seg := int(plan.phase(1).meta["segment"])
+	var seg_min := float(c.segment(seg)["min_s"])
+	var seat := TankIds.ENGINE_REPAIR
+	assert_eq(plan.phase(1).mode, Wl.SIM, "a SIM Advance for slot 0")
+	var late := _ri(plan, 1, seg_min - 5.0)
+	late.plan_elapsed_s = 400.0
+	var human := TankSeatPlan.follow(c, late, seat, -1000.0, 1000.0, false, true, false)
+	assert_eq(int(human["action"]), TankSeatPlan.FOLLOW_SPLIT, "a human's own move goes")
+	assert_almost_eq((human["plan"] as EffortPlan).phase(0).min_s, 30.0, 1e-6)
+	var bot := TankSeatPlan.follow(c, late, seat, -1000.0, 1000.0, false, true, true)
+	assert_ne(int(bot["action"]), TankSeatPlan.FOLLOW_SPLIT, "a bot's waits")
+	assert_eq(float(bot["wait_s"]), TankSeatPlan.WAIT_SEGMENT_END)
+	var early := _ri(plan, 1, seg_min - 40.0)
+	early.plan_elapsed_s = 400.0
+	var soon := TankSeatPlan.follow(c, early, seat, -1000.0, 1000.0, false, true, true)
+	assert_eq(int(soon["action"]), TankSeatPlan.FOLLOW_SPLIT, "inside the segment's own min_s")
+	var same := TankSeatPlan.follow(
+		c, late, TankIds.ENGINE_STEAM, -1000.0, 1000.0, false, true, true
+	)
+	assert_eq(int(same["action"]), TankSeatPlan.FOLLOW_SPLIT, "same mode, no hold")
 
 
 ## Free roam: the rest after a move can split again (the game's time up still reads the meta's

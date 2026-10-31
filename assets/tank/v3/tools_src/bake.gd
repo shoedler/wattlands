@@ -489,6 +489,7 @@ func _layout(kit: Dictionary) -> void:
 		{"id": "loader", "room": "loader", "engine": "steam"},
 		{"id": "lights", "room": "lights", "engine": "arc"},
 		{"id": "sec", "room": "sec", "engine": "feed"},
+		{"id": "repair", "room": "turret_drive", "engine": "repair"},
 	]
 	var windows := {}
 	for k2: String in ["shaft", "rackwin", "breechwin", "boxwin", "boxwin2"]:

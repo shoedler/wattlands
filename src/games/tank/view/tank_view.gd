@@ -6,15 +6,26 @@ extends Node2D
 ##
 ## Layers, back to front (all under `stage`, offset vertically on taller or shorter canvases and by
 ## the screen shake): Back (the forest planes at their parallax, the verge, the road band following
-## the relief, the near shoulder; TankForest), World (the little bases, the halt line, obstacles,
-## wrecks aging on sim time, enemies in their depth lanes on the relief, the Behemoth;
+## the relief, the near shoulder; TankForest), World (free roam's little bases, the halt line, bushes,
+## obstacles, wrecks aging on sim time, the near threats in their two lanes on the relief;
 ## TankWorldDraw), WorldLight (additive: every world light, behind the tank: the bases' and the halt
 ## line's lamps, fires, the tank's pools on the road), Tank (the tank: TankBody's sprite drawn
 ## rotated as a whole onto the terrain, then the main gun's blast and the bow guns' rounds;
 ## TankFiring), Light (additive: the tank's own lights rotated with the hull: room lamps, the
 ## headlight, both searchlights, the position lights, the scene flash, shells and flashes;
 ## TankLightDraw), Front (smoke and the foreground plane), Post (the tilt-shift shading); then the
-## per-frame depth of field (TankDof) over the whole canvas.
+## per-frame depth of field (TankDof) over the near panel.
+##
+## The split screen (v4, SPEC_TANK section 4; TankFarMap holds the rects): the near panel on the left,
+## a riveted seam (TankSeam) with the target's range, the far panel on the right (TankFarPanel, a
+## SubViewport with its own night forest, drawn opaque over the near stage), with the shell screen
+## (TankPip) in its top. Far enemies, the Behemoth and a stage's little base live there; near threats,
+## obstacles and drill wrecks on the near stage, in rules px, 0..NEAR_SPAN_PX past the nose mapped onto
+## the road up to the seam (sx). A far shell crosses all three (TankShellPath).
+##
+## Tank lost (SPEC_TANK 4.7): a boom and a short dim, then while hull.tow_s runs the tank creeps back with
+## its tracks reversed under heavy smoke and the far panel goes black (its veil); stage_restart forgets
+## the history and fades up from black.
 ##
 ## The tank (TankBody, a SubViewport): the base art with the rooms painted live (TankInterior: each
 ## seat's machine turning on its rider's crank, a rider on each manned seat, a bare saddle and a
@@ -26,8 +37,8 @@ extends Node2D
 ## jolt, the scene flash and the screen shake (the stage's offset, never Engine time).
 ##
 ## Scale: the rules' 640 x 360 units x 1.5 (sx/sy). The hull's rules span maps onto the art hull
-## and the ground ahead onto the rest of the canvas; a wider canvas (pixel_flex) keeps that scale
-## and shows more world on the right, a narrower one squeezes the ground ahead.
+## and the ground ahead onto the near panel's road (near_k); a wider canvas (pixel_flex) stretches that
+## up to the art's own scale and shows more road past it, a narrower one squeezes it.
 ##
 ## Time: positions come from a snapshot history (TankSnapHistory) drawn at TankRenderClock.render_t.
 ## Machines turn by their rider's cadence integrated over render time; cosmetic randomness comes
@@ -44,9 +55,12 @@ extends Node2D
 const BASE := Vector2(960, 540)
 ## Rules px -> art px.
 const S := 1.5
-## The road line (stage y) at the flat, and where enemies stand on it.
+## The road line (stage y) at the flat, and where a barricade's hulk stands on it.
 const GROUND := 385.0
 const ROAD_ENEMY_Y := 388.0
+## The near panel's road: where NEAR_SPAN_PX ends, inside the seam, and the art's own scale as its cap.
+const NEAR_END_PAD := 6.0
+const NEAR_K_MAX := 1.5
 ## The tank sprite's top-left on the base canvas at rest (its track bottom on the road line).
 const TANK_AT := Vector2(18, 176)
 ## The hull's rear (sprite x).
@@ -56,10 +70,52 @@ const WIDE_SHIFT := 0.3
 ## The road band (stage y): sharp under the depth of field.
 const BAND := Vector2(195, 405)
 const MAX_WRECKS := 8
-## Depth lanes on the road (each LANE_LIFT art px further back, smaller, darker and hazier).
-const LANES := 4
-const LANE_LIFT := 12.0
-const LANE_SCALE: Array[float] = [1.0, 0.84, 0.7, 0.58]
+## The near threats' lanes on the road: the feet (stage y) at the flat, in front of and behind the road
+## line (SPEC_TANK 4.7).
+const LANES := 2
+const LANE_FOOT: Array[float] = [396.0, 380.0]
+## A near threat's gun: the elevation it lays on the hull at (degrees), the recoil's px and its decay.
+const NEAR_ELEV_MAX := 14.0
+const NEAR_RECOIL_PX := 2.0
+const NEAR_RECOIL_DECAY := 6.0
+## The dark line round a near threat, so two in a crowd part.
+const NEAR_HALO := 0.8
+## Its exhaust puffs per second, and a leaf burst's particles and colour when it bursts from the bushes.
+const NEAR_EXHAUST_S := 20.0
+const NEAR_EXHAUST := Color(0.44, 0.45, 0.45)
+## A running one's exhaust is a streak flying back toward us: its speed, its life and how long a wisp of it stretches.
+const NEAR_STREAK_V := 105.0
+const NEAR_STREAK_S := 0.85
+const NEAR_STREAK_LEN := 15.0
+## So many near threats' worth of smoke and dust at most: a crowd shares them.
+const NEAR_EMIT_MAX := 4
+## Dust kicked up behind a running near threat, per second, low at its rear wheels and under its sprite; a paused one's
+## settles at this share.
+const NEAR_DUST_S := 34.0
+const NEAR_DUST_PAUSED := 0.12
+const NEAR_DUST := Color(0.42, 0.36, 0.28)
+const LEAF_BURST := 14
+const LEAF := Color(0.3, 0.3, 0.14)
+const LEAF_SPEED := 70.0
+## The leaves still fluttering down after the burst, the bush's colours, and how fast a bursting threat keeps
+## throwing them (per second) while it comes out.
+const LEAF_DRIFT := 22
+const LEAF_DRIFT_S := 3.4
+const LEAF_LIT := Color(0.36, 0.43, 0.27)
+const LEAF_DARK := Color(0.2, 0.3, 0.2)
+const LEAF_RATE := 24.0
+## A bush a threat burst from goes on shedding for this long (s).
+const LEAF_SHED_S := 1.9
+## How far a threat may be from a bush and still be bursting out of it.
+const LEAF_BUSH_PX := 70.0
+## A tank lost: the creep back (art px/s) and how far it goes, the dim's length and depth, the heavy smoke
+## per second, the fade from black at the restart.
+const TOW_PX_S := 12.0
+const TOW_MAX_PX := 96.0
+const TOW_DIM_S := 0.4
+const TOW_DIM_ALPHA := 0.55
+const TOW_SMOKE_S := 9.0
+const RESTART_FADE_S := 0.5
 const WRECK_HULK_S := 5.0
 const WRECK_COLLAPSE_S := 3.0
 const WRECK_BURN_S := 30.0
@@ -69,14 +125,12 @@ const CUE_QUEUE_MAX := 64
 const TURN_DUST_GAIN := 1.8
 ## The layers mirrored while the tank drives west (the planes behind and the HUD never are).
 const MIRROR_LAYERS: Array[String] = ["World", "WorldLight", "Tank", "Light", "Front"]
-## The turret's width end on, a share of its side view (a traverse squeezes it to this).
-const TURRET_MIN_W := 0.55
 ## The hull's springs: stiffness (1/s^2) and damping (1/s) of the bob, for the angle and the lift.
 const SPRING_K := 90.0
 const SPRING_D := 9.0
 ## The bow guns' tilt: rest, limits (degrees up) and slew (degrees/s).
 const BOW_REST_DEG := 2.0
-const BOW_MIN_DEG := -6.0
+const BOW_MIN_DEG := -12.0
 const BOW_MAX_DEG := 12.0
 const BOW_SLEW := 24.0
 ## The bow guns' kick (px) and how long it lasts (s).
@@ -91,15 +145,27 @@ const SEARCH_HOLD_S := 2.0
 ## The rooms' backup lighting (the Lights seat unpowered) fades in and out over BACKUP_FADE_S, with
 ## the same hold.
 const BACKUP_FADE_S := 0.5
+## Their shells that miss: rules px of near road per metre the splash event names (40-90 m ahead).
+const SPLASH_PX_PER_M := 2.0
+## An incoming far shell's last stretch: where it enters at the near panel's edge (stage y), where it
+## strikes on the tank (sprite px from the nose, as _cue_hit) and how far ahead it falls when it will miss.
+const INCOMING_Y := 170.0
+const INCOMING_HIT := Vector2(-30, 140)
+const INCOMING_MISS_PX := Vector2(70, 170)
 
 var game: TankGame = null
 var audio: TankAudio = null
 ## Turn off to drive advance() yourself (tests, screenshots).
 var auto_process: bool = true
 var rig: TankRig = null
-var kit: TankKit = null
+var enemy_kit: TankEnemyKit = TankEnemyKit.shared()
 var fx: TankFx = TankFx.new()
+## The dust on the road: drawn behind the near threats' wheels, not over them.
+var dust_fx: TankFx = TankFx.new()
 var dof: TankDof = null
+var far: TankFarPanel = null
+var seam: TankSeam = null
+var pip: TankPip = null
 var body: TankBody = null
 var interior: TankInterior = null
 var ground: TankGround = null
@@ -135,15 +201,19 @@ var seat_slots: Dictionary = {}
 var phases: Dictionary = {}
 var cadences: Dictionary = {}
 var powers: Dictionary = {}
-## Enemy id -> Rect2 (stage px) as drawn, its depth lane, and its angle on the relief.
+## The split screen this frame: {near, seam, far, pip: Rect2} on the canvas (TankFarMap.panels).
+var panels: Dictionary = {}
+## A far enemy's id -> Rect2 (canvas px) as drawn in the far panel.
+var far_rects: Dictionary = {}
+## A near enemy's id -> Rect2 (stage px) as drawn, its foot on the road, and its lane.
 var enemy_rects: Dictionary = {}
+var enemy_feet: Dictionary = {}
 var lanes: Dictionary = {}
-var enemy_rots: Dictionary = {}
 var wrecks: Array[Dictionary] = []
-## A gun line's base slide (rules px, NAN for none), latched per gun line (TankForest.gun_line_base).
-var base_slides: Dictionary = {}
-## The barrel's swing during a traverse: 1 facing right .. -1 facing left.
-var barrel_dir: float = 1.0
+## A tank lost: how far the tow has drawn the tank back (art px); the dim's and the fade's time left (s).
+var tow_px: float = 0.0
+var tow_dim_s: float = 0.0
+var restart_fade_s: float = 0.0
 ## The bow guns' tilt (degrees up) and where they aim (stage px; ZERO none).
 var bow_elev: float = BOW_REST_DEG
 var bow_target: Vector2 = Vector2.ZERO
@@ -162,14 +232,23 @@ var hull_x: float = 0.0
 var _dir_seen: int = 0
 
 var _built: bool = false
+var _far_sprite: Node2D = null
+var _far_v0: float = 560.0
+var _far_g: float = 70.0
 var _layers: Dictionary = {}
 var _last_tick: int = -1
 var _last_render_t: float = -1.0
 var _last_sim_t: float = -1.0
 var _prev_cam_px: float = 0.0
 var _cam_primed: bool = false
-var _traverse_from: float = 0.0
 var _seen: Dictionary = {}
+## A near enemy's id -> {travel, recoil, last}: its tracks and gun, kept between frames.
+var _near: Dictionary = {}
+var _near_smoke_acc: float = 0.0
+var _near_dust_acc: float = 0.0
+## The bushes threats have just burst from: [{at (stage px), left (s)}].
+var _shedding: Array[Dictionary] = []
+var _tow_smoke_acc: float = 0.0
 var _shell_seen: Dictionary = {}
 var _cues: Array[Dictionary] = []
 var _smoke_acc: float = 0.0
@@ -214,10 +293,10 @@ func _build() -> void:
 		return
 	_built = true
 	rig = TankRig.shared()
-	kit = TankKit.shared()
 	var ctx := game.ctx
 	var sd := ctx.seed if ctx != null else 1
 	fx.seed_rng(sd)
+	dust_fx.seed_rng(sd + 2)
 	ground = TankGround.new(sd)
 	ground.base_y = GROUND
 	if ctx != null:
@@ -256,7 +335,26 @@ func _build() -> void:
 	dof = TankDof.new()
 	dof.enabled = miniature_option()
 	add_child(dof)
+	_build_panels(sd)
 	game.set_meta(TankHudGeom.VIEW_META, self)
+
+
+## The far panel's SubViewport and, over the near stage in this order, its sprite, the seam and the PiP.
+func _build_panels(sd: int) -> void:
+	if game.state.content != null:
+		_far_v0 = game.state.content.num("tanks", "gun.far.v0_mps", _far_v0)
+		_far_g = game.state.content.num("tanks", "gun.far.g_mps2", _far_g)
+	far = TankFarPanel.new(self, sd)
+	add_child(far)
+	_far_sprite = Node2D.new()
+	_far_sprite.name = "FarSprite"
+	_far_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_far_sprite.draw.connect(_draw_far)
+	add_child(_far_sprite)
+	seam = TankSeam.new(self)
+	add_child(seam)
+	pip = TankPip.new(self)
+	add_child(pip)
 
 
 func _exit_tree() -> void:
@@ -323,6 +421,7 @@ func advance(delta: float) -> void:
 	hull_x = history.hull_x_at(rt, state.hull.x_px) if clock.is_set() else state.hull.x_px
 	cam_x = hull_x - float(TankConst.REAR_SCREEN_X)
 	_roam_frame(state)
+	_panels_frame()
 	var cam_px := cam_x * S
 	scroll_px = cam_px - _prev_cam_px if _cam_primed else 0.0
 	if absf(scroll_px) > 200.0:
@@ -330,27 +429,34 @@ func advance(delta: float) -> void:
 	_prev_cam_px = cam_px
 	_cam_primed = true
 	travel += state.hull.speed_mps * TankConst.PX_PER_M * S * render_dt
+	_tow_frame(state, dt)
 	_relief(state)
 	var feed := rider_feed(state, rt)
-	_seats(state, feed, render_dt)
-	_turret(state)
+	# render_t stalls at the newest snapshot then catches up (tank_render_clock.gd): on a client that
+	# would make the strokes lurch, so a client's machines run on the frame's dt.
+	var phase_dt := dt if game.ctx != null and game.ctx.role == Wl.CLIENT else render_dt
+	_seats(state, feed, phase_dt)
 	_search(state, dt)
 	_process_cues(state)
 	_feed_rounds(state)
 	firing.step(dt, scroll_px)
 	_track_enemies(state)
-	_bow_aim(state, dt)
+	_far_frame(state, dt)
+	_bow_aim(dt)
 	_pose(dt)
 	_paint(state)
 	_age_wrecks(state)
 	_emit(state, feed, dt)
 	fx.step(dt, scroll_px)
+	dust_fx.step(dt, scroll_px)
 	_shake_frame()
 	if dof != null:
-		dof.update(canvas, BAND + Vector2(y_off, y_off))
+		dof.update(canvas, BAND + Vector2(y_off, y_off), panels["near"])
 	body.refresh()
 	for l: Node2D in _layers.values():
 		l.queue_redraw()
+	for n: Node2D in [_far_sprite, seam, pip]:
+		n.queue_redraw()
 	if audio != null:
 		audio.update(state, delta, game.ctx.local_peer if game.ctx != null else 0, feed)
 
@@ -359,6 +465,29 @@ func _layout() -> void:
 	canvas = canvas_size()
 	y_off = roundf((canvas.y - BASE.y) * 0.5)
 	tank_pos = Vector2(TANK_AT.x + maxf(canvas.x - BASE.x, 0.0) * WIDE_SHIFT, TANK_AT.y)
+
+
+## The split screen on this frame's canvas (mirrored going west: far on the left).
+func _panels_frame() -> void:
+	panels = TankFarMap.panels(canvas, mirrored)
+	far.layout(canvas, mirrored, y_off)
+	seam.rect = Rect2(panels["seam"])
+	pip.rect = Rect2(panels["pip"])
+	pip.position = pip.rect.position
+
+
+## The far panel's frame, and its enemies' and the Behemoth's rects on the canvas.
+func _far_frame(state: TankState, step_dt: float) -> void:
+	far.frame(state, step_dt)
+	pip.frame(state, step_dt)
+	far.age_wrecks(state.t)
+	far_rects.clear()
+	for id: int in far.rects:
+		far_rects[id] = far.canvas_rect(far.rects[id], far_panel_x())
+
+
+func far_panel_x() -> float:
+	return (panels["far"] as Rect2).position.x
 
 
 ## The canvas the view draws on (art px): the override, else the PixelViewport's SubViewport.
@@ -445,9 +574,15 @@ func sx(world_x: float) -> float:
 	var front := tank_pos.x + headlight_x()
 	if s <= rf:
 		return art_rear + (s - rear) * (front - art_rear) / maxf(rf - rear, 1.0)
-	var right := minf(canvas.x, BASE.x) - 20.0 + (tank_pos.x - TANK_AT.x)
-	var k := (right - front) / maxf(float(TankConst.SCREEN_W) - rf, 1.0)
-	return front + (s - rf) * k
+	return front + (s - rf) * near_k()
+
+
+## Art px per rules px on the road ahead: TankConst.NEAR_SPAN_PX past the nose ends just inside the seam,
+## never above the art's own scale (a wide canvas shows more road past the span instead).
+func near_k() -> float:
+	var front := tank_pos.x + headlight_x()
+	var end := TankFarMap.near_end_x(canvas.x) - NEAR_END_PAD
+	return minf((end - front) / TankConst.NEAR_SPAN_PX, NEAR_K_MAX)
 
 
 ## World y (rules px) -> stage y.
@@ -468,11 +603,6 @@ func ground_y(x: float) -> float:
 ## A sprite point (sprite px) on the stage as drawn this frame.
 func at_sprite(p: Vector2) -> Vector2:
 	return xf * p
-
-
-## A turret point (sprite px) on the stage: through the traverse's mirror, then the hull.
-func at_turret(p: Vector2) -> Vector2:
-	return xf * (body.turret_xf() * p)
 
 
 # --- The relief and the pose ------------------------------------------------------------------------------
@@ -540,6 +670,7 @@ func _pose(step_dt: float) -> void:
 		if screen_s > 6.0:
 			screen_s = -1.0
 	off -= Vector2(firing.jolt(), 0).rotated(rot)
+	off.x -= tow_px
 	xf = TankSuspension.xform(rig.size, rig.ground, at + off, rot, hull_lift)
 	wheel_centres = TankSuspension.wheel_centres(rig.wheels, xf, gfn, t_track, up, droop)
 
@@ -571,8 +702,56 @@ func enemy_x(e: TankEnemyState) -> float:
 	return history.enemy_x_at(e.id, clock.render_t, e.x_px) if clock.is_set() else e.x_px
 
 
-func boss_x(state: TankState) -> float:
-	return history.boss_x_at(clock.render_t, state.boss.x_px) if clock.is_set() else state.boss.x_px
+## A far enemy's range as drawn (m). 0 on a far kind means the old frame's rules: it stands at the
+## panel's near end.
+func far_range_of(e: TankEnemyState) -> float:
+	var r := (
+		history.enemy_range_at(e.id, clock.render_t, e.range_m) if clock.is_set() else e.range_m
+	)
+	return r if r > 0.0 else TankFarMap.RANGE_NEAR_M
+
+
+## The Behemoth's range as drawn (m), as far_range_of().
+func far_boss_range(state: TankState) -> float:
+	var live := state.boss.range_m
+	var r := history.boss_range_at(clock.render_t, live) if clock.is_set() else live
+	return r if r > 0.0 else TankFarMap.RANGE_NEAR_M
+
+
+## A shell's seconds until it lands, as drawn.
+func shell_left(s: TankShellState) -> float:
+	return history.shell_left_at(s.id, clock.render_t, s.left_s) if clock.is_set() else s.left_s
+
+
+func far_v0() -> float:
+	return _far_v0
+
+
+func far_g() -> float:
+	return _far_g
+
+
+## The current target's range (m); 0 without a far target (a barricade, a drill wreck, none).
+func target_range_m(state: TankState) -> float:
+	var id := state.hull.target_id
+	if id == 0:
+		return 0.0
+	if TankBossState.is_part_id(id):
+		return far_boss_range(state) + boss_part_offset(state, TankBossState.part_of(id))
+	var e := state.enemy(id)
+	if e == null or e.is_near():
+		return 0.0
+	return far_range_of(e)
+
+
+## Boss part `part`'s metres behind bogie 0 (enemies.json boss.far.part_offset_m).
+func boss_part_offset(state: TankState, part: int) -> float:
+	if state.content == null:
+		return 0.0
+	var off: Variant = (state.content.boss_def().get("far", {}) as Dictionary).get("part_offset_m")
+	if off is Array and part >= 0 and part < (off as Array).size():
+		return float((off as Array)[part])
+	return 0.0
 
 
 func shell_pos(s: TankShellState) -> Vector2:
@@ -635,6 +814,22 @@ func _seats(state: TankState, feed: Dictionary, render_dt: float) -> void:
 		cadences[seat] = rpm
 		phases[seat] = float(phases.get(seat, 0.0)) + rpm / 60.0 * render_dt
 		powers[seat] = power_ratio(r)
+
+
+## What the audio reads per seat (SPEC_AUDIO 2.2): its crank revolutions, rpm (0 when the picture
+## stops the machine, as `on` in _paint), power and whether the local rider leads it.
+func audio_feed(state: TankState) -> Dictionary:
+	var out := {}
+	var me := game.ctx.local_peer if game.ctx != null else 0
+	for seat: String in TankRig.SEATS:
+		var r := rider_on(seat)
+		out[seat] = {
+			"revs": machine_phase(seat),
+			"rpm": 0.0 if state.hull.breakdown else float(cadences.get(seat, 0.0)),
+			"power": machine_power(seat),
+			"lead": r != null and r.peer == me,
+		}
+	return out
 
 
 ## The rider on a seat, or null (an empty seat).
@@ -733,6 +928,25 @@ func loader_view(state: TankState) -> Dictionary:
 
 
 func _paint(state: TankState) -> void:
+	var inp := paint_input(state)
+	if interior.paints == 0:
+		interior.paint_all(inp)
+	else:
+		interior.paint(inp, time)
+	body.travel = travel
+	body.wheels = wheel_centres
+	body.elev_deg = state.hull.elev_deg
+	body.recoil = firing.recoil()
+	body.bow_elev_deg = bow_elev
+	for k in 2:
+		body.bow_kick[k] = BOW_KICK if firing.bow_kicking(k, BOW_KICK_S) else 0.0
+	body.search_lit = search_level >= 0.5
+	body.rear_lit = search_level >= 0.5
+	body.backup = backup_level
+
+
+## What the rooms are painted from this frame (TankInterior.paint).
+func paint_input(state: TankState) -> Dictionary:
 	var inp := {"t": time}
 	for seat in TankRig.SEATS:
 		inp[seat] = {
@@ -740,6 +954,10 @@ func _paint(state: TankState) -> void:
 			"revs": machine_phase(seat),
 			"on": float(cadences.get(seat, 0.0)) > 1.0 and not state.hull.breakdown,
 		}
+	var rp := seat_station(state, "repair") as TankRepairState
+	if rp != null:
+		inp["repair"]["press_t"] = rp.press_t
+		inp["repair"]["patches"] = rp.patches
 	inp["loader_seat"] = inp["loader"]
 	var lv := loader_view(state)
 	lv["elev"] = state.hull.elev_deg
@@ -749,45 +967,16 @@ func _paint(state: TankState) -> void:
 	var feed := seat_station(state, "sec") as TankFeedState
 	if feed != null and feed.rpm <= 0.0:
 		inp["bow"] = {"revs": -1.0}
-	if interior.paints == 0:
-		interior.paint_all(inp)
-	else:
-		interior.paint(inp, time)
-	body.travel = travel
-	body.wheels = wheel_centres
-	body.elev_deg = state.hull.elev_deg
-	body.recoil = firing.recoil()
-	body.turret_sx = turret_sx()
-	body.bow_elev_deg = bow_elev
-	for k in 2:
-		body.bow_kick[k] = BOW_KICK if firing.bow_kicking(k, BOW_KICK_S) else 0.0
-	body.search_lit = search_level >= 0.5
-	body.rear_lit = search_level >= 0.5
-	body.backup = backup_level
+	return inp
 
 
-func _turret(state: TankState) -> void:
-	var h := state.hull
-	var face := 1.0 if h.facing == TankIds.FACE_RIGHT else -1.0
-	if h.traverse_s > 0.0:
-		_traverse_from = maxf(_traverse_from, h.traverse_s)
-		var p := 1.0 - h.traverse_s / maxf(_traverse_from, 0.001)
-		barrel_dir = face * cos(p * PI)
-	else:
-		_traverse_from = 0.0
-		barrel_dir = face
-
-
-## The bow guns tilt toward the nearest enemy ahead (cosmetic; the rules aim them), back to rest
+## The bow guns tilt toward the nearest near threat ahead (cosmetic; the rules aim them), back to rest
 ## without one, slewing at BOW_SLEW.
-func _bow_aim(state: TankState, step_dt: float) -> void:
+func _bow_aim(step_dt: float) -> void:
 	bow_target = Vector2.ZERO
 	var piv := at_sprite(rig.bow[0]["pivot"]) if not rig.bow.is_empty() else Vector2.ZERO
 	var best := INF
 	for id: int in enemy_rects:
-		var e := state.enemy(id)
-		if e == null or e.side < 0:
-			continue
 		var r: Rect2 = enemy_rects[id]
 		var dx := r.get_center().x - piv.x
 		if dx > 20.0 and dx < best:
@@ -844,11 +1033,11 @@ func fire(kind: String, gun: int = -1) -> void:
 	if not _built:
 		return
 	if kind == "bow":
-		var k := firing.bow_round(gun)
-		var m := bow_muzzle(k)
-		var tgt := bow_target if bow_target != Vector2.ZERO else m + Vector2(260, 14)
+		firing.bow_round(gun)
 		if bow_target != Vector2.ZERO:
-			fx.spark_burst(tgt, 2, Color(1.0, 0.8, 0.4), 40.0)
+			var hit := bow_target + Vector2(fx.rng.randf_range(-8, 8), fx.rng.randf_range(-5, 3))
+			fx.spark_burst(hit, 3, Color(1.0, 0.8, 0.4), 46.0)
+			fx.flash(hit, 5.0, 0.08, Color(1.0, 0.82, 0.5))
 		return
 	var mz := muzzle()
 	firing.fire_main(mz, barrel_vector().angle())
@@ -896,12 +1085,20 @@ func apply_cue(state: TankState, kind: String, data: Dictionary) -> void:
 			_cue_hit(state, data)
 		TankEvents.KILL:
 			_cue_kill(state, data)
+		TankEvents.SPLASH:
+			_cue_splash(data)
 		TankEvents.EVADE:
 			if int(data.get("ok", 0)) == 1:
 				play_evade(evade_kind(state, int(data.get("s", -1))))
 		TankEvents.BREAKDOWN:
 			shake = 1.0
 			fx.boom(at_sprite(rig.exhaust) + Vector2(30, 40), 18.0, 8)
+		TankEvents.AMBUSH:
+			_cue_ambush(state, int(data.get("id", 0)))
+		TankEvents.TANK_LOST:
+			_cue_tank_lost()
+		TankEvents.STAGE_RESTART:
+			_cue_restart()
 
 
 ## How the evade looks, from the evade event's `s`: the loader's boiler blows a smoke screen; the
@@ -926,16 +1123,101 @@ func _cue_shot(state: TankState, data: Dictionary) -> void:
 	elif slot < 0:
 		var src := int(data.get("src", 0))
 		var e := state.enemy(src)
-		if e != null and enemy_rects.has(src):
-			var er: Rect2 = enemy_rects[src]
-			var mz := enemy_muzzle(e, er)
-			var dir := Vector2.RIGHT if e.side < 0 else Vector2.LEFT
-			fx.flash(mz, 18.0, 0.12, Color(1.0, 0.55, 0.25), dir)
-			fx.light_scene(mz, 0.35, Color(1.0, 0.55, 0.25))
-		elif sh == TankIds.SHELL_BOSS_MAIN:
-			var bm := boss_rect(state).position + boss_muzzle()
-			fx.flash(bm - Vector2(4, 0), 40.0, 0.18, Color(1.0, 0.55, 0.25), Vector2.LEFT)
-			fx.light_scene(bm, 0.8, Color(1.0, 0.55, 0.25))
+		if e != null and e.is_near():
+			_near_fired(e)
+		else:
+			far.on_fired(state, src, sh)
+
+
+## A near threat's round: the recoil, a small flash back along its reversed gun.
+func _near_fired(e: TankEnemyState) -> void:
+	if not enemy_feet.has(e.id):
+		return
+	_near_rec(e)["recoil"] = 1.0
+	var mz := near_muzzle(e)
+	fx.flash(mz, 10.0, 0.1, Color(1.0, 0.62, 0.3), Vector2.LEFT)
+	fx.light_scene(mz, 0.15, Color(1.0, 0.62, 0.3))
+
+
+## A near threat bursts from the bushes: leaves thrown up where it is now (it may not be tracked yet).
+func _cue_ambush(state: TankState, id: int) -> void:
+	var e := state.enemy(id)
+	if e == null or not e.is_near():
+		return
+	var at := near_foot(e) + Vector2(0, -8)
+	fx.spark_burst(at, LEAF_BURST, LEAF, LEAF_SPEED, 0.0)
+	var from := _bush_top(at)
+	for i in LEAF_DRIFT:
+		_throw_leaf(from if i % 2 == 0 else at)
+	_shedding.append({"at": from, "left": LEAF_SHED_S})
+	for k in 6:
+		fx.puff(
+			at + Vector2(fx.rng.randf_range(-16, 16), 6.0),
+			Vector2(fx.rng.randf_range(-24, 4), fx.rng.randf_range(-12, -3)),
+			1.6,
+			Vector2(3.0, 15.0),
+			0.3,
+			NEAR_DUST,
+			1.0
+		)
+
+
+## One leaf off the bush at `at`, thrown up and back, in the bush's colours.
+func _throw_leaf(at: Vector2) -> void:
+	var j := fx.rng.randf()
+	fx.leaf(
+		at + Vector2(fx.rng.randf_range(-20, 20), fx.rng.randf_range(-14, 4)),
+		Vector2(fx.rng.randf_range(-46, 26), fx.rng.randf_range(-44, -6)),
+		LEAF_DRIFT_S * (0.5 + j * 0.5),
+		LEAF_DARK.lerp(LEAF_LIT, j)
+	)
+
+
+## The middle of the bush nearest stage point `at` (or `at`, with none near it).
+func _bush_top(at: Vector2) -> Vector2:
+	var best := LEAF_BUSH_PX
+	var out := at
+	for b in TankWorldDraw.bushes_at(self):
+		var x := float(b["x"])
+		if absf(x - at.x) < best:
+			best = absf(x - at.x)
+			out = Vector2(x, roundf(ground_y(x)) - TankWorldDraw.BUSH_VERGE - 18.0)
+	return out
+
+
+## The tank is lost: a boom in its hull, the scene dims for a moment. Its tow runs from hull.tow_s.
+func _cue_tank_lost() -> void:
+	shake = 1.0
+	tow_dim_s = TOW_DIM_S
+	fx.boom(at_sprite(rig.size * 0.5), 30.0, 12)
+	fx.light_scene(at_sprite(rig.size * 0.5), 0.7, Color(1.0, 0.5, 0.2))
+
+
+## The stage starts over: what was on the road is forgotten, the picture fades up from black.
+func _cue_restart() -> void:
+	restart_fade_s = RESTART_FADE_S
+	tow_dim_s = 0.0
+	history.clear()
+	clock.reset()
+	_last_tick = -1
+	_cam_primed = false
+	wrecks.clear()
+	far.wrecks.clear()
+	_seen.clear()
+	_near.clear()
+	_shell_seen.clear()
+
+
+## While hull.tow_s runs the tank creeps back with its tracks reversed; its dim and fade run down.
+func _tow_frame(state: TankState, step_dt: float) -> void:
+	if state.hull.tow_s > 0.0:
+		var was := tow_px
+		tow_px = minf(tow_px + TOW_PX_S * step_dt, TOW_MAX_PX)
+		travel -= tow_px - was
+	else:
+		tow_px = 0.0
+	tow_dim_s = maxf(tow_dim_s - step_dt, 0.0)
+	restart_fade_s = maxf(restart_fade_s - step_dt, 0.0)
 
 
 func _cue_hit(state: TankState, data: Dictionary) -> void:
@@ -951,33 +1233,37 @@ func _cue_hit(state: TankState, data: Dictionary) -> void:
 		var r: Rect2 = enemy_rects[id]
 		fx.boom(r.get_center() + Vector2(fx.rng.randf_range(-8, 8), 0), 16.0, 4)
 		return
+	if on == TankEvents.ON_ENEMY and far.rects.has(id):
+		far.on_enemy_hit(id)
+		return
 	if on == TankEvents.ON_BOSS and state.boss.phase != TankIds.BOSS_NONE:
-		var br := boss_rect(state)
-		var part := TankBossState.part_of(id)
-		var at := br.get_center()
-		var meta: Dictionary = kit.enemies.get("behemoth", {}).get("meta", {})
-		if part >= 0 and part < 3:
-			var b: Array = meta.get("bogies_at", [])
-			if part < b.size():
-				at = br.position + br.size * TankKit.vec(b[part])
-		elif part == TankBossState.TURRET_PART:
-			at = br.position + br.size * TankKit.vec(meta.get("turret_at", [0.6, 0.3]))
-		fx.boom(at, 22.0, 6)
+		far.on_boss_hit(TankBossState.part_of(id))
 		return
 	var x := float(data.get("x", 0))
 	if x != 0.0:
 		fx.boom(Vector2(sx(x), GROUND - 18.0), 16.0, 4)
 
 
+## A far shell landed on nothing: ours throws up earth in the far panel at its range; theirs on the road
+## ahead (`r` metres squeezed into the near panel's span).
+func _cue_splash(data: Dictionary) -> void:
+	var r := float(data.get("r", 0))
+	if int(data.get("f", 0)) == 1:
+		far.on_splash(r)
+		return
+	var ahead := minf(r * SPLASH_PX_PER_M, TankConst.NEAR_SPAN_PX * 0.95)
+	var x := minf(
+		sx(hull_x + float(game.state.hull.hull_w) + ahead), TankFarMap.near_end_x(canvas.x) - 6.0
+	)
+	fx.boom(Vector2(x, ground_y(x) - 6.0), 12.0, 4)
+
+
 func _cue_kill(state: TankState, data: Dictionary) -> void:
 	var id := int(data.get("id", 0))
 	if int(data.get("e", 0)) == TankIds.BOSS_CODE:
-		var br := boss_rect(state)
-		for i in 5:
-			fx.boom(br.position + br.size * Vector2(0.2 + 0.15 * i, 0.5 + 0.08 * (i % 2)), 40.0, 8)
-		fx.light_scene(br.get_center(), 1.0, Color(1.0, 0.5, 0.2))
+		far.on_boss_kill()
 		return
-	if not _seen.has(id):
+	if far.on_kill(state, id) or not _seen.has(id):
 		return
 	var w: Dictionary = (_seen[id] as Dictionary).duplicate()
 	w["t"] = state.t
@@ -986,23 +1272,22 @@ func _cue_kill(state: TankState, data: Dictionary) -> void:
 		wrecks.pop_front()
 	if enemy_rects.has(id):
 		var r: Rect2 = enemy_rects[id]
-		fx.boom(r.get_center(), 30.0, 8)
-		fx.light_scene(r.get_center(), 0.6, Color(1.0, 0.5, 0.2))
+		fx.boom(r.get_center(), 18.0, 6)
+		fx.light_scene(r.get_center(), 0.4, Color(1.0, 0.5, 0.2))
 
 
 # --- Enemies and wrecks ---------------------------------------------------------------------------------
 
 
 func enemy_kind(e: TankEnemyState) -> String:
-	var k := TankIds.enemy_of(e.code)
-	return k if kit.enemies.has(k) else "medium"
+	return TankIds.enemy_of(e.code)
 
 
-## Depth lanes: each live enemy in the lane the rules hold it in (TankEnemyState.lane).
+## Depth lanes on the near stage: each live near threat in the lane the rules hold it in.
 func _lanes(state: TankState) -> Dictionary:
 	var out := {}
 	for e in state.enemies:
-		if e.mode != TankIds.EM_DEAD:
+		if e.mode != TankIds.EM_DEAD and e.is_near():
 			out[e.id] = clampi(e.lane, 0, LANES - 1)
 	return out
 
@@ -1010,53 +1295,89 @@ func _lanes(state: TankState) -> Dictionary:
 func _track_enemies(state: TankState) -> void:
 	lanes = _lanes(state)
 	enemy_rects.clear()
-	enemy_rots.clear()
+	enemy_feet.clear()
 	for e in state.enemies:
 		if not lanes.has(e.id):
 			continue
-		var lane := int(lanes[e.id])
-		var mid := enemy_x(e) + float(e.w) * 0.5
-		var r := lane_rect(enemy_kind(e), sx(mid), lane)
-		var pose := enemy_pose(r, lane)
-		enemy_rects[e.id] = Rect2(r.position + Vector2(0, -float(pose["lift"])), r.size)
-		enemy_rots[e.id] = float(pose["rot"])
-		_seen[e.id] = {"x": mid, "kind": enemy_kind(e), "lane": lane, "side": e.side}
+		var foot := near_foot(e)
+		var x := enemy_x(e)
+		enemy_feet[e.id] = foot
+		enemy_rects[e.id] = _rect_at(enemy_kind(e), foot)
+		_seen[e.id] = {"x": x + float(e.w) * 0.5, "kind": enemy_kind(e), "lane": lanes[e.id]}
+		var rec := _near_rec(e)
+		rec["travel"] = float(rec["travel"]) + absf(x - float(rec["last"])) * S
+		rec["last"] = x
+		rec["recoil"] = maxf(float(rec["recoil"]) - dt * NEAR_RECOIL_DECAY, 0.0)
 	for id: int in _seen.keys():
 		if state.enemy(id) == null:
 			_seen.erase(id)
+	for id: int in _near.keys():
+		if state.enemy(id) == null:
+			_near.erase(id)
 
 
-## An enemy's pose on the relief (the tank's suspension fit over its track footprint): {rot
-## (radians), lift (px it stands above its lane's flat foot)}. Back lanes stand level on their flat
-## berms, lifted with the relief at their middle (the road's slope is not theirs).
-func enemy_pose(r: Rect2, lane: int) -> Dictionary:
-	var cx := r.get_center().x
-	var half := r.size.x * 0.38
-	var pts: Array[Vector2] = []
-	for i in 5:
-		var x := cx + lerpf(-half, half, float(i) / 4.0)
-		pts.append(Vector2(x, ground_y(x)))
-	var rot := TankSuspension.fit_angle(pts) if lane == 0 else 0.0
-	var mean := 0.0
-	for q in pts:
-		mean += q.y
-	mean /= float(pts.size())
-	var bob := 0.5 * sin(time * 5.0 + cx * 0.05)
-	return {"rot": rot, "lift": roundf(GROUND - mean + bob)}
+func _near_rec(e: TankEnemyState) -> Dictionary:
+	var rec: Dictionary = _near.get(e.id, {})
+	if rec.is_empty():
+		rec = {"travel": 0.0, "recoil": 0.0, "last": enemy_x(e)}
+		_near[e.id] = rec
+	return rec
 
 
+## A near threat's foot on the stage: over its rules x, on its lane of the road (the relief included).
+func near_foot(e: TankEnemyState) -> Vector2:
+	var x := sx(enemy_x(e) + float(e.w) * 0.5)
+	return Vector2(x, near_ground(x, clampi(e.lane, 0, LANES - 1)))
+
+
+## The ground under near lane `lane` at stage x `x` (TankEnemyDraw's pose.ground).
+func near_ground(x: float, lane: int) -> float:
+	return ground_y(x) + lane_foot(lane) - GROUND
+
+
+## A near threat's pose (SPEC_TANK 5.4): running away with its turret traversed back at us (turret_sx -1),
+## laid on the hull. Its tracks run with its own speed on the road, its gun kicks on a shot.
+func near_pose(e: TankEnemyState) -> Dictionary:
+	var rec: Dictionary = _near.get(e.id, {})
+	var lane := clampi(e.lane, 0, LANES - 1)
+	var foot: Vector2 = enemy_feet.get(e.id, Vector2.ZERO)
+	var front := tank_pos.x + headlight_x()
+	var elev := rad_to_deg(atan2(40.0, maxf(foot.x - front, 20.0)))
+	return {
+		"travel": float(rec.get("travel", 0.0)),
+		"turret_sx": -1.0,
+		"elev_deg": minf(elev, NEAR_ELEV_MAX),
+		"recoil": float(rec.get("recoil", 0.0)) * NEAR_RECOIL_PX,
+		"dim": 1.0 - TankWorldDraw.lane_dim(lane),
+		"haze": TankWorldDraw.lane_fog(lane),
+		"flash": 0.0,
+		"ground": Callable(self, "near_ground").bind(lane),
+		"wrecked": false,
+		"bogies_wrecked": [] as Array[bool],
+		"flip": false,
+		"time": time,
+		"halo": NEAR_HALO,
+	}
+
+
+## Where a near threat's rounds leave its gun (stage px).
+func near_muzzle(e: TankEnemyState) -> Vector2:
+	var foot: Vector2 = enemy_feet.get(e.id, near_foot(e))
+	return TankEnemyDraw.muzzle(enemy_kit, enemy_kind(e), foot, near_pose(e))
+
+
+func _rect_at(kind: String, foot: Vector2) -> Rect2:
+	var sz: Vector2 = enemy_kit.kind(kind)["size"]
+	return Rect2(foot - Vector2(roundf(sz.x * 0.5), sz.y), sz)
+
+
+## The rect of a `kind` standing in lane `lane` at stage x `cx`, at the flat.
 func lane_rect(kind: String, cx: float, lane: int) -> Rect2:
-	var sz: Vector2 = kit.enemies.get(kind, {}).get("size", Vector2(120, 50))
-	sz = (sz * lane_scale(lane)).round()
-	return Rect2(Vector2(roundf(cx - sz.x * 0.5), lane_foot(lane) - sz.y), sz)
-
-
-static func lane_scale(lane: int) -> float:
-	return LANE_SCALE[clampi(lane, 0, LANE_SCALE.size() - 1)]
+	return _rect_at(kind, Vector2(roundf(cx), lane_foot(lane)))
 
 
 static func lane_foot(lane: int) -> float:
-	return roundf(ROAD_ENEMY_Y - LANE_LIFT * float(clampi(lane, 0, LANES - 1)))
+	return LANE_FOOT[clampi(lane, 0, LANES - 1)]
 
 
 func wreck_age(w: Dictionary) -> float:
@@ -1081,23 +1402,6 @@ func _age_wrecks(state: TankState) -> void:
 	wrecks = keep
 
 
-func enemy_muzzle(e: TankEnemyState, r: Rect2) -> Vector2:
-	var m: Vector2 = kit.enemies[enemy_kind(e)]["muzzle"]
-	if e.side < 0:
-		return Vector2(r.end.x - m.x, r.position.y + m.y)
-	return r.position + m
-
-
-## The Behemoth's sprite (stage px): its left edge where the rules have it, on the road.
-func boss_rect(state: TankState) -> Rect2:
-	var sz: Vector2 = kit.enemies.get("behemoth", {}).get("size", Vector2(583, 297))
-	return Rect2(Vector2(roundf(sx(boss_x(state))), roundf(ROAD_ENEMY_Y + 4.0 - sz.y)), sz)
-
-
-func boss_muzzle() -> Vector2:
-	return kit.enemies.get("behemoth", {}).get("muzzle", Vector2(16, 140))
-
-
 func boss_visible(state: TankState) -> bool:
 	return state.boss.phase != TankIds.BOSS_NONE and state.boss.phase != TankIds.BOSS_WITHDRAWN
 
@@ -1109,22 +1413,16 @@ func barrel_angle() -> float:
 	return -deg_to_rad(game.state.hull.elev_deg)
 
 
-## The barrel's unit direction (stage px), facing, traverse and the hull's angle included.
+## The barrel's unit direction (stage px), the hull's angle included. The turret always faces forward:
+## nothing comes from behind.
 func barrel_vector() -> Vector2:
 	var a := barrel_angle()
-	return xf.basis_xform(body.turret_xf().basis_xform(Vector2(cos(a), sin(a)))).normalized()
-
-
-## The turret's horizontal scale about its pivot as drawn: 1 forward, -1 facing back, in between
-## through a traverse, never thinner than TURRET_MIN_W.
-func turret_sx() -> float:
-	var s := signf(barrel_dir) if barrel_dir != 0.0 else 1.0
-	return s * lerpf(TURRET_MIN_W, 1.0, absf(barrel_dir))
+	return xf.basis_xform(Vector2(cos(a), sin(a))).normalized()
 
 
 ## The barrel's trunnion (stage px).
 func barrel_pivot() -> Vector2:
-	return at_turret(rig.trunnion)
+	return at_sprite(rig.trunnion)
 
 
 ## The main gun's muzzle (stage px) at its elevation and recoil.
@@ -1144,6 +1442,13 @@ func bow_vector(k: int) -> Vector2:
 
 
 # --- Emitters (view-only) --------------------------------------------------------------------------------
+
+
+## A bow round's way (a unit vector): to the near threat they fire at, the barrel's tilt aside; else along the bore.
+func bow_shot(k: int) -> Vector2:
+	if bow_target == Vector2.ZERO:
+		return bow_vector(k)
+	return bow_muzzle(k).direction_to(bow_target)
 
 
 func _emit(state: TankState, feed: Dictionary, step_dt: float) -> void:
@@ -1202,6 +1507,7 @@ func _emit(state: TankState, feed: Dictionary, step_dt: float) -> void:
 			Color(0.3, 0.25, 0.2),
 			1.0
 		)
+	_emit_near(state, step_dt)
 	_kick_acc += step_dt * clampf(px_s / 6.0, 0.0, 10.0)
 	var sp := TankRig.vec((rig.gear["sprocket"] as Dictionary)["c"])
 	while _kick_acc >= 1.0:
@@ -1231,6 +1537,20 @@ func _emit(state: TankState, feed: Dictionary, step_dt: float) -> void:
 					Color(0.2, 0.19, 0.18).lerp(Color(0.12, 0.11, 0.11), j2),
 					1.0
 				)
+	if hull.tow_s > 0.0:
+		_tow_smoke_acc += step_dt * TOW_SMOKE_S
+		while _tow_smoke_acc >= 1.0:
+			_tow_smoke_acc -= 1.0
+			var j3 := fx.rng.randf()
+			fx.puff(
+				ex + Vector2(20.0 + j3 * 160.0, 14.0 - j3 * 10.0),
+				Vector2(-8.0 - j3 * 8.0, -20.0 - j3 * 10.0),
+				7.0 + j3 * 3.0,
+				Vector2(8.0, 44.0 + j3 * 20.0),
+				0.42,
+				Color(0.09, 0.08, 0.08).lerp(Color(0.16, 0.14, 0.13), j3),
+				0.3
+			)
 	if hull.breakdown and fx.rng.randf() < step_dt * 4.0:
 		fx.puff(
 			ex + Vector2(20, 10),
@@ -1245,20 +1565,117 @@ func _emit(state: TankState, feed: Dictionary, step_dt: float) -> void:
 			fx.spark_burst(at_sprite(dr.get_center()), 4, Color(1, 0.7, 0.3), 40.0, 0.0)
 
 
-## Shells as drawn this frame: [{at, dir, friendly, type}], easing from the art muzzle onto the
-## rules' path over their first 260 px.
+## The near threats running: smoke streaming back from the exhaust toward us, dust kicked up low at the rear wheels,
+## and leaves off the bush one is bursting from.
+func _emit_near(state: TankState, step_dt: float) -> void:
+	_emit_leaves(state, step_dt)
+	var crowd := float(mini(enemy_feet.size(), NEAR_EMIT_MAX))
+	_near_smoke_acc += step_dt * NEAR_EXHAUST_S * crowd
+	_near_dust_acc += step_dt * NEAR_DUST_S * crowd
+	if enemy_feet.is_empty():
+		_near_smoke_acc = 0.0
+		_near_dust_acc = 0.0
+		return
+	var ids: Array = enemy_feet.keys()
+	while _near_smoke_acc >= 1.0:
+		_near_smoke_acc -= 1.0
+		_near_exhaust(state, ids[fx.rng.randi_range(0, ids.size() - 1)])
+	while _near_dust_acc >= 1.0:
+		_near_dust_acc -= 1.0
+		_near_dust(state, ids[fx.rng.randi_range(0, ids.size() - 1)])
+
+
+## While a threat is coming out of the bushes, the bush keeps throwing leaves; one it has left goes on shedding a while.
+func _emit_leaves(state: TankState, step_dt: float) -> void:
+	for i in range(_shedding.size() - 1, -1, -1):
+		var b: Dictionary = _shedding[i]
+		b["left"] = float(b["left"]) - step_dt
+		b["at"] = (b["at"] as Vector2) - Vector2(scroll_px, 0.0)
+		if float(b["left"]) <= 0.0:
+			_shedding.remove_at(i)
+		elif fx.rng.randf() < step_dt * LEAF_RATE * 0.5:
+			_throw_leaf(b["at"])
+	for id: int in enemy_feet:
+		var e := state.enemy(id)
+		if e == null or e.mode != TankIds.EM_ENTER:
+			continue
+		var from := _bush_top((enemy_feet[id] as Vector2) + Vector2(0, -8))
+		if fx.rng.randf() < step_dt * LEAF_RATE:
+			_throw_leaf(from)
+
+
+func _near_exhaust(state: TankState, id: int) -> void:
+	var e := state.enemy(id)
+	if e == null:
+		return
+	var row := enemy_kit.kind(enemy_kind(e))
+	var sz: Vector2 = row["size"]
+	var at: Vector2 = row.get("exhaust", sz * Vector2(0.12, 0.45))
+	var j := fx.rng.randf()
+	var from: Vector2 = (enemy_feet[id] as Vector2) - Vector2(sz.x * 0.5, float(row["ground"])) + at
+	if e.mode == TankIds.EM_PAUSE:
+		fx.puff(
+			from,
+			Vector2(-8.0 - j * 8.0, -9.0 - j * 5.0),
+			1.2 + j * 0.5,
+			Vector2(1.5, 8.0),
+			0.3,
+			NEAR_EXHAUST,
+			0.45
+		)
+		return
+	fx.wisp(
+		from + Vector2(0.0, fx.rng.randf_range(-1.5, 1.5)),
+		Vector2(-NEAR_STREAK_V * (0.75 + j * 0.5), -2.0 - j * 7.0),
+		NEAR_STREAK_S * (0.7 + j * 0.6),
+		NEAR_STREAK_LEN * (0.6 + j * 0.8),
+		0.5,
+		NEAR_EXHAUST
+	)
+
+
+func _near_dust(state: TankState, id: int) -> void:
+	var e := state.enemy(id)
+	if e == null:
+		return
+	if e.mode == TankIds.EM_PAUSE and fx.rng.randf() > NEAR_DUST_PAUSED:
+		return
+	var sz: Vector2 = enemy_kit.kind(enemy_kind(e))["size"]
+	var foot: Vector2 = enemy_feet[id]
+	dust_fx.puff(
+		foot + Vector2(-sz.x * 0.5 + fx.rng.randf_range(0.0, sz.x * 0.3), -1.0),
+		Vector2(fx.rng.randf_range(-58, -22), fx.rng.randf_range(-7, -2)),
+		0.9,
+		Vector2(3.0, 12.0),
+		0.24,
+		NEAR_DUST,
+		0.6
+	)
+
+
+## Shells on the near stage this frame: [{at, dir, friendly, type}]. A near shell eases from the art
+## muzzle onto the rules' path over its first 260 px; a far one shows only on its near stretches
+## (_far_shell_near).
 func shells_drawn(state: TankState) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var alive := {}
 	for s in state.shells:
 		alive[s.id] = true
+		if s.far:
+			var row := _far_shell_near(s)
+			if not row.is_empty():
+				out.append(row)
+			continue
 		var wp := shell_pos(s)
 		var p := Vector2(sx(wp.x), sy(wp.y))
 		var info: Dictionary = _shell_seen.get(s.id, {})
 		if info.is_empty():
 			var start := p
+			var src := state.enemy(s.source)
 			if s.friendly:
 				start = muzzle() if s.type != TankIds.SHELL_BOW else bow_muzzle(0)
+			elif src != null and enemy_feet.has(src.id):
+				start = near_muzzle(src)
 			info = {"first": p, "off": start - p}
 			_shell_seen[s.id] = info
 		var first: Vector2 = info["first"]
@@ -1280,6 +1697,47 @@ func shells_drawn(state: TankState) -> Array[Dictionary]:
 	return out
 
 
+## A far shell on the near stage (SPEC_TANK 4.4), or {}: ours for its first LEAVE_S, from the muzzle along
+## the barrel off the near edge; theirs for its last ARRIVE_S, from the near edge onto the tank or, on a
+## peer that knows it will miss (will_hit is host only), the road ahead.
+func _far_shell_near(s: TankShellState) -> Dictionary:
+	var edge := TankFarMap.near_end_x(canvas.x)
+	var left := shell_left(s)
+	var from: Vector2
+	var to: Vector2
+	var k: float
+	if s.friendly:
+		k = TankShellPath.leave_k(TankShellPath.flight_s(s.left_s, s.vy, _far_g) - left)
+		if k < 0.0:
+			return {}
+		var info: Dictionary = _shell_seen.get(s.id, {})
+		if info.is_empty():
+			info = {"from": muzzle(), "dir": barrel_vector()}
+			_shell_seen[s.id] = info
+		from = info["from"]
+		var d: Vector2 = info["dir"]
+		to = from + d * (edge + 8.0 - from.x) / maxf(d.x, 0.1)
+	else:
+		k = TankShellPath.arrive_k(left)
+		if k < 0.0:
+			return {}
+		from = Vector2(edge + 8.0, INCOMING_Y)
+		to = _incoming_aim(s)
+	var at := from.lerp(to, k)
+	return {"at": at, "dir": (to - from).normalized(), "friendly": s.friendly, "type": s.type}
+
+
+## Where an incoming far shell strikes on the near stage.
+func _incoming_aim(s: TankShellState) -> Vector2:
+	var client := game.ctx != null and game.ctx.role == Wl.CLIENT
+	if s.will_hit or client:
+		return at_sprite(Vector2(headlight_x(), 0.0) + INCOMING_HIT)
+	var h := TankDraw.hash01(float(s.id) * 0.73)
+	var x := tank_pos.x + headlight_x() + lerpf(INCOMING_MISS_PX.x, INCOMING_MISS_PX.y, h)
+	x = minf(x, TankFarMap.near_end_x(canvas.x) - 6.0)
+	return Vector2(x, ground_y(x) - 2.0)
+
+
 # --- The HUD's geometry (TankHudGeom; canvas art px, 0,0 the canvas' top left) ----------------------
 
 
@@ -1296,8 +1754,8 @@ func hud_ground_y() -> float:
 	return GROUND + y_off
 
 
-## A tank point as drawn now: "barrel_pivot" (the trunnion), "muzzle" (at the elevation, facing and
-## recoil), "rear" (the road under the hull's rear end), "turret_pivot", "headlight", "exhaust",
+## A tank point as drawn now: "barrel_pivot" (the trunnion), "muzzle" (at the elevation and recoil),
+## "rear" (the road under the hull's rear end), "turret_pivot", "headlight", "exhaust",
 ## "bow_gun_upper_pivot" / "_muzzle", "bow_gun_lower_pivot" / "_muzzle", "searchlight_turret_lens",
 ## "searchlight_rear_lens".
 func hud_tank_point(name: String) -> Vector2:
@@ -1324,7 +1782,7 @@ func hud_tank_point(name: String) -> Vector2:
 		"bow_gun_lower_muzzle":
 			p = bow_muzzle(1)
 		"searchlight_turret_lens":
-			p = at_turret(TankRig.lens_of(rig.detail("searchlight")))
+			p = at_sprite(TankRig.lens_of(rig.detail("searchlight")))
 		"searchlight_rear_lens":
 			p = at_sprite(TankRig.lens_of(rig.detail("searchlight_rear")))
 		_:
@@ -1342,18 +1800,19 @@ func hud_barrel_length() -> float:
 	return rig.gun_len + 1.0
 
 
+## The barrel always faces the way the tank drives.
 func hud_barrel_dir() -> float:
-	return -barrel_dir if mirrored else barrel_dir
+	return -1.0 if mirrored else 1.0
 
 
 ## The tank's body on the canvas as drawn now, which the world tags keep out of: the hitbox's turret
-## (as it faces) and its hull joined with the track run, each the bounds of the rect as rotated,
+## and its hull joined with the track run, each the bounds of the rect as rotated,
 ## rounded out to whole art px.
 func hud_tank_rects() -> Array[Rect2]:
 	var off := Vector2(0, y_off)
 	var hull := rig.hit_rect("hull").merge(rig.hit_rect("track_run"))
 	var out: Array[Rect2] = []
-	out.append(_bounds(xf * body.turret_xf(), rig.hit_rect("turret")))
+	out.append(_bounds(xf, rig.hit_rect("turret")))
 	out.append(_bounds(xf, hull))
 	for i in out.size():
 		var h := _hud_rect(out[i])
@@ -1370,23 +1829,34 @@ static func _bounds(t: Transform2D, r: Rect2) -> Rect2:
 	return out
 
 
+## An enemy's sprite on the canvas: in the far panel (canvas px already) or on the near stage.
 func hud_enemy_rect(id: int) -> Rect2:
+	if far_rects.has(id):
+		return far_rects[id]
 	if not enemy_rects.has(id):
 		return Rect2()
 	var r: Rect2 = _hud_rect(enemy_rects[id])
 	return Rect2(r.position + Vector2(0, y_off), r.size)
 
 
+## Where a far enemy's gun ends on the canvas; Vector2.ZERO when it is not drawn in the far panel.
+func hud_enemy_muzzle(id: int) -> Vector2:
+	if far == null or not far.feet.has(id) or game == null or game.state == null:
+		return Vector2.ZERO
+	var e := game.state.enemy(id)
+	return far.canvas_point(far.muzzle_of(e), far_panel_x()) if e != null else Vector2.ZERO
+
+
 func hud_boss_rect() -> Rect2:
-	if game == null or game.state == null or not boss_visible(game.state):
+	if game == null or game.state == null or far == null or not boss_visible(game.state):
 		return Rect2()
-	var r := _hud_rect(boss_rect(game.state))
-	return Rect2(r.position + Vector2(0, y_off), r.size)
+	return far.canvas_rect(far.boss_box, far_panel_x())
 
 
 func hud_boss_muzzle() -> Vector2:
-	var r := hud_boss_rect()
-	return Vector2.ZERO if r.size == Vector2.ZERO else r.position + boss_muzzle()
+	if hud_boss_rect().size == Vector2.ZERO:
+		return Vector2.ZERO
+	return far.canvas_point(far.boss_muzzle(game.state), far_panel_x())
 
 
 # --- Layers ---------------------------------------------------------------------------------------------
@@ -1407,17 +1877,26 @@ func _draw_world_light() -> void:
 		TankLightDraw.draw_world(layer("WorldLight"), self, game.state)
 
 
-## The tank: its sprite (TankBody) rotated as a whole, nearest; the turn's dust; the blast and the
-## bow guns' rounds.
+## The near threats, over the world's lights; the tank: its sprite (TankBody) rotated as a whole, nearest; the turn's
+## dust; the blast and the bow guns' rounds.
 func _draw_tank() -> void:
 	if not _built or game.state == null:
 		return
 	var ci := layer("Tank")
+	dust_fx.draw_smoke(ci)
+	fx.draw_leaves(ci)
+	TankWorldDraw.draw_near_threats(ci, self, game.state)
 	ci.draw_set_transform_matrix(xf)
 	ci.draw_texture(body.get_texture(), -Vector2(TankBody.PAD, TankBody.PAD))
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
 	TankWorldDraw.draw_turn_dust(ci, self, game.state)
 	firing.draw(ci, self)
+
+
+## The far panel's picture over the near stage, opaque.
+func _draw_far() -> void:
+	if _built and far != null and not panels.is_empty():
+		_far_sprite.draw_texture(far.get_texture(), (panels["far"] as Rect2).position)
 
 
 func _draw_light() -> void:
@@ -1458,3 +1937,6 @@ func _draw_post() -> void:
 		),
 		PackedColorArray([clear, clear, b1, b1])
 	)
+	var black := maxf(TOW_DIM_ALPHA * tow_dim_s / TOW_DIM_S, restart_fade_s / RESTART_FADE_S)
+	if black > 0.0:
+		ci.draw_rect(Rect2(0, top, w, bottom - top), Color(0, 0, 0, black))

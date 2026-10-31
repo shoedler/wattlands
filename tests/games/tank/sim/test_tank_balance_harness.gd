@@ -113,7 +113,9 @@ func test_the_harness_reports_every_ashfall_road_segment_for_crew_3() -> void:
 			assert_almost_eq(float(s["dur_s"]), 60.0, 0.1)
 	assert_almost_eq(float(r["end_t"]) - total, 1.0, 1.0, "the run stops 1 s into the cool-down")
 	assert_has([TankIds.OUTCOME_VICTORY, TankIds.OUTCOME_WITHDRAWN], r["outcome"])
-	assert_eq((r["kills"] as Array).size(), 7)
+	assert_eq(
+		(r["kills"] as Array).size(), 9, "a count per enemy code, the near kinds' 7 and 8 too"
+	)
 	assert_eq(int(r["crew"]), 3)
 	assert_true((r["dynamo"] as Array).size() > 0, "the dynamo's phases are tracked")
 	assert_true(TankBalanceHarness.format(r).contains("crew 3 seed 1"))
@@ -162,9 +164,82 @@ func test_enemy_counts_are_tripled_in_memory_and_the_content_still_validates() -
 				assert_eq(
 					(e["at_px"] as Array).size(), int(e["count"]), "a position per gun-line enemy"
 				)
+			if e.has("hold_m"):
+				assert_eq(
+					(e["hold_m"] as Array).size(), int(e["count"]), "a position per holding enemy"
+				)
 	assert_gt(n_plain, 10)
 	assert_eq(n_three, 3 * n_plain)
 	assert_eq(tripled.segments().size(), plain.segments().size(), "the segment table is untouched")
+
+
+func test_the_multiplier_grows_holding_positions_outward_and_near_threats_too() -> void:
+	var segs: Array = [
+		{
+			"encounters": [{"at_m": 10, "enemy": "light", "count": 2}],
+			"near": [{"at_s": 15, "enemy": "recon"}, {"at_s": 40, "enemy": "tankette", "count": 2}],
+			"enemies":
+			[
+				{"enemy": "medium", "count": 2, "hold_m": [1200.0, 1500.0]},
+				{"enemy": "heavy", "count": 1, "hold_m": [1600.0]},
+				{"enemy": "light", "count": 2, "at_px": [100.0, 200.0]},
+				{"enemy": "light", "count": 1},
+			],
+		}
+	]
+	var big: Array = TankBalanceHarness.multiplied_segments(segs, 3)
+	var s: Dictionary = big[0]
+	assert_eq(int(s["encounters"][0]["count"]), 6)
+	assert_eq(int(s["near"][0]["count"]), 3, "a near entry without a count is one")
+	assert_eq(int(s["near"][1]["count"]), 6)
+	assert_eq(s["enemies"][0]["hold_m"], [1200.0, 1500.0, 1260.0, 1560.0, 1320.0, 1620.0])
+	assert_eq(s["enemies"][1]["hold_m"], [1600.0, 1660.0, 1720.0], "never nearer than it was")
+	assert_eq(s["enemies"][2]["at_px"], [100.0, 200.0, 140.0, 240.0, 180.0, 280.0])
+	assert_false((s["enemies"][3] as Dictionary).has("at_px"), "no list, none made up")
+	assert_eq(int(s["enemies"][3]["count"]), 3)
+	assert_false((segs[0]["near"][0] as Dictionary).has("count"), "the input is left alone")
+
+
+func test_the_report_names_the_difficulty_losses_and_near_threats() -> void:
+	for level: String in [TankIds.DIFF_EASY, TankIds.DIFF_HARD]:
+		for via_module: bool in [false, true]:
+			var r := TankBalanceHarness.run(
+				{
+					"crew": 2,
+					"seed": 2,
+					"content": "drill",
+					"difficulty": level,
+					"via_module": via_module
+				}
+			)
+			assert_false(r.has("error"), str(r.get("error", "")))
+			assert_eq(str(r["difficulty"]), level, "module %s" % via_module)
+			assert_eq(int(r["losses"]), 0, "the drill is a warm-up: no loss at any level")
+			assert_typeof(r["near_killed"], TYPE_INT)
+			assert_typeof(r["near_escaped"], TYPE_INT)
+			assert_eq(
+				(r["hp_at"] as Array).map(func(h: Dictionary) -> String: return h["seg"]),
+				[
+					TankIds.SEG_DEPOT,
+					TankIds.SEG_SKIRMISH,
+					TankIds.SEG_CHECKPOINT,
+					TankIds.SEG_COOLDOWN
+				]
+			)
+			var one := TankBalanceHarness.line(r)
+			assert_string_contains(one, "crew 2 seed 2 %s" % level)
+			assert_string_contains(one, "losses 0 breakdowns")
+			assert_string_contains(one, "times dep0:30")
+
+
+func test_the_kills_near_killed_counts_the_two_near_codes() -> void:
+	var h := TankBalanceHarness.new()
+	h._on_event(TankEvents.kill(5, TankIds.enemy_code(TankIds.ENEMY_RECON), TankEvents.BY_BOW, 0))
+	h._on_event(
+		TankEvents.kill(6, TankIds.enemy_code(TankIds.ENEMY_TANKETTE), TankEvents.BY_BOW, 0)
+	)
+	h._on_event(TankEvents.kill(7, TankIds.enemy_code(TankIds.ENEMY_LIGHT), TankEvents.BY_SHELL, 0))
+	assert_eq(h._kills, [0, 1, 0, 0, 0, 0, 0, 1, 1] as Array[int])
 
 
 # --- The evaluator ---------------------------------------------------------------------------------------
@@ -178,11 +253,11 @@ func test_t1_to_t5_pass_on_a_run_that_meets_them() -> void:
 
 func test_t1_misses_on_a_slow_advance_an_overrun_a_breakdown_or_a_low_grade() -> void:
 	var slow := _good()
-	slow["segments"][1]["dur_s"] = 260.0
-	assert_false(bool(TankBalanceTargets.t1([slow])["ok"]), "an Advance over 240 s")
+	slow["segments"][1]["dur_s"] = 300.0
+	assert_false(bool(TankBalanceTargets.t1([slow])["ok"]), "an Advance over 280 s")
 	var short := _good()
-	short["segments"][2]["dur_s"] = 70.0
-	assert_false(bool(TankBalanceTargets.t1([short])["ok"]), "a gun line under 80 s")
+	short["segments"][2]["dur_s"] = 50.0
+	assert_false(bool(TankBalanceTargets.t1([short])["ok"]), "a gun line under 60 s")
 	var overran := _good()
 	overran["segments"][3]["overran"] = true
 	assert_false(bool(TankBalanceTargets.t1([overran])["ok"]))
@@ -227,6 +302,79 @@ func test_t3_judges_only_heavy_shells_outside_the_depot() -> void:
 	var no_rest := _good()
 	no_rest["shells"][0]["grade0_s"] = 4.0
 	assert_false(bool(TankBalanceTargets.t3([no_rest])["ok"]))
+
+
+func test_t1_to_t5_are_normals_targets() -> void:
+	var slow := _good()
+	slow["segments"][1]["dur_s"] = 300.0
+	slow["difficulty"] = TankIds.DIFF_HARD
+	assert_string_contains(str(TankBalanceTargets.t1([slow])["text"]), "skipped")
+	slow["difficulty"] = TankIds.DIFF_NORMAL
+	assert_false(bool(TankBalanceTargets.t1([slow])["ok"]))
+	var hard := _good(3, 1, 900.0, 0.7)
+	hard["difficulty"] = TankIds.DIFF_HARD
+	var rising := [_good(3, 1, 800.0), _good(3, 1, 700.0, 0.85), _good(3, 1, 600.0, 0.7), hard]
+	assert_true(bool(TankBalanceTargets.t5(rising)["ok"]), "Hard's run is not in Normal's mean")
+
+
+func _diff(
+	level: String,
+	losses: int,
+	outcome: String = TankIds.OUTCOME_VICTORY,
+	grade: String = "A",
+	crew: int = 3,
+	compliance: float = 1.0,
+	seed_value: int = 1,
+) -> Dictionary:
+	return {
+		"content": "ashfall_road",
+		"difficulty": level,
+		"crew": crew,
+		"seed": seed_value,
+		"compliance": compliance,
+		"losses": losses,
+		"outcome": outcome,
+		"grade": grade,
+	}
+
+
+func _d1_ok(results: Array) -> bool:
+	return bool(TankBalanceTargets.d1(results)["ok"])
+
+
+func test_d1_holds_the_difficulty_table_for_a_compliant_crew() -> void:
+	var easy := TankIds.DIFF_EASY
+	var normal := TankIds.DIFF_NORMAL
+	var hard := TankIds.DIFF_HARD
+	var lost := TankIds.OUTCOME_WITHDRAWN
+	assert_string_contains(str(TankBalanceTargets.d1([_good()])["text"]), "skipped")
+	assert_true(_d1_ok([_diff(easy, 0), _diff(easy, 0, TankIds.OUTCOME_VICTORY, "S")]))
+	assert_false(_d1_ok([_diff(easy, 1)]), "no loss on Easy")
+	assert_false(_d1_ok([_diff(easy, 0, lost)]), "Easy wins always")
+	assert_false(_d1_ok([_diff(easy, 0, TankIds.OUTCOME_VICTORY, "B")]), "A or S on Easy")
+	assert_true(_d1_ok([_diff(normal, 1), _diff(normal, 0), _diff(normal, 0, lost, "B")]))
+	assert_false(_d1_ok([_diff(normal, 2)]), "at most one loss on Normal")
+	assert_false(_d1_ok([_diff(normal, 0), _diff(normal, 0, lost), _diff(normal, 0, lost)]))
+	assert_false(_d1_ok([_diff(normal, 0, TankIds.OUTCOME_VICTORY, "C")]), "B or better")
+	assert_true(_d1_ok([_diff(hard, 1), _diff(hard, 2), _diff(hard, 0)]), "one easy seed")
+	assert_false(_d1_ok([_diff(hard, 1), _diff(hard, 0), _diff(hard, 3)]), "most seeds 1-2")
+	assert_false(_d1_ok([_diff(hard, 1), _diff(hard, 2), _diff(hard, 5)]), "none above 4")
+	assert_false(_d1_ok([_diff(hard, 1, lost, "D")]), "C or better on Hard")
+	assert_false(_d1_ok([_diff(hard, 1, TankIds.OUTCOME_VICTORY, "S")]), "never S with a loss")
+
+
+func test_d1_holds_the_ignoring_crew_to_more_losses_and_shows_every_group() -> void:
+	var hard := TankIds.DIFF_HARD
+	var won := TankIds.OUTCOME_VICTORY
+	var full := _diff(hard, 1)
+	assert_true(_d1_ok([full, _diff(hard, 3, won, "C", 3, 0.85)]))
+	assert_false(_d1_ok([full, _diff(hard, 1, won, "C", 3, 0.85)]), "strictly more")
+	assert_true(_d1_ok([_diff(TankIds.DIFF_EASY, 0, TankIds.OUTCOME_WITHDRAWN, "B", 3, 0.85)]))
+	assert_false(_d1_ok([_diff(TankIds.DIFF_EASY, 1, won, "B", 3, 0.85)]), "no loss on Easy")
+	assert_true(_d1_ok([_diff(hard, 9, won, "D", 3, 0.7)]), "0.7 is shown, not judged")
+	var t := TankBalanceTargets.d1([full, _diff(hard, 3, won, "C", 4, 1.0, 2)])
+	assert_eq((t["rows"] as Array).size(), 2, "a row per group")
+	assert_string_contains(str(t["rows"][0]), "ashfall_road hard crew 3 c1.00: losses [1]")
 
 
 func test_t4_and_t5() -> void:

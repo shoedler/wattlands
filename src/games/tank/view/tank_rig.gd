@@ -13,7 +13,7 @@ extends RefCounted
 const DIR := "res://assets/tank/v3/"
 const MANIFEST := DIR + "kit.json"
 ## The seats, in the HUD's card order (brief v3 "Seats").
-const SEATS: Array[String] = ["drive", "gun", "loader", "lights", "sec"]
+const SEATS: Array[String] = ["drive", "gun", "loader", "lights", "sec", "repair"]
 ## The rooms every seat machine lives in, and the windows the loader and the bow guns show.
 const WINDOWS: Array[String] = ["shaft", "rackwin", "breechwin", "boxwin", "boxwin2"]
 const GEAR_SHEETS: Array[String] = ["road", "sprocket", "idler", "roller"]

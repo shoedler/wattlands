@@ -9,7 +9,7 @@
 // One PASS / FAIL / SKIP line per scenario (details of a failure indented below it), exit 1 when any
 // scenario failed, 2 on usage or I/O errors. A scenario whose reports are all missing is SKIP (a
 // subset run); one that has some but not all is FAIL. `--fit` also runs tools/fit_check on every FIT
-// file the reports name (laps expected: ashfall_road 12, drill 4; none for a run that did not
+// file the reports name (laps expected: ashfall_road 12, ambush_15 6, drill 4; none for a run that did not
 // complete). Zero dependencies, so `node --test` in tests/games/tank/sim runs the unit tests
 // (check_sims.test.mjs) anywhere.
 //
@@ -32,15 +32,22 @@
 //   s11_roam10_c1, s11_roam10_c4, s11_roam30_c3   free roam, compliant `erg` riders (brief 2.10): time up, the overtime
 //                          bound, no patrol after time up, FIT laps, the grade (roam_30 crew 3: B or A, the tuning target)
 //   s12_roam10_c3_zero     free roam roam_10, crew 3 at 0 W: the shared pause holds the drive-out, no kill, grade D
+//   s14_easy_c<crew>_seed<n>   ashfall_road on Easy, crews 1-4: victory, no loss, T1
+//   s15_hard_c<crew>_seed<n>   ashfall_road on Hard, crews 1-4: 1-2 losses on most seeds, phases, laps and S4 hold
+//   s16_amb_<normal|hard>_c<crew>_seed<n>   ambush_15, crews 1, 3, 4: 780-1010 game seconds, 6 laps, S4
+//   s17_hard_c3_c85_seed<n>    Hard, compliance 0.85: more losses than s15_hard_c3 (nobody rescues, the crew falls behind)
+//   s17_hard_c3_c70_seed1      Hard, compliance 0.70: the riders sink into rescue, and rescue shields the crew (BRIEF 4.6.3)
+//   s18_bots_h1b3, s18_bots_h2b2   ambush_15 on Hard with bots: complete, nothing refused, bots act only through their seats
 //
 // Definitions (the numbers are brief 2.3, 2.4 and 4):
 //   segment       a mission segment with its span in `phases[peer]` (game seconds) and how it ended
 //                 (`ended_by`: duration, end_phase or max_s: an overrun is max_s on a WORK phase); v3: a seat
 //                 switch splits a segment into plan phases (the rest of it a lap-false phase), so a segment is
 //                 every phase with its meta `segment` (phaseSpansOf keeps them one by one).
-//   T1 (crews 1-4) every Advance 120-280 s, gun line 60-160 s, boss 120-330 s, no overrun, at most 1
-//                 breakdown (game events), grade S/A/B (v3: the rack's ~7 s shells end fights sooner
-//                 than v2's 18-35 s).
+//   T1 (crews 1-4) every Advance 120-280 s, gun line 60-160 s (crew 2 on ashfall_road: 60-180 s, see
+//                 T1_CREW2_GUN_LINE_MAX_S), boss 120-330 s (ambush_15: 80-160, 60-120, 100-190), no overrun, at most 1 tank loss, no breakdown (Normal has none; Easy, whose hull breaks down
+//                 instead, at most 1), grade S/A/B. v4: a segment holding a tank_lost is not held to the range or
+//                 to "no overrun": it started over and max_s is what ends it.
 //   T2 (crews 2-4) the dynamo's applied ERG target (trace rows, % FTP) is above 80% for >= 30 s per
 //                 stage (Advance + gun line) and >= 60 s in the boss, and is back at <= 65% within
 //                 120 s after each dynamo gun line or boss ends.
@@ -49,23 +56,29 @@
 //                 full between them) take 4-12 s each at the median (about 7 s at 250 W P_eff).
 //   T4 (crew 1, v3 the solo loop) the solo rider drives enough to make each Advance's time bound:
 //                 >= 50% of each Advance on Drive (its plan phases' seat; one 60 s stay elsewhere
-//                 at most), and works each gun line's guns: >= 2 main-gun shells fired, or a
-//                 kill by the bow guns (the loop's step 4 mans the Secondaries when only light
-//                 targets, dug-in turrets among them, stand within 220 px).
+//                 at most), and works each holding action's guns: >= 2 main-gun shells fired (v4: the bow
+//                 guns reach only near threats, so a bow kill no longer stands in for it).
 //   T5            mean score falls strictly from 100% (s1_c3) to 85% to 70%.
-//   T6            every Advance has a telegraphed shot (an `evade` event: a sprint prompt) and a medium tank (enemy
+//   T6            every Advance has a telegraphed shot (an `evade` event, v4 raised when the shell lands: a sprint
+//                 prompt, from the light's flank shot or the destroyer) and a medium tank (enemy
 //                 `shot` or `kill` events); crew 1, whose host rider rides SIM in every Advance, also shows the
 //                 "Surge to evade" toast there (every crew with --require-prompts); stages 2 and 3 end in a heavy-tank
 //                 duel: the gun line lasts 60-180 s (v3) and a heavy tank fired or died in it.
 //   T7 (crew 4)   the arc rider's applied ERG target is above 72% for >= 30 s per stage (stages 1-3: Advance + gun
 //                 line), and is back at <= 68% within 60 s of a fight's end (the end of an arc gun line or boss, or
 //                 a kill in an Advance followed by 60 s with no enemy shot).
+//   T8 (crews 2-4) near threats: an `ambush` in every Advance; each one is killed or `escaped` in its own segment,
+//                 unless the segment's end or a tank loss cleared it while it could still be alive (NEAR_LIFE_S);
+//                 crews 3-4 kill at least 40% of them over a run.
+//   T9            no enemy `shot` in a checkpoint; `tank_lost` only in WORK; each one followed by `stage_restart`
+//                 within the tow + 1 s unless the segment ended first.
 //   S9 (crew 1)   the sprinting rider (scripted intervals, not a compliant one): successful evades, no Ram or
 //                 dodge event and no ram haptic (v2), and every SIM -> ERG entry (v3: a move to the Gun or the
 //                 Lights, a checkpoint) starts at its planned target, not at the sprint power.
 //   S10 (crew 3)  every rider a sprinter: a client's Overpressure (`over` over Telemetry.intents, owned by the steam
 //                 engine) latches an Overpressure shell; and a dynamo rider who stops in a gun line is rescued, goes AFK
 //                 within 10 s, is announced as on reserve, comes back, with nobody else affected and the plan completing.
+//   S14-S18       difficulty, the short session and bots (the list of report names above); S4's rules read them too.
 //   S13 (crew 3)  seat switching (0.3.1, no seat lock): humans on the fallback (--autopilot=none) seated by the host's
 //                 Autopilot, the clients' moves included: seat events (a move lands at once), every split and replan
 //                 accepted with no plan warning, each rider's trainer on its new seat's plan within SWITCH_SPACING_S
@@ -80,9 +93,25 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 export const CREWS = [1, 2, 3, 4];
 export const DEFAULT_SEEDS = [1, 2, 3];
 /** FIT laps: lap-true plan phases + the cool-down (the platform marks it lap true; ADR G0.2). */
-export const EXPECTED_LAPS = { ashfall_road: 12, drill: 4 };
-export const T1_RANGES = { advance: [120, 280], gun_line: [60, 160], boss: [120, 330] };
+export const EXPECTED_LAPS = { ashfall_road: 12, ambush_15: 6, drill: 4 };
+/** T1's segment ranges by content; a content not listed takes ashfall_road's. */
+export const T1_RANGES = {
+  ashfall_road: { advance: [120, 280], gun_line: [60, 160], boss: [120, 330] },
+  ambush_15: { advance: [80, 160], gun_line: [60, 120], boss: [100, 190] },
+};
 export const T1_CREWS = [1, 2, 3, 4];
+/**
+ * Lead's ruling (docs/decisions/tank.md, "v4: T1 for crew 2"): on ashfall_road a crew of two may hold a gun line up to
+ * the brief's own 90% gun-line limit (docs/games/tank.md 4.6.1 checks), not the 160 s of every other crew. One rider
+ * shuttles between Gun and Loader while the other repairs, and its holds reach 175 s and 168 s on two seeds; tuning
+ * only moved the miss to another seed. Every other crew and every other T1 row stay as they are.
+ */
+export const T1_CREW2_GUN_LINE_MAX_S = 180;
+export const T1_MAX_LOSSES = 1;
+/** Hull at 0 on Easy is the old breakdown; the other levels lose the tank instead (TankDifficulty.tank_loss). */
+export const T1_MAX_BREAKDOWNS = { easy: 1, normal: 0, hard: 0 };
+/** What the "auto" option means per mission (each mission's difficulty_default). */
+export const MISSION_DIFFICULTY = { ashfall_road: 'normal', ambush_15: 'hard', drill: 'easy' };
 export const T6_DUEL_RANGE = [60, 180];
 export const T2_ABOVE_PCT = 80;
 export const T2_PER_STAGE_S = 30;
@@ -98,6 +127,25 @@ export const T3_PAIR_MAX_S = 15;
 export const T3_PER_STAGE = 3;
 export const T4_MIN_SHARE = 0.5;
 export const T4_SHOTS_PER_GUN_LINE = 2;
+export const T8_CREWS = [2, 3, 4];
+export const T8_KILL_CREWS = [3, 4];
+export const T8_KILL_SHARE = 0.4;
+/**
+ * The longest a near threat lives once it burst out (enemies.json flee_after_s, 20 s at most, plus its flight off the
+ * near panel, under 4 s). One younger than this may still be out when its segment ends or the tank is lost: both clear it.
+ */
+export const NEAR_LIFE_S = 25;
+/** tanks.json hull.tow_s: seconds from TANK LOST to the stage's restart. */
+export const TOW_S = 8;
+/** S15, S16: a mode's "losses 1-2" band; S15: no run above the most. */
+export const HARD_LOSSES = [1, 2];
+export const HARD_MOST_LOSSES = 4;
+/** S16: ambush_15's whole session in game seconds, every segment at its min_s and at its max_s (SPEC_TANK 3.8). */
+export const AMBUSH_GAME_S = [780, 1010];
+/** Each phase change can run a tick or two past its bound, so a whole session gets a second of slack. */
+export const SESSION_SLACK_S = 1;
+/** One segment's bound gets the same for its own change and a split inside it. */
+export const SEGMENT_SLACK_S = 0.25;
 /**
  * BRIEF 4.5: a rider's ERG <-> SIM switches at least this far apart on the trainer's trace. 0.3.1 (no seat lock): the
  * trainer follows a seat move as soon as its last switch is 30 s old, the platform's rule (the PlanValidator's warning,
@@ -144,6 +192,12 @@ export const ENEMY_LIGHT = 1;
 export const ENEMY_MEDIUM = 2;
 export const ENEMY_HEAVY = 5;
 export const BY_BARRAGE = 2;
+/** v4: what bursts from the bushes: the recon car and the tankette. */
+export const NEAR_CODES = [7, 8];
+/** v4: what stands in the far panel, at a range in metres. */
+export const FAR_CODES = [1, 2, 3, 5];
+/** The dug-in turret's code: reserved, nothing may use it. */
+export const DUGIN_CODE = 4;
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const sum = (a) => a.reduce((x, y) => x + y, 0);
@@ -274,7 +328,15 @@ export function argsProblems(name, r, want) {
   if (want.bots !== undefined && num(a.bots ?? 0) !== want.bots) probs.push(`${name}: bots ${a.bots}, wanted ${want.bots}`);
   if (want.seed !== undefined && num(r.seed) !== want.seed) probs.push(`${name}: seed ${r.seed}, wanted ${want.seed}`);
   if (want.role && r.role !== want.role) probs.push(`${name}: role ${r.role}, wanted ${want.role}`);
+  if (want.difficulty && String(a.options?.difficulty ?? 'auto') !== want.difficulty) probs.push(`${name}: difficulty ${a.options?.difficulty}, wanted ${want.difficulty}`);
+  if (want.rider && (a.riders ?? [])[0] !== want.rider) probs.push(`${name}: rider ${(a.riders ?? [])[0]}, wanted ${want.rider}`);
   return probs;
+}
+
+/** The difficulty a run played at: its option, with "auto" read through the mission's default. */
+export function difficultyOf(r) {
+  const v = String(r.args?.options?.difficulty ?? 'auto');
+  return v === 'auto' ? MISSION_DIFFICULTY[r.content_id] ?? 'normal' : v;
 }
 
 /** A run that played to the end: complete, a mission outcome, clean plans, directives and snapshots. */
@@ -356,19 +418,36 @@ export function cleanProblems(name, r) {
 // --- T1-T4, T6 --------------------------------------------------------------------------------------------
 
 export const breakdowns = (r) => eventsOf(r, 'breakdown').length;
+/** Times the crew lost the tank (v4, Normal and Hard). */
+export const lossesOf = (r) => eventsOf(r, 'tank_lost').length;
 
-/** T1 on one compliant run. */
+/** The segment (segmentsOf row) running at game time `t`: the last one started by then, or null. */
+export function segmentAt(segs, t) {
+  let at = null;
+  for (const s of segs) if (s.start <= t + EPS) at = s;
+  return at;
+}
+
+/** T1 on one compliant run. A segment that holds a tank loss started over: no range and no "no overrun" for it. */
 export function t1Problems(name, r) {
   const probs = [];
-  for (const s of segmentsOf(r)) {
-    const lim = T1_RANGES[s.seg];
+  const ranges = T1_RANGES[r.content_id] ?? T1_RANGES.ashfall_road;
+  const crew2Hold = ranges === T1_RANGES.ashfall_road && (r.slots ?? []).length === 2;
+  const segs = segmentsOf(r);
+  const hit = new Set(eventsOf(r, 'tank_lost').map((e) => segmentAt(segs, e._t)?.index));
+  for (const s of segs) {
+    if (hit.has(s.index)) continue;
+    const lim = crew2Hold && s.seg === 'gun_line' ? [ranges.gun_line[0], T1_CREW2_GUN_LINE_MAX_S] : ranges[s.seg];
     if (lim && (!(s.dur >= lim[0] - EPS) || !(s.dur <= lim[1] + EPS))) {
       probs.push(`${name}: ${s.seg} ${s.stage} lasted ${fmt(s.dur)} s (${lim[0]}-${lim[1]})`);
     }
     if (s.overran && s.kind === 'WORK') probs.push(`${name}: ${s.seg} ${s.stage} overran (ended at max_s)`);
   }
   const b = breakdowns(r);
-  if (b > 1) probs.push(`${name}: ${b} breakdowns (at most 1)`);
+  const mostB = T1_MAX_BREAKDOWNS[difficultyOf(r)] ?? 0;
+  if (b > mostB) probs.push(`${name}: ${b} breakdowns (at most ${mostB} on ${difficultyOf(r)})`);
+  const lost = lossesOf(r);
+  if (lost > T1_MAX_LOSSES) probs.push(`${name}: ${lost} tank losses (at most ${T1_MAX_LOSSES})`);
   const g = gradeOf(r);
   if (GRADE_ORDER.indexOf(g) < 0 || GRADE_ORDER.indexOf(g) > GRADE_ORDER.indexOf('B')) probs.push(`${name}: grade ${g} (B or better)`);
   return probs;
@@ -459,7 +538,6 @@ export function t3Problems(name, r) {
 export function soloLoop(r) {
   const host = hostPeer(r);
   const shots = eventsOf(r, 'shot').filter((e) => num(e.s) >= 0 && num(e.sh) !== SHELL_BOW);
-  const bowKills = eventsOf(r, 'kill').filter((e) => num(e.by) === BY_BOW);
   const out = [];
   for (const s of segmentsOf(r, host)) {
     if (!Number.isFinite(s.end)) continue;
@@ -468,7 +546,7 @@ export function soloLoop(r) {
       out.push({ seg: s.seg, stage: s.stage, share: s.dur > 0 ? drive / s.dur : 1 });
     } else if (s.seg === 'gun_line') {
       const inS = (e) => e._t >= s.start - EPS && e._t <= s.end + EPS;
-      out.push({ seg: s.seg, stage: s.stage, shots: shots.filter(inS).length, bowKills: bowKills.filter(inS).length });
+      out.push({ seg: s.seg, stage: s.stage, shots: shots.filter(inS).length });
     }
   }
   return out;
@@ -480,14 +558,14 @@ export function t4Problems(name, r) {
   const probs = rows.some((x) => x.seg === 'advance') ? [] : [`${name}: no Advance found`];
   for (const x of rows) {
     if (x.seg === 'advance' && x.share < T4_MIN_SHARE - EPS) probs.push(`${name}: stage ${x.stage} Advance on Drive ${fmt(100 * x.share)}% (min ${100 * T4_MIN_SHARE}%)`);
-    if (x.seg === 'gun_line' && x.shots < T4_SHOTS_PER_GUN_LINE && x.bowKills === 0) {
-      probs.push(`${name}: stage ${x.stage} gun line: ${x.shots} main-gun shells fired and no bow-gun kill (min ${T4_SHOTS_PER_GUN_LINE} shells or a bow kill)`);
+    if (x.seg === 'gun_line' && x.shots < T4_SHOTS_PER_GUN_LINE) {
+      probs.push(`${name}: stage ${x.stage} holding action: ${x.shots} main-gun shells fired (min ${T4_SHOTS_PER_GUN_LINE})`);
     }
   }
   return probs;
 }
 
-/** T6 on one compliant run: a telegraphed shot and a medium in each Advance, a heavy duel in gun lines 2 and 3. */
+/** T6 on one compliant run: a telegraphed shot (light's flank, destroyer) and a medium in each Advance, a heavy duel in holding actions 2 and 3. */
 export function t6Problems(name, r, opts = {}) {
   const probs = [];
   const events = gameEvents(r);
@@ -565,6 +643,95 @@ export function t7Problems(name, r) {
   return probs;
 }
 
+/**
+ * Near threats per run: `rows` one per ambush {id, e, t, seg, out: 'killed' | 'escaped' | ''} (seg the segmentsOf row it
+ * burst out in), `unmatched` the near kills and escapes no ambush raised.
+ */
+export function nearLedger(r) {
+  const segs = segmentsOf(r);
+  const ends = new Map();
+  for (const e of eventsOf(r, 'kill')) if (NEAR_CODES.includes(num(e.e))) ends.set(num(e.id), 'killed');
+  for (const e of eventsOf(r, 'escaped')) ends.set(num(e.id), 'escaped');
+  const rows = eventsOf(r, 'ambush').map((e) => ({ id: num(e.id), e: num(e.e), t: e._t, seg: segmentAt(segs, e._t), out: ends.get(num(e.id)) ?? '' }));
+  const seen = new Set(rows.map((x) => x.id));
+  return { rows, unmatched: [...ends.keys()].filter((id) => !seen.has(id)) };
+}
+
+/** T8 on one compliant crew 2-4 run. */
+export function t8Problems(name, r, crew) {
+  const probs = [];
+  const { rows, unmatched } = nearLedger(r);
+  const segs = segmentsOf(r);
+  for (const s of segs) {
+    if (s.seg === 'advance' && !rows.some((x) => x.seg?.index === s.index)) probs.push(`${name}: stage ${s.stage} Advance has no ambush`);
+  }
+  for (const id of unmatched) probs.push(`${name}: near threat ${id} killed or escaped with no ambush`);
+  const lost = eventsOf(r, 'tank_lost');
+  for (const x of rows) {
+    if (x.out !== '') continue;
+    // Nothing ended it: only a segment's end or a tank loss clears a near threat, and only one that could still be alive.
+    const clear = lost.find((e) => e._t >= x.t - EPS && segmentAt(segs, e._t)?.index === x.seg?.index);
+    const by = clear ? clear._t : x.seg?.end;
+    if (!(by - x.t <= NEAR_LIFE_S + EPS)) probs.push(`${name}: near threat ${x.id} from ${fmt(x.t)} s neither killed nor escaped`);
+  }
+  if (T8_KILL_CREWS.includes(crew)) {
+    const killed = rows.filter((x) => x.out === 'killed').length;
+    if (rows.length && killed / rows.length < T8_KILL_SHARE - EPS) probs.push(`${name}: ${killed} of ${rows.length} near threats killed (at least ${100 * T8_KILL_SHARE}%)`);
+  }
+  return probs;
+}
+
+/** T9 on any run: no enemy shot in a checkpoint, tank losses only in WORK, each one restarted within the tow + 1 s. */
+export function t9Problems(name, r) {
+  const probs = [];
+  const segs = segmentsOf(r);
+  for (const e of eventsOf(r, 'shot')) {
+    if (num(e.s) !== -1) continue;
+    // Inside the checkpoint: the tick that changes the segment still belongs to the fight it ends.
+    if (segmentAt(segs, e._t)?.seg === 'checkpoint' && segmentAt(segs, e._t - TICK_S)?.seg === 'checkpoint') probs.push(`${name}: an enemy shot at ${fmt(e._t)} s in a checkpoint`);
+  }
+  const restarts = eventsOf(r, 'stage_restart');
+  for (const e of eventsOf(r, 'tank_lost')) {
+    const s = segmentAt(segs, e._t);
+    if (s?.kind !== 'WORK' && segmentAt(segs, e._t - TICK_S)?.kind !== 'WORK') probs.push(`${name}: tank lost at ${fmt(e._t)} s in a ${s?.kind} phase`);
+    const by = e._t + TOW_S + 1;
+    if (restarts.some((x) => x._t >= e._t - EPS && x._t <= by + EPS)) continue;
+    if (!(num(s?.end, Infinity) <= by + EPS)) probs.push(`${name}: tank lost at ${fmt(e._t)} s with no stage_restart within ${TOW_S + 1} s and the segment still running`);
+  }
+  return probs;
+}
+
+/** Game time with `key` (rescue, afk) true in `peer`'s 1 Hz trace: [[first row, last row]] of each run of rows. */
+export function flagSpans(r, peer, key) {
+  const spans = [];
+  let cur = null;
+  for (const row of traceOf(r, peer)) {
+    const t = num(row.game_t, num(row.t));
+    if (row[key] === true) {
+      if (cur) cur[1] = t;
+      else cur = [t, t];
+    } else if (cur) {
+      spans.push(cur);
+      cur = null;
+    }
+  }
+  if (cur) spans.push(cur);
+  return spans;
+}
+
+/**
+ * BRIEF 4.6.3: a rider in rescue or AFK shields the crew, so no tank is lost inside such a span. A client's state
+ * reaches the host's rules with its telemetry, so the shield starts up to one telemetry interval and a tick after the rider's own.
+ */
+export function lossesInSpans(name, r, peer, key) {
+  const probs = [];
+  const spans = flagSpans(r, peer, key);
+  for (const e of eventsOf(r, 'tank_lost')) {
+    if (spans.some(([a, b]) => e._t >= a + SHARED_PAUSE_TELEMETRY_S + TICK_S - EPS && e._t <= b + EPS)) probs.push(`${name}: tank lost at ${fmt(e._t)} s while peer ${peer} was in ${key} (BRIEF 4.6.3)`);
+  }
+  return probs;
+}
+
 // --- S1 ----------------------------------------------------------------------------------------------------
 
 export function checkS1(reports, opts = {}) {
@@ -586,6 +753,8 @@ export function checkS1(reports, opts = {}) {
     if (crew >= 3) probs.push(...t3Problems(name, r));
     if (crew === 1) probs.push(...t4Problems(name, r));
     if (crew === 4) probs.push(...t7Problems(name, r));
+    if (T8_CREWS.includes(crew)) probs.push(...t8Problems(name, r, crew));
+    probs.push(...t9Problems(name, r));
     // The sim report's HUD log holds only the host rider's own toasts, and v3 seats move the host rider onto ERG seats
     // (the Gun, the Lights) too: the "Surge to evade" prompt is required only with --require-prompts.
     probs.push(...t6Problems(name, r, opts));
@@ -649,6 +818,7 @@ export function checkS2(reports) {
   }
   // Crew 3 spinning at 10 W: no detector sees a stopped rider (no pause, no AFK), and the game
   // must still fail them: every Advance, gun line and the boss ends at max_s, withdrawn, grade D.
+  // v4: it may lose the tank on the way (Normal); the stage starts over and max_s still ends it.
   const ri = reports.s2_c3_idle;
   if (ri) {
     const n = 's2_c3_idle';
@@ -661,6 +831,7 @@ export function checkS2(reports) {
       }
     }
     if (gradeOf(ri) !== 'D') probs.push(`${n}: grade ${gradeOf(ri)}, wanted D`);
+    probs.push(...t9Problems(n, ri));
   }
   const r1 = reports.s2_c1_zero;
   if (r1) {
@@ -705,6 +876,7 @@ export function checkS3(reports, opts = {}) {
     for (const [name, r] of f) {
       probs.push(...argsProblems(name, r, { content: 'ashfall_road', players: 3, role: 'HOST' }));
       probs.push(...completeProblems(name, r));
+      probs.push(...t9Problems(name, r));
     }
     means[c] = mean(f.map(([, r]) => scoreOf(r)).filter(Number.isFinite));
   }
@@ -740,13 +912,14 @@ function enteredTargetW(r, peer, index) {
   return Math.max((pct / 100) * ftp * f, floor);
 }
 
-/** What one `request` directive is, by brief 2.3 / 2.7: 'bank' | 'arc' | 'boiler' | 'haptic' | '' (unknown; v3 retired the hoist). */
+/** What one `request` directive is, by brief 2.3 / 2.7: 'bank' | 'arc' | 'repair' | 'boiler' | 'haptic' | '' (unknown; v3 retired the hoist; v4 Repairs is the director's pattern 10). */
 export function classify(d) {
   const q = d.requested ?? {};
   const reason = q.reason;
   if (q.haptic !== undefined) return ['hit', 'boss_hit'].includes(reason) ? 'haptic' : '';
   if (reason === 'bank' && q.mode === 'ERG' && q.target_pct !== undefined) return 'bank';
   if (reason === 'arc' && q.mode === 'ERG' && q.target_pct !== undefined) return 'arc';
+  if (reason === 'repair' && q.mode === 'ERG' && q.target_pct !== undefined) return 'repair';
   if (reason === 'boiler' && q.mode === 'SIM' && q.mode_grade !== undefined) return 'boiler';
   return '';
 }
@@ -789,6 +962,17 @@ export function directiveProblems(name, r, d) {
       if (!isObj(d.applied) || !Array.isArray(d.applied.clamped_by)) probs.push(`${at}: no governor record with clamped_by (not clamped)`);
       probs.push(...appliedProblems(at, kind, q, d));
       const warm = isWarmupKind(ph);
+      // v4, pattern 10: the Repairs target, held to the same rules as the arc's, on its own seat.
+      if (kind === 'repair') {
+        const t = num(q.target_pct);
+        if (ph.mode !== 'ERG' || ph.kind === 'RECOVERY') probs.push(`${at}: repair target outside an ERG phase`);
+        if (ph.meta?.engine !== undefined && ph.meta.engine !== 'repair') probs.push(`${at}: repair target to a rider on ${ph.meta.engine}`);
+        const range = ph.range_pct;
+        if (!Array.isArray(range)) probs.push(`${at}: repair target in a phase without range_pct (depot or checkpoint)`);
+        else if (t < range[0] - EPS || t > range[1] + EPS) probs.push(`${at}: repair target ${t}% outside range_pct ${JSON.stringify(range)}`);
+        if (t > 100 + EPS || t < 50 - EPS) probs.push(`${at}: repair target ${t}% outside 50-100% FTP`);
+        break;
+      }
       if (kind === 'bank' || kind === 'arc') {
         const t = num(q.target_pct);
         const engine = kind === 'bank' ? 'dynamo' : 'arc';
@@ -832,6 +1016,7 @@ export function appliedProblems(at, kind, q, d) {
   const over = (what, applied, asked) => {
     if (applied !== undefined && !(num(applied, NaN) <= num(asked, NaN) + EPS)) probs.push(`${at}: applied ${what} ${fmt(num(applied, NaN))} above the requested ${fmt(num(asked, NaN))}`);
   };
+  if (kind === 'repair') over('ERG target %', got.target_pct, q.target_pct);
   if (kind === 'bank' || kind === 'arc') over('ERG target %', got.target_pct, q.target_pct);
   else if (kind === 'boiler') over('mode grade %', got.mode_grade, q.mode_grade);
   else if (kind === 'haptic') over('haptic %', got.haptic_pct, q.haptic);
@@ -936,6 +1121,27 @@ export function lapProblems(name, r) {
   return probs;
 }
 
+/**
+ * What a matrix report's name promises (S14-S18): {id, content, difficulty, players, bots, seed, role, rider}, or null
+ * for any other report. The riders are `erg` at the compliance of the name.
+ */
+export function matrixRun(name) {
+  const make = (id, content, difficulty, players, bots, seed, compliance = '1.0') => ({
+    id, content, difficulty, players, bots, seed, role: players >= 2 ? 'HOST' : 'SOLO', rider: `erg:compliance=${compliance}`,
+  });
+  let m = name.match(/^s14_easy_c(\d)_seed(\d+)$/);
+  if (m) return make('S14', 'ashfall_road', 'easy', Number(m[1]), 0, Number(m[2]));
+  m = name.match(/^s15_hard_c(\d)_seed(\d+)$/);
+  if (m) return make('S15', 'ashfall_road', 'hard', Number(m[1]), 0, Number(m[2]));
+  m = name.match(/^s16_amb_(normal|hard)_c(\d)_seed(\d+)$/);
+  if (m) return make('S16', 'ambush_15', m[1], Number(m[2]), 0, Number(m[3]));
+  m = name.match(/^s17_hard_c3_c(85|70)_seed(\d+)$/);
+  if (m) return make('S17', 'ashfall_road', 'hard', 3, 0, Number(m[2]), m[1] === '85' ? '0.85' : '0.70');
+  m = name.match(/^s18_bots_h(\d)b(\d)$/);
+  if (m) return make('S18', 'ambush_15', 'hard', Number(m[1]), Number(m[2]), 1);
+  return null;
+}
+
 export function checkS4(reports, opts = {}) {
   const seeds = opts.seeds ?? DEFAULT_SEEDS;
   const title = 'every content and crew: directives, plans, haptics, switches, laps';
@@ -961,6 +1167,18 @@ export function checkS4(reports, opts = {}) {
         if (changes > 1) probs.push(`${name}: peer ${peer} switches ${changes} times (the drill allows at most one)`);
       }
     }
+  }
+  // v4: the same rules over every S14-S18 report there is (each scenario's own check says when one is missing).
+  for (const [name, r] of Object.entries(reports)) {
+    const want = matrixRun(name);
+    if (!want) continue;
+    probs.push(...argsProblems(name, r, want));
+    probs.push(...completeProblems(name, r));
+    probs.push(...cleanProblems(name, r));
+    probs.push(...planProblems(name, r));
+    probs.push(...directivesProblems(name, r));
+    probs.push(...traceProblems(name, r));
+    probs.push(...lapProblems(name, r));
   }
   return result('S4', title, probs, `${found.length} runs`);
 }
@@ -990,6 +1208,7 @@ export function checkS5(reports) {
     probs.push(...argsProblems(n, r, { content: 'ashfall_road', players: c.players, bots: 0, role: 'HOST' }));
     probs.push(...completeProblems(n, r));
     probs.push(...cleanProblems(n, r));
+    probs.push(...lossesInSpans(n, r, c.peer, 'rescue'));
     const st = rescueStats(r, c.peer);
     if (st.rows === 0) probs.push(`${n}: peer ${c.peer} never entered rescue`);
     else {
@@ -1068,7 +1287,7 @@ export function checkS7(reports) {
 /** A trailing mean power at or above this share of FTP is a sprint (the sprint rule, 1.2 x FTP). The S9 rider (run_sims.sh) rides 12 s at 1.5 x FTP every 40 s. */
 export const S9_SPRINT_SIM_FTP_PCT = 120;
 
-/** The telegraphed shots a rider's surge made miss (`evade` ok 1). */
+/** The telegraphed shots a rider's surge made miss (`evade` ok 1; v4: raised when the far shell lands, after its `shot`). */
 export const successfulEvades = (r) => eventsOf(r, 'evade').filter((e) => num(e.ok) === 1);
 
 /** SIM -> ERG switches of `peer` with the trailing mean raw power (last `n` rows before the switch). */
@@ -1170,14 +1389,14 @@ export function checkS10(reports) {
     notes.push(`${n} ${overs.length} client Overpressure shells`);
   }
 
-  // Slot 1 stops pedaling in the stage 1 gun line (the dynamo, ERG 60% or more): rescue, then AFK and a station on reserve, then back.
+  // Slot 1 stops pedaling on the Gun in stage 1's Advance (the dynamo, ERG 60% or more; v4's near threats can pull it off the Gun by plan phase 2): rescue, then AFK and a station on reserve, then back.
   const stop = reports.s10_c3_dynamo_stop;
   if (stop) {
     const n = 's10_c3_dynamo_stop';
     hygiene(n, stop);
     const peer = '2';
     const rows = traceOf(stop, peer);
-    const span = phaseSpansOf(stop, peer).find((x) => x.index === 2);
+    const span = phaseSpansOf(stop, peer).find((x) => x.index === 1);
     const zero = rows.find((row) => num(row.game_t) >= num(span?.start, 0) - EPS && num(row.power_w) <= 0 && num(row.cadence_rpm) <= 0);
     const afk = rows.filter((row) => row.afk === true);
     if (!zero) probs.push(`${n}: peer ${peer} never stopped pedaling in the gun line`);
@@ -1188,6 +1407,7 @@ export function checkS10(reports) {
       if (!rows.some((row) => num(row.game_t) > num(afk[afk.length - 1].game_t) && row.afk !== true && num(row.power_w) > 0)) probs.push(`${n}: peer ${peer} never came back from AFK`);
       if (!(stop.events ?? []).some((e) => e && e.type === 'hud' && /RESERVE/.test(String(e.key ?? '')))) probs.push(`${n}: no "on reserve" toast`);
     }
+    probs.push(...lossesInSpans(n, stop, peer, 'afk'));
     const st = rescueStats(stop, peer);
     if (st.rows === 0) probs.push(`${n}: peer ${peer} never entered rescue`);
     else if (!(st.maxPct <= 50 + 100 / Math.max(num(slotOf(stop, peer).ftp, 200), 1) + EPS)) probs.push(`${n}: rescue applied ${fmt(st.maxPct)}% FTP (wanted 50% or less)`);
@@ -1274,6 +1494,23 @@ export function roamProblems(name, r) {
   return probs;
 }
 
+/**
+ * Nothing comes from behind (v4): every far enemy's shot carries its range ahead of the hull, in metres, and no event
+ * names the retired dug-in turret. An enemy behind the tank would have no such range.
+ */
+export function behindProblems(name, r) {
+  const probs = [];
+  let n = 0;
+  for (const e of gameEvents(r)) {
+    if ((e.type === 'shot' && num(e.s) === -1 && FAR_CODES.includes(num(e.e)) && !(num(e.rng_m) > 0)) || (['shot', 'kill', 'evade'].includes(e.type) && num(e.e) === DUGIN_CODE)) {
+      n += 1;
+      if (n <= 3) probs.push(`${name}: ${e.type} of enemy code ${e.e} at ${fmt(e._t)} s with range ${e.rng_m} (nothing stands behind the tank, nothing is dug in)`);
+    }
+  }
+  if (n > 3) probs.push(`${name}: ... ${n - 3} more`);
+  return probs;
+}
+
 /** One line of a roam run's numbers for the summary. */
 export function roamLine(name, r) {
   const host = hostPeer(r);
@@ -1301,6 +1538,7 @@ export function checkS11(reports) {
     if (!r) continue;
     probs.push(...argsProblems(name, r, { content, players, bots: 0, role }));
     probs.push(...roamProblems(name, r));
+    probs.push(...behindProblems(name, r));
     if (name === 's11_roam30_c3' && !ROAM_TARGET_GRADES.includes(gradeOf(r))) {
       probs.push(`${name}: grade ${gradeOf(r)}, wanted ${ROAM_TARGET_GRADES.join(' or ')} (a compliant 30-min crew of 3)`);
     }
@@ -1326,13 +1564,14 @@ export function checkS12(reports) {
   const crewKills = eventsOf(r, 'kill').filter((e) => num(e.by) !== BY_BARRAGE);
   if (crewKills.length) probs.push(`${n}: ${crewKills.length} kills by crew fire at 0 W`);
   if (gradeOf(r) !== 'D') probs.push(`${n}: grade ${gradeOf(r)}, wanted D`);
+  probs.push(...behindProblems(n, r));
   return result('S12', title, probs, `${r.end_reason}, ${crewKills.length} kills, grade ${gradeOf(r)}`);
 }
 
 // --- S13: seat switching (v3) -----------------------------------------------------------------------------------------
 
 /** Engine codes (TankIds.ENGINE_CODES). */
-export const ENGINE_OF_CODE = { 1: 'diesel', 2: 'dynamo', 3: 'steam', 5: 'arc', 6: 'feed' };
+export const ENGINE_OF_CODE = { 1: 'diesel', 2: 'dynamo', 3: 'steam', 5: 'arc', 6: 'feed', 7: 'repair' };
 /** Plan follows: the trainer is on a moved rider's new seat within this long (the switch spacing and a tick). */
 export const FOLLOW_SLACK_S = 0.2;
 
@@ -1392,6 +1631,192 @@ export function checkS13(reports) {
   return result('S13', title, probs, `${seats.length} moves (${clients.length} by clients), ${follows.length} splits and replans`);
 }
 
+// --- S14-S18: difficulty, the short session, bots --------------------------------------------------------------
+
+/** How many of `n` seeds a "most seeds" target asks for: 2 of 3 (and so 1 of 1 on a one-seed subset run). */
+export const mostOf = (n) => Math.ceil((2 * n) / 3);
+const isWin = (r) => r.finished_reason === 'victory';
+
+/** A matrix run's arguments and everything S4 holds it to (a complete run, directives, plans, trace, laps), plus T9. */
+export function matrixProblems(name, r) {
+  const want = matrixRun(name);
+  return [
+    ...argsProblems(name, r, want),
+    ...completeProblems(name, r),
+    ...cleanProblems(name, r),
+    ...planProblems(name, r),
+    ...directivesProblems(name, r),
+    ...traceProblems(name, r),
+    ...lapProblems(name, r),
+    ...t9Problems(name, r),
+  ];
+}
+
+/** Every open-ended segment of every human ran inside its min_s..max_s, whatever a restart or a seat split did. */
+export function phaseBoundProblems(name, r) {
+  const probs = [];
+  for (const peer of humanPeers(r)) {
+    const plan = planOf(r, peer);
+    for (const s of segmentsOf(r, peer)) {
+      const ph = plan[s.phases[0]?.index];
+      if (!ph?.open_ended || !Number.isFinite(s.end)) continue;
+      const lo = num(ph.meta?.seg_min_s, num(ph.min_s));
+      const hi = num(ph.max_s, Infinity);
+      if (s.dur < lo - SEGMENT_SLACK_S || s.dur > hi + SEGMENT_SLACK_S) probs.push(`${name}: peer ${peer} ${s.seg} ${s.stage} lasted ${fmt(s.dur)} s (${lo}-${hi})`);
+    }
+  }
+  return probs;
+}
+
+/** The longest the plan can run: each segment at its max_s (a fixed one at its duration) and the cool-down. */
+export function planMaxS(r, peer = hostPeer(r)) {
+  const first = planOf(r, peer).filter((p) => p.meta?.offset_s === undefined);
+  return sum(first.map((p) => num(p.open_ended ? p.max_s : p.duration_s)));
+}
+
+/** A session that stayed on its plan: the game clock under the plan's longest. */
+export function planTotalProblems(name, r) {
+  const most = planMaxS(r);
+  const got = num(r.game_seconds, NaN);
+  return got <= most + SESSION_SLACK_S ? [] : [`${name}: ${fmt(got)} game seconds, over the plan's longest ${fmt(most)} s`];
+}
+
+export function checkS14(reports, opts = {}) {
+  const seeds = opts.seeds ?? DEFAULT_SEEDS;
+  const title = 'ashfall_road on Easy, crews 1-4: victory every run, no tank loss, T1';
+  const names = [];
+  for (const c of CREWS) for (const s of seeds) names.push(`s14_easy_c${c}_seed${s}`);
+  const { found, missing } = pick(reports, names);
+  if (found.length === 0) return skip('S14', title, 'no s14_* reports');
+  const probs = missing.map((m) => `missing report ${m}`);
+  for (const [name, r] of found) {
+    probs.push(...matrixProblems(name, r));
+    if (!isWin(r)) probs.push(`${name}: finished "${r.finished_reason}", wanted victory`);
+    if (lossesOf(r) !== 0) probs.push(`${name}: ${lossesOf(r)} tank losses on Easy (none)`);
+    probs.push(...t1Problems(name, r));
+  }
+  return result('S14', title, probs, `${found.length} runs`);
+}
+
+export function checkS15(reports, opts = {}) {
+  const seeds = opts.seeds ?? DEFAULT_SEEDS;
+  const title = 'ashfall_road on Hard, crews 1-4: 1-2 losses on most seeds, none above 4, phases, 12 laps and S4 still hold';
+  const names = [];
+  for (const c of CREWS) for (const s of seeds) names.push(`s15_hard_c${c}_seed${s}`);
+  const { found, missing } = pick(reports, names);
+  if (found.length === 0) return skip('S15', title, 'no s15_* reports');
+  const probs = missing.map((m) => `missing report ${m}`);
+  const lines = [];
+  for (const c of CREWS) {
+    const runs = found.filter(([n]) => n.startsWith(`s15_hard_c${c}_`));
+    if (runs.length === 0) continue;
+    for (const [name, r] of runs) {
+      probs.push(...matrixProblems(name, r), ...phaseBoundProblems(name, r), ...planTotalProblems(name, r));
+      if (lossesOf(r) > HARD_MOST_LOSSES) probs.push(`${name}: ${lossesOf(r)} tank losses (at most ${HARD_MOST_LOSSES})`);
+    }
+    const losses = runs.map(([, r]) => lossesOf(r));
+    const inBand = losses.filter((n) => n >= HARD_LOSSES[0] && n <= HARD_LOSSES[1]).length;
+    if (inBand < mostOf(seeds.length)) probs.push(`crew ${c}: ${inBand} of ${seeds.length} seeds with ${HARD_LOSSES.join('-')} losses (at least ${mostOf(seeds.length)}; losses ${losses.join(', ')})`);
+    lines.push(`c${c} losses ${losses.join('/')}`);
+  }
+  return result('S15', title, probs, lines.join(', '));
+}
+
+export function checkS16(reports, opts = {}) {
+  const seeds = opts.seeds ?? DEFAULT_SEEDS;
+  const title = 'ambush_15, crews 1, 3, 4: Normal at most 1 loss and wins on most seeds, Hard 1-2 losses on most seeds, 780-1010 game seconds, 6 laps, S4';
+  const crews = [1, 3, 4];
+  const names = [];
+  for (const d of ['normal', 'hard']) for (const c of crews) for (const s of seeds) names.push(`s16_amb_${d}_c${c}_seed${s}`);
+  const { found, missing } = pick(reports, names);
+  if (found.length === 0) return skip('S16', title, 'no s16_* reports');
+  const probs = missing.map((m) => `missing report ${m}`);
+  const lines = [];
+  const need = mostOf(seeds.length);
+  for (const [name, r] of found) {
+    probs.push(...matrixProblems(name, r));
+    const got = num(r.game_seconds, NaN);
+    if (!(got >= AMBUSH_GAME_S[0] - SESSION_SLACK_S && got <= AMBUSH_GAME_S[1] + SESSION_SLACK_S)) probs.push(`${name}: ${fmt(got)} game seconds (${AMBUSH_GAME_S.join('-')})`);
+  }
+  for (const d of ['normal', 'hard']) {
+    for (const c of crews) {
+      const runs = found.filter(([n]) => n.startsWith(`s16_amb_${d}_c${c}_`));
+      if (runs.length === 0) continue;
+      const losses = runs.map(([, r]) => lossesOf(r));
+      if (d === 'normal') {
+        for (const [name, r] of runs) {
+          if (lossesOf(r) > T1_MAX_LOSSES) probs.push(`${name}: ${lossesOf(r)} tank losses (at most ${T1_MAX_LOSSES} on Normal)`);
+          // "Usually wins, T1": a seed that fell short answers to the win count, not to the time ranges.
+          if (isWin(r)) probs.push(...t1Problems(name, r));
+        }
+        const wins = runs.filter(([, r]) => isWin(r)).length;
+        if (wins < need) probs.push(`normal crew ${c}: ${wins} of ${seeds.length} seeds won (at least ${need})`);
+      } else {
+        const inBand = losses.filter((n) => n >= HARD_LOSSES[0] && n <= HARD_LOSSES[1]).length;
+        if (inBand < need) probs.push(`hard crew ${c}: ${inBand} of ${seeds.length} seeds with ${HARD_LOSSES.join('-')} losses (at least ${need}; losses ${losses.join(', ')})`);
+      }
+      lines.push(`${d} c${c} losses ${losses.join('/')}`);
+    }
+  }
+  return result('S16', title, probs, lines.join(', '));
+}
+
+export function checkS17(reports, opts = {}) {
+  const seeds = opts.seeds ?? DEFAULT_SEEDS;
+  const title = 'crew 3 on Hard falling behind: more losses at 85% than at 100%; at 70% rescue shields the crew and it completes';
+  const behind = seeds.map((s) => `s17_hard_c3_c85_seed${s}`);
+  const stagger = 's17_hard_c3_c70_seed1';
+  const { found, missing } = pick(reports, [...behind, stagger]);
+  if (found.length === 0) return skip('S17', title, 'no s17_* reports');
+  const probs = missing.map((m) => `missing report ${m}`);
+  for (const [name, r] of found) probs.push(...matrixProblems(name, r));
+  const base = pick(reports, seeds.map((s) => `s15_hard_c3_seed${s}`));
+  probs.push(...base.missing.map((m) => `missing report ${m}`));
+  const meanLow = mean(found.filter(([n]) => n !== stagger).map(([, r]) => lossesOf(r)));
+  const meanFull = mean(base.found.map(([, r]) => lossesOf(r)));
+  if (!(meanLow > meanFull)) probs.push(`mean losses at 85% (${fmt(meanLow)}) are not above 100% (${fmt(meanFull)})`);
+  const r70 = reports[stagger];
+  if (r70) for (const peer of humanPeers(r70)) probs.push(...lossesInSpans(stagger, r70, peer, 'rescue'));
+  return result('S17', title, probs, `mean losses 100% ${fmt(meanFull)}, 85% ${fmt(meanLow)}${r70 ? `, 70% ${lossesOf(r70)}` : ''}`);
+}
+
+/**
+ * Bots act only through their own seats (SPEC_TANK 3.7): they do move, a bot never lands on a human's seat, and a
+ * human's trainer never follows anything but that human's own seat move (a split or replan with no seat event of
+ * its slot before it would be an effort change a bot caused).
+ */
+export function botSeatProblems(name, r) {
+  const probs = [];
+  const seats = eventsOf(r, 'seat');
+  const humans = humanPeers(r);
+  const botSlots = new Set((r.slots ?? []).filter((s) => s.is_bot).map((s) => num(s.slot)));
+  const botMoves = seats.filter((e) => botSlots.has(num(e.s)));
+  if (botSlots.size && botMoves.length === 0) probs.push(`${name}: no bot ever moved seats`);
+  for (const e of botMoves) {
+    const to = ENGINE_OF_CODE[num(e.to)];
+    for (const peer of humans) if (seatAt(r, peer, e._t) === to) probs.push(`${name}: bot slot ${e.s} landed on ${to} at ${fmt(e._t)} s, peer ${peer}'s seat`);
+  }
+  for (const d of r.directives ?? []) {
+    if ((d.kind !== 'replan' && d.kind !== 'split') || !humans.includes(String(d.peer))) continue;
+    const slot = num(slotOf(r, d.peer).slot, -1);
+    if (!seats.some((e) => num(e.s) === slot && e._t <= num(d.t) + EPS)) probs.push(`${name}: ${d.kind} ${d.id} to human peer ${d.peer} at ${fmt(num(d.t))} s with no seat move of its own before it`);
+  }
+  return probs;
+}
+
+export function checkS18(reports) {
+  const title = 'ambush_15 on Hard with bots (1 human + 3 bots, 2 + 2): complete, nothing refused, bots act only through their seats';
+  const { found, missing } = pick(reports, ['s18_bots_h1b3', 's18_bots_h2b2']);
+  if (found.length === 0) return skip('S18', title, 'no s18_* reports');
+  const probs = missing.map((m) => `missing report ${m}`);
+  const lines = [];
+  for (const [name, r] of found) {
+    probs.push(...matrixProblems(name, r), ...botSeatProblems(name, r));
+    lines.push(`${name} ${r.finished_reason}, ${eventsOf(r, 'seat').length} seat moves, ${lossesOf(r)} losses`);
+  }
+  return result('S18', title, probs, lines.join('; '));
+}
+
 // --- FIT ------------------------------------------------------------------------------------------------------------
 
 /** [[laps|null, [files]]] groups of the FIT files the reports name, existing on disk. */
@@ -1430,7 +1855,7 @@ export function checkFit(reports, dir, repo) {
 
 // --- main ------------------------------------------------------------------------------------------------------------
 
-export const CHECKS = { S1: checkS1, S2: checkS2, S3: checkS3, S4: checkS4, S5: checkS5, S6: checkS6, S7: checkS7, S9: checkS9, S10: checkS10, S11: checkS11, S12: checkS12, S13: checkS13 };
+export const CHECKS = { S1: checkS1, S2: checkS2, S3: checkS3, S4: checkS4, S5: checkS5, S6: checkS6, S7: checkS7, S9: checkS9, S10: checkS10, S11: checkS11, S12: checkS12, S13: checkS13, S14: checkS14, S15: checkS15, S16: checkS16, S17: checkS17, S18: checkS18 };
 
 export function parseArgs(argv) {
   const o = { dir: null, only: null, seeds: DEFAULT_SEEDS, fit: false, requirePrompts: false };

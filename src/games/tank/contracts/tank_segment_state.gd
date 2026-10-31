@@ -32,3 +32,5 @@ var overrun: bool = false
 var length_m: float = 0.0
 ## The next encounter of the Advance to trigger (index into the mission segment's list).
 var next_encounter: int = 0
+## v4: the next entry of the segment's "near" list (by elapsed_s).
+var next_near: int = 0

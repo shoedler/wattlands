@@ -10,7 +10,7 @@ extends RefCounted
 ## once and the trainer follows, TankSeatPlan):
 ##  - left / right open the picker on the nearest empty seat that way (TankIds.SEATS order,
 ##    wrapping) and then step it through the empty seats; the Gun too (its target cycling moved to
-##    swap, R / LB);
+##    swap, R / LB). A seat a bot holds counts as empty: a human's move always wins, the bot vacates;
 ##  - confirm while it is open sends {"k": "seat", "to": <the picked seat>} and closes it;
 ##  - back closes it;
 ## and it closes by itself after IDLE_S without a key, or once nothing can be picked any more (the
@@ -43,12 +43,11 @@ static func usable(state: TankState, r: TankRiderState) -> bool:
 	return not empty_seats(state, r).is_empty()
 
 
-## The empty seats `r` could move to, in TankIds.SEATS order.
+## The seats `r` could move to, in TankIds.SEATS order: the empty ones and, for a human, a bot's.
 static func empty_seats(state: TankState, r: TankRiderState) -> Array[String]:
 	var out: Array[String] = []
 	for engine in TankIds.SEATS:
-		var st := state.station(engine)
-		if engine != r.engine and st != null and st.is_empty():
+		if engine != r.engine and TankSeats.is_free_for(state, r, engine):
 			out.append(engine)
 	return out
 

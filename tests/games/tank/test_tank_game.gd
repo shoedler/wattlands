@@ -22,7 +22,7 @@ func _hud(ctx: GameContext) -> F.Hud:
 
 ## v3: every crew size rides the landship with its five seats; slot s starts on start seat s
 ## (Drive, Gun, Loader, Lights) and the seats past the crew stay empty.
-func test_every_crew_rides_the_one_tank_and_its_five_seats() -> void:
+func test_every_crew_rides_the_one_tank_and_its_six_seats() -> void:
 	var starts := ["diesel", "dynamo", "steam", "arc"]
 	for crew in [1, 2, 3, 4]:
 		var g := _game(F.make_ctx(crew))
@@ -31,12 +31,14 @@ func test_every_crew_rides_the_one_tank_and_its_five_seats() -> void:
 		var engines: Array = g.state.stations.map(
 			func(s: TankStationState) -> String: return s.engine
 		)
-		assert_eq(engines, ["diesel", "steam", "dynamo", "arc", "feed"], "rooms rear to front")
+		assert_eq(
+			engines, ["diesel", "steam", "dynamo", "arc", "repair", "feed"], "rooms rear to front"
+		)
 		for r in g.state.riders:
 			assert_eq(r.engine, starts[r.slot], "slot %d starts on its seat" % r.slot)
 			assert_eq(g.state.station(r.engine).slot, r.slot)
 		var empty := g.state.stations.filter(func(s: TankStationState) -> bool: return s.is_empty())
-		assert_eq(empty.size(), 5 - crew, "crew %d: the other seats are empty" % crew)
+		assert_eq(empty.size(), 6 - crew, "crew %d: the other seats are empty" % crew)
 
 
 func test_bad_content_is_rejected_at_load_and_gives_no_plans() -> void:
@@ -315,3 +317,22 @@ func test_the_same_seed_gives_the_same_snapshots() -> void:
 		F.run(g, plans, 0, 400.0)
 		out.append(JSON.stringify(g.snapshot()))
 	assert_eq(out[0], out[1])
+
+
+## Lead's ruling 2, SPEC_TANK 3.5: the difficulty changes the enemy, never the plan. For every content
+## and every level the plans a game builds are the same, and configure does set the level.
+func test_plans_are_identical_for_every_difficulty_on_every_content() -> void:
+	for content: String in F.manifest()["contents"]:
+		var base := ""
+		for level in [TankIds.DIFF_EASY, TankIds.DIFF_NORMAL, TankIds.DIFF_HARD]:
+			var ctx := F.make_ctx(3, 0, content)
+			ctx.options["difficulty"] = level
+			var g := _game(ctx)
+			assert_eq(g.state.difficulty, level, content)
+			var plans := g.build_effort_plans()
+			var dump := ""
+			for peer: int in plans:
+				dump += JSON.stringify((plans[peer] as EffortPlan).to_dict())
+			if base == "":
+				base = dump
+			assert_eq(dump, base, "%s %s" % [content, level])

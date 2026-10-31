@@ -339,6 +339,11 @@ func _sample_events() -> Array[Dictionary]:
 		TankEvents.evade(13, 3, true, 2),
 		TankEvents.turn(-1, TankIds.DIR_LEFT),
 		TankEvents.time_up(),
+		TankEvents.tank_lost(2, TankIds.SEG_ADVANCE, 2),
+		TankEvents.stage_restart(TankIds.SEG_ADVANCE, 2, 84.4),
+		TankEvents.ambush(44, TankIds.enemy_code(TankIds.ENEMY_RECON)),
+		TankEvents.escaped(44, TankIds.enemy_code(TankIds.ENEMY_RECON)),
+		TankEvents.splash(1499.6, TankIds.SHELL_HEAVY, true),
 	]
 
 

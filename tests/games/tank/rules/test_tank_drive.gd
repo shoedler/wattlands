@@ -259,20 +259,23 @@ func test_the_berm_only_grows_while_in_band_and_not_in_rescue() -> void:
 
 
 func test_the_berm_absorbs_hits_before_the_hull() -> void:
-	var rig := _gun_line_rig(2)
+	var rig := _gun_line_rig(4)
 	rig.hull().berm_hp = 10.0
 	var events: Array[Dictionary] = []
+	var scale := rig.content.crew_damage_scale(4)
 	var lost := TankHullRules.hit(rig.state, 4.0, TankIds.SHELL_ENEMY, 300.0, events)
 	assert_eq(lost, 0.0)
-	assert_eq(rig.hull().berm_hp, 6.0)
+	assert_almost_eq(rig.hull().berm_hp, 10.0 - 4.0 * scale, 1e-6)
 	assert_eq(rig.hull().hp, rig.hull().hp_max)
-	lost = TankHullRules.hit(rig.state, 10.0, TankIds.SHELL_ENEMY, 300.0, events)
-	assert_eq(lost, 4.0, "6 absorbed, 4 through")
+	var left := rig.hull().berm_hp
+	lost = TankHullRules.hit(rig.state, 20.0, TankIds.SHELL_ENEMY, 300.0, events)
+	var through := 20.0 * scale - left
+	assert_almost_eq(lost, through, 1e-6, "the berm's rest absorbed, the rest through")
 	assert_eq(rig.hull().berm_hp, 0.0)
-	assert_eq(rig.hull().hp, rig.hull().hp_max - 4.0)
+	assert_almost_eq(rig.hull().hp, rig.hull().hp_max - through, 1e-6)
 	assert_eq(
 		[events[1]["dmg"], events[1]["b"]],
-		[10, 6],
+		[roundi(20.0 * scale), roundi(left)],
 		"the event keeps the round's damage and what the berm took"
 	)
 	assert_eq(rig.state.score.berm_absorbed, 10.0)
@@ -292,7 +295,8 @@ func test_the_berm_clears_when_the_segment_ends() -> void:
 
 func test_zero_hp_is_a_breakdown_that_ignores_damage_until_5_kj_repair_it() -> void:
 	var rig := _sprint_rig()
-	rig.hull().hp = 5.0
+	rig.state.difficulty = TankIds.DIFF_EASY
+	rig.hull().hp = 3.0
 	var events: Array[Dictionary] = []
 	TankHullRules.hit(rig.state, 12.0, TankIds.SHELL_ENEMY, 300.0, events)
 	assert_true(rig.hull().breakdown)
@@ -318,6 +322,7 @@ func test_zero_hp_is_a_breakdown_that_ignores_damage_until_5_kj_repair_it() -> v
 func test_repair_time_is_12_to_30_seconds_across_the_p_eff_range() -> void:
 	for w: float in [417.0, 250.0, 167.0]:
 		var rig := _sprint_rig()
+		rig.state.difficulty = TankIds.DIFF_EASY
 		rig.p_eff[1] = w
 		rig.hull().hp = 1.0
 		var events: Array[Dictionary] = []
@@ -328,6 +333,7 @@ func test_repair_time_is_12_to_30_seconds_across_the_p_eff_range() -> void:
 
 func test_the_repair_is_paid_by_the_reserve_when_the_driver_is_afk() -> void:
 	var rig := _sprint_rig(2)
+	rig.state.difficulty = TankIds.DIFF_EASY
 	rig.hull().hp = 1.0
 	TankHullRules.hit(rig.state, 5.0, TankIds.SHELL_ENEMY, 0.0, [])
 	rig.afk[1] = true
@@ -339,6 +345,7 @@ func test_the_repair_is_paid_by_the_reserve_when_the_driver_is_afk() -> void:
 ## v3: the crew works the repair: the mean P_eff of the manned seats, whatever seats they are.
 func test_the_crew_pays_the_repair_with_its_mean_p_eff() -> void:
 	var rig := _sprint_rig(2)
+	rig.state.difficulty = TankIds.DIFF_EASY
 	rig.p_eff[1] = 300.0
 	rig.p_eff[2] = 100.0
 	rig.hull().hp = 1.0

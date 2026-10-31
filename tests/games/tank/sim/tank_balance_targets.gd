@@ -3,6 +3,17 @@ extends RefCounted
 ## T1-T5 of brief 2.4 evaluated on a list of TankBalanceHarness results (the tuning loop's quick
 ## check: the gates are tests/games/tank/sim/check_sims.mjs over the full simulation matrix).
 ## Returns [{id, ok, text}], one entry per target; a target no run applies to reads "skipped".
+## T1-T5 are Normal's targets (a result without a difficulty counts as Normal); d1() holds the
+## difficulty table and adds a table of rows.
+##
+## The difficulty targets the content is tuned to (compliant autopilot crews, seeds 1-3 for the
+## tuning, seeds 4-6 as the check against overfit; no effort number, plan or governor input differs):
+##   Easy    never loses: every run a victory, no loss, grade A or S.
+##   Normal  usually wins: most seeds a victory, at most 1 loss, grade B or better.
+##   Hard    expect to fail: 1-2 losses on most seeds, none above 4, grade C or better, never S with a
+##           loss. ambush_15 defaults to it: 15 minutes, one or two failures, a whole workout.
+##   Compliance 0.85: no loss on Easy, more losses than the compliant rider on Normal and Hard.
+##   Only 1.0 and 0.85 are judged: these riders never rescue, so 0.7 reads harsher than the real matrix.
 
 
 static func evaluate(results: Array) -> Array[Dictionary]:
@@ -24,19 +35,23 @@ static func _verdict(id: String, problems: Array[String], runs: int) -> Dictiona
 	return {"id": id, "ok": problems.is_empty(), "text": text}
 
 
+static func _normal(r: Dictionary) -> bool:
+	return str(r.get("difficulty", TankIds.DIFF_NORMAL)) == TankIds.DIFF_NORMAL
+
+
 static func _compliant(r: Dictionary) -> bool:
-	return float(r["compliance"]) > 0.999 and str(r["content"]) == "ashfall_road"
+	return float(r["compliance"]) > 0.999 and str(r["content"]) == "ashfall_road" and _normal(r)
 
 
-## T1: compliant crews: every Advance 150-240 s, gun line 80-160 s, boss 180-330 s, no overrun,
-## at most 1 breakdown, grade B or better.
+## T1: compliant crews: every Advance 120-280 s, gun line 60-160 s, boss 120-330 s (check_sims.mjs
+## T1_RANGES of ashfall_road), no overrun, at most 1 breakdown, grade B or better.
 static func t1(results: Array) -> Dictionary:
 	var problems: Array[String] = []
 	var runs := 0
 	var ranges := {
-		TankIds.SEG_ADVANCE: [150.0, 240.0],
-		TankIds.SEG_GUN_LINE: [80.0, 160.0],
-		TankIds.SEG_BOSS: [180.0, 330.0],
+		TankIds.SEG_ADVANCE: [120.0, 280.0],
+		TankIds.SEG_GUN_LINE: [60.0, 160.0],
+		TankIds.SEG_BOSS: [120.0, 330.0],
 	}
 	for r: Dictionary in results:
 		if not _compliant(r):
@@ -146,7 +161,7 @@ static func t5(results: Array) -> Dictionary:
 			var n := 0
 			for r: Dictionary in results:
 				var same := int(r["crew"]) == crew and absf(float(r["compliance"]) - c) < 0.001
-				if same and str(r["content"]) == "ashfall_road":
+				if same and str(r["content"]) == "ashfall_road" and _normal(r):
 					total += float(r["score"])
 					n += 1
 			if n > 0:
@@ -163,3 +178,116 @@ static func t5(results: Array) -> Dictionary:
 					)
 				)
 	return _verdict("T5", problems, runs)
+
+
+## D1 (SPEC_TANK 9.3) over the results that name a difficulty, per content, difficulty, crew and
+## compliance. Compliant: Easy wins always with no loss and grades A or S; Normal wins on most
+## seeds, at most 1 loss, grade B or better; Hard has 1-2 losses on most seeds and none above 4,
+## grade C or better. Compliance 0.85: Easy no loss, the others more losses than compliant. A grade
+## of S with a loss is a miss everywhere. Other compliance values are shown, not judged (the
+## synthetic riders never rescue, so their 0.7 rows read harsher than the real matrix). `rows` is
+## the table: one line per group.
+static func d1(results: Array) -> Dictionary:
+	var groups := {}
+	for r: Dictionary in results:
+		if not r.has("difficulty"):
+			continue
+		var key := [
+			r["content"], r["difficulty"], int(r["crew"]), snappedf(float(r["compliance"]), 0.01)
+		]
+		if not groups.has(key):
+			groups[key] = []
+		(groups[key] as Array).append(r)
+	var problems: Array[String] = []
+	var rows: Array[String] = []
+	for key: Array in groups:
+		var runs: Array = groups[key]
+		var at := "%s %s crew %d c%.2f" % key
+		var losses: Array[int] = []
+		var wins := 0
+		var grades: PackedStringArray = []
+		for r: Dictionary in runs:
+			losses.append(int(r["losses"]))
+			wins += 1 if str(r["outcome"]) == TankIds.OUTCOME_VICTORY else 0
+			grades.append(str(r["grade"]))
+			if str(r["grade"]) == "S" and int(r["losses"]) > 0:
+				problems.append("%s seed %d: grade S with a loss" % [at, r["seed"]])
+		var compliant_mean := _mean_losses(groups, [key[0], key[1], key[2], 1.0])
+		for p: String in _d1_group(key, losses, wins, grades, compliant_mean):
+			problems.append("%s: %s" % [at, p])
+		rows.append(
+			(
+				"%s: losses %s wins %d/%d grades %s"
+				% [at, str(losses), wins, runs.size(), ",".join(grades)]
+			)
+		)
+	var out := _verdict("D1", problems, groups.size())
+	out["rows"] = rows
+	return out
+
+
+## Seeds that a "most seeds" target asks for: 2 of 3, and 1 of 1.
+static func _most(n: int) -> int:
+	return ceili(2.0 * n / 3.0)
+
+
+static func _mean_losses(groups: Dictionary, key: Array) -> float:
+	if not groups.has(key):
+		return -1.0
+	var total := 0
+	for r: Dictionary in groups[key]:
+		total += int(r["losses"])
+	return float(total) / (groups[key] as Array).size()
+
+
+static func _d1_group(
+	key: Array, losses: Array[int], wins: int, grades: PackedStringArray, compliant_mean: float
+) -> Array[String]:
+	var out: Array[String] = []
+	var diff := str(key[1])
+	var n := losses.size()
+	var most := int(losses.max())
+	var total := 0
+	var in_band := 0
+	for l in losses:
+		total += l
+		in_band += 1 if l >= 1 and l <= 2 else 0
+	if is_equal_approx(float(key[3]), 0.85):
+		if diff == TankIds.DIFF_EASY:
+			if most > 0:
+				out.append("%d losses at most on Easy (none)" % most)
+		elif compliant_mean >= 0.0 and not float(total) / n > compliant_mean:
+			out.append(
+				"mean losses %.2f not above compliant %.2f" % [float(total) / n, compliant_mean]
+			)
+		return out
+	if not is_equal_approx(float(key[3]), 1.0):
+		return out
+	match diff:
+		TankIds.DIFF_EASY:
+			if wins < n:
+				out.append("%d of %d won (all)" % [wins, n])
+			if most > 0:
+				out.append("%d losses at most (none)" % most)
+			out.append_array(_grades_in(grades, ["S", "A"]))
+		TankIds.DIFF_NORMAL:
+			if wins < _most(n):
+				out.append("%d of %d won (at least %d)" % [wins, n, _most(n)])
+			if most > 1:
+				out.append("%d losses at most (1)" % most)
+			out.append_array(_grades_in(grades, ["S", "A", "B"]))
+		TankIds.DIFF_HARD:
+			if in_band < _most(n):
+				out.append("%d of %d with 1-2 losses (at least %d)" % [in_band, n, _most(n)])
+			if most > 4:
+				out.append("%d losses at most (4)" % most)
+			out.append_array(_grades_in(grades, ["S", "A", "B", "C"]))
+	return out
+
+
+static func _grades_in(grades: PackedStringArray, allowed: Array[String]) -> Array[String]:
+	var out: Array[String] = []
+	for g in grades:
+		if not allowed.has(g):
+			out.append("grade %s (%s)" % [g, "/".join(allowed)])
+	return out

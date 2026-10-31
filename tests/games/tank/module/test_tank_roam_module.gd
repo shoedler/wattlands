@@ -127,7 +127,7 @@ func test_roam_results_score_points_and_grade_by_points_per_work_minute() -> voi
 		s.roam.work_s = 1500.0
 		s.roam.points = roundi(float(c[0]) * 25.0)
 		s.roam.odo_m = 12345.0
-		s.score.kills = [0, 3, 2, 1, 1, 0, 0]
+		s.score.kills = [0, 3, 2, 1, 1, 0, 0, 4, 5]
 		s.score.evades_ok = 2
 		s.score.evades_tried = 5
 		var res := g.results()
@@ -138,6 +138,8 @@ func test_roam_results_score_points_and_grade_by_points_per_work_minute() -> voi
 			(res.team as Dictionary).keys(),
 			[
 				"TANK_TEAM_OUTCOME",
+				"TANK_TEAM_DIFFICULTY",
+				"TANK_TEAM_LOSSES",
 				"TANK_TEAM_POINTS",
 				"TANK_TEAM_POINTS_PER_MIN",
 				"TANK_TEAM_ROAM_KILLS",
@@ -147,7 +149,11 @@ func test_roam_results_score_points_and_grade_by_points_per_work_minute() -> voi
 				"TANK_TEAM_PATROLS"
 			]
 		)
-		assert_eq(res.team["TANK_TEAM_ROAM_KILLS"], "3/2/1/1/0")
+		assert_eq(
+			res.team["TANK_TEAM_ROAM_KILLS"],
+			"3/2/1/0/4/5",
+			"the near kinds count, the Behemoth's slot does not"
+		)
 		assert_eq(res.team["TANK_TEAM_DISTANCE"], "12.3")
 		assert_eq(res.team["TANK_TEAM_EVADES"], "2/5")
 		var bonus := {"S": 60, "A": 40, "B": 25, "C": 10, "D": 0}

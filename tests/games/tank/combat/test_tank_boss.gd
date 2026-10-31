@@ -13,10 +13,6 @@ func _rig(crew: int = 2, quiet: bool = false) -> TankRulesRig:
 	return rig
 
 
-func _gap(rig: TankRulesRig) -> float:
-	return rig.state.boss.x_px - (rig.hull().x_px + rig.hull().hull_w)
-
-
 func _driver(rig: TankRulesRig) -> int:
 	return rig.peer_of(TankIds.ENGINE_DIESEL)
 
@@ -39,30 +35,19 @@ func test_the_boss_starts_in_phase_1_at_full_health_scaled_by_the_tank() -> void
 		assert_eq(rig.of_type("boss_phase")[0]["p"], TankIds.BOSS_PHASE_1)
 
 
-func test_the_boss_stands_partly_past_the_right_edge() -> void:
-	var rig := _rig(2)
-	var left_screen := rig.state.boss.x_px - rig.state.camera_x()
-	assert_almost_eq(left_screen, float(rig.content.segment(BOSS)["boss"]["start_left_px"]), 0.5)
-	assert_gt(left_screen + 320.0, 640.0, "its 320 px hull runs off the right edge")
-
-
-func test_in_phase_1_it_creeps_2_px_a_second_until_it_is_stop_px_away() -> void:
+func test_it_starts_far_off_and_creeps_until_stop_m() -> void:
 	var rig := _rig(2, true)
-	var gap := _gap(rig)
-	var start := float(rig.content.segment(BOSS)["boss"]["start_left_px"])
-	assert_almost_eq(gap, start - float(TankConst.REAR_SCREEN_X) - rig.hull().hull_w, 1.0)
+	var far: Dictionary = rig.content.boss_def()["far"]
+	var b := rig.state.boss
+	assert_almost_eq(b.range_m, float(far["start_m"]), 2.0, "start_m")
+	var r0 := b.range_m
 	rig.run(10.0)
-	assert_almost_eq(gap - _gap(rig), 20.0, 0.2, "2 px/s")
-	var stop := float(rig.content.boss_def()["stop_px"])
-	rig.run(ceilf((_gap(rig) - stop) / 2.0) + 1.0)
-	assert_almost_eq(
-		_gap(rig), stop, 0.01, "it stops stop_px from the hull's front (120 in the brief)"
-	)
+	assert_almost_eq(r0 - b.range_m, 10.0 * float(far["creep_mps"]), 0.2, "creep_mps")
+	b.range_m = float(far["stop_m"]) + 3.0
+	rig.run(4.0)
+	assert_eq(b.range_m, float(far["stop_m"]), "it stops at stop_m")
 	rig.run(5.0)
-	assert_almost_eq(_gap(rig), stop, 0.01)
-	var cit := _rig(3, true)
-	cit.run(ceilf((_gap(cit) - stop) / 2.0) + 1.0)
-	assert_almost_eq(_gap(cit), stop, 0.01)
+	assert_eq(b.range_m, float(far["stop_m"]))
 
 
 func test_each_broken_bogie_pushes_it_back_and_the_third_starts_phase_2() -> void:
@@ -70,48 +55,70 @@ func test_each_broken_bogie_pushes_it_back_and_the_third_starts_phase_2() -> voi
 	rig.run(80.0)
 	var aux := TankAux.of(rig.state)
 	var b := rig.state.boss
-	var x := b.x_px
-	var push := float(rig.content.boss_def()["pushback_px"])
-	assert_eq(push, 12.0, "v3: 12 px (the turret stays in the gun's reach)")
+	var push := float(rig.content.boss_def()["far"]["pushback_m"])
+	var r := b.range_m
 	TankShells.damage_boss(rig.state, aux, 0, 1000.0, 0, rig.events)
 	assert_eq(b.bogie_hp[0], 0.0)
-	assert_almost_eq(b.x_px, x + push, 0.001)
+	assert_almost_eq(b.range_m, r + push, 0.001)
 	assert_eq(b.phase, TankIds.BOSS_PHASE_1)
 	TankShells.damage_boss(rig.state, aux, 1, 1000.0, 0, rig.events)
 	TankShells.damage_boss(rig.state, aux, 2, 1000.0, 0, rig.events)
-	assert_almost_eq(b.x_px, x + 3.0 * push, 0.001)
+	assert_almost_eq(b.range_m, r + 3.0 * push, 0.001)
 	assert_eq(b.phase, TankIds.BOSS_PHASE_2)
 	assert_eq(rig.of_type("boss_phase").back()["p"], TankIds.BOSS_PHASE_2)
-	var x2 := b.x_px
+	var r2 := b.range_m
 	rig.run(20.0)
-	assert_eq(b.x_px, x2, "phase 2: immobile")
+	assert_eq(b.range_m, r2, "phase 2: immobile")
 
 
-## v3: with its front bogie broken it creeps on until the next standing bogie stands where the front
-## one stood (the dark gun's headlight then reaches it), and so on.
-func test_it_creeps_on_until_its_next_standing_bogie_stands_at_the_stop() -> void:
-	var rig := _rig(2, true)
+## Parts by metres: each stands at the Behemoth's range + part_offset_m, with its own hit window.
+func test_its_parts_stand_in_the_far_frame_by_metres() -> void:
+	var rig := _rig(4, true)
 	var aux := TankAux.of(rig.state)
-	var stop := float(rig.content.boss_def()["stop_px"])
-	rig.run(ceilf((_gap(rig) - stop) / 2.0) + 1.0)
-	var front := rig.hull().x_px + rig.hull().hull_w
-	var near0 := TankTargets.boss_rect(rig.state, aux, 0).position.x - front
-	TankShells.damage_boss(rig.state, aux, 0, 1000.0, 0, rig.events)
-	var spacing := aux.geo.boss_part_rect(1).position.x - aux.geo.boss_part_rect(0).position.x
-	assert_gt(spacing, 0.0)
-	rig.run(ceilf((spacing + 12.0) / 2.0) + 1.0)
-	var near1 := TankTargets.boss_rect(rig.state, aux, 1).position.x - front
-	assert_almost_eq(near1, near0, 0.01, "bogie 1 where bogie 0 stood")
-	assert_lte(near1, rig.content.num("tanks", "arc.dark_range_px"), "inside the headlight")
+	var far: Dictionary = rig.content.boss_def()["far"]
+	var b := rig.state.boss
+	TankTargets.build(rig.state, aux)
+	for i in 3:
+		var t := TankTargets.by_id(aux, TankBossState.part_id(i))
+		assert_true(t.far, "part %d" % i)
+		assert_almost_eq(t.range_m, b.range_m + float(far["part_offset_m"][i]), 0.001)
+		assert_eq(t.hit_half_m, float(far["part_half_m"][i]))
+		assert_false(t.rect.has_area(), "no px in the far frame")
+	assert_null(TankTargets.by_id(aux, TankBossState.part_id(3)), "the turret only in phase 2")
+
+
+## A far shell on a part's metres does its damage; the turret takes nothing in phase 1.
+func test_a_far_shell_hits_the_part_it_lands_on() -> void:
+	var rig := _rig(4, true)
+	var aux := TankAux.of(rig.state)
+	var b := rig.state.boss
+	TankTargets.build(rig.state, aux)
+	var t := TankTargets.by_id(aux, TankBossState.part_id(1))
+	var s := TankShellState.new()
+	s.id = rig.state.take_id()
+	s.type = TankIds.SHELL_HEAVY
+	s.far = true
+	s.friendly = true
+	s.left_s = 0.01
+	s.impact_r = t.range_m
+	s.target_id = t.id
+	rig.state.shells.append(s)
+	TankShells.step(rig.state, aux, Wl.SIM_DT, rig.events)
+	assert_almost_eq(b.bogie_hp[1], b.bogie_max - 35.0, 0.001, "direct")
+	var frac := rig.content.num("tanks", "damage.splash_frac", 0.5)
+	assert_almost_eq(b.bogie_hp[0], b.bogie_max - 35.0 * frac, 0.001, "22 m off: splash")
+	assert_eq(b.turret_hp, b.turret_max, "armoured in phase 1")
+	var hit: Dictionary = rig.of_type("hit").back()
+	assert_eq([hit["on"], hit["id"], hit["x"]], [TankEvents.ON_BOSS, t.id, roundi(t.range_m)])
 
 
 func test_a_broken_bogie_cannot_break_twice() -> void:
 	var rig := _rig(2, true)
 	var aux := TankAux.of(rig.state)
 	TankShells.damage_boss(rig.state, aux, 0, 1000.0, 0, rig.events)
-	var x := rig.state.boss.x_px
+	var r := rig.state.boss.range_m
 	TankShells.damage_boss(rig.state, aux, 0, 1000.0, 0, rig.events)
-	assert_eq(rig.state.boss.x_px, x)
+	assert_eq(rig.state.boss.range_m, r)
 
 
 func test_the_turret_only_takes_damage_in_phase_2() -> void:
@@ -157,9 +164,6 @@ func test_auto_aim_takes_the_nearest_standing_bogie_then_the_turret() -> void:
 		assert_not_null(t, "step %d" % step)
 		order.append(t.id)
 		TankShells.damage_boss(rig.state, aux, t.part, 10000.0, 0, rig.events)
-		rig.state.boss.x_px = (
-			rig.hull().x_px + rig.hull().hull_w + float(rig.content.boss_def()["stop_px"])
-		)
 	assert_eq(
 		order,
 		[
@@ -172,28 +176,22 @@ func test_auto_aim_takes_the_nearest_standing_bogie_then_the_turret() -> void:
 	)
 
 
-## v3: the main gun reaches the Behemoth's turret only up to about 240 px off the hull's front, so
-## the Behemoth starts and is pushed back (three bogies) no farther than that.
-func test_the_turret_stays_in_reach_after_three_push_backs() -> void:
-	var rig := _rig(4, true)
-	var aux := TankAux.of(rig.state)
-	var c := rig.content
-	var front := rig.hull().x_px + rig.hull().hull_w
-	var start := float(c.segment(BOSS)["boss"]["start_left_px"]) - (16.0 + rig.hull().hull_w)
-	var worst := start + 3.0 * float(c.boss_def()["pushback_px"])
-	for i in 3:
-		TankShells.damage_boss(rig.state, aux, i, 1000.0, 0, rig.events)
-	rig.state.boss.x_px = front + worst
-	aux.aim_valid = false
-	TankTargets.build(rig.state, aux)
-	var t := TankAim.current(rig.state, aux)
-	assert_not_null(t, "the turret at %.0f px" % worst)
-	if t != null:
-		assert_eq(t.id, TankBossState.part_id(TankBossState.TURRET_PART))
+func test_the_turret_stays_in_reach_after_three_push_backs_lit_or_dark() -> void:
+	for crew in [2, 4]:
+		var rig := _rig(crew, true)
+		var aux := TankAux.of(rig.state)
+		for i in 3:
+			TankShells.damage_boss(rig.state, aux, i, 1000.0, 0, rig.events)
+		aux.aim_valid = false
+		TankTargets.build(rig.state, aux)
+		var t := TankAim.current(rig.state, aux)
+		assert_not_null(t, "the turret at %.0f m" % rig.state.boss.range_m)
+		if t != null:
+			assert_eq(t.id, TankBossState.part_id(TankBossState.TURRET_PART))
 
 
-func test_the_main_gun_fires_every_35_to_45_seconds_after_an_8_second_telegraph() -> void:
-	var rig := _rig(2)
+func test_the_main_gun_fires_every_35_to_45_seconds_after_its_telegraph() -> void:
+	var rig := _rig(2, true)
 	rig.hull().hp = 100000.0
 	rig.hull().hp_max = 100000.0
 	var b := rig.state.boss
@@ -211,8 +209,8 @@ func test_the_main_gun_fires_every_35_to_45_seconds_after_an_8_second_telegraph(
 	assert_gte(shots.size(), 2, "two shots in 110 s")
 	assert_between(shots[0], 35.0, 46.0)
 	assert_between(shots[1] - shots[0], 35.0, 45.5)
-	assert_almost_eq(telegraphs.max(), 8.0, 0.1, "the telegraph shows for 8 s (v3)")
-	assert_lte(telegraphs[0], 8.0)
+	assert_almost_eq(telegraphs.max(), 6.0, 0.1, "the telegraph shows for 6 s")
+	assert_lte(telegraphs[0], 6.0)
 
 
 func test_in_phase_2_the_main_gun_comes_every_25_to_35_seconds() -> void:
@@ -288,13 +286,13 @@ func _sprint(rig: TankRulesRig, peer: int, seconds: float) -> void:
 	rig.run(seconds)
 
 
-func test_a_sprint_held_3_seconds_inside_the_telegraph_makes_the_shot_miss() -> void:
+func test_a_sprint_held_3_seconds_makes_the_shot_miss_at_landing() -> void:
 	var rig := _rig(2)
 	var b := rig.state.boss
 	var d := _driver(rig)
 	rig.hull().hp = 100000.0
 	rig.hull().hp_max = 100000.0
-	b.main_s = 7.0
+	b.main_s = 6.5
 	b.secondary_s = 1000.0
 	rig.run(1.2)
 	assert_gt(b.telegraph_s, 0.0, "telegraph")
@@ -306,10 +304,18 @@ func test_a_sprint_held_3_seconds_inside_the_telegraph_makes_the_shot_miss() -> 
 	assert_true(
 		b.evaded, "held 3 s inside the telegraph: about 1.75 s for the rule to hold, then 3 s"
 	)
-	assert_eq(rig.of_type("evade").size(), 0, "the event comes when the shot resolves")
+	assert_eq(rig.of_type("evade").size(), 0, "the event comes when the shot lands")
 	var hp := rig.hull().hp
-	rig.run(3.0)
+	rig.run(1.0)
 	assert_eq(b.telegraph_s, 0.0, "the gun fired")
+	var shot := rig.of_type("shot").filter(
+		func(e: Dictionary) -> bool: return e["sh"] == TankIds.SHELL_BOSS_MAIN
+	)
+	assert_eq(shot.size(), 1)
+	assert_almost_eq(float(shot[0]["rng_m"]), b.range_m, 3.0, "the shooter's range")
+	assert_gt(float(shot[0]["flight_s"]), 1.0, "and how long it flies")
+	assert_true(b.evaded, "until it lands")
+	rig.run(4.0)
 	var ev := rig.of_type("evade")
 	assert_eq(ev.size(), 1)
 	assert_eq(
@@ -318,7 +324,6 @@ func test_a_sprint_held_3_seconds_inside_the_telegraph_makes_the_shot_miss() -> 
 	)
 	assert_eq([rig.rider(d).evades_ok, rig.rider(d).evades_tried], [1, 1])
 	assert_eq([rig.state.score.evades_ok, rig.state.score.evades_tried], [1, 1])
-	rig.run(4.0)
 	assert_eq(rig.hull().hp, hp, "and missed")
 	assert_false(b.evaded, "armed again for the next shot")
 
@@ -334,7 +339,7 @@ func test_without_the_sprint_the_telegraphed_shot_is_a_normal_roll() -> void:
 		rig.state.boss.secondary_s = 1000.0
 		rig.power_w[_driver(rig)] = 100.0
 		rig.hull().evasive = false
-		rig.run(8.0)
+		rig.run(11.0)
 		for e in rig.events:
 			if e["type"] == "hit" and TankEvents.is_boss_main_hit(e):
 				hits += 1
@@ -353,12 +358,12 @@ func test_the_evade_does_nothing_in_the_first_300_seconds() -> void:
 	rig.plan_t = 200.0
 	var b := rig.state.boss
 	var d := _driver(rig)
-	b.main_s = 7.0
+	b.main_s = 6.5
 	rig.run(1.2)
 	_sprint(rig, d, 5.0)
 	assert_false(b.evaded)
 	assert_false(rig.rider(d).can_evade)
-	rig.run(1.0)
+	rig.run(5.0)
 	var ev := rig.of_type("evade")
 	assert_eq(ev.size(), 1, "the telegraphed shot resolves")
 	assert_eq(ev[0]["ok"], 0, "not evaded")
@@ -427,13 +432,32 @@ func test_a_solo_rider_meets_the_behemoth_with_its_bogies_wrecked() -> void:
 	assert_eq(b.phase, TankIds.BOSS_PHASE_2)
 	assert_eq(rig.of_type("boss_phase").back()["p"], TankIds.BOSS_PHASE_2)
 	assert_eq(b.turret_hp, float(rig.content.boss_def()["turret_hp"]))
-	var stop := float(rig.content.boss_def()["stop_px"])
-	assert_almost_eq(_gap(rig), stop, 0.01, "at its stop line")
+	var stop := float(rig.content.boss_def()["far"]["stop_m"])
+	assert_eq(b.range_m, stop, "at its stop line")
 	rig.run(10.0)
-	assert_almost_eq(_gap(rig), stop, 0.01, "immobile")
+	assert_eq(b.range_m, stop, "immobile")
 	var aux := TankAux.of(rig.state)
-	var t := TankTargets.boss_rect(rig.state, aux, TankBossState.TURRET_PART)
-	var front := rig.hull().x_px + rig.hull().hull_w
-	assert_lte(
-		t.position.x - front, rig.content.num("tanks", "arc.dark_range_px"), "in the headlight"
-	)
+	TankTargets.build(rig.state, aux)
+	var t := TankTargets.by_id(aux, TankBossState.part_id(TankBossState.TURRET_PART))
+	assert_true(TankAim.in_reach(rig.state, t), "within reach in the dark")
+
+
+func test_difficulty_reaches_the_behemoth() -> void:
+	for level: String in TankIds.DIFFICULTIES:
+		var rig := TankRulesRig.new(2)
+		rig.state.difficulty = level
+		rig.no_fire = true
+		rig.enter(BOSS, 1.0)
+		var row: Dictionary = rig.content.value("enemies", "difficulty.%s" % level, {})
+		var def := rig.content.boss_def()
+		var b := rig.state.boss
+		assert_almost_eq(b.bogie_max, float(def["bogie_hp"]) * float(row["hp"]), 0.001, level)
+		assert_almost_eq(b.turret_max, float(def["turret_hp"]) * float(row["hp"]), 0.001, level)
+		b.main_s = 20.0
+		b.secondary_s = 1000.0
+		var longest := 0.0
+		for _i in 400:
+			rig.step()
+			longest = maxf(longest, b.telegraph_s)
+		var want := float(def["main"]["telegraph_s"]) * float(row["telegraph"])
+		assert_almost_eq(longest, want, 0.1, "%s telegraph" % level)

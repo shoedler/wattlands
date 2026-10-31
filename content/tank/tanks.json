@@ -6,7 +6,7 @@
 			"code": 5,
 			"crew": [1, 4],
 			"hull_px": [296, 65],
-			"engines": ["diesel", "steam", "dynamo", "arc", "feed"],
+			"engines": ["diesel", "steam", "dynamo", "arc", "repair", "feed"],
 			"turrets": ["main"],
 			"enemy_scale": 1.0,
 			"label": "TANK_TANK_LANDSHIP",
@@ -38,7 +38,8 @@
 					"steam": [111.3333, 27, 46, 20.6667],
 					"dynamo": [157.3333, 27, 28.6667, 20.6667],
 					"arc": [186, 27, 28.6667, 20.6667],
-					"feed": [231.3333, 29.6667, 20, 18]
+					"feed": [231.3333, 29.6667, 20, 18],
+					"repair": [169.3333, 7.6667, 44.6667, 18]
 				}
 			}
 		}
@@ -47,7 +48,9 @@
 		"hp": 150,
 		"checkpoint_hp": 30,
 		"repair_j": 5000,
-		"repair_hp": 40
+		"repair_hp": 40,
+		"tow_s": 8,
+		"restart_hp_frac": 0.7
 	},
 	"drive": {
 		"cda_m2": 0.5,
@@ -82,7 +85,7 @@
 	},
 	"dynamo": {
 		"bank_max": 100,
-		"j_per_unit": 150,
+		"j_per_unit": 180,
 		"stabilizer_per_s": 2.25,
 		"per_degree": 0.5,
 		"per_traverse": 15,
@@ -106,14 +109,15 @@
 		"light_latch_pct": 40
 	},
 	"gun": {
-		"load_elev_deg": 0,
+		"load_elev_deg": 8,
 		"elev_min_deg": -12,
 		"elev_max_deg": 30,
 		"shell_speed_px_s": 360,
 		"gravity_px_s2": 300,
 		"aim_tol_deg": 0.5,
 		"manual_pause_s": 5,
-		"nudge_deg": 1
+		"nudge_deg": 1,
+		"far": {"v0_mps": 560, "g_mps2": 70, "max_range_m": 2500, "nudge_deg": 0.25, "aim_tol_deg": 0.1, "dispersion_deg": [0.2, 0.35], "splash_m": 60}
 	},
 	"damage": {
 		"light": 14,
@@ -125,18 +129,24 @@
 		"armored_light_mult": 0.25
 	},
 	"bow": {
-		"_doc": "v3: the Secondaries seat (feed): two bow guns, 2 rounds per pedal revolution of its rider (alternating guns) at the nearest enemy, or Behemoth part, ahead whose near edge is min_px..max_px off the hull front, else a wire or wreck barricade there (clear_rounds rounds clear it). damage per round (armour: enemies.json light_mult). The guns slew at slew_deg_s [under band, in band] (power in band sets their speed); a round hits when the gun points within aim_tol_deg of the target, else it misses.",
+		"_doc": "v3: the Secondaries seat (feed): two bow guns, 2 rounds per pedal revolution of its rider (alternating guns) at the nearest near threat (v4: recon, tankette) whose near edge is min_px..max_px off the hull front, else a wire or wreck barricade there (clear_rounds rounds clear it). damage per round (armour: enemies.json light_mult). The guns slew at slew_deg_s [under band, in band] (power in band sets their speed); a round hits when the gun points within aim_tol_deg of the target, else it misses.",
 		"damage": 1.5,
-		"min_px": 40,
-		"max_px": 220,
+		"min_px": 4,
+		"max_px": 200,
 		"slew_deg_s": [8, 40],
 		"aim_tol_deg": 3,
 		"clear_rounds": 12
 	},
 	"arc": {
-		"_doc": "v3: the Lights seat (arc generator). While its rider is in band the searchlights are lit: the main gun reaches its full range with its normal dispersion. Empty or not lit, the gun reaches only the headlight: targets whose near edge is at most dark_range_px off the hull's front (off its rear for a target behind), with its dispersion x dark_dispersion_mult.",
+		"_doc": "v3: the Lights seat (arc generator). While its rider is in band the searchlights are lit: the main gun reaches its full range with its normal dispersion. Empty or not lit, far targets only up to dark_range_m, with its dispersion x dark_dispersion_mult (dark_range_px is v3's, until the Autopilot moves).",
 		"dark_range_px": 260,
-		"dark_dispersion_mult": 2
+		"dark_range_m": 2300,
+		"dark_dispersion_mult": 1.5
+	},
+	"repair": {
+		"_doc": "v4: the Repairs seat rebuilds hp_per_kj hull HP per kJ of P_eff in band (x difficulty.repair), one patch per patch_hp.",
+		"hp_per_kj": 3.0,
+		"patch_hp": 4
 	},
 	"caps": {
 		"enemies": 16,
@@ -148,9 +158,9 @@
 		"drill_wreck": {"w": 72, "h": 32},
 		"tank_traps": {"w": 64, "h": 24},
 		"light_hits_to_clear": 3,
-		"standoff_px": 180
+		"standoff_px": 130
 	},
 	"drill": {
-		"wreck_px": [220, 330]
+		"wreck_px": [135, 170]
 	}
 }

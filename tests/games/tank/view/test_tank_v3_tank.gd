@@ -251,7 +251,7 @@ func test_the_bow_guns_tilt_toward_the_nearest_enemy_ahead() -> void:
 	assert_almost_eq(v.bow_elev, TankView.BOW_REST_DEG, 0.01, "at rest without a target")
 	var e := TankEnemyState.new()
 	e.id = 77
-	e.code = TankIds.ENEMY_CODES[TankIds.ENEMY_LIGHT]
+	e.code = TankIds.ENEMY_CODES[TankIds.ENEMY_RECON]
 	e.x_px = s.hull.x_px + float(s.hull.hull_w) + 60.0
 	e.w = 80
 	e.h = 30
@@ -334,16 +334,15 @@ func test_little_bases_stand_at_the_depot_and_in_free_roam() -> void:
 	s.seg.seg = TankIds.SEG_DEPOT
 	s.hull.x_px = 0.0
 	var v := U.view_of(self, s)
-	var bases := TankForest.bases(v, s)
-	assert_eq(bases.size(), 1, "the depot's base in view at the start")
-	if bases.is_empty():
-		return
-	var lights := TankForest.base_lights(v, bases[0])
+	var base := TankForest.far_base(v, s)
+	assert_false(is_nan(base), "the depot's base in view at the start, in the far panel")
+	var lights := TankForest.base_lights(v, base)
 	assert_eq(lights.size(), 2, "its lamp and its slit")
 	var adv := U.fixture("state", 3)
 	adv.seg.seg = TankIds.SEG_ADVANCE
 	var va := U.view_of(self, adv)
 	assert_eq(TankForest.bases(va, adv).size(), 0, "none on the road between")
+	assert_true(is_nan(TankForest.far_base(va, adv)), "nor over there")
 	var r := U.roam_state(3)
 	r.roam.map_m = r.roam_map.strongpoints[0]
 	var g: TankGame = autofree(U.roam_game(r))

@@ -56,6 +56,11 @@ const SWITCH_GAP_S := 30.0
 ## the trainer's SWITCH_GAP_S), a solo rider AUTO_STAY_SOLO_S (it works every seat alone).
 const AUTO_STAY_S := 60.0
 const AUTO_STAY_SOLO_S := 30.0
+## v4: the near panel's span ahead of the hull's front in rules px. The view maps 0..NEAR_SPAN_PX onto
+## nose..panel edge on every canvas, so the rules never depend on the canvas (TankFarMap).
+const NEAR_SPAN_PX := 200.0
+## v4: the far field's end (m): a retiring enemy is gone past it; nothing spawns beyond it.
+const FAR_SPAWN_M := 2600.0
 
 
 ## True when a rider at `power_w` raw watts with FTP `ftp_w` counts as building steam.

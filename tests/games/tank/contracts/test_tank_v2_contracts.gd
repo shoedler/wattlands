@@ -51,8 +51,8 @@ func test_turn_is_a_deliberate_intent_only_the_driver_owns() -> void:
 
 
 func test_evade_turn_and_time_up_events_are_appended_with_int_fields() -> void:
-	var n := TankEvents.TYPES.size()
-	assert_eq(TankEvents.TYPES.slice(n - 4, n - 1), ["evade", "turn", "time_up"] as Array[String])
+	var n := TankEvents.TYPES.find("evade")
+	assert_eq(TankEvents.TYPES.slice(n, n + 3), ["evade", "turn", "time_up"] as Array[String])
 	assert_eq(
 		TankEvents.evade(13, 3, true, 2), {"type": "evade", "id": 13, "e": 3, "ok": 1, "s": 2}
 	)
@@ -258,13 +258,13 @@ func test_every_crew_round_trips_through_json() -> void:
 func test_a_crew_4_snapshot_at_the_caps_fits_4_kb() -> void:
 	var s := TankFixtures.cap4()
 	assert_eq(s.riders.size(), 4)
-	assert_eq(s.stations.size(), 5, "v3: five seats")
+	assert_eq(s.stations.size(), 6, "v4: six seats")
 	assert_eq(s.hull.tank, TankIds.TANK_LANDSHIP)
 	var snap := TankSnapshot.encode(s)
 	assert_eq((snap["e"] as Array).size(), TankConst.MAX_ENEMIES)
 	assert_eq((snap["s"] as Array).size(), TankConst.MAX_SHELLS)
 	assert_eq((snap["r"] as Array).size(), 4)
-	assert_eq((snap["st"] as Array).size(), 5)
+	assert_eq((snap["st"] as Array).size(), 6)
 	assert_eq(TankSnapshotSchema.check(snap), "")
 	var size := TankSnapshotSchema.byte_size(snap)
 	gut.p("Crew-4 snapshot at the caps: %d bytes" % size)

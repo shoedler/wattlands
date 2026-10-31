@@ -121,7 +121,7 @@ func test_an_advance_is_done_at_the_halt_line_and_holds_until_min_s() -> void:
 
 
 func test_a_gun_line_is_done_when_every_gun_has_fallen() -> void:
-	var rig := TankRulesRig.new(1)
+	var rig := TankRulesRig.new(2)
 	rig.enter(GUN_LINE, 1.0)
 	var aux := TankAux.of(rig.state)
 	assert_false(rig.state.seg.objective_done)
@@ -212,7 +212,7 @@ func test_a_gun_line_overrun_falls_to_a_support_barrage_with_no_kill_credit() ->
 		assert_eq(k["by"], TankEvents.BY_BARRAGE)
 		assert_eq(k["s"], -1)
 	assert_eq(rig.state.score.crew_kills, 0, "a barrage kills nothing for the score")
-	assert_eq(rig.state.score.kills, [0, 0, 0, 0, 0, 0, 0] as Array[int])
+	assert_eq(rig.state.score.kills, [0, 0, 0, 0, 0, 0, 0, 0, 0] as Array[int])
 	assert_true(rig.state.gun_line.barrage)
 	assert_eq(rig.state.enemies.size(), 0)
 	assert_false(rig.state.gun_line.active)
@@ -356,6 +356,36 @@ func test_an_advance_encounter_spawns_when_the_tank_has_driven_that_far() -> voi
 	assert_eq(rig.state.enemies.size(), 0)
 	rig.run_until(func() -> bool: return rig.hull().distance_m >= 150.0, 60.0)
 	rig.run(0.2)
-	assert_eq(rig.state.enemies.size(), 1, "a light tank at 150 m")
-	assert_eq(rig.state.enemies[0].code, TankIds.enemy_code(TankIds.ENEMY_LIGHT))
+	assert_eq(rig.state.enemies.size(), 1, "a medium tank at 150 m")
+	assert_eq(rig.state.enemies[0].code, TankIds.enemy_code(TankIds.ENEMY_MEDIUM))
 	assert_eq(rig.state.seg.next_encounter, 1)
+
+
+## Only a human's own phase may hold the segment's end; a bot's or another segment's never does.
+func test_only_a_humans_phase_holds_the_segments_end() -> void:
+	var rig := TankRulesRig.new(2)
+	rig.state.riders[1].is_bot = true
+	var inputs := TankInputs.new()
+	inputs.phase.segment = ADVANCE
+	var human := _held(inputs, rig.state.riders[0].peer, ADVANCE)
+	var bot := _held(inputs, rig.state.riders[1].peer, ADVANCE)
+	assert_false(TankSegments.riders_may_end(rig.state, inputs), "a human inside its min_s")
+	human.phase_elapsed_s = human.phase_min_s
+	assert_true(TankSegments.riders_may_end(rig.state, inputs), "a bot inside its min_s does not")
+	assert_lt(bot.phase_elapsed_s, bot.phase_min_s)
+	rig.state.riders[1].is_bot = false
+	assert_false(TankSegments.riders_may_end(rig.state, inputs), "an Autopilot human does")
+	bot.segment = GUN_LINE
+	assert_true(TankSegments.riders_may_end(rig.state, inputs), "another segment does not")
+	assert_true(TankSegments.riders_may_end(rig.state, null), "true without inputs")
+
+
+func _held(inputs: TankInputs, peer: int, segment: int) -> TankRiderInput:
+	var ri := TankRiderInput.new()
+	ri.peer = peer
+	ri.segment = segment
+	ri.phase_open_ended = true
+	ri.phase_elapsed_s = 5.0
+	ri.phase_min_s = 30.0
+	inputs.riders.append(ri)
+	return ri

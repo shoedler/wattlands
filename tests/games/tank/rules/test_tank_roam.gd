@@ -2,7 +2,7 @@ extends GutTest
 ## Free roam's rules (brief 2.10, 4): the roam contents and their expansion, the seeded valley, the
 ## drive along it, the turn (ownership, the 8 s stop, the flip, the cooldown, the Autopilot at the
 ## ends), patrols and their caps, strongpoints and the engagement halt, time up and the overtime
-## bound, and the crew's points.
+## bound, and the crew's points. v4: nothing is ever behind the tank.
 
 const ROAMS: Array[String] = ["roam_10", "roam_20", "roam_30", "roam_45", "roam_60"]
 
@@ -240,35 +240,49 @@ func test_a_turn_stops_8_s_flips_at_its_midpoint_and_cools_down_30_s() -> void:
 	assert_eq(_count(rig.step(), TankEvents.TURN), 1, "turns again after 30 s")
 
 
-func test_a_turn_mirrors_the_field_so_every_map_point_keeps_its_place() -> void:
+func test_a_turn_clears_the_field_with_no_credit_and_mirrors_the_obstacles() -> void:
 	var rig := _rig(3)
 	_enter_roam(rig, 10.0)
 	rig.no_fire = true
 	rig.no_bow = true
-	var e := rig.spawn(TankIds.ENEMY_MEDIUM, 1, 200.0)
-	var before := TankRoam.map_of(rig.state, e.x_px + e.w * 0.5)
+	rig.state.roam.patrol_s = 1.0e9
+	rig.far(TankIds.ENEMY_MEDIUM)
+	rig.near(TankIds.ENEMY_RECON)
+	rig.state.roam.strong_id[0] = rig.far(TankIds.ENEMY_HEAVY).id
+	var aux := TankAux.of(rig.state)
+	TankEnemies.launch_far(rig.state, aux, 900.0, TankIds.SHELL_ENEMY, 1.0, 0.0, false, 0, 1, [])
+	var o := TankEncounters.add_obstacle(rig.state, TankIds.OBST_WIRE, rig.state.hull.x_px + 1000.0)
+	var at := TankRoam.map_of(rig.state, o.x_px + float(o.w) * 0.5)
+	var kills := rig.state.score.crew_kills
 	rig.send(_driver_peer(rig), {"k": "turn"})
 	rig.step()
 	rig.run(4.1)
 	assert_eq(rig.state.hull.dir, TankIds.DIR_LEFT)
-	assert_eq(e.side, -1, "ahead is behind after the turn")
-	var after := TankRoam.map_of(rig.state, e.x_px + e.w * 0.5)
-	assert_almost_eq(after, before, 6.0, "the enemy stays where it was on the road (it moves on)")
+	assert_eq(
+		rig.state.hull.facing, TankIds.FACE_RIGHT, "the turret keeps its facing: v4 has no rear"
+	)
+	assert_eq(rig.state.enemies.size(), 0, "every enemy gone")
+	assert_eq(rig.state.shells.size(), 0, "every shell gone")
+	assert_eq(rig.state.score.crew_kills, kills, "no credit")
+	assert_eq(rig.of_type(TankEvents.KILL).size(), 0)
+	assert_eq(rig.state.roam.strong_id[0], 0)
+	assert_between(rig.state.roam.patrol_s, 40.0, 110.1, "the next patrol's wait rolled anew")
+	var after := TankRoam.map_of(rig.state, o.x_px + float(o.w) * 0.5)
+	assert_almost_eq(after, at, 0.5, "the obstacle stays where it was on the road")
 
 
-func test_a_pursuer_turned_ahead_holds_off_the_hulls_nose() -> void:
+func test_a_turn_with_a_running_telegraph_leaves_no_evade_behind() -> void:
 	var rig := _rig(3)
 	_enter_roam(rig, 10.0)
 	rig.no_fire = true
-	rig.no_bow = true
-	var e := rig.spawn(TankIds.ENEMY_LIGHT, -1, -8.0)
-	e.hold_px = -8.0
+	var e := rig.far(TankIds.ENEMY_DESTROYER)
+	e.gun_s = 1.0
+	rig.run(0.2)
+	assert_eq(e.mode, TankIds.EM_TELEGRAPH)
 	rig.send(_driver_peer(rig), {"k": "turn"})
 	rig.step()
 	rig.run(4.1)
-	assert_eq(e.side, 1, "behind became ahead")
-	var min_hold := rig.state.content.num("enemies", "lanes.min_hold_px", 60.0)
-	assert_gte(e.hold_px, min_hold - 1e-6, "not the pursuer's -8 px inside the nose")
+	assert_eq(TankAux.of(rig.state).evade.size(), 0)
 
 
 func test_the_autopilot_turns_3_s_after_the_end() -> void:
@@ -358,6 +372,10 @@ func test_patrols_come_every_50_to_110_s_of_work_time_capped_at_6() -> void:
 	_enter_roam(rig)
 	rig.no_fire = true
 	rig.no_bow = true
+	# The tank stands in mid road, so no strongpoint or road end comes into it.
+	rig.p_eff[_driver_peer(rig)] = 0.0
+	rig.hull().hp_max = 1.0e7
+	rig.hull().hp = 1.0e7
 	var times := _patrol_times(rig, 1500.0)
 	assert_gt(times.size(), 8, "patrols keep coming")
 	assert_between(times[0], 50.0, 110.0 + 0.1, "the first one")
@@ -370,26 +388,52 @@ func test_patrols_come_every_50_to_110_s_of_work_time_capped_at_6() -> void:
 	assert_eq(retried, 0, "never sooner than 50 s")
 
 
-func test_patrols_enter_ahead_mostly() -> void:
-	var ahead := 0
-	var behind := 0
+func test_patrols_always_come_ahead_far_in_the_far_panel_and_near_from_the_bushes() -> void:
+	var far := 0
+	var near := 0
 	for s in range(1, 9):
 		var rig := _rig(3, "roam_30", s)
 		_enter_roam(rig)
 		rig.no_fire = true
 		rig.no_bow = true
+		rig.hull().hp_max = 1.0e7
+		rig.hull().hp = 1.0e7
 		var seen := {}
 		for i in roundi(700.0 / Wl.SIM_DT):
 			rig.step()
 			for e in rig.state.enemies:
-				if not seen.has(e.id) and not rig.state.roam.strong_id.has(e.id):
-					seen[e.id] = true
-					if e.side > 0:
-						ahead += 1
-					else:
-						behind += 1
-	assert_gt(ahead, behind * 2, "ahead (75%%) %d, behind %d" % [ahead, behind])
-	assert_gt(behind, 0)
+				assert_eq(e.side, 1, "nothing behind")
+				if seen.has(e.id):
+					continue
+				seen[e.id] = true
+				if e.is_near():
+					near += 1
+					assert_gt(TankEnemies.distance(rig.state, e), 0.0, "ahead of the front")
+					assert_eq(e.range_m, 0.0)
+				else:
+					far += 1
+					assert_between(e.range_m, 700.0, TankConst.FAR_SPAWN_M, "in the far panel")
+	assert_gt(far, 10, "far patrols")
+	assert_gt(near, 2, "near threats from the bushes")
+
+
+func test_with_too_little_road_ahead_a_patrol_waits() -> void:
+	var rig := _rig(3)
+	_enter_roam(rig)
+	rig.no_fire = true
+	rig.no_bow = true
+	rig.state.roam.map_m = rig.state.roam_map.hi_m - 100.0
+	rig.state.roam.patrol_s = 0.04
+	rig.step()
+	assert_eq(rig.state.enemies.size(), 0, "no road ahead: none")
+	assert_eq(rig.state.roam.patrols, 0)
+	assert_almost_eq(rig.state.roam.patrol_s, 10.0, 0.01, "valley.json patrols.retry_s")
+
+
+func test_patrol_counts_scale_with_difficulty() -> void:
+	var c := TankFixtures.content("roam_30")
+	assert_eq(c.crew_count(4, TankIds.TANK_LANDSHIP, 4, 1.3), 5, "Hard")
+	assert_eq(c.crew_count(4, TankIds.TANK_LANDSHIP, 4, 0.85), 3, "Easy")
 
 
 func test_no_heavy_patrol_before_10_min_and_the_weights_hold() -> void:
@@ -405,10 +449,11 @@ func test_no_heavy_patrol_before_10_min_and_the_weights_hold() -> void:
 	for i in 8000:
 		var k2 := TankRoam.roll_kind(rig.state)
 		counts[str(k2["id"])] = int(counts.get(str(k2["id"]), 0)) + 1
-	assert_between(counts["lights"] / 8000.0, 0.40, 0.50, "lights 45%")
-	assert_between(counts["medium"] / 8000.0, 0.25, 0.35, "medium 30%")
-	assert_between(counts["destroyer"] / 8000.0, 0.12, 0.18, "destroyer 15%")
-	assert_between(counts["heavy"] / 8000.0, 0.07, 0.13, "heavy 10%")
+	assert_between(counts["lights"] / 8000.0, 0.32, 0.40, "lights 45 of 125")
+	assert_between(counts["medium"] / 8000.0, 0.20, 0.28, "medium 30 of 125")
+	assert_between(counts["destroyer"] / 8000.0, 0.09, 0.15, "destroyer 15 of 125")
+	assert_between(counts["heavy"] / 8000.0, 0.05, 0.11, "heavy 10 of 125")
+	assert_between(counts["ambush"] / 8000.0, 0.16, 0.24, "ambush 25 of 125")
 	rig.spawn(TankIds.ENEMY_HEAVY, 1, 200.0)
 	for i in 500:
 		assert_ne(str(TankRoam.roll_kind(rig.state)["id"]), "heavy", "one heavy at a time")
@@ -419,24 +464,28 @@ func test_a_strongpoint_halts_the_tank_and_returns_10_min_after_it_falls() -> vo
 	_enter_roam(rig)
 	rig.no_fire = true
 	rig.no_bow = true
+	rig.hull().hp_max = 1.0e7
+	rig.hull().hp = 1.0e7
 	rig.state.roam.patrol_s = 1.0e9
 	var spot := rig.state.roam_map.strongpoints[0]
-	rig.state.roam.map_m = spot - 120.0
+	rig.state.roam.map_m = spot - 560.0
+	rig.step()
+	assert_eq(rig.state.roam.strong_id[0], 0, "past spawn_m ahead: not yet")
 	rig.run_until(func() -> bool: return rig.state.roam.engaging, 60.0)
 	assert_true(rig.state.roam.engaging, "the tank engages")
+	assert_between(spot - rig.state.roam.map_m, 480.0, 500.0, "spawn_m ahead of it")
 	var id := rig.state.roam.strong_id[0]
 	var e := rig.state.enemy(id)
 	assert_not_null(e, "the strongpoint stands on the field")
-	assert_eq(e.code, TankIds.enemy_code(TankIds.ENEMY_DUGIN))
-	var front := rig.state.hull.x_px + rig.state.hull.hull_w
-	assert_almost_eq(e.x_px - front, 180.0, 1.5, "halted engage_px short of it")
-	assert_almost_eq(TankRoam.map_of(rig.state, e.x_px + e.w * 0.5), spot, 0.5, "at its spot")
+	assert_eq(e.code, TankIds.enemy_code(TankIds.ENEMY_HEAVY), "a holding force of one heavy")
+	assert_false(e.gun_line)
+	assert_between(e.range_m, 1300.0, 2300.0, "in the far panel")
 	rig.run(5.0)
 	assert_eq(rig.state.hull.speed_mps, 0.0, "holds while it stands")
 	var before := rig.state.roam.points
 	TankShells.kill_enemy(rig.state, TankAux.of(rig.state), e, TankEvents.BY_SHELL, 0, rig.events)
 	TankRoam.post(rig.state, TankAux.of(rig.state), [TankEvents.kill(id, e.code, 0, 0)])
-	assert_eq(rig.state.roam.points - before, 20, "a dug-in is 20 points")
+	assert_eq(rig.state.roam.points - before, 60, "a heavy's points")
 	assert_true(rig.state.roam.strong_down(0))
 	rig.run(5.0)
 	assert_false(rig.state.roam.engaging)
@@ -449,6 +498,29 @@ func test_a_strongpoint_halts_the_tank_and_returns_10_min_after_it_falls() -> vo
 	rig.state.roam.map_m = spot - 40.0
 	rig.run(2.0)
 	assert_ne(rig.state.roam.strong_id[0], 0, "back after its 10 min")
+
+
+func test_a_strongpoint_behind_the_tank_never_spawns() -> void:
+	var rig := _rig(3)
+	_enter_roam(rig)
+	rig.no_fire = true
+	rig.no_bow = true
+	rig.state.roam.patrol_s = 1.0e9
+	var spot := rig.state.roam_map.strongpoints[0]
+	rig.state.roam.map_m = spot + 5.0
+	rig.run(3.0)
+	assert_eq(rig.state.roam.strong_id[0], 0, "just passed: behind")
+	assert_eq(rig.state.enemies.size(), 0)
+
+
+func test_no_strongpoint_after_time_up() -> void:
+	var rig := _rig(3, "roam_10")
+	_enter_roam(rig, 301.0)
+	rig.state.roam.patrol_s = 1.0e9
+	assert_true(rig.state.roam.time_up)
+	rig.state.roam.map_m = rig.state.roam_map.strongpoints[0] - 100.0
+	rig.run(1.0)
+	assert_eq(rig.state.roam.strong_id[0], 0)
 
 
 func test_a_heavy_in_range_halts_the_tank() -> void:
@@ -465,6 +537,13 @@ func test_a_heavy_in_range_halts_the_tank() -> void:
 	rig.run(3.0)
 	assert_false(rig.state.roam.engaging)
 	assert_gt(rig.state.hull.speed_mps, 0.0)
+	var far_off := rig.far(TankIds.ENEMY_HEAVY, 2100.0)
+	rig.run(1.0)
+	assert_false(rig.state.roam.engaging, "past engage_heavy_m it rolls on")
+	far_off.hold_m = 1900.0
+	far_off.range_m = 1900.0
+	rig.run(1.0)
+	assert_true(rig.state.roam.engaging)
 
 
 # --- Time up -------------------------------------------------------------------------------------
@@ -491,6 +570,8 @@ func test_a_fight_runs_into_overtime_but_never_past_max_s() -> void:
 	_enter_roam(rig, 295.0)
 	rig.no_fire = true
 	rig.no_bow = true
+	rig.hull().hp_max = 1.0e7
+	rig.hull().hp = 1.0e7
 	rig.state.roam.patrol_s = 1.0e9
 	rig.spawn(TankIds.ENEMY_MEDIUM, 1, 200.0)
 	rig.run(10.0)
@@ -502,6 +583,26 @@ func test_a_fight_runs_into_overtime_but_never_past_max_s() -> void:
 	rig.run(15.0)
 	assert_true(rig.state.seg.objective_done, "cut 1 s before max_s")
 	assert_false(rig.state.roam.overtime)
+
+
+func test_a_fight_is_a_far_enemy_in_fight_m_not_retiring_or_a_near_threat() -> void:
+	var rig := _rig(3)
+	_enter_roam(rig, 10.0)
+	var aux := TankAux.of(rig.state)
+	rig.state.enemies.clear()
+	assert_false(TankRoam.fighting(rig.state, aux))
+	var e := rig.far(TankIds.ENEMY_MEDIUM, 1500.0)
+	assert_true(TankRoam.fighting(rig.state, aux))
+	e.range_m = 2300.0
+	assert_false(TankRoam.fighting(rig.state, aux), "beyond fight_m")
+	e.range_m = 1500.0
+	aux.enemy_leaving[e.id] = true
+	assert_false(TankRoam.fighting(rig.state, aux), "retiring")
+	rig.state.enemies.clear()
+	var n := rig.near(TankIds.ENEMY_TANKETTE)
+	assert_true(TankRoam.fighting(rig.state, aux))
+	aux.enemy_leaving[n.id] = true
+	assert_false(TankRoam.fighting(rig.state, aux), "fleeing")
 
 
 func test_a_whole_roam_plays_to_the_cool_down_and_finishes_time_up() -> void:
@@ -527,8 +628,9 @@ func test_points_per_kill_evade_breakdown_and_kilometre() -> void:
 		TankIds.ENEMY_LIGHT: 10,
 		TankIds.ENEMY_MEDIUM: 25,
 		TankIds.ENEMY_DESTROYER: 30,
-		TankIds.ENEMY_DUGIN: 20,
 		TankIds.ENEMY_HEAVY: 60,
+		TankIds.ENEMY_RECON: 8,
+		TankIds.ENEMY_TANKETTE: 6,
 	}
 	for type: String in cases:
 		var before := r.points
@@ -543,6 +645,8 @@ func test_points_per_kill_evade_breakdown_and_kilometre() -> void:
 	assert_eq(r.points - b2, 5, "a shot not evaded scores nothing")
 	TankRoam.post(rig.state, aux, [TankEvents.breakdown()])
 	assert_eq(r.points - b2, -35, "a breakdown")
+	TankRoam.post(rig.state, aux, [TankEvents.tank_lost(1, TankIds.SEG_ROAM, 1)])
+	assert_eq(r.points - b2, -75, "a lost tank costs the same")
 	var b3 := r.points
 	r.work_m = 2999.0
 	TankRoam.post(rig.state, aux, [])

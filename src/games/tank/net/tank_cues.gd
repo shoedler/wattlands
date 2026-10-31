@@ -16,6 +16,8 @@ extends RefCounted
 ## Free roam (brief 2.10, 3.6): "Turn around" to the Drive rider when the tank
 ## stands at a turning place, "Engage" to everyone when it halts for a strongpoint or a heavy tank,
 ## "Turning round" on a turn and "Time up" when the roam phase's min_s passed.
+## v4: to the whole crew, "Stage restarts" after a tow, "Ambush: Secondaries" when a near threat bursts
+## from the bushes, "It got away" when one flees (the HUD's plate shows TANK LOST itself).
 
 const PROMPT_NONE := ""
 const PROMPT_EVADE := "evade"
@@ -66,12 +68,16 @@ static func prompt_of(state: TankState, rider: TankRiderState) -> String:
 	return PROMPT_NONE
 
 
-## True while some enemy or the Behemoth shows a telegraph (from the replicated telegraph times).
+## True while some enemy or the Behemoth shows a telegraph (from the replicated telegraph times), or
+## v4: an evadable shell is still in the air (a surge can make it miss until it lands).
 static func telegraph_running(state: TankState) -> bool:
 	if state.boss.telegraph_s > 0.0:
 		return true
 	for e in state.enemies:
 		if e.telegraph_s > 0.0:
+			return true
+	for s in state.shells:
+		if s.evadable and s.left_s > 0.0:
 			return true
 	return false
 
@@ -186,6 +192,12 @@ func on_event(state: TankState, e: Dictionary) -> void:
 			_toast("TANK_TOAST_TURNING")
 		TankEvents.TIME_UP:
 			_toast("TANK_TOAST_TIME_UP")
+		TankEvents.STAGE_RESTART:
+			_toast("TANK_TOAST_RESTART")
+		TankEvents.AMBUSH:
+			_toast("TANK_TOAST_AMBUSH")
+		TankEvents.ESCAPED:
+			_toast("TANK_TOAST_ESCAPED")
 
 
 func _segment_banner(state: TankState, index: int) -> void:

@@ -8,10 +8,10 @@ const KIND_ENEMY := 0
 const KIND_BOSS := 1
 const KIND_OBSTACLE := 2
 
-## Auto-aim tiers, lower first: a destroyer in its telegraph, dug-in, heavy, medium (or a
+## Auto-aim tiers, lower first: a destroyer in its telegraph, a Behemoth's bogie, heavy, medium (or a
 ## destroyer not telegraphing), light, obstacle, the depot's drill wrecks.
 const TIER_TELEGRAPH := 0
-const TIER_DUGIN := 1
+const TIER_BOGIE := 1
 const TIER_HEAVY := 2
 const TIER_MEDIUM := 3
 const TIER_LIGHT := 4
@@ -32,8 +32,21 @@ var obstacle: TankObstacleState = null
 var part: int = -1
 ## Shells pass through it harmlessly and it never counts toward the score (a drill wreck).
 var drill: bool = false
+## v4: stands in the far frame (range_m, hit_half_m; its rect is empty).
+var far: bool = false
+## v4: a near threat (recon, tankette); the bow guns' target, never the main gun's.
+var near: bool = false
+## v4: far targets: metres from the hull's front, the rate it changes at, half its hit window.
+var range_m: float = 0.0
+var rate_mps: float = 0.0
+var hit_half_m: float = 0.0
 
 
 ## The point the gun aims at: the box centre.
 func center() -> Vector2:
 	return rect.get_center()
+
+
+## v4: what target lists sort on: range_m when far (its rect is empty), else the box centre's x.
+func sort_key() -> float:
+	return range_m if far else center().x

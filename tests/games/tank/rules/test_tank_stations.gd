@@ -30,7 +30,7 @@ func _quiet(crew: int, index: int = ADVANCE, into_s: float = 5.0) -> TankRulesRi
 # --- Dynamo --------------------------------------------------------------------------------------
 
 
-func test_the_bank_gains_one_unit_per_150_joules_of_p_eff_in_band() -> void:
+func test_the_bank_gains_one_unit_per_j_per_unit_joules_of_p_eff_in_band() -> void:
 	var rig := _quiet(2)
 	var dy := rig.dynamo()
 	assert_eq(dy.peer, 2)
@@ -38,7 +38,9 @@ func test_the_bank_gains_one_unit_per_150_joules_of_p_eff_in_band() -> void:
 	rig.run(10.0)
 	assert_true(dy.in_band)
 	# Slot 1's FTP is 220 W: 55% = 121 W, P_eff 137.5 W.
-	assert_almost_eq(dy.bank, 40.0 + 137.5 * 10.0 / 150.0, 0.1)
+	var joules := rig.content.num("tanks", "dynamo.j_per_unit", 0.0)
+	assert_between(joules, 100.0, 225.0, "150 at the start, tuned inside +-50%")
+	assert_almost_eq(dy.bank, 40.0 + 137.5 * 10.0 / joules, 0.1)
 
 
 func test_the_bank_does_not_charge_out_of_band_or_on_reserve() -> void:
@@ -80,6 +82,7 @@ func test_elevation_costs_half_a_unit_per_degree_and_runs_at_8_degrees_a_second(
 	var dy := rig.dynamo()
 	dy.bank = 100.0
 	rig.power_w[2] = 50.0
+	rig.hull().elev_deg = 0.0
 	rig.hull().elev_target_deg = 20.0
 	rig.run(1.0)
 	assert_almost_eq(rig.hull().elev_deg, 8.0, 0.25, "8 degrees/s at 50 units or more")
@@ -94,37 +97,11 @@ func test_elevation_slows_linearly_to_2_degrees_a_second_at_an_empty_bank() -> v
 		var rig := _quiet(2)
 		rig.dynamo().bank = bank
 		rig.power_w[2] = 50.0
+		rig.hull().elev_deg = 0.0
 		rig.hull().elev_target_deg = 30.0
 		rig.run(1.0)
 		# The bank pays while it moves, so allow for the speed dropping a little during the second.
 		assert_almost_eq(rig.hull().elev_deg, rows[bank], 0.7, "bank %.0f" % bank)
-
-
-func test_a_traverse_costs_15_units_and_takes_2_5_s_at_a_full_bank_8_s_at_empty() -> void:
-	var rig := _quiet(2)
-	var dy := rig.dynamo()
-	dy.bank = 100.0
-	rig.power_w[2] = 50.0
-	assert_eq(rig.hull().facing, TankIds.FACE_RIGHT)
-	rig.send(2, {"k": "traverse"})
-	rig.run(0.1)
-	assert_almost_eq(dy.bank, 85.0, 0.01)
-	assert_almost_eq(rig.hull().traverse_s, 2.5 - 0.05, 0.06)
-	rig.run(2.6)
-	assert_eq(rig.hull().facing, TankIds.FACE_LEFT, "the facing flips when the traverse completes")
-	assert_eq(rig.hull().traverse_s, 0.0)
-	var empty := _quiet(2)
-	empty.dynamo().bank = 0.0
-	empty.power_w[2] = 50.0
-	empty.send(2, {"k": "traverse"})
-	empty.run(0.1)
-	assert_almost_eq(empty.hull().traverse_s, 8.0 - 0.05, 0.06)
-	var mid := _quiet(2)
-	mid.dynamo().bank = 25.0
-	mid.power_w[2] = 50.0
-	mid.send(2, {"k": "traverse"})
-	mid.run(0.1)
-	assert_almost_eq(mid.hull().traverse_s, 5.25 - 0.05, 0.06, "linear between 0 and 50 units")
 
 
 func test_the_depot_fills_the_bank_on_a_script() -> void:
@@ -140,6 +117,7 @@ func test_rescue_stalls_the_dynamo_the_turret_freezes_and_the_bank_holds() -> vo
 	var dy := rig.dynamo()
 	dy.bank = 50.0
 	rig.rescue[2] = true
+	rig.hull().elev_deg = 0.0
 	rig.hull().elev_target_deg = 10.0
 	rig.spawn(TankIds.ENEMY_MEDIUM, 1, 300.0)
 	rig.run(5.0)
@@ -376,14 +354,15 @@ func test_the_gun_chambers_the_oldest_shell_in_1_s_at_the_loading_elevation() ->
 	rig.set_rack(0)
 	TankAux.of(rig.state).rack_types.append_array([TankIds.SHELL_LIGHT, TankIds.SHELL_HEAVY])
 	st.rack = 2
-	rig.hull().elev_deg = 8.0
-	rig.hull().elev_target_deg = 8.0
+	var load_elev := rig.content.num("tanks", "gun.load_elev_deg")
+	rig.hull().elev_deg = load_elev + 8.0
+	rig.hull().elev_target_deg = load_elev + 8.0
 	rig.run(0.5)
-	assert_lt(rig.hull().elev_deg, 8.0, "back down to the loading elevation")
+	assert_lt(rig.hull().elev_deg, load_elev + 8.0, "back down to the loading elevation")
 	assert_false(st.chamber)
 	assert_almost_eq(st.chamber_s, 1.0, 1e-6, "the chambering waits for the elevation")
 	rig.run(0.6)
-	assert_almost_eq(rig.hull().elev_deg, 0.0, 1e-6, "at 8 degrees a second")
+	assert_almost_eq(rig.hull().elev_deg, load_elev, 1e-6, "at 8 degrees a second")
 	rig.run(0.7)
 	assert_eq(rig.hull().loaded, TankIds.SHELL_NONE, "1 s of chambering")
 	rig.run(0.5)

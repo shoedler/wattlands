@@ -1,6 +1,7 @@
 {
-	"_doc": "Ashfall Road (brief 2.4, P0). Owner: rules. Schema: TankContentSchema.validate_mission. Segments in plan order; every one is a lap-true plan phase (TankPlanBuilder). terrain: [distance_m, grade_pct] points, the course_profile format, interpolated linearly by the tank's distance into the segment and held past the last point; grades are before difficulty. encounters trigger when the tank has driven at_m metres into the Advance; obstacles stand at at_m in world space; gun-line and boss enemies are fixed in world space; a gun-line at_px is the distance from the halted hull's front to the enemy's near edge (\"edge\": at the screen edge), clamped like a held distance (enemies.json clamp). Enemy counts scale by the tank's enemy_scale (rounded, at least 1). G2 balance iteration 1 (docs/decisions/tank.md): Advance lengths 1100 / 1200 / 950 m, stages 2 and 3 with one medium (brief 2), gun line 1 with 4 dug-in and a medium, gun line 2 with a third dug-in, the Behemoth 560 px out, end_hold_s on the boss (seconds the director waits after the objective is done before end_phase: the Behemoth's death beat, so the loader's last shell keeps its 6 s at grade 0). G1: Advance lengths 1100 / 1100 / 1000 m (brief 1300 / 1300 / 1400; the profiles and trigger points scale with them) so every tank finishes inside max_s; gun-line at_px keep every gun inside the gun's reach for all three tanks (the gun cannot depress onto anything nearer than about 230 px from the muzzle; tested); the Behemoth starts 470 px from the left edge, past the Citadel's stop line. v2 rules (P4): gun-line at_px moved in for the shorter field ahead of the kit hulls (TankEnemies.reserve_hold spreads them over depth lanes); gun line 1 five dug-ins and a medium, gun line 2 a heavy and four single dug-ins, gun line 3 a heavy, one dug-in and a destroyer; stage 1's Advance gains a rear light (a flank shot no gun reaches, so its sprint prompt always comes: T6) and a destroyer; end_hold_s 7.5. Integration polish (docs/decisions/tank.md 2026-10-27 integration polish ADR): gun line 1's dug-ins are two entries of 2 (4 for every tank), gun line 2's single dug-ins stand at 110-170 px (no splash onto the heavy). v3 rules (2026-10-28, docs/decisions/tank.md v3 rules ADR): rotation is gone (seat choice replaces it); Ashfall Road keeps its segments, gun lines and the Behemoth, through the forest: every backdrop is a forest variant or a little base (TankIds.BACKDROPS: the depot, gun lines 1 and 2 and the Behemoth's gate at a base) with forest place names; enemy counts scale with the crew size (enemies.json crew_count_scale): the segment's total, taken from the lists in order (TankEncounters.crew_counts), so each list puts first what the smallest crews must meet; v3 solo balance: an entry (enemy, gun-line gun or barricade) with min_crew is there only for crews of that size and up (the barricades of Advances 1 and 2, the dug-ins of gun lines 2 and 3 and one of gun line 1's, gun line 3's destroyer: a solo rider meets a medium and the rear light per Advance, two dug-ins at gun line 1 and the heavy alone at gun lines 2 and 3), crews 2-4 meeting the same enemies as before (Advance 3: its medium and the rear light, a telegraphed flank shot, ahead of the second light and the destroyer; gun lines 1 and 2 list their dug-ins as one entry of 4). The Behemoth starts 500 px from the left edge (560): 188 px off the v3 hull's front, so with its 12 px push-backs its turret stays inside the gun's reach (about 240 px). Every Advance and gun line holds 2 s after its objective is done (end_hold_s 2): the Autopilot's seating then moves riders for the next segment, landing at the end (v3 TankAutopilot.seat_intent).",
+	"_doc": "Ashfall Road (brief 2.4; v4: docs/decisions/tank.md). Owner: rules. Schema: TankContentSchema.validate_mission. Segments in plan order; every one is a lap-true plan phase (TankPlanBuilder). terrain: [distance_m, grade_pct] points, the course_profile format, interpolated linearly by the tank's distance into the segment and held past the last point; grades are before difficulty. encounters trigger when the tank has driven at_m metres into the Advance (far kinds in the far panel, near kinds from the bushes); obstacles stand at at_m in world space. A gun_line segment is a holding action in the UI: enemies {enemy, count, hold_m: [..]} on the move at long range, near {at_s, enemy, count} near threats by seconds into it; the boss segment has a near list too. Counts scale with the crew and difficulty (TankEncounters.crew_counts: the segment's total, taken from the lists in order, so each list puts first what the smallest crews must meet; min_crew: the entry is there only for crews of that size and up). end_hold_s: seconds the director waits after the objective is done before end_phase (the Autopilot's seating moves riders for the next segment; the Behemoth's death beat).",
 	"id": "ashfall_road",
+	"difficulty_default": "normal",
 	"label": "TANK_CONTENT_ASHFALL_ROAD",
 	"plan_table": "plans",
 	"segments": [
@@ -35,11 +36,13 @@
 			"length_m": 1100,
 			"terrain": [[0, 0], [130, 1.5], [250, 3], [380, 1], [510, -2], [630, 0], [760, 2.5], [890, 1], [1020, -1], [1100, 0]],
 			"encounters": [
-				{"at_m": 130, "enemy": "light", "count": 1, "from": "front"},
-				{"at_m": 250, "enemy": "light", "count": 1, "from": "rear"},
-				{"at_m": 360, "enemy": "medium", "count": 1, "from": "front"},
-				{"at_m": 600, "enemy": "destroyer", "count": 1, "from": "front"},
-				{"at_m": 830, "enemy": "light", "count": 1, "from": "front"}
+				{"at_m": 130, "enemy": "medium", "count": 1},
+				{"at_m": 250, "enemy": "recon", "count": 1, "min_crew": 2},
+				{"at_m": 360, "enemy": "light", "count": 1},
+				{"at_m": 600, "enemy": "destroyer", "count": 1},
+				{"at_m": 700, "enemy": "tankette", "count": 1, "min_crew": 2},
+				{"at_m": 720, "enemy": "destroyer", "count": 1, "min_crew": 4},
+				{"at_m": 830, "enemy": "light", "count": 1}
 			],
 			"obstacles": [
 				{"at_m": 640, "type": "wire", "min_crew": 2}
@@ -54,14 +57,18 @@
 			"min_s": 60,
 			"max_s": 180,
 			"end_hold_s": 2,
-			"label": "TANK_PHASE_GUN_LINE_1",
+			"label": "TANK_PHASE_HOLD_1",
 			"name": "TANK_PLACE_FOREST_POST",
 			"backdrop": "base",
 			"enemies": [
-				{"enemy": "dugin", "count": 2, "at_px": [110, 140]},
-				{"enemy": "dugin", "count": 1, "at_px": [230], "min_crew": 2},
-				{"enemy": "dugin", "count": 1, "at_px": [170]},
-				{"enemy": "medium", "count": 1, "at_px": [230]}
+				{"enemy": "medium", "count": 2, "hold_m": [1200, 1500]},
+				{"enemy": "medium", "count": 1, "hold_m": [1350], "min_crew": 2},
+				{"enemy": "light", "count": 1, "hold_m": [900], "min_crew": 2},
+				{"enemy": "light", "count": 1, "hold_m": [1050], "min_crew": 3}
+			],
+			"near": [
+				{"at_s": 15, "enemy": "tankette", "count": 1, "min_crew": 3},
+				{"at_s": 40, "enemy": "recon", "count": 1, "min_crew": 3}
 			],
 			"props": [
 				{"type": "tank_traps", "at_px": 40}
@@ -92,12 +99,14 @@
 			"length_m": 1200,
 			"terrain": [[0, 0], [142, -2], [273, -3], [415, -1], [513, 0], [600, 0], [742, 3], [873, 5], [1015, 4], [1113, 2], [1200, 0]],
 			"encounters": [
-				{"at_m": 109, "enemy": "medium", "count": 1, "from": "front"},
-				{"at_m": 349, "enemy": "light", "count": 1, "from": "rear"},
-				{"at_m": 589, "enemy": "destroyer", "count": 1, "from": "front"}
+				{"at_m": 109, "enemy": "medium", "count": 1},
+				{"at_m": 349, "enemy": "recon", "count": 1, "min_crew": 2},
+				{"at_m": 589, "enemy": "destroyer", "count": 1},
+				{"at_m": 700, "enemy": "destroyer", "count": 1, "min_crew": 4},
+				{"at_m": 800, "enemy": "light", "count": 1}
 			],
 			"obstacles": [
-				{"at_m": 971, "type": "wreck", "min_crew": 2}
+				{"at_m": 971, "type": "wreck", "min_crew": 3}
 			]
 		},
 		{
@@ -109,12 +118,18 @@
 			"min_s": 60,
 			"max_s": 180,
 			"end_hold_s": 2,
-			"label": "TANK_PHASE_GUN_LINE_2",
+			"label": "TANK_PHASE_HOLD_2",
 			"name": "TANK_PLACE_LOGGING_CAMP",
 			"backdrop": "base",
 			"enemies": [
-				{"enemy": "heavy", "count": 1, "at_px": [230]},
-				{"enemy": "dugin", "count": 4, "at_px": [110, 130, 150, 170], "min_crew": 2}
+				{"enemy": "heavy", "count": 1, "hold_m": [1500]},
+				{"enemy": "medium", "count": 2, "hold_m": [1150, 1450], "min_crew": 2},
+				{"enemy": "medium", "count": 1, "hold_m": [1300], "min_crew": 3},
+				{"enemy": "medium", "count": 1, "hold_m": [1550], "min_crew": 3}
+			],
+			"near": [
+				{"at_s": 20, "enemy": "recon", "count": 1, "min_crew": 3},
+				{"at_s": 55, "enemy": "tankette", "count": 1, "min_crew": 3}
 			],
 			"props": [
 				{"type": "tank_traps", "at_px": 40}
@@ -145,10 +160,12 @@
 			"length_m": 950,
 			"terrain": [[0, 1], [133, 3], [238, 6], [342, 4], [446, -1], [551, -3], [646, 0], [741, 5], [846, 6], [950, 2]],
 			"encounters": [
-				{"at_m": 95, "enemy": "medium", "count": 1, "from": "front"},
-				{"at_m": 266, "enemy": "light", "count": 1, "from": "rear"},
-				{"at_m": 475, "enemy": "light", "count": 1, "from": "front"},
-				{"at_m": 608, "enemy": "destroyer", "count": 1, "from": "front"}
+				{"at_m": 95, "enemy": "medium", "count": 1},
+				{"at_m": 266, "enemy": "tankette", "count": 1, "min_crew": 2},
+				{"at_m": 475, "enemy": "light", "count": 1},
+				{"at_m": 608, "enemy": "destroyer", "count": 1},
+				{"at_m": 690, "enemy": "destroyer", "count": 1, "min_crew": 4},
+				{"at_m": 760, "enemy": "recon", "count": 1, "min_crew": 2}
 			],
 			"obstacles": []
 		},
@@ -161,13 +178,18 @@
 			"min_s": 60,
 			"max_s": 180,
 			"end_hold_s": 2,
-			"label": "TANK_PHASE_GUN_LINE_3",
+			"label": "TANK_PHASE_HOLD_3",
 			"name": "TANK_PLACE_RIDGE",
 			"backdrop": "forest_birches",
 			"enemies": [
-				{"enemy": "heavy", "count": 1, "at_px": [230]},
-				{"enemy": "dugin", "count": 1, "at_px": [140], "min_crew": 2},
-				{"enemy": "destroyer", "count": 1, "at_px": ["edge"], "min_crew": 2}
+				{"enemy": "heavy", "count": 1, "hold_m": [1600]},
+				{"enemy": "light", "count": 1, "hold_m": [1000], "min_crew": 2},
+				{"enemy": "destroyer", "count": 1, "hold_m": [1900], "min_crew": 2},
+				{"enemy": "medium", "count": 1, "hold_m": [1400], "min_crew": 3}
+			],
+			"near": [
+				{"at_s": 25, "enemy": "recon", "count": 1, "min_crew": 3},
+				{"at_s": 60, "enemy": "recon", "count": 1, "min_crew": 3}
 			],
 			"props": [
 				{"type": "tank_traps", "at_px": 40}
@@ -195,7 +217,12 @@
 			"name": "TANK_PLACE_IRON_GATE",
 			"backdrop": "base",
 			"end_hold_s": 7.5,
-			"boss": {"start_left_px": 500}
+			"boss": {"start_left_px": 500},
+			"near": [
+				{"at_s": 30, "enemy": "tankette", "count": 1, "min_crew": 3},
+				{"at_s": 90, "enemy": "recon", "count": 1, "min_crew": 3},
+				{"at_s": 150, "enemy": "tankette", "count": 1, "min_crew": 3}
+			]
 		}
 	],
 	"cooldown": {

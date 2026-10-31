@@ -78,6 +78,9 @@ func _init(
 	var rng := RandomNumberGenerator.new()
 	rng.seed = rng_seed
 	state = TankRules.new_state(content, slots, p_mission, rng)
+	# The gun rests at its loading elevation, so a test's bank numbers hold only what the test does.
+	state.hull.elev_deg = content.num("tanks", "gun.load_elev_deg", 0.0)
+	state.hull.elev_target_deg = state.hull.elev_deg
 
 
 func segs() -> Array:
@@ -335,14 +338,41 @@ func peer_of(engine: String) -> int:
 	return st.peer if st != null else 0
 
 
-## An enemy placed at distance `dist` from the hull's nearer end (a held position), full HP.
-func spawn(type: String, side: int = 1, dist: float = 200.0, fixed: bool = false) -> TankEnemyState:
+## A far enemy holding at `range_m` (0: its kind's nearest hold), full HP. Its timed shifts are off
+## and it already holds: a test wants it to stand still unless it says otherwise.
+func far(type: String, range_m: float = 0.0) -> TankEnemyState:
 	var aux := TankAux.of(state)
-	var e := TankEnemies.spawn(state, aux, type, side, dist, fixed, false, -1)
+	var span: Array = content.enemy_def(type)["hold_m"]
+	var at := range_m if range_m > 0.0 else float(span[0])
+	var e := TankFar.spawn(state, aux, type, at, false, -1)
 	e.mode = TankIds.EM_HOLD
-	e.hold_px = TankEnemies.clamp_hold(state, e.w, side, dist)
-	TankEnemies.place(state, aux, e, e.hold_px)
+	e.range_m = at
+	e.weave = 0.0
+	aux.enemy_shift.erase(e.id)
 	return e
+
+
+## A near threat `dist` px off the hull's front, paused for good (until it flees), full HP.
+func near(type: String, dist: float = 60.0) -> TankEnemyState:
+	var aux := TankAux.of(state)
+	var quiet: Array[Dictionary] = []
+	var e := TankNear.spawn(state, aux, type, -1, quiet)
+	TankEnemies.place(state, aux, e, dist)
+	e.mode = TankIds.EM_PAUSE
+	aux.near_left[e.id] = 1.0e6
+	return e
+
+
+## An enemy on the field, by frame: a far kind holds at `dist` metres or its nearest hold, a near kind
+## pauses `dist` px off the front. (`_side` and `_fixed` are gone from the rules: nothing stands behind
+## the hull, no gun is stationary.)
+func spawn(
+	type: String, _side: int = 1, dist: float = 200.0, _fixed: bool = false
+) -> TankEnemyState:
+	if TankIds.NEAR_KINDS.has(type):
+		return near(type, dist)
+	var span: Array = content.enemy_def(type)["hold_m"]
+	return far(type, maxf(dist, float(span[0])))
 
 
 ## Chambers a round of `type` (v3: in the breech, ready to fire).

@@ -1,5 +1,5 @@
 # tests/games/tank/sim/run_sims.ps1: the PowerShell twin of run_sims.sh (Windows PowerShell 5.1). Same
-# scenarios (s1-s7, s9 to s13), same report names in build/tank/sims, same checker.
+# scenarios (s1-s7, s9 to s18), same report names in build/tank/sims, same checker.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tests/games/tank/sim/run_sims.ps1 [s1 s2 ...]
 #
@@ -20,11 +20,17 @@ $timeout = if ($env:TANK_GODOT_TIMEOUT) { $env:TANK_GODOT_TIMEOUT } else { '1800
 New-Item -ItemType Directory -Force $out | Out-Null
 
 $Erg = 'erg:compliance=1.0'
-$DynamoDrop = 'erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=30'
+$DynamoDrop = 'erg+cadence_drop:rpm=30,at_phase=1,after_s=20,at_target_pct=60,for_s=30'
 $Sprinter = 'intervals:on_w=300,off_w=150,on_s=12,off_s=28,rpm=100'
 $S9Sprinter = 'intervals:on_w=300,off_w=150,on_s=20,off_s=17,rpm=100'
-$Stop = 'erg+cadence_drop:rpm=0,at_phase=2,at_target_pct=60,for_s=60'
+$Stop = 'erg+cadence_drop:rpm=0,at_phase=1,after_s=20,at_target_pct=60,for_s=60'
 $ArcDrop = 'erg+cadence_drop:rpm=30,at_phase=1,at_target_pct=60,for_s=30'
+$Idle = 'const:w=10,rpm=25'
+# The lobby's difficulty option (v4). Windows PowerShell 5.1 strips bare double quotes from a native argument, so they
+# are written escaped here; the escapes are what reach the child's command line.
+$Easy = '--options={\"difficulty\":\"easy\"}'
+$Normal = '--options={\"difficulty\":\"normal\"}'
+$Hard = '--options={\"difficulty\":\"hard\"}'
 
 function Invoke-Sim([string]$Name, [string[]]$SimArgs) {
     Write-Host "== $Name"
@@ -42,7 +48,8 @@ function Invoke-S1Run([string]$Crew, [string]$Seed) {
 
 function Invoke-S1 { foreach ($c in 1, 2, 3, 4) { foreach ($s in $seeds) { Invoke-S1Run $c $s } } }
 function Invoke-S2 {
-    Invoke-Sim 's2_c3_zero' @('--content=ashfall_road', '--players=3', '--bots=0', '--rider=zero', '--seed=1')
+    Invoke-Sim 's2_c3_zero' @('--content=ashfall_road', '--players=3', '--bots=0', '--rider=zero', '--seed=1', '--max-sim-seconds=300')
+    Invoke-Sim 's2_c3_idle' @('--content=ashfall_road', '--players=3', '--bots=0', "--rider=$Idle", '--seed=1')
     Invoke-Sim 's2_c1_zero' @('--content=ashfall_road', '--players=1', '--bots=0', '--rider=zero', '--seed=1')
 }
 function Invoke-S3 {
@@ -93,7 +100,43 @@ function Invoke-S13 {
     Invoke-Sim 's13_c3_seats' @('--content=ashfall_road', '--players=3', '--bots=0', "--rider=$Erg", '--autopilot=none', '--seed=1')
 }
 
-$order = @('s1', 's2', 's3', 's4', 's5', 's6', 's7', 's9', 's10', 's11', 's12', 's13')
+function Invoke-S14 {
+    foreach ($c in 1, 2, 3, 4) {
+        foreach ($s in $seeds) {
+            Invoke-Sim "s14_easy_c${c}_seed$s" @('--content=ashfall_road', "--players=$c", '--bots=0', "--rider=$Erg", "--seed=$s", $Easy)
+        }
+    }
+}
+
+function Invoke-S15Run([string]$Crew, [string]$Seed) {
+    Invoke-Sim "s15_hard_c${Crew}_seed${Seed}" @('--content=ashfall_road', "--players=$Crew", '--bots=0', "--rider=$Erg", "--seed=$Seed", $Hard)
+}
+
+function Invoke-S15 { foreach ($c in 1, 2, 3, 4) { foreach ($s in $seeds) { Invoke-S15Run "$c" $s } } }
+
+function Invoke-S16 {
+    foreach ($c in 1, 3, 4) {
+        foreach ($s in $seeds) {
+            Invoke-Sim "s16_amb_normal_c${c}_seed$s" @('--content=ambush_15', "--players=$c", '--bots=0', "--rider=$Erg", "--seed=$s", $Normal)
+            Invoke-Sim "s16_amb_hard_c${c}_seed$s" @('--content=ambush_15', "--players=$c", '--bots=0', "--rider=$Erg", "--seed=$s", $Hard)
+        }
+    }
+}
+
+function Invoke-S17 {
+    foreach ($s in $seeds) {
+        if (-not (Test-Have "s15_hard_c3_seed$s")) { Invoke-S15Run '3' $s }
+        Invoke-Sim "s17_hard_c3_c85_seed$s" @('--content=ashfall_road', '--players=3', '--bots=0', '--rider=erg:compliance=0.85', "--seed=$s", $Hard)
+    }
+    Invoke-Sim 's17_hard_c3_c70_seed1' @('--content=ashfall_road', '--players=3', '--bots=0', '--rider=erg:compliance=0.70', '--seed=1', $Hard)
+}
+
+function Invoke-S18 {
+    Invoke-Sim 's18_bots_h1b3' @('--content=ambush_15', '--players=1', '--bots=3', "--rider=$Erg", '--seed=1', $Hard)
+    Invoke-Sim 's18_bots_h2b2' @('--content=ambush_15', '--players=2', '--bots=2', "--rider=$Erg", '--seed=1', $Hard)
+}
+
+$order = @('s1', 's2', 's3', 's4', 's5', 's6', 's7', 's9', 's10', 's11', 's12', 's13', 's14', 's15', 's16', 's17', 's18')
 $wanted = if ($Scenarios -and $Scenarios.Count -gt 0) { $Scenarios } elseif ($env:TANK_SIMS) { $env:TANK_SIMS -split '[,\s]+' } else { $order }
 foreach ($sc in $wanted) {
     if ($order -notcontains $sc) { Write-Error "run_sims: unknown scenario $sc (one of: $($order -join ' '))"; exit 2 }

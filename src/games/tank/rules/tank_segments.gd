@@ -48,7 +48,11 @@ static func track(
 		if sg.seg == TankIds.SEG_COOLDOWN and state.outcome == "":
 			state.outcome = _outcome(state)
 		if sg.seg == TankIds.SEG_CHECKPOINT:
-			var bonus := state.content.num("tanks", "hull.checkpoint_hp", 20.0)
+			var bonus := float(
+				state.content.mission().get(
+					"checkpoint_hp", state.content.num("tanks", "hull.checkpoint_hp", 20.0)
+				)
+			)
 			state.hull.hp_max += bonus
 			state.hull.hp = minf(state.hull.hp + bonus, state.hull.hp_max)
 		state.gun_line.active = sg.seg == TankIds.SEG_GUN_LINE
@@ -108,7 +112,7 @@ static func _prev_stage(state: TankState, segment: int) -> int:
 
 ## Objectives (brief 2.4): an Advance is done at the halt line, a gun line when every gun fell,
 ## the boss when the Behemoth died. Once done the tank holds ("Regroup") until min_s, and (v3) until
-## every rider of the segment may end its phase: a rider whose seat switch split the segment has the
+## every human of the segment may end its phase: a rider whose seat switch split the segment has the
 ## rest of it as a phase whose own min_s keeps its next mode change 60 s away (TankSeatPlan).
 static func objectives(state: TankState, inputs: TankInputs = null) -> void:
 	var sg := state.seg
@@ -124,16 +128,23 @@ static func objectives(state: TankState, inputs: TankInputs = null) -> void:
 				)
 			TankIds.SEG_BOSS:
 				sg.objective_done = state.boss.phase == TankIds.BOSS_DEAD
-	sg.regroup = (sg.objective_done and (sg.elapsed_s < sg.min_s or not riders_may_end(inputs)))
+	sg.regroup = (
+		sg.objective_done and (sg.elapsed_s < sg.min_s or not riders_may_end(state, inputs))
+	)
 
 
-## True when every rider in the group's segment is past its own phase's min_s (v3: a split phase
-## may hold the segment's end; TankDirector waits for it). True without inputs.
-static func riders_may_end(inputs: TankInputs) -> bool:
+## True when every human in the group's segment is past its own phase's min_s (v3: a split phase
+## may hold the segment's end; TankDirector waits for it). A bot never holds it: a human's trainer
+## must not stay in a phase, nor the crew run into max_s, because of a bot's seat move (the bot's own
+## end_phase follows once its min_s passed, TankDirector). True without inputs.
+static func riders_may_end(state: TankState, inputs: TankInputs) -> bool:
 	if inputs == null:
 		return true
 	for ri in inputs.riders:
 		if ri.segment != inputs.phase.segment or not ri.phase_open_ended:
+			continue
+		var r := state.rider(ri.peer)
+		if r != null and r.is_bot:
 			continue
 		if ri.phase_elapsed_s < ri.phase_min_s - 1e-6:
 			return false

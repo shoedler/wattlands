@@ -22,7 +22,7 @@ func _arc(rig: TankRulesRig) -> TankArcState:
 func test_crew_4_puts_slot_3_on_the_arc_and_leaves_the_feed_empty() -> void:
 	var rig := _rig()
 	assert_eq(rig.state.hull.tank, TankIds.TANK_LANDSHIP)
-	assert_eq(rig.state.stations.size(), 5)
+	assert_eq(rig.state.stations.size(), 6)
 	assert_eq(_arc(rig).slot, 3)
 	assert_eq(rig.rider(4).engine, TankIds.ENGINE_ARC)
 	assert_true(rig.state.station(TankIds.ENGINE_FEED).is_empty())

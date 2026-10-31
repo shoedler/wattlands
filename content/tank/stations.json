@@ -1,6 +1,6 @@
 {
 	"_doc": "Effort per engine (brief 2.3, 2.7). Owner: effort. Schema: TankContentSchema.validate_stations, which also holds every number here to the brief's safety envelope (BRIEF 4.6.1, 4.6.2, 4.6.6, 4.6.8): G2 tuning cannot move one past it. Plans: per engine and segment type, the PlanPhase mode and its numbers; every engine needs an entry for every segment type of its table; the mission file gives each segment's kind and length. WARMUP-kind segments (the depot, the drill's skirmish) use the warm-up numbers of the boiler (3% x min(pressure, 1)), the hoist (1%) and terrain (0..+2%). Bank (pattern 1): every target is clamp(base_pct + span_pct x (1 - bank/100), lo, hi) of the rider's phase effective_range(), clamped before the max_step_pts limit and the sub-steps; it runs in every dynamo phase with a range_pct (stages, boss and the drill's skirmish, so 55..65 there), never in the depot or checkpoints. The SIM power band the director publishes is tanks.json in_band.sim_ftp_pct (one source); the first 300 s is TankConst.FIRST_S. v2 contracts: the arc generator (the Bastion's fourth engine, slot 3's start) has plan entries from brief 2.3's table (depot ERG 50 -> 65, stages ERG 65 in [65, 80]; the drill 50, then 55 in [55, 65]); its arc-load pattern is stations.json arc (brief 2.3 pattern 2). v2 removed the Ram haptic (brief 2.7). Crew 4 rotates slot s in stage k to the engine (s + k) mod 4 of diesel, dynamo, steam, arc. v3 contracts (2026-10-28): one tank (the landship, five seats) for every crew size; start_engines.landship lists the seat of each slot (a crew of n uses the first n: Drive, Gun, Loader, Lights; the solo rider on Drive until the rules builder adds automatic seating); rotation is gone (brief v3: seat choice replaces it), so every slot keeps its start seat for the whole mission; the Bulwark's plans and its hoist pattern are retired with its gearbox; feed, the new Secondaries seat, rides SIM flat in every segment (brief v3 effort table). v3 rules (2026-10-28): the Drive seat digs the berm at a gun line in SIM flat (v2's ERG 90% gun-line block is gone; brief v3 effort table), the solo rider's start seat is Drive and automatic seating moves it (TankAutopilot); a seat switch replans the rest of the rider's plan for the new seat (TankSeatPlan: the rest of the current segment as its own phase, then every later segment), from these same tables.",
-	"engines": ["diesel", "dynamo", "steam", "arc", "feed"],
+	"engines": ["diesel", "dynamo", "steam", "arc", "feed", "repair"],
 	"start_engines": {
 		"landship": ["diesel", "dynamo", "steam", "arc"]
 	},
@@ -35,6 +35,12 @@
 			"gun_line": {"mode": "SIM", "grade_source": "flat"},
 			"boss": {"mode": "SIM", "grade_source": "flat"}
 		},
+		"repair": {
+			"depot": {"mode": "ERG", "target_pct": 50, "ramp_to_pct": 65},
+			"advance": {"mode": "ERG", "target_pct": 55, "range_pct": [55, 70]},
+			"gun_line": {"mode": "ERG", "target_pct": 55, "range_pct": [55, 70]},
+			"boss": {"mode": "ERG", "target_pct": 55, "range_pct": [55, 70]}
+		},
 		"checkpoint": {"mode": "ERG", "target_pct": 50}
 	},
 	"drill_plans": {
@@ -57,6 +63,10 @@
 		"feed": {
 			"depot": {"mode": "SIM", "grade_source": "flat"},
 			"skirmish": {"mode": "SIM", "grade_source": "flat"}
+		},
+		"repair": {
+			"depot": {"mode": "ERG", "target_pct": 50},
+			"skirmish": {"mode": "ERG", "target_pct": 55, "range_pct": [55, 65]}
 		},
 		"checkpoint": {"mode": "ERG", "target_pct": 50}
 	},
@@ -82,6 +92,10 @@
 			"depot": {"mode": "SIM", "grade_source": "flat"},
 			"roam": {"mode": "SIM", "grade_source": "flat"}
 		},
+		"repair": {
+			"depot": {"mode": "ERG", "target_pct": 50, "ramp_to_pct": 65},
+			"roam": {"mode": "ERG", "target_pct": 55, "range_pct": [55, 70]}
+		},
 		"checkpoint": {"mode": "ERG", "target_pct": 50}
 	},
 	"terrain": {
@@ -100,6 +114,15 @@
 	"arc": {
 		"_doc": "Pattern 2 (the arc generator, brief 2.3; v3 the Lights seat): every every_s an update toward base_pct + span_pct x duty (duty: the searchlight load, the share of the last 10 s an enemy stood in the main gun's range, TankArcState), clamped to the phase's effective range_pct, moving at most max_step_pts from the last sent target, in substeps sub-steps substep_s apart (<= 3.3% FTP/s, BRIEF 4.6.2); only in arc ERG phases with a range_pct, never in the depot or checkpoints.",
 		"base_pct": 65,
+		"span_pct": 15,
+		"every_s": 5,
+		"substeps": 3,
+		"substep_s": 1,
+		"max_step_pts": 10
+	},
+	"repair": {
+		"_doc": "Pattern 10 (v4, the Repairs seat): the arc's schedule, every every_s an update toward base_pct + span_pct x duty (TankRepairState.duty), clamped to the phase's range_pct, inside the same 3.3% FTP/s envelope as bank and arc.",
+		"base_pct": 55,
 		"span_pct": 15,
 		"every_s": 5,
 		"substeps": 3,

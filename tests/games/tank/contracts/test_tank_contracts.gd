@@ -147,7 +147,7 @@ func test_intents_normalize_and_reject_junk() -> void:
 func test_intents_belong_to_their_engine() -> void:
 	var expect := {
 		"diesel": ["turn", "seat"],
-		"dynamo": ["aim", "target", "traverse", "fire", "seat"],
+		"dynamo": ["aim", "target", "fire", "seat"],
 		"steam": ["latch", "over", "seat"],
 		"arc": ["seat"],
 		"feed": ["seat"],
@@ -201,6 +201,11 @@ func test_every_event_declares_its_int_fields() -> void:
 		TankEvents.turn(0, TankIds.DIR_LEFT),
 		TankEvents.time_up(),
 		TankEvents.seat(1, TankIds.ENGINE_ARC, TankIds.ENGINE_FEED),
+		TankEvents.tank_lost(1, TankIds.SEG_ADVANCE, 1),
+		TankEvents.stage_restart(TankIds.SEG_ADVANCE, 1, 84.0),
+		TankEvents.ambush(7, TankIds.enemy_code(TankIds.ENEMY_RECON)),
+		TankEvents.escaped(7, TankIds.enemy_code(TankIds.ENEMY_RECON)),
+		TankEvents.splash(1500.0, TankIds.SHELL_HEAVY, true),
 	]
 	assert_eq(samples.size(), TankEvents.TYPES.size())
 	for e in samples:

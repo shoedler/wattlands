@@ -27,6 +27,15 @@ extends RefCounted
 ## only 30 s or more after the last (follow's WAIT), and the segment's end waits for a rest's min_s
 ## ("Regroup"), so every real ERG <-> SIM switch is 30 s or more from the next (asserted on the
 ## trainer's trace by the simulations).
+##
+## The warm-up's edge. The platform's model closes the current phase at the elapsed time it was split
+## at, one tick before its real end. A rest inside the first 300 s therefore keeps that tick, so a depot
+## split reaches 300 s in the model (and a tick past it in real time), and the next phase's range never
+## counts as inside the warm-up (BRIEF 4.6.8).
+##
+## A bot's seat move never holds a segment (`no_hold`): a split whose rest has a min_s reaching past the
+## segment's own min_s would keep every human in the phase once the objective is done, so the bot's
+## trainer follows at the segment's end instead (V1 plan item 8: no effort change for a human).
 
 ## The shortest rest phase (a min_s must be > 0): one tick.
 const MIN_REST_S := Wl.SIM_DT
@@ -152,6 +161,7 @@ static func seat_target_pct(content: TankContent, segment: int, engine: String) 
 ## remaining phases to send (split or replan) or null, "wait_s": seconds until the trainer switches
 ## (0 none, WAIT_SEGMENT_END at the segment's end), "mode_to": the mode it will switch to ("" none)}.
 ## `allow_split` false (the segment ends this tick): never a split, only the later segments.
+## `no_hold` (a bot): never a split whose rest would hold the segment's end past its own min_s.
 static func follow(
 	content: TankContent,
 	ri: TankRiderInput,
@@ -159,7 +169,8 @@ static func follow(
 	last_switch_s: float,
 	now_s: float,
 	hold_end: bool,
-	allow_split: bool = true
+	allow_split: bool = true,
+	no_hold: bool = false
 ) -> Dictionary:
 	var out := {"action": FOLLOW_NONE, "plan": null, "wait_s": 0.0, "mode_to": ""}
 	var plan := ri.plan
@@ -199,13 +210,26 @@ static func follow(
 			# Too close to the last switch now, and no room for the rest then: the segment's end.
 			return _boundary(content, plan, idx, seat, cross, out)
 	if allow_split and not (cross and hold_end):
-		var rest := tail(content, plan, idx, seat, true, offset + elapsed + Wl.SIM_DT, elapsed)
-		if rest != null and check(whole(plan, idx, rest), idx, elapsed):
+		var tick := 0.0 if TankConst.in_first_window(ri.plan_elapsed_s) else Wl.SIM_DT
+		var start := offset + elapsed + tick
+		var rest := tail(content, plan, idx, seat, true, start, elapsed)
+		var held := no_hold and rest != null and holds_segment(content, seg, rest.phase(0), start)
+		if rest != null and not held and check(whole(plan, idx, rest), idx, elapsed):
 			out["action"] = FOLLOW_SPLIT
 			out["plan"] = rest
 			out["mode_to"] = ""
 			return out
 	return _boundary(content, plan, idx, seat, cross, out)
+
+
+## True when `rest`, starting `offset_s` into segment `seg`, could hold the segment's end past the
+## segment's own min_s: an open phase whose min_s is longer than that, one tick allowed.
+static func holds_segment(content: TankContent, seg: int, rest: PlanPhase, offset_s: float) -> bool:
+	if not rest.open_ended:
+		return false
+	var s := content.segment(seg)
+	var seg_min := float(s.get("plan_min_s", s.get("min_s", 0.0)))
+	return rest.min_s > maxf(seg_min - offset_s, MIN_REST_S) + EPS
 
 
 ## The later segments for `seat`, the trainer switching at the segment's end.

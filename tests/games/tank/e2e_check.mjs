@@ -18,10 +18,11 @@
 //      (v2 never emits them), no successful evade (nobody can evade in WARMUP), boss event
 //      or overrun, no haptic directive); no more kills than the skirmish has tanks, none twice;
 //      every repair follows a breakdown; no hit or kill in the depot; no rotation event (v3
-//      retired rotation; the name stays reserved); seat moves (v3) carry known seats;
+//      retired rotation; the name stays reserved); seat moves (v3) carry known seats; no tank loss, restart or
+//      near threat (v4: the drill is a warm-up, so its hull cannot be lost, and it has no recon car or tankette);
 //   4. every peer's final snapshot is a well-formed Tank snapshot (the schema of
 //      contracts/tank_snapshot_schema.gd, whole numbers, at most 4 KB, three riders and the
-//      landship's five rooms) and matches the host's within 2%;
+//      landship's six rooms) and matches the host's within 2%;
 //   5. no push_error or script error on any peer (killed run included), no desync warning, every
 //      peer finished complete;
 //   6. when fit_check's JSON is in the report, every FIT has the drill's 4 laps.
@@ -40,13 +41,13 @@ const isInt = (v) => Number.isInteger(v) || (typeof v === 'number' && Number.isF
 /** Tank's event types (TankEvents.TYPES). */
 export const EVENT_TYPES = [
   'segment', 'rotation', 'shot', 'hit', 'kill', 'ram', 'dodge', 'breakdown', 'repaired', 'overrun', 'boss_phase', 'latch', 'lever',
-  'evade', 'turn', 'time_up', 'seat',
+  'evade', 'turn', 'time_up', 'seat', 'tank_lost', 'stage_restart', 'ambush', 'escaped', 'splash',
 ];
 /** Declared int fields per type (TankEvents.INT_FIELDS; "r[][]" is rows of ints). */
 export const INT_FIELDS = {
   segment: ['i', 'sg', 'st'],
   rotation: ['r[][]'],
-  shot: ['s', 'sh', 'id', 'src', 'e'],
+  shot: ['s', 'sh', 'id', 'src', 'e', 'rng_m'],
   hit: ['on', 'id', 'dmg', 'sh', 'b', 'x'],
   kill: ['id', 'e', 'by', 's'],
   ram: ['s', 'ok', 'id'],
@@ -61,6 +62,11 @@ export const INT_FIELDS = {
   turn: ['s', 'dir'],
   time_up: [],
   seat: ['s', 'from', 'to'],
+  tank_lost: ['n', 'sg', 'st'],
+  stage_restart: ['sg', 'st', 'hp'],
+  ambush: ['id', 'e'],
+  escaped: ['id', 'e'],
+  splash: ['r', 'sh', 'f'],
 };
 /** Segment codes (TankIds.SEG_CODES). */
 export const SEG = { none: 0, depot: 1, advance: 2, gun_line: 3, checkpoint: 4, boss: 5, skirmish: 6, cooldown: 7 };
@@ -75,12 +81,12 @@ export const DRILL_SEGMENTS = [
 export const DRILL_ENEMIES = 3;
 export const DRILL_LAPS = 4;
 export const SNAPSHOT_MAX_BYTES = 4096;
-const CREW3 = { tank: 5, riders: 3, rooms: 5 };
-const ENEMY_CODES = [1, 2, 3, 4, 5, 6];
+const CREW3 = { tank: 5, riders: 3, rooms: 6 };
+const ENEMY_CODES = [1, 2, 3, 4, 5, 6, 7, 8];
 const SNAPSHOT_KEYS = ['v', 'tick', 'sg', 'tk', 'r', 'st', 'e', 's', 'o', 'gl', 'b', 'sc'];
 /** Column counts of TankSnapshotSchema. */
-export const SNAPSHOT_WIDTHS = { sg: 5, tk: 17, gl: 4, b: 7, sc: 4 };
-export const ROW_WIDTHS = { r: 9, st: 9, e: 8, s: 7, o: 5 };
+export const SNAPSHOT_WIDTHS = { sg: 5, tk: 18, gl: 4, b: 8, sc: 5 };
+export const ROW_WIDTHS = { r: 9, st: 9, e: 9, s: 10, o: 5 };
 const ROLES = ['host', 'client1', 'client2'];
 const COMBAT = new Set(['hit', 'kill']);
 
@@ -115,6 +121,10 @@ export function eventErrors(e) {
       }
     } else if (!isInt(e[key])) errs.push(`${type}: ${key} is not an int (${JSON.stringify(e[key])})`);
   }
+  // v4: a far shot's flight time, the one event number that is not whole (TankEvents.FLOAT_FIELDS).
+  if (type === 'shot' && 'flight_s' in e && !(typeof e.flight_s === 'number' && e.flight_s > 0)) {
+    errs.push(`shot: flight_s is not a positive number (${JSON.stringify(e.flight_s)})`);
+  }
   if (errs.length) return errs;
   const inRange = (name, v, lo, hi) => {
     if (v < lo || v > hi) errs.push(`${type}: ${name} ${v} outside ${lo}..${hi}`);
@@ -136,7 +146,7 @@ export function eventErrors(e) {
       inRange('sh', e.sh, 1, 6);
       inRange('id', e.id, 1, 1e9);
       inRange('src', e.src, 0, 1e9);
-      inRange('e', e.e, 0, 6);
+      inRange('e', e.e, 0, 8);
       break;
     case 'hit':
       inRange('on', e.on, 0, 3);
@@ -146,7 +156,7 @@ export function eventErrors(e) {
       break;
     case 'kill':
       inRange('id', e.id, 1, 1e9);
-      inRange('e', e.e, 1, 6);
+      inRange('e', e.e, 1, 8);
       inRange('by', e.by, 0, 3);
       inRange('s', e.s, -1, 2);
       break;
@@ -158,7 +168,7 @@ export function eventErrors(e) {
       inRange('s', e.s, 0, 2);
       break;
     case 'evade':
-      inRange('e', e.e, 1, 6);
+      inRange('e', e.e, 1, 8);
       inRange('ok', e.ok, 0, 1);
       inRange('s', e.s, -1, 3);
       break;
@@ -182,8 +192,26 @@ export function eventErrors(e) {
       break;
     case 'seat':
       inRange('s', e.s, 0, 3);
-      inRange('from', e.from, 1, 6);
-      inRange('to', e.to, 1, 6);
+      inRange('from', e.from, 1, 7);
+      inRange('to', e.to, 1, 7);
+      break;
+    case 'tank_lost':
+      inRange('n', e.n, 1, 99);
+      inRange('sg', e.sg, 1, 8);
+      inRange('st', e.st, 0, 4);
+      break;
+    case 'stage_restart':
+      inRange('sg', e.sg, 1, 8);
+      inRange('st', e.st, 0, 4);
+      inRange('hp', e.hp, 1, 1000);
+      break;
+    case 'ambush':
+    case 'escaped':
+      inRange('e', e.e, 7, 8);
+      break;
+    case 'splash':
+      inRange('r', e.r, 0, 3000);
+      inRange('f', e.f, 0, 1);
       break;
     default:
       break;
@@ -243,9 +271,9 @@ export function drillErrors(events, { tail = false } = {}) {
     if (idx.some((v, k) => k > 0 && v <= idx[k - 1])) errs.push(`segments out of order: ${JSON.stringify(idx)}`);
     if (new Set(idx).size !== idx.length) errs.push(`a segment twice: ${JSON.stringify(idx)}`);
   }
-  for (const t of ['ram', 'dodge', 'boss_phase', 'overrun', 'rotation']) {
+  for (const t of ['ram', 'dodge', 'boss_phase', 'overrun', 'rotation', 'tank_lost', 'stage_restart', 'ambush', 'escaped']) {
     const n = events.filter((e) => e.type === t).length;
-    if (n > 0) errs.push(`${n} ${t} event(s) in the drill (a WARMUP-only session with no boss; v3 has no rotation)`);
+    if (n > 0) errs.push(`${n} ${t} event(s) in the drill (a WARMUP-only session with no boss and no near threats; v3 has no rotation)`);
   }
   const evaded = events.filter((e) => e.type === 'evade' && e.ok === 1).length;
   if (evaded > 0) errs.push(`${evaded} evaded shot(s) in the drill (nobody can evade in a WARMUP phase)`);

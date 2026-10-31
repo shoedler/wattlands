@@ -35,8 +35,8 @@ func test_the_objective_line_per_segment() -> void:
 	g.gun_line.guns_total = 4
 	g.gun_line.guns_left = 2
 	var gl := TankHudModel.objective(g)
-	assert_eq(gl["key"], "TANK_OBJ_GUN_LINE")
-	assert_eq(gl["args"], [2, 4], "Gun line 2/4")
+	assert_eq(gl["key"], "TANK_OBJ_HOLD")
+	assert_eq(gl["args"], [2, 4], "Holding force 2/4")
 	g.gun_line.guns_left = 4
 	assert_eq(TankHudModel.objective(g)["args"], [0, 4])
 	g.gun_line.guns_left = 0

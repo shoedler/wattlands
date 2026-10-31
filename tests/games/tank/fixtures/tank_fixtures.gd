@@ -35,6 +35,7 @@ const TARGETS := {
 	TankIds.ENGINE_STEAM: 90.0,
 	TankIds.ENGINE_DYNAMO: 71.2,
 	TankIds.ENGINE_ARC: 70.3,
+	TankIds.ENGINE_REPAIR: 55.0,
 }
 
 static var _contents: Dictionary = {}
@@ -125,7 +126,7 @@ static func gun_line(crew: int) -> TankState:
 	hv.telegraph_s = 1.5
 	s.enemies.append(hv)
 	for i in 2:
-		var dg := _enemy(22 + i, TankIds.ENEMY_DUGIN, front + 150.0 + 80.0 * i, 50.0, 1)
+		var dg := _enemy(22 + i, TankIds.ENEMY_MEDIUM, front + 150.0 + 80.0 * i, 50.0, 1)
 		dg.fixed = true
 		dg.gun_line = true
 		dg.mode = TankIds.EM_HOLD

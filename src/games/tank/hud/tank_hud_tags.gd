@@ -6,28 +6,37 @@ extends TankHudCtl
 ## and may reach past its own rect to the canvas edges:
 ##  - the speed tag on the road behind the tank ("23 km/h");
 ##  - the halt line in an Advance: a striped post where the line is with its distance on a plate,
-##    pinned to the right edge with an arrow while the line is still beyond the screen;
-##  - SURGE TO EVADE over every shooter whose gun telegraphs (and over the Behemoth's main gun),
-##    with one pip per second of the telegraph, emptying as it runs out; every peer shows it;
+##    pinned to the near panel's edge with an arrow while the line is still beyond it. While a near threat
+##    lives the road lane is the threat's: the plate lifts over the beam, the post stands behind the threat,
+##    and a pinned line has no post at all, its plate and arrow say it;
+##  - one SURGE TO EVADE instruction with its pips, emptying as they run out, on every peer: beside the
+##    seam's range plate while an evadable shell flies (pips of its flight left), else over the shooter who
+##    fires soonest (one pip per second of its telegraph), its leader running down to the muzzle; every
+##    other shooter a small red tick over its muzzle;
 ##  - the gun's elevation as a thin arc round the barrel's pivot while the gunner aims (a target,
 ##    a gun line or the boss), drawn beyond the muzzle so the barrel never hides it: the reach
 ##    (-12 .. +30 degrees), a tick per 10 degrees, the barrel's elevation lit where the barrel
 ##    points, the ordered elevation marked outside, and the degrees past the upper end;
 ##  - the turn marker at a map end (free roam; set_turn_marker());
 ##  - v3: the ready rack's three shells beside the elevation arc's label, and the Secondaries' small
-##    cold blue-white dial past the bow guns' muzzles while their seat is manned and firing or a
-##    target is in their reach (bow_elevation(), the guns' elevation, and their rounds a minute).
-## Tags keep out of the plates (the mission plate and toasts, the hull and boss plates) and never lie
-## on the hero: every tag stays TAG_CLEAR px outside the tank's drawn rects (TankHudGeom.tank_rects);
-## a SURGE tag whose shooter is behind or under the tank moves above the hull's top (or onto the road
-## below the tracks) with its pointer bent round the tank to the shooter; a pursuer that only shows a
-## sliver at the screen's edge gets a small edge arrow on the road. refresh() lays them all out
-## (m["layout"], tested for every variant, facing and travel direction) and paint() draws that.
+##    cold blue-white dial past the bow guns' muzzles while their seat is manned and a near threat
+##    is alive (bow_elevation(), the guns' elevation, and their rounds a minute).
+## Tags keep out of the plates (the mission plate and toasts, the hull and boss plates, the PiP), stay
+## in their own panel, and never lie on the hero: every tag stays TAG_CLEAR px outside the tank's drawn
+## rects (TankHudGeom.tank_rects). refresh() lays them all out (m["layout"], tested for every crew and
+## travel direction) and paint() draws that.
 ## The two angle meters (the gun's arc, the Secondaries' dial) fade in over DIAL_IN_S and, once their
 ## show condition ends, hold DIAL_HOLD_S before fading out over DIAL_OUT_S (dial_fade(); tank 0.3.1:
 ## they no longer flash when the condition toggles).
 
 const POST_H := 44.0
+## A post's plate: its bottom this far over the road line, above the headlight's beam and the near threats' lane.
+const PLATE_LIFT := 95.0
+## The tick that marks a shooter with no plate of its own, its size, and the chevron it draws.
+const TICK_SIZE := Vector2(9, 6)
+const TICK := ["#########", ".#######.", "..#####..", "...###...", "....#....", "....#...."]
+## Clear air between the seam's range plate and the instruction beside it.
+const SEAM_GAP := 8.0
 const PIN_MARGIN := 36.0
 const TAG_LIFT := 10.0
 const WARN_TRI := ["...#...", "..#.#..", "..#.#..", ".#.#.#.", ".#...#.", "#..#..#", "#######"]
@@ -37,10 +46,11 @@ const PIN_ARROW_L := ["...#", "..##", ".###", "####", ".###", "..##", "...#"]
 const TAG_CLEAR := 8.0
 const WARN_H := 26.0
 const SPEED_H := 17.0
-const EDGE_ARROW := ["...#", "..##", ".###", "####", ".###", "..##", "...#"]
-const EDGE_ARROW_R := ["#...", "##..", "###.", "####", "###.", "##..", "#..."]
-## A pursuer showing less than this much of its sprite on the canvas gets an edge arrow (art px).
-const SLIVER_PX := 48.0
+const SPEED_LEGS := 4.0
+## The seam's range plate (TankSeam, SPEC_TANK 4.6): the shell's tag stands beside it, at its height.
+const SEAM_PLATE_Y := 216.0
+const SEAM_PLATE_W := 46.0
+const SEAM_PLATE_H := 14.0
 ## Free roam: the turn marker shows once the turning place ahead is this near (game metres).
 const TURN_MARKER_M := 160.0
 ## The angle meters' fade in, fade out and hold after their condition ends (s).
@@ -94,7 +104,7 @@ func find_view() -> Object:
 
 
 func geom() -> TankHudGeom:
-	return TankHudGeom.make(st(), find_view())
+	return TankHudGeom.make(st(), find_view(), Vector2(canvas()))
 
 
 ## The angle meters' fades follow their show conditions (wall clock).
@@ -129,45 +139,48 @@ func refresh() -> void:
 	var h := s.hull
 	m = {"speed": h.speed_mps * 3.6, "rear": g.tank_point("rear"), "ground": g.ground_y()}
 	m["body"] = g.tank_rects()
+	m["panels"] = g.panels()
+	m["mirrored"] = g.mirrored()
 	var halt := TankHudModel.halt_distance_m(s)
 	m["halt_m"] = halt
 	if halt >= 0.0:
 		m["halt_x"] = g.world_x(h.x_px + float(h.hull_w) + TankConst.m_to_px(halt))
+	m["threats"] = _near_rects(s, g)
 	var warn: Array = []
 	for t: Dictionary in TankHudModel.telegraphs(s):
+		var r := Rect2()
 		var anchor := Vector2.ZERO
+		var far := false
 		if bool(t["boss"]):
-			var br := g.boss_rect()
-			anchor = br.position + Vector2(14, br.size.y * 0.27)
+			r = g.boss_rect()
+			anchor = g.boss_muzzle()
+			far = s.boss.range_m > 0.0
 		else:
 			var e := s.enemy(int(t["id"]))
-			var r := g.enemy_rect(e) if e != null else Rect2()
+			r = g.enemy_rect(e) if e != null else Rect2()
 			if r.size == Vector2.ZERO:
 				continue
+			far = TankHudGeom.in_far_frame(e)
+			anchor = g.enemy_muzzle(e) if far else Vector2.ZERO
+		if anchor == Vector2.ZERO:
 			anchor = Vector2(r.position.x + r.size.x * 0.5, r.position.y)
-		warn.append({"anchor": anchor, "left": t["left"], "total": t["total"]})
+		warn.append(
+			{
+				"anchor": anchor,
+				"top": r.position.y,
+				"boss": t["boss"],
+				"far": far,
+				"left": t["left"],
+				"total": t["total"]
+			}
+		)
+	warn.sort_custom(_sooner)
 	m["warn"] = warn
-	var edge: Array = []
-	var cvx := float(canvas().x)
-	for e in s.enemies:
-		if e.mode == TankIds.EM_DEAD or e.side >= 0:
-			continue
-		var er := g.enemy_rect(e)
-		if er.size == Vector2.ZERO:
-			continue
-		var shown := minf(er.end.x, cvx) - maxf(er.position.x, 0.0)
-		if shown < SLIVER_PX:
-			edge.append({"left": er.get_center().x < cvx * 0.5})
-	m["edge"] = edge
+	m["shell"] = TankHudModel.evadable_shell(s)
 	var laying := absf(h.elev_deg - h.elev_target_deg) > 0.5 or h.target_id != 0
-	m["aim"] = laying and absf(h.elev_deg) >= 2.0 and not h.breakdown
+	m["aim"] = laying and absf(h.elev_deg) >= 2.0 and not h.out_of_action()
 	if bool(m["aim"]) or aim_fade.x > 0.0:
-		var b := g.barrel()
-		if bool(b["turning"]):
-			# the turret traverses: the arc goes at once (its geometry is the barrel's)
-			m["aim"] = false
-			aim_fade = Vector2.ZERO
-		m["barrel"] = b
+		m["barrel"] = g.barrel()
 		m["elev"] = h.elev_deg
 		m["elev_to"] = h.elev_target_deg
 	if turn_dir != 0:
@@ -178,46 +191,78 @@ func refresh() -> void:
 	m["layout"] = layout()
 
 
+## The Behemoth first, then the shooter whose telegraph runs out soonest: who gets the one plate.
+static func _sooner(a: Dictionary, b: Dictionary) -> bool:
+	if bool(a["boss"]) != bool(b["boss"]):
+		return bool(a["boss"])
+	return float(a["left"]) < float(b["left"])
+
+
+## Every live near threat's rect as drawn (canvas art px): the road lane the post keeps out of.
+static func _near_rects(s: TankState, g: TankHudGeom) -> Array[Rect2]:
+	var out: Array[Rect2] = []
+	for e in s.enemies:
+		if e.is_near() and e.mode != TankIds.EM_DEAD and e.hp > 0.0:
+			var r := g.enemy_rect(e)
+			if r.size != Vector2.ZERO:
+				out.append(r)
+	return out
+
+
 ## Where every world tag goes this refresh (canvas art px), clear of the plates and of the tank:
-## {speed: Rect2 (empty when standing), posts: [{x, plate, pinned, dir, title, value}], warn:
-## [{rect, pointer (Array[Vector2i]), lx, up, w}], edge: [Vector2]}.
+## {speed: Rect2 (empty when standing), posts: [{x, plate, pinned, pole, dir, title, value}], warn:
+## [{rect, pointer (Array[Vector2i]), lx, w, plate (the one with the words, else a tick)}], shell: Rect2 (empty
+## without an evadable shell; it holds the one instruction then)}.
 func layout() -> Dictionary:
-	var cv := Vector2(canvas())
 	var body: Array[Rect2] = []
 	body.assign(m.get("body", []))
-	var out := {"speed": Rect2(), "posts": [], "warn": [], "edge": []}
+	var panels: Dictionary = m["panels"]
+	var near: Rect2 = panels["near"]
+	var far: Rect2 = panels["far"]
+	var out := {"speed": Rect2(), "posts": [], "warn": [], "shell": Rect2()}
 	var speed := Rect2()
 	if float(m["speed"]) > 0.5:
 		var txt := tx("TANK_HUD_SPEED", [roundi(float(m["speed"]))])
-		speed = speed_rect(m["rear"], D.tall_w(txt) + 16.0, geom().mirrored(), body)
+		var under := float(TankHud.anchored(TankHud.LAYOUT["mine"], canvas()).position.y)
+		speed = speed_rect(m["rear"], D.tall_w(txt) + 16.0, bool(m["mirrored"]), body, near, under)
 		out["speed"] = speed
 	var gy := float(m["ground"])
+	var threats: Array[Rect2] = []
+	threats.assign(m.get("threats", []))
 	if float(m["halt_m"]) >= 0.0 and m.has("halt_x"):
 		var title := tx("TANK_HUD_HALT_LINE")
 		var value := "%d m" % ceili(float(m["halt_m"]))
-		var pl := post_layout(float(m["halt_x"]), post_size(title, value), gy, cv, body)
+		var pl := post_layout(float(m["halt_x"]), post_size(title, value), gy, near, body, threats)
 		pl.merge({"dir": 1, "title": title, "value": value})
 		out["posts"].append(pl)
 	if m.has("turn_x"):
 		var title2 := tx("TANK_HUD_TURN")
-		var pl2 := post_layout(float(m["turn_x"]), post_size(title2, ""), gy, cv, body)
+		var pl2 := post_layout(float(m["turn_x"]), post_size(title2, ""), gy, near, body, threats)
 		pl2.merge({"dir": turn_dir, "title": title2, "value": ""})
 		out["posts"].append(pl2)
 	var keep := keep_out()
+	keep.append((panels["pip"] as Rect2).grow(2))
 	if speed.size != Vector2.ZERO:
 		keep.append(speed.grow(2))
 	var wsize := Vector2(D.tall_w(tx("TANK_HUD_SURGE_TAG")) + 22.0, WARN_H)
+	if not (m["shell"] as Dictionary).is_empty():
+		var sr := shell_rect(panels["seam"], far, wsize)
+		out["shell"] = sr
+		keep.append(sr.grow(2))
+	var plate_due: bool = (out["shell"] as Rect2).size == Vector2.ZERO
 	for w: Dictionary in m["warn"]:
-		var wl := warn_layout(w["anchor"], wsize, cv, keep, body)
+		var zone := far if bool(w["far"]) else near
+		var wl := {}
+		if plate_due:
+			var room := _off_seam_plate(zone, panels["seam"]) if bool(w["far"]) else zone
+			wl = warn_layout(w["anchor"], wsize, zone, keep, body, float(w["top"]), room)
+		else:
+			wl = warn_layout(w["anchor"], TICK_SIZE, zone, keep, body)
+		wl["plate"] = plate_due
+		plate_due = false
 		wl["w"] = w
 		out["warn"].append(wl)
 		keep.append((wl["rect"] as Rect2).grow(2))
-	var counts := {true: 0, false: 0}
-	for ed: Dictionary in m.get("edge", []):
-		var left := bool(ed["left"])
-		var y := gy + TAG_CLEAR + 2.0 + float(counts[left]) * 9.0
-		out["edge"].append(Vector2(4.0 if left else cv.x - 8.0, y))
-		counts[left] = int(counts[left]) + 1
 	return out
 
 
@@ -237,15 +282,21 @@ static func _union(body: Array[Rect2]) -> Rect2:
 
 
 ## The speed plate (canvas art px), `w` wide, under the hull's rear on the road, TAG_CLEAR below
-## the tracks (it grows toward the tank while driving west).
-static func speed_rect(rear: Vector2, w: float, mirrored: bool, body: Array[Rect2]) -> Rect2:
+## the tracks (it grows toward the tank while driving west), inside the near panel. Where the road has no room for it
+## above the rider's panel (`under`, its top; a short canvas), it stands over the hull's rear deck, in the air.
+static func speed_rect(
+	rear: Vector2, w: float, mirrored: bool, body: Array[Rect2], near: Rect2, under: float = INF
+) -> Rect2:
 	var x := rear.x - 10.0
 	if mirrored:
 		x = rear.x + 10.0 - w
+	x = clampf(x, near.position.x + 4.0, near.end.x - 4.0 - w)
 	var y := rear.y + 3.0
 	var u := _union(body)
 	if u.size != Vector2.ZERO:
 		y = maxf(y, u.end.y + TAG_CLEAR)
+		if y + SPEED_H + SPEED_LEGS > under:
+			y = u.position.y - TAG_CLEAR - SPEED_H
 	return Rect2(roundf(x), roundf(y), w, SPEED_H)
 
 
@@ -260,92 +311,112 @@ static func post_rect(x: float, gy: float) -> Rect2:
 	return Rect2(x - 4.0, top - 6.0, 11.0, gy + 4.0 - (top - 6.0))
 
 
-## A striped post standing at canvas x `x` on the road (`gy`), its plate `size`: {x, plate, pinned}.
-## Pinned to the canvas edge while beyond the screen; pushed out past the tank (TAG_CLEAR) when it
-## would stand on it (the tank reaching its halt line); its plate on the post's left, else its
-## right, whichever keeps clear of the tank.
+## A striped post standing at canvas x `x` on the road (`gy`), its plate `size`: {x, plate, pinned, pole}.
+## Pinned to the near panel's edge while beyond it; pushed out past the tank (TAG_CLEAR) when it would
+## stand on it (the tank reaching its halt line); its plate on the post's left, else its right,
+## whichever keeps clear of the tank, the post stepping back from the seam so the plate fits when the
+## tank leaves room for that; it goes over the beam against the seam, always, so it never jumps when a threat comes, and
+## only where a tank on a narrow canvas would not leave it room does it keep the post's side. With near threats alive
+## (`threats`, their rects) the road lane is theirs: a pinned line stands no post (pole false).
 static func post_layout(
-	x: float, size: Vector2, gy: float, cv: Vector2, body: Array[Rect2]
+	x: float, size: Vector2, gy: float, near: Rect2, body: Array[Rect2], threats: Array[Rect2] = []
 ) -> Dictionary:
-	var pin_r := cv.x - PIN_MARGIN
-	var pinned := x > pin_r or x < PIN_MARGIN
-	x = roundf(clampf(x, PIN_MARGIN, pin_r))
+	var pin_l := near.position.x + PIN_MARGIN
+	var pin_r := near.end.x - PIN_MARGIN
+	var pinned := x > pin_r or x < pin_l
+	x = roundf(clampf(x, pin_l, pin_r))
+	var u := _union(body)
 	if not clear_of(post_rect(x, gy), body):
-		var u := _union(body)
 		var past := u.end.x + TAG_CLEAR + 5.0
 		var before := u.position.x - TAG_CLEAR - 8.0
 		# The nearer side of the tank, unless the post and its plate do not fit there.
-		var near_right := x >= u.get_center().x or before - size.x - 6.0 < 4.0
-		x = past if near_right and past + 9.0 + size.x <= cv.x - 4.0 else before
+		var near_right := x >= u.get_center().x or before - size.x - 6.0 < near.position.x + 4.0
+		x = past if near_right and past + 9.0 <= near.end.x else before
 	var top := gy - POST_H
 	var left := Rect2(x - size.x - 6.0, top - 8.0, size.x, size.y)
 	var right := Rect2(x + 9.0, top - 8.0, size.x, size.y)
 	var plate := left
-	if left.position.x < 4.0 or not clear_of(left, body):
+	if left.position.x < near.position.x + 4.0 or not clear_of(left, body):
 		plate = right
-	return {"x": x, "plate": plate, "pinned": pinned}
+		if plate.end.x > near.end.x:
+			# Step back toward the tank; a narrow panel may still not leave it room (clamped below).
+			var back := minf(x, maxf(near.end.x - size.x - 9.0, u.end.x + TAG_CLEAR + 5.0))
+			if clear_of(post_rect(back, gy), body):
+				x = back
+				plate.position.x = x + 9.0
+	var lift_y := maxf(gy - PLATE_LIFT - size.y, SEAM_PLATE_Y + SEAM_PLATE_H + 2.0)
+	var lifted := Rect2(near.end.x - 12.0 - size.x, lift_y, size.x, size.y)
+	if near.get_center().x < u.get_center().x:
+		lifted.position.x = near.position.x + 12.0
+	lifted.position = lifted.position.round()
+	if clear_of(lifted, body):
+		plate = lifted
+	# Whatever else gives: every near plate stays in the near panel, none crosses the seam.
+	plate.position.x = clampf(plate.position.x, near.position.x + 4.0, near.end.x - 4.0 - size.x)
+	return {"x": x, "plate": plate, "pinned": pinned, "pole": threats.is_empty() or not pinned}
 
 
-## The SURGE tag for a shooter at `anchor` (canvas art px), `size` art px: {rect, pointer, lx, up}.
-## Over the shooter by default, out of the plates `keep`; when that would touch the tank (`body`
-## grown TAG_CLEAR), above the tank's top, else on the road below its tracks (`up`: its tip on top).
-## The pointer runs from the tag's tip (at lx) to the shooter, bent round the tank (along a column
-## clear of it, then across) and is never painted on the tank.
+## The SURGE tag for a shooter at `anchor` (canvas art px; its muzzle in the far panel), `size` art px: {rect,
+## pointer, lx}. Over the shooter (over its sprite's `top` when given, so it covers neither gun nor turret), inside its
+## panel `zone`, under the plates `keep`; when that would touch the tank (`body` grown TAG_CLEAR), above the
+## tank's top. The pointer runs from the tag's tip (at lx) to the shooter and is never painted on the tank. `room`, when
+## given, is a narrower part of `zone` the tag itself keeps to.
 static func warn_layout(
-	anchor: Vector2, size: Vector2, cv: Vector2, keep: Array[Rect2], body: Array[Rect2]
+	anchor: Vector2,
+	size: Vector2,
+	zone: Rect2,
+	keep: Array[Rect2],
+	body: Array[Rect2],
+	top: float = NAN,
+	room: Rect2 = Rect2()
 ) -> Dictionary:
 	var tw := size.x
 	var th := size.y
-	var tr := Rect2(roundf(anchor.x - tw * 0.5), roundf(anchor.y - th - TAG_LIFT), tw, th)
-	tr.position.x = clampf(tr.position.x, 4.0, cv.x - 4.0 - tw)
-	tr.position.y = maxf(tr.position.y, 4.0)
-	tr = _out_of(tr, keep, cv)
-	var up := false
-	var u := _union(body)
+	# a sprite can reach past its panel (the Behemoth at close range): the pointer stays inside
+	anchor.x = clampf(anchor.x, zone.position.x + 2.0, zone.end.x - 2.0)
+	var over := anchor.y if is_nan(top) else minf(top, anchor.y)
+	var tr := Rect2(roundf(anchor.x - tw * 0.5), roundf(over - th - TAG_LIFT), tw, th)
+	var box := zone if room.size == Vector2.ZERO else room
+	tr.position.x = clampf(tr.position.x, box.position.x + 4.0, box.end.x - 4.0 - tw)
+	tr.position.y = maxf(tr.position.y, zone.position.y + 4.0)
+	tr = _under(tr, keep)
 	if not clear_of(tr, body):
-		var above := Rect2(tr.position.x, u.position.y - TAG_CLEAR - th, tw, th)
-		above = _out_of(above, keep, cv)
-		if above.position.y >= 4.0 and clear_of(above, body):
-			tr = above
-		else:
-			tr = Rect2(tr.position.x, u.end.y + TAG_CLEAR, tw, th)
-			for k in keep:
-				if tr.intersects(k):
-					tr.position.x = minf(k.end.x + 2.0, cv.x - 4.0 - tw)
-			up = true
+		tr.position.y = _union(body).position.y - TAG_CLEAR - th
+		tr = _under(tr, keep)
 	var lx := roundf(clampf(anchor.x, tr.position.x + 6.0, tr.end.x - 6.0))
-	var from := Vector2(lx, tr.position.y - 4.0 if up else tr.end.y + 4.0)
+	var from := Vector2(lx, tr.end.y + 4.0)
 	var to := anchor + Vector2(0, -3)
-	var pts: Array[Vector2] = [from, to]
-	if not _segment_clear(from, to, body):
-		# Bend round the tank: across to a column clear of it, along it, then across to the shooter.
-		var cx0 := u.position.x - TAG_CLEAR
-		var cx1 := u.end.x + TAG_CLEAR
-		var col := cx0 if absf(anchor.x - cx0) <= absf(anchor.x - cx1) else cx1
-		if col < 1.0 or col > cv.x - 2.0:
-			col = cx1 if col == cx0 else cx0
-		col = clampf(col, 1.0, cv.x - 2.0)
-		pts = [from, Vector2(col, from.y), Vector2(col, to.y), to]
 	var pointer: Array[Vector2i] = []
-	for i in pts.size() - 1:
-		var a: Vector2 = pts[i]
-		var b: Vector2 = pts[i + 1]
-		var steps := int(maxf(absf(b.x - a.x), absf(b.y - a.y)))
-		for j in range(0, steps + 1, 2):
-			var p := a.lerp(b, float(j) / maxf(float(steps), 1.0)).round()
-			if not _on_body(p, body):
-				pointer.append(Vector2i(p))
-	return {"rect": tr, "pointer": pointer, "lx": lx, "up": up}
+	var steps := int(maxf(absf(to.x - from.x), absf(to.y - from.y)))
+	for j in range(0, steps + 1, 2):
+		var p := from.lerp(to, float(j) / maxf(float(steps), 1.0)).round()
+		if not _on_body(p, body):
+			pointer.append(Vector2i(p))
+	return {"rect": tr, "pointer": pointer, "lx": lx}
 
 
-## `tr` moved out of the plates `keep` (left of a plate on the right half, else under it).
-static func _out_of(tr: Rect2, keep: Array[Rect2], cv: Vector2) -> Rect2:
+## The evadable shell's SURGE tag: in the far panel, beside the seam's range plate and at its height.
+static func shell_rect(seam: Rect2, far: Rect2, size: Vector2) -> Rect2:
+	var cx := seam.get_center().x
+	var x := cx + SEAM_PLATE_W * 0.5 + SEAM_GAP
+	if far.get_center().x < cx:
+		x = cx - SEAM_PLATE_W * 0.5 - SEAM_GAP - size.x
+	return Rect2(roundf(x), SEAM_PLATE_Y, size.x, size.y)
+
+
+## The far panel `far` without the strip the seam's range plate reaches into.
+static func _off_seam_plate(far: Rect2, seam: Rect2) -> Rect2:
+	var reach := SEAM_PLATE_W * 0.5 - seam.size.x * 0.5
+	if far.position.x >= seam.position.x:
+		return far.grow_individual(-reach, 0.0, 0.0, 0.0)
+	return far.grow_individual(0.0, 0.0, -reach, 0.0)
+
+
+## `tr` moved under the plates `keep` it would lie on.
+static func _under(tr: Rect2, keep: Array[Rect2]) -> Rect2:
 	for k in keep:
 		if tr.intersects(k):
-			if k.get_center().x > cv.x * 0.5:
-				tr.position.x = k.position.x - tr.size.x - 4.0
-			else:
-				tr.position.y = k.end.y + 2.0
+			tr.position.y = k.end.y + 2.0
 	return tr
 
 
@@ -354,14 +425,6 @@ static func _on_body(p: Vector2, body: Array[Rect2]) -> bool:
 		if b.has_point(p + Vector2(0.5, 0.5)):
 			return true
 	return false
-
-
-static func _segment_clear(a: Vector2, b: Vector2, body: Array[Rect2]) -> bool:
-	var steps := int(maxf(absf(b.x - a.x), absf(b.y - a.y)))
-	for j in steps + 1:
-		if _on_body(a.lerp(b, float(j) / maxf(float(steps), 1.0)).round(), body):
-			return false
-	return true
 
 
 ## Free roam: the turn marker at the turning place ahead while it is within TURN_MARKER_M of the
@@ -401,10 +464,10 @@ func paint() -> void:
 		_post(pl)
 	for wl: Dictionary in lay["warn"]:
 		_warn_tag(wl)
-	for p: Vector2 in lay["edge"]:
-		var left := p.x < float(canvas().x) * 0.5
-		D.rect(self, Rect2(p + Vector2(-1, -1), Vector2(6, 9)), Color(D.PANEL, 0.8))
-		D.pixels(self, EDGE_ARROW if left else EDGE_ARROW_R, p, Color(D.RED, 0.9))
+	var sr2: Rect2 = lay["shell"]
+	if sr2.size != Vector2.ZERO:
+		var sh: Dictionary = m["shell"]
+		_surge_plate(sr2, float(sh["left"]), float(sh["total"]))
 	if aim_fade.x > 0.0 and m.has("barrel"):
 		_alpha = aim_fade.x
 		_elev_arc()
@@ -420,9 +483,11 @@ func paint() -> void:
 func _speed_tag(r: Rect2) -> void:
 	var txt := tx("TANK_HUD_SPEED", [roundi(float(m["speed"]))])
 	D.rect(self, Rect2(r.position + Vector2(2, r.size.y), Vector2(r.size.x - 2, 1)), D.SHADOW)
-	for lx: float in [r.position.x + 5.0, r.end.x - 7.0]:
-		D.rect(self, Rect2(lx, r.end.y, 2, 4), D.RIVET_LO)
-		D.rect(self, Rect2(lx, r.end.y, 1, 4), D.FRAME_IN)
+	# on the road it stands on its legs; over the deck (a short canvas) it has none
+	if r.position.y >= float(m["ground"]) - SPEED_H:
+		for lx: float in [r.position.x + 5.0, r.end.x - 7.0]:
+			D.rect(self, Rect2(lx, r.end.y, 2, SPEED_LEGS), D.RIVET_LO)
+			D.rect(self, Rect2(lx, r.end.y, 1, SPEED_LEGS), D.FRAME_IN)
 	D.plate(self, r, D.FRAME, 0)
 	D.tall(self, r.position.x + 8, r.position.y + 4, txt, D.TEXT)
 
@@ -437,13 +502,10 @@ func _post(pl: Dictionary) -> void:
 	var pinned := bool(pl["pinned"])
 	var gy := float(m["ground"])
 	var top := gy - POST_H
-	for y in range(int(top), int(gy + 2)):
-		var band := posmod(int((y - top) / 4.0), 2) == 0
-		D.rect(self, Rect2(x, y, 3, 1), D.AMBER if band else Color("#2a1f14"))
-	D.rect(self, Rect2(x - 1, gy + 2, 5, 2), Color("#2a1f14"))
-	D.rect(self, Rect2(x - 3, top - 3, 9, 3), D.FRAME)
-	D.rect(self, Rect2(x - 4, top - 6, 11, 11), Color(D.AMBER, 0.12))
-	D.rect(self, Rect2(x, top - 2, 3, 1), Color("#fff2c8"))
+	var threats: Array[Rect2] = []
+	threats.assign(m.get("threats", []))
+	if bool(pl.get("pole", true)):
+		_pole(x, top, gy, threats)
 	var tr: Rect2 = pl["plate"]
 	D.plate(self, tr, D.FRAME, 0)
 	D.tall(self, tr.position.x + 5, tr.position.y + 4, title, D.DIM)
@@ -452,7 +514,30 @@ func _post(pl: Dictionary) -> void:
 	if pinned or dir < 0:
 		var arrow := PIN_ARROW if dir >= 0 else PIN_ARROW_L
 		var ax := x + 8.0 if dir >= 0 else x - 8.0
-		D.pixels(self, arrow, Vector2(ax, top + 6), D.AMBER)
+		var ay := top + 6.0
+		if not threats.is_empty():
+			# outside the plate's own edge, over the beam: the road lane is the threat's
+			ax = tr.end.x + 2.0 if dir >= 0 else tr.position.x - 6.0
+			ay = tr.position.y + 13.0
+		D.pixels(self, arrow, Vector2(ax, ay), D.AMBER)
+
+
+## The striped post and its lamp, every pixel of it behind the near threats: the signage never stands on a threat.
+func _pole(x: float, top: float, gy: float, threats: Array[Rect2]) -> void:
+	for y in range(int(top), int(gy + 2)):
+		var band := posmod(int((y - top) / 4.0), 2) == 0
+		_post_rect(Rect2(x, y, 3, 1), D.AMBER if band else Color("#2a1f14"), threats)
+	_post_rect(Rect2(x - 1, gy + 2, 5, 2), Color("#2a1f14"), threats)
+	_post_rect(Rect2(x - 3, top - 3, 9, 3), D.FRAME, threats)
+	_post_rect(Rect2(x - 4, top - 6, 11, 11), Color(D.AMBER, 0.12), threats)
+	_post_rect(Rect2(x, top - 2, 3, 1), Color("#fff2c8"), threats)
+
+
+func _post_rect(r: Rect2, col: Color, threats: Array[Rect2]) -> void:
+	for t in threats:
+		if r.intersects(t):
+			return
+	D.rect(self, r, col)
 
 
 ## The plates a world tag keeps out of, on the canvas.
@@ -464,30 +549,39 @@ func keep_out() -> Array[Rect2]:
 	return out
 
 
-## A SURGE tag laid out by warn_layout: the plate (blinking edge), the warning sign, the label, one
-## pip per second of the telegraph, its tip and the dotted pointer to the shooter.
+## A SURGE tag laid out by warn_layout: the plate, its tip and the dotted pointer to the shooter; a shooter with no
+## plate of its own has a small blinking tick and the same pointer.
 func _warn_tag(wl: Dictionary) -> void:
 	var w: Dictionary = wl["w"]
 	var tr: Rect2 = wl["rect"]
-	var label := tx("TANK_HUD_SURGE_TAG")
-	var blink := int(floorf(st().t * 4.0)) % 2 == 0
-	var edge := D.RED if blink else D.FRAME_HI
 	var lx := float(wl["lx"])
 	for p: Vector2i in wl["pointer"]:
 		D.rect(self, Rect2(Vector2(p), Vector2(1, 1)), Color(D.RED, 0.8))
+	if not bool(wl.get("plate", true)):
+		var lit := int(floorf(st().t * 4.0)) % 2 == 0
+		D.pixels(self, TICK, tr.position, D.RED if lit else D.FRAME_HI)
+		return
+	var edge := _surge_plate(tr, float(w["left"]), float(w["total"]))
+	for k in 4:
+		D.rect(self, Rect2(lx - 3 + k, tr.end.y + k, 7 - 2 * k, 1), edge)
+
+
+## The SURGE plate: its blinking edge (returned), the warning sign, the label, one pip per second of
+## `total`, emptying as `left` runs out.
+func _surge_plate(tr: Rect2, left: float, total: float) -> Color:
+	var blink := int(floorf(st().t * 4.0)) % 2 == 0
+	var edge := D.RED if blink else D.FRAME_HI
 	D.plate(self, tr, edge, 0)
 	D.pixels(self, WARN_TRI, tr.position + Vector2(5, 4), D.RED)
-	D.tall(self, tr.position.x + 15, tr.position.y + 4, label, D.TEXT)
-	var n := maxi(ceili(float(w["total"])), 1)
-	var lit := clampi(ceili(float(w["left"])), 0, n)
+	D.tall(self, tr.position.x + 15, tr.position.y + 4, tx("TANK_HUD_SURGE_TAG"), D.TEXT)
+	var n := maxi(ceili(total), 1)
+	var lit := clampi(ceili(left), 0, n)
 	var pw := 5.0
 	var px := roundf(tr.position.x + (tr.size.x - n * (pw + 2) + 2) * 0.5)
 	for i in n:
 		var col := D.RED if i < lit else D.TRACK
 		D.rect(self, Rect2(px + i * (pw + 2), tr.position.y + 17, pw, 4), col)
-	for k in 4:
-		var y := tr.position.y - 1 - k if bool(wl["up"]) else tr.end.y + k
-		D.rect(self, Rect2(lx - 3 + k, y, 7 - 2 * k, 1), edge)
+	return edge
 
 
 ## The elevation arc beyond the muzzle of the barrel as drawn (TankHudGeom's pure geometry, tested
@@ -540,9 +634,8 @@ const SEC_COL := Color("#d6ecff")
 const SEC_DIM := Color(0.62, 0.78, 0.92, 0.5)
 ## The plate under the dial's two lines (its alpha).
 const SEC_PLATE_A := 0.8
-## The bow guns' reach ahead of their muzzles in rules px (TankFeedState: they fire at the nearest
-## enemy 40-220 px ahead).
-const SEC_REACH_PX := Vector2(40.0, 220.0)
+## The bow guns' reach ahead of their muzzles in rules px (tanks.json bow.min_px, max_px).
+const SEC_REACH_PX := Vector2(4.0, 200.0)
 const SHELL_PIP := [".#.", "###", "###", "###", "###", "###", "###"]
 
 
@@ -559,10 +652,18 @@ func _rack_pips(lr: Rect2, left: bool) -> void:
 			D.rect(self, Rect2(p + Vector2(i * 5 + 1, 0), Vector2(1, 1)), _fa(Color("#e07a3c")))
 
 
-## The bow guns' elevation as the dial shows it: {deg (+ up, SEC_MIN..SEC_MAX), target (an enemy in
-## their reach)}. SWITCH POINT for the lead: until the rules expose the bow guns' elevation, deg
+## True while a near threat (recon, tankette) is alive: the Secondaries' dial shows only then.
+static func near_threat(s: TankState) -> bool:
+	for e in s.enemies:
+		if e.is_near() and e.mode != TankIds.EM_DEAD and e.hp > 0.0:
+			return true
+	return false
+
+
+## The bow guns' elevation as the dial shows it: {deg (+ up, SEC_MIN..SEC_MAX), target (a near threat
+## in their reach)}. SWITCH POINT for the lead: until the rules expose the bow guns' elevation, deg
 ## is the upper gun's bore as the view draws it (pivot to muzzle, which the view tilts toward the
-## nearest enemy ahead), else (no view) the bore line from its pivot to the nearest live enemy
+## nearest enemy ahead), else (no view) the bore line from its pivot to the nearest near threat
 ## SEC_REACH_PX ahead of the muzzles, level (0) with none. Once the state carries the elevation,
 ## return that instead and keep the signature.
 static func bow_elevation(s: TankState, g: TankHudGeom) -> Dictionary:
@@ -573,7 +674,7 @@ static func bow_elevation(s: TankState, g: TankHudGeom) -> Dictionary:
 	var best := Rect2()
 	var best_d := INF
 	for e in s.enemies:
-		if e.mode == TankIds.EM_DEAD or e.hp <= 0.0:
+		if not e.is_near() or e.mode == TankIds.EM_DEAD or e.hp <= 0.0:
 			continue
 		var r := g.enemy_rect(e)
 		if r.size == Vector2.ZERO:
@@ -593,13 +694,13 @@ static func bow_elevation(s: TankState, g: TankHudGeom) -> Dictionary:
 	return {"deg": clampf(rad_to_deg(atan2(-d.y, absf(d.x))), SEC_MIN, SEC_MAX), "target": has}
 
 
-## The Secondaries' dial data while their seat is manned and the guns fire or have a target: the bow
-## guns' pivot and length as drawn, their side, their elevation (bow_elevation()) and the rounds a
+## The Secondaries' dial data while their seat is manned, a near threat lives and the guns fire or have
+## it in reach: the bow guns' pivot and length as drawn, their side, their elevation (bow_elevation()) and the rounds a
 ## minute (TankFeedState.rpm).
 func _feed_secondaries(s: TankState, g: TankHudGeom) -> void:
 	m.erase("sec")
 	var fd := s.station(TankIds.ENGINE_FEED)
-	if fd == null or fd.is_empty():
+	if fd == null or fd.is_empty() or not near_threat(s):
 		return
 	var be := bow_elevation(s, g)
 	var rpm := TankHudModel.feed_rpm(s)

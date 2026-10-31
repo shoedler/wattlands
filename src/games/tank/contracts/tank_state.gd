@@ -27,6 +27,9 @@ var all_afk: bool = false
 var outcome: String = ""
 ## The next id for enemies, shells and obstacles (never reused).
 var next_id: int = 1
+## v4: TankIds.DIFF_EASY/NORMAL/HARD, resolved at the session start on every peer (from ctx.options; not
+## in the snapshot).
+var difficulty: String = TankIds.DIFF_NORMAL
 
 var seg: TankSegmentState = TankSegmentState.new()
 var hull: TankHullState = TankHullState.new()
@@ -69,7 +72,9 @@ static func create(
 	var size: Array = def.get("hull_px", [296, 65])
 	s.hull.hull_w = int(size[0])
 	s.hull.hull_h = int(size[1])
-	s.hull.hp_max = p_content.num("tanks", "hull.hp", 100.0)
+	s.hull.hp_max = float(
+		p_content.mission().get("hull_hp", p_content.num("tanks", "hull.hp", 100.0))
+	)
 	s.hull.hp = s.hull.hp_max
 	var starts := p_content.start_engines(tank)
 	for p in slots:

@@ -26,16 +26,9 @@ const DIP_SHADE := 0.05
 ## whole clearing on screen ahead of the tank's nose at the start, the gate last, so the tank rolls
 ## out past it), a gun line's (rules px), and the free-roam start's metre.
 const BASE_W := 236.0
-const DEPOT_BASE_X := 460.0
-const GUN_LINE_BASE_X := 560.0
+## The lamp post's x in a base.
+const LAMP_X := 120.0
 const ROAM_START_M := 60.0
-## A gun line's base slides along the road in steps of BASE_SLIDE (rules px), nearest first, up to
-## BASE_SLIDE_MAX either way, until its clearing (BASE_W and its bank, BASE_BANK each side) keeps
-## BASE_CLEAR art px clear of every dug-in in every lane, standing or wrecked.
-const BASE_SLIDE := 30.0
-const BASE_SLIDE_MAX := 480.0
-const BASE_BANK := 14.0
-const BASE_CLEAR := 6.0
 ## The forest variants: zone id -> the forest planes' tint.
 const ZONE_TINT := {
 	TankIds.ZONE_FOREST: Color(1, 1, 1),
@@ -269,82 +262,31 @@ static func _noise(x: int, y: int) -> float:
 # --- Little bases -------------------------------------------------------------------------------------------
 
 
-## The little bases on screen: their left ends (travel-frame stage x). The depot's at its start; a
-## gun line's clear of its dug-ins (gun_line_base()); free roam's at the start and at each
-## strongpoint.
+## The little bases on the near stage: their left ends (travel-frame stage x): free roam's, at the start
+## and at each strongpoint.
 static func bases(v: TankView, state: TankState) -> Array[float]:
 	var out: Array[float] = []
-	if state.roam.active and state.roam_map != null:
-		var map := state.roam_map
-		var spots: Array[float] = [map.lo_m + ROAM_START_M]
-		for m in map.strongpoints:
-			spots.append(m)
-		for m2: float in spots:
-			out.append(roundf(v.sx(v.travel_x(state, m2)) - BASE_W * 0.5))
-	elif state.seg.seg == TankIds.SEG_DEPOT:
-		out.append(roundf(v.sx(DEPOT_BASE_X)))
-	elif state.seg.seg == TankIds.SEG_GUN_LINE:
-		var gx := gun_line_base(v, state)
-		if not is_nan(gx):
-			out.append(gx)
-	var vis: Array[float] = []
-	for x in out:
-		if x < v.canvas.x + 20.0 and x + BASE_W > -20.0:
-			vis.append(x)
-	return vis
-
-
-## A gun line's base (its left end, travel-frame stage x; NAN where none fits): GUN_LINE_BASE_X
-## slid by the nearest step of BASE_SLIDE that keeps its clearing clear of every dug-in, standing
-## or wrecked, in every lane (dugin_spans()). The slide is latched per gun line once a dug-in is
-## known (TankView.base_slides), so the base never jumps when a dug-in falls or its wreck goes.
-static func gun_line_base(v: TankView, state: TankState) -> float:
-	var key := "gun line %d" % state.seg.phase_index
-	var spans := dugin_spans(v, state)
-	var d: Variant = v.base_slides.get(key, null)
-	if d == null:
-		d = base_slide(v, spans)
-		if not spans.is_empty():
-			v.base_slides[key] = d
-	if is_nan(float(d)):
-		return NAN
-	return roundf(v.sx(GUN_LINE_BASE_X + float(d)))
-
-
-## The slide (rules px) of the nearest clear spot for a gun line's base against `spans` (stage x
-## ranges, dugin_spans()); NAN when none within BASE_SLIDE_MAX.
-static func base_slide(v: TankView, spans: Array[Vector2]) -> float:
-	var n := int(BASE_SLIDE_MAX / BASE_SLIDE)
-	for i in 2 * n + 1:
-		var d := BASE_SLIDE * float(ceili(float(i) / 2.0)) * (1.0 if i % 2 == 1 else -1.0)
-		var x0 := v.sx(GUN_LINE_BASE_X + d)
-		var a := x0 - BASE_BANK - BASE_CLEAR
-		var b := x0 + BASE_W + BASE_BANK + BASE_CLEAR
-		var clear := true
-		for sp in spans:
-			if a < sp.y and b > sp.x:
-				clear = false
-				break
-		if clear:
-			return d
-	return NAN
-
-
-## The dug-ins' stage x ranges (Vector2(left, right)): every standing one in any lane and every
-## dug-in wreck.
-static func dugin_spans(v: TankView, state: TankState) -> Array[Vector2]:
-	var out: Array[Vector2] = []
-	for e in state.enemies:
-		if e.mode == TankIds.EM_DEAD or TankIds.enemy_of(e.code) != TankIds.ENEMY_DUGIN:
-			continue
-		var lane := clampi(e.lane, 0, TankView.LANES - 1)
-		var r := v.lane_rect(TankIds.ENEMY_DUGIN, v.sx(v.enemy_x(e) + float(e.w) * 0.5), lane)
-		out.append(Vector2(r.position.x, r.end.x))
-	for w in v.wrecks:
-		if str(w.get("kind", "")) == TankIds.ENEMY_DUGIN:
-			var wr := TankWorldDraw.wreck_rect(v, w)
-			out.append(Vector2(wr.position.x, wr.end.x))
+	if not state.roam.active or state.roam_map == null:
+		return out
+	var map := state.roam_map
+	var spots: Array[float] = [map.lo_m + ROAM_START_M]
+	for m in map.strongpoints:
+		spots.append(m)
+	for m2: float in spots:
+		var x := roundf(v.sx(v.travel_x(state, m2)) - BASE_W * 0.5)
+		if x < TankFarMap.near_end_x(v.canvas.x) + 20.0 and x + BASE_W > -20.0:
+			out.append(x)
 	return out
+
+
+## The base a mission's stage shows in the far panel, its left end in panel px; NAN for none: the depot's
+## and a holding action's, whole in the panel (the near panel's road has no room for one), sliding away
+## at the far parallax as the hull drives off.
+static func far_base(v: TankView, state: TankState) -> float:
+	if state.roam.active or not state.seg.seg in [TankIds.SEG_DEPOT, TankIds.SEG_GUN_LINE]:
+		return NAN
+	var x := (v.far.far_w - BASE_W) * 0.5 - v.hull_x * TankView.S * TankFarPanel.PLANE_PARALLAX
+	return roundf(x) if x + BASE_W > -20.0 else NAN
 
 
 ## The road line (stage y) a base at `x0` stands on: the relief at its middle, on the far edge.
@@ -355,22 +297,28 @@ static func base_ground(v: TankView, x0: float) -> float:
 ## A little base at stage x `x0`: a cleared earth bank, a fence of posts and wire with a gate, a
 ## sodded concrete bunker (formwork joints, a vent grille, a periscope pipe, rust under the slit's
 ## frame) with a dark firing slit behind sandbags, a hooded lamp on a post, crates
-## under a tarp, fuel drums, the gate's red and white barrier raised.
-static func draw_base(ci: CanvasItem, v: TankView, x0: float) -> void:
-	var g := base_ground(v, x0)
-	_bank(ci, x0, g)
+## under a tarp, fuel drums, the gate's red and white barrier raised. `at_g` stands it on that row instead of the road
+## (the far panel: at the treeline's foot, with no earth bank: nothing under an enemy's tracks); `lamp` false leaves
+## the post out (the far panel, while a hull stands across it).
+static func draw_base(
+	ci: CanvasItem, v: TankView, x0: float, at_g: float = NAN, lamp: bool = true
+) -> void:
+	var g := base_ground(v, x0) if is_nan(at_g) else at_g
+	if is_nan(at_g):
+		_bank(ci, x0, g)
 	_fence(ci, x0, g, true)
 	_bunker(ci, x0 + 26.0, g)
 	_drums(ci, x0 + 98.0, g)
-	_lamp_post(ci, x0 + 120.0, g)
+	if lamp:
+		_lamp_post(ci, x0 + LAMP_X, g)
 	_crates(ci, x0 + 130.0, g)
 	_barrier(ci, x0 + 182.0, g)
 	_fence(ci, x0, g, false)
 
 
 ## The base's lights (stage px): the lamp and the bunker's slit.
-static func base_lights(v: TankView, x0: float) -> Array[Dictionary]:
-	var g := base_ground(v, x0)
+static func base_lights(v: TankView, x0: float, at_g: float = NAN) -> Array[Dictionary]:
+	var g := base_ground(v, x0) if is_nan(at_g) else at_g
 	return [
 		{"p": Vector2(x0 + 121.0, g - 45.0), "kind": "lamp", "g": g},
 		{"p": Vector2(x0 + 58.0, g - 15.0), "kind": "slit", "g": g},
@@ -538,11 +486,15 @@ static func _barrier(ci: CanvasItem, x: float, g: float) -> void:
 
 ## The base's light on the world light layer (behind the tank): the lamp, its cone and pool, the
 ## slit's faint glow.
-static func draw_base_light(ci: CanvasItem, v: TankView, x0: float) -> void:
-	for l in base_lights(v, x0):
+static func draw_base_light(
+	ci: CanvasItem, v: TankView, x0: float, at_g: float = NAN, lamp: bool = true
+) -> void:
+	for l in base_lights(v, x0, at_g):
 		var p: Vector2 = l["p"]
 		if str(l["kind"]) == "slit":
 			TankDraw.glow_at(ci, p, 10.0, Color(1.0, 0.55, 0.25, 0.1))
+			continue
+		if not lamp:
 			continue
 		TankDraw.glow_at(ci, p, 5.0, Color(1.0, 0.86, 0.6, 0.8))
 		TankDraw.glow_at(ci, p + Vector2(0, 14), 36.0, Color(LAMP.r, LAMP.g, LAMP.b, 0.24))

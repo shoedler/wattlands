@@ -1,0 +1,111 @@
+{
+	"_doc": "Ambush (SPEC_TANK 3.8): the short, hard mission. 15 minutes: the 5 minute warm-up depot (BRIEF 4.6.8), about 7 minutes of fights, a 3 minute cool-down. Nominal 300 + 120 + 90 + 60 + 150 + 180 = 900 s; at the phases' min_s 780 s, at their max_s 1010 s. Defaults to Hard (difficulty_default; the host's option overrides it). One stage for the score (score_stages). Owner: rules. Schema: TankContentSchema.validate_mission; format as ashfall_road.json.",
+	"id": "ambush_15",
+	"difficulty_default": "hard",
+	"hull_hp": 90,
+	"checkpoint_hp": 20,
+	"score_stages": 1,
+	"label": "TANK_CONTENT_AMBUSH_15",
+	"plan_table": "plans",
+	"segments": [
+		{
+			"id": "depot",
+			"type": "depot",
+			"stage": 0,
+			"kind": "WARMUP",
+			"duration_s": 300,
+			"label": "TANK_PHASE_DEPOT",
+			"name": "TANK_PLACE_DEPOT",
+			"backdrop": "base",
+			"terrain": [[0, 0], [200, 1], [400, 2], [600, 1], [800, 0], [1000, 1.5], [1200, 0.5], [1500, 0]],
+			"drills": [
+				{"from_s": 0, "to_s": 120, "drill": "drive"},
+				{"from_s": 120, "to_s": 240, "drill": "aim", "targets": 2},
+				{"from_s": 240, "to_s": 300, "drill": "fire"}
+			]
+		},
+		{
+			"id": "ambush_advance",
+			"type": "advance",
+			"stage": 1,
+			"kind": "WORK",
+			"duration_s": 120,
+			"min_s": 80,
+			"max_s": 160,
+			"end_hold_s": 2,
+			"label": "TANK_PHASE_AMBUSH_ADVANCE",
+			"name": "TANK_PLACE_PINE_ROAD",
+			"backdrop": "forest",
+			"length_m": 700,
+			"terrain": [[0, 0], [130, 2], [280, 5], [420, 2], [540, -2], [700, 0]],
+			"encounters": [
+				{"at_m": 35, "enemy": "medium", "count": 1},
+				{"at_m": 105, "enemy": "recon", "count": 1, "min_crew": 2},
+				{"at_m": 210, "enemy": "light", "count": 1},
+				{"at_m": 315, "enemy": "destroyer", "count": 1},
+				{"at_m": 420, "enemy": "tankette", "count": 1, "min_crew": 2},
+				{"at_m": 470, "enemy": "light", "count": 1},
+				{"at_m": 525, "enemy": "medium", "count": 1}
+			],
+			"obstacles": []
+		},
+		{
+			"id": "ambush_hold",
+			"type": "gun_line",
+			"stage": 1,
+			"kind": "WORK",
+			"duration_s": 90,
+			"min_s": 60,
+			"max_s": 120,
+			"end_hold_s": 2,
+			"label": "TANK_PHASE_AMBUSH_HOLD",
+			"name": "TANK_PLACE_FOREST_POST",
+			"backdrop": "base",
+			"enemies": [
+				{"enemy": "light", "count": 1, "hold_m": [950]},
+				{"enemy": "heavy", "count": 1, "hold_m": [1400], "min_crew": 2},
+				{"enemy": "medium", "count": 1, "hold_m": [1100], "min_crew": 2},
+				{"enemy": "light", "count": 1, "hold_m": [1050], "min_crew": 2}
+			],
+			"near": [
+				{"at_s": 20, "enemy": "recon", "count": 1, "min_crew": 3},
+				{"at_s": 45, "enemy": "tankette", "count": 1, "min_crew": 3}
+			],
+			"props": [
+				{"type": "tank_traps", "at_px": 40}
+			]
+		},
+		{
+			"id": "checkpoint1",
+			"type": "checkpoint",
+			"stage": 1,
+			"kind": "RECOVERY",
+			"duration_s": 60,
+			"label": "TANK_PHASE_CHECKPOINT_1",
+			"name": "TANK_PLACE_CHECKPOINT",
+			"backdrop": "forest"
+		},
+		{
+			"id": "boss",
+			"type": "boss",
+			"stage": 4,
+			"kind": "WORK",
+			"duration_s": 150,
+			"min_s": 100,
+			"max_s": 190,
+			"label": "TANK_PHASE_BOSS",
+			"name": "TANK_PLACE_IRON_GATE",
+			"backdrop": "base",
+			"end_hold_s": 7.5,
+			"boss": {"start_left_px": 500},
+			"near": [
+				{"at_s": 30, "enemy": "tankette", "count": 1, "min_crew": 3},
+				{"at_s": 90, "enemy": "recon", "count": 1, "min_crew": 3}
+			]
+		}
+	],
+	"cooldown": {
+		"backdrop_victory": "base",
+		"backdrop_withdrawn": "forest"
+	}
+}

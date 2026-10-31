@@ -33,11 +33,20 @@ const ENGINE_ARC := "arc"
 ## Secondaries (v3): the crank-driven twin belt feed (SIM flat) of the two bow guns, 2 rounds per
 ## pedal revolution (TankFeedState).
 const ENGINE_FEED := "feed"
+## v4: Repairs: the crank-driven rivet hammer and patch press on the upper deck (ERG 55-70 %).
+const ENGINE_REPAIR := "repair"
 ## Every engine content and plans know (stations.json engines).
-const ENGINES: Array[String] = [ENGINE_DIESEL, ENGINE_DYNAMO, ENGINE_STEAM, ENGINE_ARC, ENGINE_FEED]
+const ENGINES: Array[String] = [
+	ENGINE_DIESEL, ENGINE_DYNAMO, ENGINE_STEAM, ENGINE_ARC, ENGINE_FEED, ENGINE_REPAIR
+]
 ## Wire codes. 4 was the Bulwark's gearbox diesel: reserved.
 const ENGINE_CODES := {
-	ENGINE_DIESEL: 1, ENGINE_DYNAMO: 2, ENGINE_STEAM: 3, ENGINE_ARC: 5, ENGINE_FEED: 6
+	ENGINE_DIESEL: 1,
+	ENGINE_DYNAMO: 2,
+	ENGINE_STEAM: 3,
+	ENGINE_ARC: 5,
+	ENGINE_FEED: 6,
+	ENGINE_REPAIR: 7,
 }
 ## Engine name keys (TANK_ENGINE_*), for station cards and results.
 const ENGINE_LABELS := {
@@ -46,11 +55,14 @@ const ENGINE_LABELS := {
 	ENGINE_STEAM: "TANK_ENGINE_STEAM",
 	ENGINE_ARC: "TANK_ENGINE_ARC",
 	ENGINE_FEED: "TANK_ENGINE_FEED",
+	ENGINE_REPAIR: "TANK_ENGINE_REPAIR",
 }
-## v3: the five seats in the seat row's order (Drive, Gun, Loader, Lights, Secondaries; the HUD's
-## seat panel, "next" / "prev" seat intents and the automatic seating's fill priority). The tank's
-## rooms rear to front are tanks.json engines (diesel, steam, dynamo, arc, feed).
-const SEATS: Array[String] = [ENGINE_DIESEL, ENGINE_DYNAMO, ENGINE_STEAM, ENGINE_ARC, ENGINE_FEED]
+## The six seats (v4) in the seat row's order (Drive, Gun, Loader, Lights, Secondaries, Repairs; the
+## HUD's seat panel, "next" / "prev" seat intents and the automatic seating's fill priority). The
+## tank's rooms rear to front are tanks.json engines (diesel, steam, dynamo, arc, repair, feed).
+const SEATS: Array[String] = [
+	ENGINE_DIESEL, ENGINE_DYNAMO, ENGINE_STEAM, ENGINE_ARC, ENGINE_FEED, ENGINE_REPAIR
+]
 ## Seat name keys (TANK_SEAT_*).
 const SEAT_LABELS := {
 	ENGINE_DIESEL: "TANK_SEAT_DRIVE",
@@ -58,6 +70,7 @@ const SEAT_LABELS := {
 	ENGINE_STEAM: "TANK_SEAT_LOADER",
 	ENGINE_ARC: "TANK_SEAT_LIGHTS",
 	ENGINE_FEED: "TANK_SEAT_SECONDARIES",
+	ENGINE_REPAIR: "TANK_SEAT_REPAIRS",
 }
 
 # --- Segments (brief 2.3 segment table; the drill's skirmish, 2.9) -----------------------------------
@@ -120,14 +133,27 @@ const BACKDROPS: Array[String] = [BACKDROP_FOREST, BACKDROP_FIRS, BACKDROP_BIRCH
 const ENEMY_LIGHT := "light"
 const ENEMY_MEDIUM := "medium"
 const ENEMY_DESTROYER := "destroyer"
-const ENEMY_DUGIN := "dugin"
 const ENEMY_HEAVY := "heavy"
+const ENEMY_RECON := "recon"
+const ENEMY_TANKETTE := "tankette"
+## v4: stand in the far panel (TankEnemyState.range_m).
+const FAR_KINDS: Array[String] = [ENEMY_LIGHT, ENEMY_MEDIUM, ENEMY_DESTROYER, ENEMY_HEAVY]
+## v4: burst from the bushes in the near panel (TankEnemyState.x_px); only the bow guns hit them.
+const NEAR_KINDS: Array[String] = [ENEMY_RECON, ENEMY_TANKETTE]
 const ENEMY_TYPES: Array[String] = [
-	ENEMY_LIGHT, ENEMY_MEDIUM, ENEMY_DESTROYER, ENEMY_DUGIN, ENEMY_HEAVY
+	ENEMY_LIGHT, ENEMY_MEDIUM, ENEMY_DESTROYER, ENEMY_HEAVY, ENEMY_RECON, ENEMY_TANKETTE
 ]
+## 6 is BOSS_CODE.
 const ENEMY_CODES := {
-	ENEMY_LIGHT: 1, ENEMY_MEDIUM: 2, ENEMY_DESTROYER: 3, ENEMY_DUGIN: 4, ENEMY_HEAVY: 5
+	ENEMY_LIGHT: 1,
+	ENEMY_MEDIUM: 2,
+	ENEMY_DESTROYER: 3,
+	ENEMY_HEAVY: 5,
+	ENEMY_RECON: 7,
+	ENEMY_TANKETTE: 8,
 }
+## Kinds that are gone, with the codes they held: a code is never used again.
+const RETIRED_ENEMY_CODES := {"dugin": 4}
 ## The Behemoth's code in kill counts and events ("kill" t, results kills by type).
 const BOSS_CODE := 6
 const BOSS_ID := "behemoth"
@@ -142,10 +168,20 @@ const EM_DEAD := 5
 ## A raider breaking off (a light tank after its linger_s): rolls away, does not fire, leaves with no
 ## kill. Distinct from EM_MOVE, a destroyer's shift after a shot.
 const EM_LEAVE := 6
+## v4: a far enemy falling back in reverse (hull still toward us); removed past FAR_SPAWN_M with no credit.
+const EM_RETIRE := 7
+## v4: a near threat paused to fire (EM_MOVE is its dash, EM_LEAVE its flight).
+const EM_PAUSE := 8
 
 ## Where an Advance encounter enters.
 const FROM_FRONT := "front"
-const FROM_REAR := "rear"
+
+# --- Difficulty (v4, game.json option "difficulty"; TankDifficulty) ---------------------------------
+const DIFF_AUTO := "auto"
+const DIFF_EASY := "easy"
+const DIFF_NORMAL := "normal"
+const DIFF_HARD := "hard"
+const DIFFICULTIES: Array[String] = [DIFF_EASY, DIFF_NORMAL, DIFF_HARD]
 
 # --- Obstacles and props ----------------------------------------------------------------------------
 const OBST_WIRE := "wire"
@@ -204,7 +240,6 @@ const OUTCOME_TIME_UP := "time_up"
 const INTENT_LEVER := "lever"
 const INTENT_AIM := "aim"
 const INTENT_TARGET := "target"
-const INTENT_TRAVERSE := "traverse"
 const INTENT_FIRE := "fire"
 const INTENT_LATCH := "latch"
 const INTENT_OVER := "over"
@@ -216,19 +251,12 @@ const INTENT_TURN := "turn"
 ## seat (0.3.1: no seat lock; refused on reserve and in the cool-down) and the trainer follows.
 const INTENT_SEAT := "seat"
 const INTENT_KINDS: Array[String] = [
-	INTENT_AIM,
-	INTENT_TARGET,
-	INTENT_TRAVERSE,
-	INTENT_FIRE,
-	INTENT_LATCH,
-	INTENT_OVER,
-	INTENT_TURN,
-	INTENT_SEAT
+	INTENT_AIM, INTENT_TARGET, INTENT_FIRE, INTENT_LATCH, INTENT_OVER, INTENT_TURN, INTENT_SEAT
 ]
 ## Intents that end a human's Autopilot fallback (brief 2.5; v3: and its automatic seating); over
 ## never does. (v2: the Ram and its "ram" intent are gone, brief 2.4; v3: so is "lever".)
 const DELIBERATE_KINDS: Array[String] = [
-	INTENT_AIM, INTENT_TARGET, INTENT_TRAVERSE, INTENT_FIRE, INTENT_LATCH, INTENT_TURN, INTENT_SEAT
+	INTENT_AIM, INTENT_TARGET, INTENT_FIRE, INTENT_LATCH, INTENT_TURN, INTENT_SEAT
 ]
 
 const VIA_ACTION := "action"
@@ -280,6 +308,11 @@ static func enemy_of(code: int) -> String:
 		if int(ENEMY_CODES[k]) == code:
 			return k
 	return ""
+
+
+## v4: true for a near kind's code (recon, tankette).
+static func is_near_code(code: int) -> bool:
+	return code == ENEMY_CODES[ENEMY_RECON] or code == ENEMY_CODES[ENEMY_TANKETTE]
 
 
 static func seg_code(seg: String) -> int:

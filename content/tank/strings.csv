@@ -3,13 +3,10 @@ TANK_CONTENT_ASHFALL_ROAD,Ashfall Road (30-41 min)
 TANK_CONTENT_DRILL,Depot drill (2 min)
 TANK_PHASE_DEPOT,Depot roll-out
 TANK_PHASE_ADVANCE_1,Stage 1: Advance
-TANK_PHASE_GUN_LINE_1,Stage 1: Gun line
 TANK_PHASE_CHECKPOINT_1,Checkpoint 1
 TANK_PHASE_ADVANCE_2,Stage 2: Advance
-TANK_PHASE_GUN_LINE_2,Stage 2: Gun line
 TANK_PHASE_CHECKPOINT_2,Checkpoint 2
 TANK_PHASE_ADVANCE_3,Stage 3: Advance
-TANK_PHASE_GUN_LINE_3,Stage 3: Gun line
 TANK_PHASE_CHECKPOINT_3,Checkpoint 3
 TANK_PHASE_BOSS,Foundry Gate: the Behemoth
 TANK_PHASE_SKIRMISH,Skirmish
@@ -55,7 +52,7 @@ TANK_TOAST_BLOCKED,Obstacle ahead
 TANK_TOAST_TRAPS_CLEARED,Tank traps shoved aside
 TANK_BANNER_SEGMENT,{0}
 TANK_BANNER_BOSS,The Behemoth
-TANK_BANNER_BOSS_PHASE2,The bogies are broken: hit the turret
+TANK_BANNER_BOSS_PHASE2,Bogies broken: hit the turret
 TANK_BANNER_VICTORY,Foundry Gate taken
 TANK_BANNER_WITHDRAWN,The Behemoth got away
 TANK_CARD_SPEED,Speed
@@ -72,7 +69,6 @@ TANK_SHELL_OVER,Overpressure
 TANK_SHELL_SECONDARY,Bow guns
 TANK_OBJ_DEPOT,Depot drill
 TANK_OBJ_ADVANCE,Halt line: {0} m
-TANK_OBJ_GUN_LINE,Gun line {0}/{1}
 TANK_OBJ_CHECKPOINT,Checkpoint
 TANK_OBJ_BOSS,Behemoth
 TANK_OBJ_SKIRMISH,Skirmish
@@ -84,7 +80,6 @@ TANK_HUD_TURRET,Turret
 TANK_ENEMY_LIGHT,Light tank
 TANK_ENEMY_MEDIUM,Medium tank
 TANK_ENEMY_DESTROYER,Tank destroyer
-TANK_ENEMY_DUGIN,Dug-in tank
 TANK_ENEMY_HEAVY,Heavy tank
 TANK_ENEMY_BEHEMOTH,Behemoth
 TANK_RESULT_VICTORY,Foundry Gate taken
@@ -121,7 +116,7 @@ TANK_TEAM_OUTCOME,Mission
 TANK_TEAM_HP,Hull HP per segment
 TANK_TEAM_BREAKDOWNS,Breakdowns
 TANK_TEAM_OVERRUNS,Overruns
-TANK_TEAM_KILLS,Kills (light/medium/destroyer/dug-in/heavy/Behemoth)
+TANK_TEAM_KILLS,Kills (light/medium/destroyer/heavy/Behemoth/recon/tankette)
 TANK_TEAM_EVADES,Evades (made/tried)
 TANK_TEAM_BOW_HITS,Bow-gun hits
 TANK_UNLOCK_SOOT,Soot hull finish
@@ -157,7 +152,6 @@ TANK_HUD_YOU,YOU
 TANK_HUD_RESERVE,RESERVE
 TANK_HUD_WATTS_N,{0} W
 TANK_HUD_NEXT,NEXT
-TANK_HUD_GUNS,GUNS
 TANK_HUD_KILLS,KILLS
 TANK_HUD_BREAKDOWN,BREAKDOWN
 TANK_HUD_BEHEMOTH,BEHEMOTH
@@ -172,7 +166,6 @@ TANK_HUD_OVERTIME,OVERTIME
 TANK_HUD_POINTS,POINTS
 TANK_HELP_NUMBERS,"Your watts, cadence and what to do now"
 TANK_HELP_CREW,Your crew's engines run on their legs
-TANK_HELP_MISSION,"Stage, time left and the road ahead"
 TANK_HELP_HULL,"Hull, kills and the Behemoth"
 TANK_HELP_SURGE,"SURGE: sprint 2 s, the shot misses"
 TANK_SHELL_BOW,Bow-gun round
@@ -210,7 +203,7 @@ TANK_RIDE_POINTS,Points: {0} (grade {1})
 TANK_RIDE_DISTANCE,Distance driven: {0} km
 TANK_TEAM_POINTS,Points
 TANK_TEAM_POINTS_PER_MIN,Points per work minute
-TANK_TEAM_ROAM_KILLS,Kills (light/medium/destroyer/dug-in/heavy)
+TANK_TEAM_ROAM_KILLS,Kills (light/medium/destroyer/heavy/recon/tankette)
 TANK_TEAM_DISTANCE,Distance (km)
 TANK_TEAM_PATROLS,Patrols met
 TANK_HELP_ROAM_MAP,"The valley: you, patrols, strongpoints"
@@ -239,5 +232,45 @@ TANK_HUD_TAB_SHORT_DYNAMO,GUN
 TANK_HUD_TAB_SHORT_STEAM,LDR
 TANK_HUD_TAB_SHORT_ARC,LGT
 TANK_HUD_TAB_SHORT_FEED,SEC
-TANK_HELP_SEATS,"Five seats: < > and OK move you, at once"
-TANK_HELP_SEAT_LOCK,"ERG / SIM: your trainer follows within 30 s"
+TANK_HELP_SEATS,"Six seats: < > and OK move you, at once"
+TANK_ENGINE_REPAIR,Rivet hammer
+TANK_SEAT_REPAIRS,Repairs
+TANK_HUD_TAB_REPAIR,REPAIRS
+TANK_HUD_TAB_SHORT_REPAIR,REP
+TANK_HUD_JOB_REPAIR,hull repairs
+TANK_STAT_REPAIR_S,Rivet hammer (s)
+TANK_STAT_REPAIRED,Hull repaired
+TANK_OPT_DIFFICULTY,Difficulty
+TANK_DIFF_AUTO,Mission default
+TANK_DIFF_EASY,Easy
+TANK_DIFF_NORMAL,Normal
+TANK_DIFF_HARD,Hard
+TANK_HUD_DIFF_EASY,EASY
+TANK_HUD_DIFF_NORMAL,NORMAL
+TANK_HUD_DIFF_HARD,HARD
+TANK_HUD_LOST,TANK LOST
+TANK_HUD_TOW,TOW {0} S
+TANK_HUD_LOSSES,LOST {0}
+TANK_HUD_DO_TOW,KEEP RIDING
+TANK_TOAST_AMBUSH,Ambush: Secondaries
+TANK_TOAST_ESCAPED,It got away
+TANK_TOAST_RESTART,Stage restarts
+TANK_TEAM_DIFFICULTY,Difficulty
+TANK_TEAM_LOSSES,Tanks lost
+TANK_RIDE_LOSSES,Tanks lost: {0}
+TANK_ENEMY_RECON,Recon car
+TANK_ENEMY_TANKETTE,Tankette
+TANK_PHASE_HOLD_1,Stage 1: Holding action
+TANK_PHASE_HOLD_2,Stage 2: Holding action
+TANK_PHASE_HOLD_3,Stage 3: Holding action
+TANK_PHASE_AMBUSH_ADVANCE,Ambush: Advance
+TANK_PHASE_AMBUSH_HOLD,Ambush: Holding action
+TANK_PHASE_COOLDOWN,Cool-down: spin easy
+TANK_OBJ_HOLD,Holding force {0}/{1}
+TANK_CONTENT_AMBUSH_15,Ambush (15 min)
+TANK_MISSION_AMBUSH_15,Ambush
+TANK_CARD_AMBUSH,Short and hard: defaults to Hard. Expect to lose the tank once or twice.
+TANK_HELP_RANGE,"Far panel: the enemy, range in metres"
+TANK_HELP_PIP,The arc: our shells and theirs in flight
+TANK_HELP_NEAR,Bushes: only the Secondaries hit these
+TANK_HELP_REPAIR,Repairs: rebuilds the hull while you stay in band

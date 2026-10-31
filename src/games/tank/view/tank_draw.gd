@@ -80,7 +80,8 @@ static func fill_room(ci: CanvasItem, rect: Rect2, c: Color) -> void:
 static func beam(
 	ci: CanvasItem, p: Vector2, ang: float, blen: float, half: float, c: Color, k: float
 ) -> void:
-	if k <= 0.0:
+	# A beam with no length (something stands at the lens) has no polygon to triangulate.
+	if k <= 0.0 or blen < 8.0:
 		return
 	var spreads: Array[float] = [1.6, 1.0, 0.55]
 	var alphas: Array[float] = [0.3, 0.55, 0.45]

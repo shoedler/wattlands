@@ -14,7 +14,7 @@
 #   s3  crew 3 at compliance 0.85 and 0.70 x seeds 1-3 (100% comes from s1)
 #   s4  drill, compliant, crews 1-4 as the S4 rule checks' other content (s1 is the other)
 #   s5  cadence_drop to 30 rpm at at_phase + at_target_pct=60: crew 3 in a Gun phase (slot 1, plan
-#       phase 2, ERG 55-100% with the bank), crew 4 in a Lights phase (slot 3, plan phase 1, ERG 65-80%)
+#       phase 1, ERG 55-100% with the bank), crew 4 in a Lights phase (slot 3, plan phase 1, ERG 65-80%)
 #       (v3: Drive digs in SIM, so no 90% gun line arms rescue any more)
 #   s6  crew 3, haptics off for slot 0
 #   s7  the s1 crew 3 seed 1 run again (same arguments, another report name)
@@ -25,19 +25,25 @@
 #   s10 crew 3 on the network path: every rider the same scripted sprinter (a client on the steam
 #       engine surges in its window: its `over` reaches the host as Telemetry.intents, owned by the
 #       steam engine; a client's `aim` needs a key, which headless sims cannot press: GUT-tested in
-#       tests/games/tank/integration), and slot 1 stopping dead for 60 s in the stage 1 gun line
-#       (rescue, AFK, a station on reserve, back; at_phase=2, ERG target >= 60%)
+#       tests/games/tank/integration), and slot 1 stopping dead for 60 s on the Gun in stage 1's Advance
+#       (rescue, AFK, a station on reserve, back; at_phase=1, after the warm-up's carried target, ERG target >= 60%)
 #   s11 free roam, compliant `erg` riders: roam_10 for crews 1 (SOLO) and 4 (HOST), roam_30 for crew 3 (HOST):
 #       time up, the overtime bound, no patrol after time up, the FIT laps (drive-out, roam, cool-down), the grade
 #   s12 free roam roam_10, crew 3 at 0 W (HOST): like s2's zero crew the host's shared pause holds the drive-out, so
 #       the run ends at --max-sim-seconds still paused: no kill by crew fire, grade D
 #   s13 v3 seat switching: crew 3 HOST with --autopilot=none (every human on the fallback, seated by the host's
 #       Autopilot through replans, the two clients included): the lock, the replans, the switches, the laps
+#   s14 ashfall_road on Easy, compliant, crews 1-4 x seeds: victory, no tank loss, T1
+#   s15 ashfall_road on Hard, compliant, crews 1-4 x seeds: 1-2 losses on most seeds, phases, 12 laps and S4 hold
+#   s16 ambush_15 on Normal and on Hard, compliant, crews 1, 3, 4 x seeds: 780-1010 game seconds, 6 laps, S4
+#   s17 crew 3 on Hard: compliance 0.85 x seeds (more losses than s15's crew 3: nobody rescues, ERG is out of band and
+#       the Loader never builds) and compliance 0.70 seed 1 (under rescue's 75 %: rescue shields the crew, BRIEF 4.6.3)
+#   s18 ambush_15 on Hard with bots: 1 human + 3 bots, 2 + 2 (complete, nothing refused, bots act only through their seats)
 #
-# A scenario that needs another's report (s3, s4, s7 need s1 crew 3; the checks of s1 reuse
+# A scenario that needs another's report (s3, s4, s7 need s1 crew 3, s17 needs s15 crew 3; the checks of s1 reuse
 # them) runs that report first when it is missing. Every run goes through tools/run_game_sim at
 # --sim-speed=200 and stops this script on a non-zero exit (75: the Godot lock wait timed out,
-# just rerun). A full matrix is about 50 runs, 10 to 60 s each on a quiet machine.
+# just rerun). A full matrix is about 100 runs, 10 to 60 s each on a quiet machine.
 # Environment: TANK_SEEDS="1 2 3" (seeds), TANK_SIMS_OUT (report dir), TANK_SKIP_CHECK=1 (runs
 # only), TANK_FIT=0 (no fit_check), TANK_GODOT_TIMEOUT (seconds per run, default 1800).
 # The locks (no hardware control, no network integrations) are exported by tools/run_game_sim;
@@ -60,11 +66,15 @@ SPRINTER='intervals:on_w=300,off_w=150,on_s=12,off_s=28,rpm=100'
 # S9's sprinter rides 20 s on, 17 s off, so its sprints cover an Advance's end (the first ends at
 # about 490 s with the v2 content and this rider): a gun line entered while still sprinting.
 S9_SPRINTER='intervals:on_w=300,off_w=150,on_s=20,off_s=17,rpm=100'
-STOP='erg+cadence_drop:rpm=0,at_phase=2,at_target_pct=60,for_s=60'
-DYNAMO_DROP='erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=30'
+STOP='erg+cadence_drop:rpm=0,at_phase=1,after_s=20,at_target_pct=60,for_s=60'
+DYNAMO_DROP='erg+cadence_drop:rpm=30,at_phase=1,after_s=20,at_target_pct=60,for_s=30'
 ARC_DROP='erg+cadence_drop:rpm=30,at_phase=1,at_target_pct=60,for_s=30'
 # Pedaling for the not_pedaling detector (cadence >= 20 rpm) with no effort to speak of.
 IDLE='const:w=10,rpm=25'
+# The lobby's difficulty option, as --options takes it (v4; the mission's own default without one).
+EASY='--options={"difficulty":"easy"}'
+NORMAL='--options={"difficulty":"normal"}'
+HARD='--options={"difficulty":"hard"}'
 
 # run <name> <run_game_sim flags...>: one run; stops the script when it fails.
 run() {
@@ -167,7 +177,54 @@ scenario_s13() {
   run s13_c3_seats --content=ashfall_road --players=3 --bots=0 "--rider=$ERG" --autopilot=none --seed=1
 }
 
-order="s1 s2 s3 s4 s5 s6 s7 s9 s10 s11 s12 s13"
+scenario_s14() {
+  local c s
+  for c in 1 2 3 4; do
+    for s in $seeds; do
+      run "s14_easy_c${c}_seed${s}" --content=ashfall_road "--players=$c" --bots=0 "--rider=$ERG" "--seed=$s" "$EASY"
+    done
+  done
+}
+
+# s15_run <crew> <seed>
+s15_run() {
+  run "s15_hard_c${1}_seed${2}" --content=ashfall_road "--players=$1" --bots=0 "--rider=$ERG" "--seed=$2" "$HARD"
+}
+
+scenario_s15() {
+  local c s
+  for c in 1 2 3 4; do
+    for s in $seeds; do s15_run "$c" "$s"; done
+  done
+}
+
+scenario_s16() {
+  local c s
+  for c in 1 3 4; do
+    for s in $seeds; do
+      run "s16_amb_normal_c${c}_seed${s}" --content=ambush_15 "--players=$c" --bots=0 "--rider=$ERG" "--seed=$s" "$NORMAL"
+      run "s16_amb_hard_c${c}_seed${s}" --content=ambush_15 "--players=$c" --bots=0 "--rider=$ERG" "--seed=$s" "$HARD"
+    done
+  done
+}
+
+scenario_s17() {
+  local s
+  for s in $seeds; do
+    have "s15_hard_c3_seed${s}" || s15_run 3 "$s"
+    run "s17_hard_c3_c85_seed${s}" --content=ashfall_road --players=3 --bots=0 \
+      --rider=erg:compliance=0.85 "--seed=$s" "$HARD"
+  done
+  run s17_hard_c3_c70_seed1 --content=ashfall_road --players=3 --bots=0 \
+    --rider=erg:compliance=0.70 --seed=1 "$HARD"
+}
+
+scenario_s18() {
+  run s18_bots_h1b3 --content=ambush_15 --players=1 --bots=3 "--rider=$ERG" --seed=1 "$HARD"
+  run s18_bots_h2b2 --content=ambush_15 --players=2 --bots=2 "--rider=$ERG" --seed=1 "$HARD"
+}
+
+order="s1 s2 s3 s4 s5 s6 s7 s9 s10 s11 s12 s13 s14 s15 s16 s17 s18"
 if [ "$#" -gt 0 ]; then
   wanted="$*"
 else

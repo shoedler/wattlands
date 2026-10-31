@@ -12,23 +12,24 @@ func _rig(crew: int = 3) -> TankRulesRig:
 	return rig
 
 
-## Fires a friendly shell of `type` straight into the middle of `e` from its left side.
-func _hit(rig: TankRulesRig, e: TankEnemyState, type: int) -> void:
+## Lands a friendly far shell of `type` at range `r` this tick.
+func _land(rig: TankRulesRig, r: float, type: int, source: int = 0) -> void:
 	var aux := TankAux.of(rig.state)
 	TankTargets.build(rig.state, aux)
-	var t := TankTargets.by_id(aux, e.id)
-	var c := t.rect.get_center()
 	var s := TankShellState.new()
 	s.id = rig.state.take_id()
 	s.type = type
-	s.x = t.rect.position.x - 6.0
-	s.y = c.y
-	s.vx = 360.0
-	s.vy = 0.0
+	s.far = true
+	s.left_s = Wl.SIM_DT
+	s.impact_r = r
 	s.friendly = true
-	s.source = 0
+	s.source = source
 	rig.state.shells.append(s)
 	TankShells.step(rig.state, aux, Wl.SIM_DT, rig.events)
+
+
+func _hit(rig: TankRulesRig, e: TankEnemyState, type: int) -> void:
+	_land(rig, e.range_m, type)
 
 
 func test_the_shell_damage_table() -> void:
@@ -50,7 +51,8 @@ func test_light_shells_and_secondaries_are_armoured_heavy_and_overpressure_are_n
 		TankIds.ENEMY_MEDIUM: 0.5,
 		TankIds.ENEMY_DESTROYER: 0.25,
 		TankIds.ENEMY_HEAVY: 0.25,
-		TankIds.ENEMY_DUGIN: 1.0,
+		TankIds.ENEMY_RECON: 1.0,
+		TankIds.ENEMY_TANKETTE: 1.0,
 	}
 	for type: String in armour:
 		assert_eq(TankDamage.enemy_mult(c, type, TankIds.SHELL_LIGHT), armour[type], type)
@@ -70,7 +72,6 @@ func test_a_shell_hit_applies_the_table_to_a_real_enemy() -> void:
 		[TankIds.ENEMY_HEAVY, TankIds.SHELL_OVER, 70.0],
 		[TankIds.ENEMY_DESTROYER, TankIds.SHELL_LIGHT, 3.5],
 		[TankIds.ENEMY_LIGHT, TankIds.SHELL_LIGHT, 14.0],
-		[TankIds.ENEMY_DUGIN, TankIds.SHELL_LIGHT, 14.0],
 	]
 	for row: Array in rows:
 		var rig := _rig(3)
@@ -84,6 +85,7 @@ func test_a_shell_hit_applies_the_table_to_a_real_enemy() -> void:
 			[hits[0]["on"], hits[0]["id"], hits[0]["sh"]], [TankEvents.ON_ENEMY, e.id, row[1]]
 		)
 		assert_eq(hits[0]["dmg"], roundi(float(row[2])))
+		assert_eq(hits[0]["x"], roundi(e.range_m), "a far hit's x is the range in metres")
 
 
 func test_enemy_hp_and_counts_scale_with_the_tank() -> void:
@@ -110,45 +112,35 @@ func test_enemy_hp_and_counts_scale_with_the_tank() -> void:
 			assert_eq(e.hp, e.hp_max)
 
 
-func test_splash_is_half_damage_within_16_px_of_the_impact() -> void:
+func test_splash_is_half_damage_within_60_m_of_the_impact() -> void:
 	var rig := _rig(3)
-	var near := rig.spawn(TankIds.ENEMY_MEDIUM, 1, 250.0)
-	var other := rig.spawn(TankIds.ENEMY_LIGHT, 1, 250.0)
-	# Two enemies overlap (the view draws them on two depth rows): the first one in the list takes
-	# the direct hit, the other stands inside the splash radius.
-	other.x_px = near.x_px
+	var hit := rig.far(TankIds.ENEMY_MEDIUM, 1200.0)
+	var other := rig.far(TankIds.ENEMY_LIGHT, 1100.0)
+	other.range_m = 1250.0
+	other.hold_m = 1250.0
 	other.hp = 100.0
 	var hp := other.hp
-	_hit(rig, near, TankIds.SHELL_HEAVY)
+	_hit(rig, hit, TankIds.SHELL_HEAVY)
 	# Heavy 35 x 50% = 17.5 on a light tank (armour does not apply to heavy shells).
 	assert_almost_eq(hp - other.hp, 17.5, 0.001)
 	var far := _rig(3)
-	var a := far.spawn(TankIds.ENEMY_MEDIUM, 1, 250.0)
-	var b := far.spawn(TankIds.ENEMY_LIGHT, 1, 250.0)
-	b.x_px = a.x_px + a.w + 40.0
+	var a := far.far(TankIds.ENEMY_MEDIUM, 1200.0)
+	var b := far.far(TankIds.ENEMY_LIGHT, 1100.0)
+	b.range_m = 1270.0
 	var b_hp := b.hp
 	_hit(far, a, TankIds.SHELL_HEAVY)
-	assert_eq(b.hp, b_hp, "40 px away: no splash")
+	assert_eq(b.hp, b_hp, "70 m away: no splash")
 
 
-func test_splash_follows_the_armour_of_the_victim_and_hurts_on_a_ground_impact_too() -> void:
+func test_splash_follows_the_armour_of_the_victim_and_hurts_on_a_miss_too() -> void:
 	var rig := _rig(3)
-	var aux := TankAux.of(rig.state)
-	var m := rig.spawn(TankIds.ENEMY_MEDIUM, 1, 250.0)
+	var m := rig.far(TankIds.ENEMY_MEDIUM, 1200.0)
 	var hp := m.hp
-	# A light shell comes down on the ground 10 px in front of the medium tank's box.
-	TankTargets.build(rig.state, aux)
-	var s := TankShellState.new()
-	s.id = rig.state.take_id()
-	s.type = TankIds.SHELL_LIGHT
-	s.x = m.x_px - 10.0
-	s.y = float(TankConst.GROUND_Y) - 8.0
-	s.vx = 0.0
-	s.vy = 200.0
-	s.friendly = true
-	rig.state.shells.append(s)
-	TankShells.step(rig.state, aux, Wl.SIM_DT, rig.events)
+	# A light shell lands 50 m past the medium's 35 m hit window's centre: no direct hit.
+	_land(rig, 1250.0, TankIds.SHELL_LIGHT)
 	assert_eq(rig.state.shells.size(), 0, "landed")
+	assert_eq(rig.of_type("hit").size(), 0)
+	assert_eq(rig.of_type("splash").size(), 1, "it hit nothing directly")
 	# Light 14 x 50% splash x 50% armour = 3.5.
 	assert_almost_eq(hp - m.hp, 3.5, 0.001)
 
@@ -157,19 +149,7 @@ func test_a_kill_is_credited_to_the_shooter_and_removes_the_enemy() -> void:
 	var rig := _rig(3)
 	var e := rig.spawn(TankIds.ENEMY_LIGHT, 1, 250.0)
 	e.hp = 10.0
-	var aux := TankAux.of(rig.state)
-	TankTargets.build(rig.state, aux)
-	var t := TankTargets.by_id(aux, e.id)
-	var s := TankShellState.new()
-	s.id = rig.state.take_id()
-	s.type = TankIds.SHELL_LIGHT
-	s.x = t.rect.position.x - 6.0
-	s.y = t.rect.get_center().y
-	s.vx = 360.0
-	s.friendly = true
-	s.source = 1
-	rig.state.shells.append(s)
-	TankShells.step(rig.state, aux, Wl.SIM_DT, rig.events)
+	_land(rig, e.range_m, TankIds.SHELL_LIGHT, 1)
 	assert_false(rig.state.enemies.has(e))
 	var kill := rig.of_type("kill")[0]
 	assert_eq([kill["id"], kill["e"], kill["by"], kill["s"]], [e.id, 1, TankEvents.BY_SHELL, 1])
