@@ -201,7 +201,7 @@ func _init() -> void:
 	var kit := {
 		"version": "v2-2",
 		"note": "Diesel Domestiques v2 art kit (docs/games/tank.md 3), built from the reference image only (no fal), "
-			+ "960x540 art px. The single manifest the view reads (TankKit). Regenerate with tools_src/regen.sh.",
+			+ "960x540 art px. The single manifest. Regenerate with tools_src/regen.sh.",
 		"art_resolution": [960, 540],
 		"reference": {"file": "source/reference.webp", "scale": 15.0 / 17.0, "offset_y": 2,
 			"note": "x960 = x1088 * 15/17, y540 = y608 * 15/17 + 2 (1088x608 -> 960x536, edge rows repeated to 540)"},
