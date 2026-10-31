@@ -36,9 +36,9 @@
 			"length_m": 1100,
 			"terrain": [[0, 0], [130, 1.5], [250, 3], [380, 1], [510, -2], [630, 0], [760, 2.5], [890, 1], [1020, -1], [1100, 0]],
 			"encounters": [
-				{"at_m": 130, "enemy": "light", "count": 1},
+				{"at_m": 130, "enemy": "medium", "count": 1},
 				{"at_m": 250, "enemy": "recon", "count": 1, "min_crew": 2},
-				{"at_m": 360, "enemy": "medium", "count": 1},
+				{"at_m": 360, "enemy": "light", "count": 1},
 				{"at_m": 600, "enemy": "destroyer", "count": 1},
 				{"at_m": 700, "enemy": "tankette", "count": 1, "min_crew": 2},
 				{"at_m": 830, "enemy": "light", "count": 1}

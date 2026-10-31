@@ -3,7 +3,7 @@
 	"types": {
 		"light": {
 			"code": 1,
-			"hp": 40,
+			"hp": 70,
 			"size_px": [91, 30],
 			"sprite": "enemy_light",
 			"hold_m": [800, 1100],
@@ -35,7 +35,7 @@
 		},
 		"destroyer": {
 			"code": 3,
-			"hp": 95,
+			"hp": 110,
 			"size_px": [109, 37],
 			"sprite": "enemy_destroyer",
 			"hold_m": [1700, 2200],
@@ -51,7 +51,7 @@
 		},
 		"heavy": {
 			"code": 5,
-			"hp": 150,
+			"hp": 140,
 			"size_px": [133, 53],
 			"sprite": "enemy_heavy",
 			"hold_m": [1300, 1900],
@@ -122,5 +122,5 @@
 	"miss_px": [20, 40],
 	"miss_m": [40, 90],
 	"crew_count_scale": [0.5, 0.7, 0.85, 1.0],
-	"crew_damage_scale": [0.65, 0.72, 0.85, 1.0]
+	"crew_damage_scale": [0.65, 0.65, 0.85, 0.9]
 }
