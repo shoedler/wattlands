@@ -360,7 +360,9 @@ func show_toast(key: String, args: Variant = []) -> void:
 ## A banner from a string key for `seconds`.
 func show_banner(key: String, args: Variant = [], seconds: float = 3.0) -> void:
 	_banner.show_game_banner(_text(key, args), seconds)
-	_play("warning")
+	var sound := _spec.banner_sound if _spec != null else "warning"
+	if sound != "":
+		_play(sound)
 
 
 ## The power band of `peer`'s gauges (SIM band; 0, 0 clears). Kept for gauges built later.
