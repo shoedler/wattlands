@@ -28,6 +28,9 @@ const CUE_KILL_ENGINE := "kill_engine"
 ## Events with no sound of their own. Every other event type maps to a cue (cue_for).
 const SILENT_EVENTS: Array[String] = []
 const HOOF_EVERY_S := 0.4
+## Hooves only for a chariot this near the gate: all along the road they ran 75 % of a wave, at 2.5 Hz against the
+## footfalls' 3 Hz.
+const HOOF_NEAR_GATE_M := 70.0
 ## A ram's stroke: about 1.2 s, never quite a metronome, and never quite the same blow.
 const RAM_GAPS_S: Array[float] = [1.15, 1.25]
 const RAM_PITCH: Array[float] = [1.0, 0.96, 1.03, 0.94]
@@ -40,10 +43,11 @@ const FLIGHT_MIN_S := 0.1
 const FLIGHT_MAX_S := 8.0
 ## Side of the screen: art x from the middle over half the width, then the panned sends' reach.
 const PAN_SPREAD := 0.75
-## Volleys overlap: the organ fires every 1.5 s and an arrow flies about 4 s. Each volley still in the air takes this
-## off the next one's swoosh, so a full rate reads as racks passing over and not as one wall of hiss.
+## Volleys overlap: a real wave's organ fires every 0.87 to 1.5 s and an arrow flies about 4 s, so 4 or 5 are in the air
+## at its full rate. Each one still flying takes this off the next one's swoosh, so a full rate reads as racks passing
+## over and not as one wall of hiss.
 const VOLLEY_TRIM_DB := -1.5
-const VOLLEY_TRIM_MAX := 2
+const VOLLEY_TRIM_MAX := 5
 ## A volley's patter by how many of its 12 arrows came down on nothing: this much under, per halving.
 const PATTER_HALVING_DB := -3.0
 const PATTER_MIN_DB := -11.0
@@ -159,6 +163,7 @@ func update(state: SiegeState, dt: float, p_local_peer: int, view: SiegeView) ->
 	_view = view
 	_shots.content = state.content
 	_shots.path = state.path
+	_shots.track(view.clock_s, state.enemies)
 	_landings(state, view)
 	_wheels(state, view)
 	_works(state, view)
@@ -277,7 +282,9 @@ func _shot(cue_name: String, data: Dictionary) -> void:
 	var sd := int(data.get("sd", 0))
 	var weapon := SiegeShotSounds.weapon_of(int(data.get("kind", 0)))
 	var volleys := mini(_shots.in_air(weapon), VOLLEY_TRIM_MAX)
-	var flight := _shots.add(data, int(data.get("tk", 0)) * Wl.SIM_DT)
+	var src := int(data.get("src", 0))
+	var lead := is_mine(src)
+	var flight := _shots.add(data, int(data.get("tk", 0)) * Wl.SIM_DT, _level_of(src), lead)
 	last_flight_s = clampf(float(flight["flight_s"]), FLIGHT_MIN_S, FLIGHT_MAX_S)
 	(
 		kit
@@ -290,9 +297,24 @@ func _shot(cue_name: String, data: Dictionary) -> void:
 				"pan1": _pan(flight["to"]),
 				"lvl":
 				VOLLEY_TRIM_DB * float(volleys) if weapon == SiegeShotSounds.WEAPON_ARROW else 0.0,
-			}
+			},
+			lead
 		)
 	)
+
+
+## A shot is the local rider's if their wheel drives the station that fired it. Nobody drives a pad's Scorpion.
+func is_mine(src: int) -> bool:
+	if _view == null or _view.state == null:
+		return false
+	var st := _view.state
+	return src == SiegeViewMath.lit_station(st, st.rider(local_peer))
+
+
+func _level_of(src: int) -> int:
+	if _view == null or _view.state == null or src > SiegeIds.SRC_PAD or src < 1:
+		return 0
+	return _view.state.station(src).level
 
 
 ## The flight this shot's sound is given, in seconds, as _shot works it out (tests).
@@ -312,7 +334,7 @@ func _landings(state: SiegeState, view: SiegeView) -> void:
 		var lvl := 0.0
 		if impact["surface"] in [SiegeShotSounds.SURFACE_DIRT, SiegeShotSounds.SURFACE_WATER]:
 			lvl = patter_db(int(impact["count"])) if impact["weapon"] == "arrow" else 0.0
-		kit.cue(cue_name, {"pan": _pan(impact["at"]), "lvl": lvl})
+		kit.cue(cue_name, {"pan": _pan(impact["at"]), "lvl": lvl}, bool(impact["lead"]))
 
 
 ## A volley's patter under its level by how few of the rack's arrows it is.
@@ -329,9 +351,10 @@ func _pan(p: Vector3) -> float:
 	return clampf((_view.bank.to_art(p).x - half) / half * PAN_SPREAD, -1.0, 1.0)
 
 
+## A kill's side of the screen, from where the body was last seen: the rules took it off the list before the cue.
 func _enemy_pan(enemy_id: int) -> float:
-	var e := _view.state.enemy(enemy_id) if _view != null and _view.state != null else null
-	return _pan(e.pos) if e != null else 0.0
+	var at: Variant = _shots.last_seen(enemy_id)
+	return _pan(at) if at is Vector3 else 0.0
 
 
 ## The mark lowers only when a hit fires and rises with a repair, so damage in any size of step adds up.
@@ -364,7 +387,7 @@ func _enemies(state: SiegeState, dt: float) -> void:
 	var horses := 0
 	var batter := false
 	for e in state.enemies:
-		if e.type == SiegeIds.ENEMY_CHARIOT and e.st == SiegeIds.EN_WALK:
+		if e.type == SiegeIds.ENEMY_CHARIOT and e.st == SiegeIds.EN_WALK and _near_gate(state, e):
 			horses += 1
 		elif e.type == SiegeIds.ENEMY_RAM and e.st == SiegeIds.EN_BATTER:
 			batter = true
@@ -375,6 +398,10 @@ func _enemies(state: SiegeState, dt: float) -> void:
 		_ram_t = RAM_GAPS_S[_ram_n % RAM_GAPS_S.size()]
 		kit.cue(CUE_RAM, {"p": RAM_PITCH[_ram_n % RAM_PITCH.size()]})
 		_ram_n += 1
+
+
+static func _near_gate(state: SiegeState, e: SiegeEnemyState) -> bool:
+	return state.path == null or state.path.dist_to_gate(e.prog_m) <= HOOF_NEAR_GATE_M
 
 
 func _coins(state: SiegeState, dt: float) -> void:

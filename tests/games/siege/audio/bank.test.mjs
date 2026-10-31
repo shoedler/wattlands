@@ -2,12 +2,13 @@
 // (the walkers' frames and the art's phases), and the fatigue rule, which the scorecard doesn't read.
 
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { loadBank, validateBank } from '../../../../tools/audio/lib/bank.mjs';
-import { biquad, rbj } from '../../../../tools/audio/lib/dsp.mjs';
+import { bandFilter, biquad, rbj } from '../../../../tools/audio/lib/dsp.mjs';
 import { renderSound } from '../../../../tools/audio/lib/recipe.mjs';
 import { momentaryMaxLufs } from '../../../../tools/audio/lib/lufs.mjs';
 import { BankAudio, MIX_RATE, mixdown, simulate } from '../../../../tools/audio/lib/offline_mix.mjs';
@@ -176,21 +177,100 @@ test('each stroke rings out inside what the dead stop allows', () => {
   }
 });
 
-test('a flight sound is at most this much of the wheels: a game-long hiss is the next complaint', () => {
-  for (const w of WEAPONS) {
-    const flight = doc.cues[`shot_${w}`].hits.find((h) => h.flight);
-    assert.ok(flight.db <= -5, `${w}: ${flight.db}`);
+/** A train of one contour every `gap` s over a `flight` s flight: how far the sum of their power moves, in dB. */
+function ripple(points, gap, flight = 4) {
+  const at = (u) => {
+    if (u < 0 || u > 1) return -200;
+    for (let i = 1; i < points.length; i++) {
+      if (u <= points[i][0]) return points[i - 1][1] + ((points[i][1] - points[i - 1][1]) * (u - points[i - 1][0])) / (points[i][0] - points[i - 1][0]);
+    }
+    return points[points.length - 1][1];
+  };
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (let t = 0; t < gap; t += 0.01) {
+    let sum = 0;
+    for (let k = 0; k < 12; k++) sum += 10 ** (at((t + k * gap) / flight) / 10);
+    const db = 10 * Math.log10(sum);
+    lo = Math.min(lo, db);
+    hi = Math.max(hi, db);
+  }
+  return hi - lo;
+}
+
+test('volleys read as separate volleys at the organ\'s real rate: the flight is a pass, not a bed', () => {
+  const gain = doc.cues.shot_arrow.hits.find((h) => h.flight).flight.gain;
+  assert.ok(ripple(gain, 0.87) >= 3.5, `0.87 s: ${ripple(gain, 0.87).toFixed(1)} dB`);
+  assert.ok(ripple(gain, 1.5) >= 9, `1.5 s: ${ripple(gain, 1.5).toFixed(1)} dB`);
+  assert.ok(ripple(gain, 2.3) >= 14, `2.3 s: ${ripple(gain, 2.3).toFixed(1)} dB`);
+});
+
+test('every hit cue is on the card, and another rider\'s shots are under your own without dropping out', () => {
+  const listed = Object.values(doc.preview.checks.projectiles.surfaces).flat().sort();
+  const hits = Object.keys(doc.cues).filter((c) => c.startsWith('hit_')).sort();
+  assert.deepEqual(listed, hits);
+  for (const c of [...hits, 'shot_bolt', 'shot_stone', 'shot_arrow', 'shot_scorpion']) {
+    assert.ok(doc.cues[c].other_db >= -6 && doc.cues[c].other_db <= -4, `${c}: ${doc.cues[c].other_db}`);
   }
 });
 
-test('D5 sees the worst: a volley sits in the prompt window, and the preview shows the organ at its rate', () => {
+test('a miss is under a hit: the patter is quieter than a body at the same level of the mix', () => {
+  const bank = new BankAudio(doc, path.dirname(BANK));
+  const loudest = (id, db) => {
+    const x = bandFilter(bank.file(id, 0).data[0], 400, 6000, 22050);
+    const n = Math.round(0.05 * 22050);
+    let best = -300;
+    for (let a = 0; a + n <= x.length; a += 40) {
+      let e = 0;
+      for (let i = 0; i < n; i++) e += x[a + i] * x[a + i];
+      best = Math.max(best, 10 * Math.log10(e / n + 1e-30));
+    }
+    return best + db;
+  };
+  const db = (cue) => doc.cues[cue].hits[0].db;
+  assert.ok(loudest('arrow_dirt', db('hit_arrow_dirt')) <= loudest('hit_flesh', db('hit_arrow_flesh')) - 1.5);
+  assert.ok(loudest('arrow_dirt', db('hit_arrow_dirt')) <= loudest('hit_wood', db('hit_arrow_wood')) - 1.5);
+});
+
+test('what a rider must hear of the gate cannot lose its voice to a flight', () => {
+  for (const c of ['gate_hit', 'ram_thud', 'leak']) assert.equal(doc.cues[c].hits[0].priority, 8, c);
+});
+
+test('the Scorpion is not the arrow\'s flight at another pitch', () => {
+  const pitch = doc.cues.shot_scorpion.hits.find((h) => h.flight).pitch ?? 1;
+  assert.ok(pitch < 1.3, `pitch ${pitch}`);
+  assert.notEqual(doc.cues.shot_scorpion.hits.find((h) => h.flight).sound, doc.cues.shot_arrow.hits.find((h) => h.flight).sound);
+});
+
+test('D5 sees the worst: a volley sits in the prompt window, and the preview fires the organ at its real rate', () => {
   const events = doc.preview.events;
   const volley = events.filter((e) => e.cue === 'shot_arrow').map((e) => e.t).sort((a, b) => a - b);
-  assert.ok(events.some((e) => e.cue === 'shot_arrow' && e.t >= 30 && e.t < 30.6), 'a volley in 30.0..30.6 s');
-  const run = volley.filter((t) => t >= 25.5 && t <= 34.5);
-  assert.equal(run.length, 7);
-  run.slice(1).forEach((t, i) => assert.equal(t - run[i], 1.5));
+  assert.ok(events.some((e) => e.cue === 'shot_arrow' && e.t >= 30 && e.t < 31.2), 'a volley in the second before 31.2 s');
+  const run = volley.filter((t) => t >= 5 && t < 55);
+  assert.ok(run.length / 50 >= 0.9, `${(run.length / 50).toFixed(2)} volleys a second`);
 });
+
+test('the preview plays levels the adapter can give: 0 down in steps, to the cap', () => {
+  for (const e of doc.preview.events.filter((x) => x.cue === 'shot_arrow')) {
+    assert.equal(Math.abs(e.vars.lvl % 1.5), 0, `${e.t}: ${e.vars.lvl}`);
+    assert.ok(e.vars.lvl >= -7.5 && e.vars.lvl <= 0, `${e.t}: ${e.vars.lvl}`);
+  }
+});
+
+const REAL = ['organ', 'auto'].map((k) => [k, JSON.parse(fs.readFileSync(new URL(`./real_wave_${k}.json`, import.meta.url), 'utf8'))]);
+
+for (const [name, wave] of REAL) {
+  test(`the real wave, rider ${name}: holds what the preview can only estimate`, () => {
+    const sha = crypto.createHash('sha256').update(fs.readFileSync(BANK)).digest('hex');
+    assert.equal(wave.bank_sha, sha, 'the bank has moved on: record it again, tools/audio/live_report.mjs');
+    assert.ok(wave.seconds >= 150, 'a real wave, not a sample');
+    assert.equal(wave.flight_starts, wave.shots, 'one flight per shot');
+    assert.ok(wave.ear_band_share <= -12, `2-8 kHz ${wave.ear_band_share} dB of the master, Tank's limit -12`);
+    assert.ok(wave.lufs >= -20 && wave.lufs <= -16, `${wave.lufs} LUFS`);
+    assert.ok(wave.top_band_share <= -32, `above 9.8 kHz ${wave.top_band_share} dB`);
+    assert.ok(wave.prompt_margin_worst >= 6, `warning ${wave.prompt_margin_worst} LU over the wave at its worst`);
+  });
+}
 
 test('the preview ends the junction at the stop, as the adapter does', () => {
   const stop = doc.preview.segments.filter((s) => s.rpm > 0).reduce((a, s) => a + s.s, 0);

@@ -1,0 +1,21 @@
+{
+  "seconds": 179.54,
+  "lufs": -17.35,
+  "lra": 1.59,
+  "ear_band_share": -12.73,
+  "ear_band_worst": -2.76,
+  "ear_band_a_share": -7.23,
+  "top_band_share": -35.41,
+  "sfx_lufs": -20.16,
+  "sfx_movement_1k_4k": {
+    "p10": -34.86,
+    "p50": -30.4,
+    "p90": -25.47,
+    "spread": 9.39
+  },
+  "prompt_margin_worst": 7.44,
+  "bank_sha": "edbfc2d4362b4658cb618ae8b717514d0f975da27bdd95ecaf8ec0409be5c474",
+  "shots": 416,
+  "flight_starts": 416,
+  "voiceless": 3
+}

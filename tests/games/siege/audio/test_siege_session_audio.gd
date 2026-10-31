@@ -214,6 +214,122 @@ func test_nothing_there_is_the_ground() -> void:
 		)
 
 
+func test_a_real_wave_hears_what_the_host_hit() -> void:
+	var seen := {}
+	_ride(300.0, seen)
+	var st := _game.state
+	var sounds: SiegeShotSounds = _view.audio._shots
+	var near := func(got: int, truth: int, label: String) -> void:
+		var slack := maxi(2, roundi(truth * 0.1))
+		assert_gt(truth, 0, "%s: the host hit something in %d s" % [label, 300])
+		assert_lte(
+			absi(got - truth), slack, "%s: %d struck by ear, %d by the host" % [label, got, truth]
+		)
+	near.call(
+		int(sounds.struck_count.get("stone", 0)), st.station(SiegeIds.STATION_ONAGER).hits, "stones"
+	)
+	near.call(
+		int(sounds.struck_count.get("bolt", 0)), st.station(SiegeIds.STATION_BALLISTA).hits, "bolts"
+	)
+	var pads := 0
+	for n in range(1, SiegeIds.PAD_COUNT + 1):
+		pads += st.pad(n).hits
+	near.call(int(sounds.struck_count.get("scorpion", 0)), pads, "Scorpion bolts")
+	# Arrows within a quarter: a body killed by the volley's first arrow still counts for RECENT_S.
+	var arrows := st.station(SiegeIds.STATION_ARROWS).hits
+	var heard := int(sounds.struck_count.get("arrow", 0))
+	assert_gt(arrows, 0)
+	assert_lte(
+		absi(heard - arrows),
+		maxi(5, roundi(arrows * 0.25)),
+		"%d by ear, %d by the host" % [heard, arrows]
+	)
+
+
+func test_a_killing_blow_is_a_hit_and_not_a_miss() -> void:
+	var st := SiegeKit.state("short", 1, 0)
+	var sounds := SiegeShotSounds.new()
+	sounds.content = st.content
+	sounds.path = st.path
+	var o: Array[int] = [8000, 12000, 1500]
+	var v: Array[int] = [12000, 15000, 9000]
+	var ev := SiegeEvents.shot(0, SiegeIds.STATION_ONAGER, SiegeIds.SHOT_STONE, o, v, 1, 77)
+	sounds.add(ev, 0.0)
+	var r := sounds.flying[0].replay
+	var e := SiegeKit.enemy(st, SiegeIds.ENEMY_SPEAR, 100.0)
+	e.pos = r.landing(0)
+	var land := r.land_t[0]
+	assert_eq(sounds.step(land - 0.05, st.enemies), [] as Array[Dictionary], "still in the air")
+	st.enemies.clear()
+	assert_eq(
+		_surfaces(sounds.step(land + 0.05, st.enemies)),
+		["flesh"] as Array[String],
+		"the rules already took it off"
+	)
+
+
+func test_a_body_long_gone_is_the_ground_again() -> void:
+	var st := SiegeKit.state("short", 1, 0)
+	var sounds := SiegeShotSounds.new()
+	sounds.content = st.content
+	sounds.path = st.path
+	var o: Array[int] = [8000, 12000, 1500]
+	var v: Array[int] = [12000, 15000, 9000]
+	sounds.add(SiegeEvents.shot(0, SiegeIds.STATION_ONAGER, SiegeIds.SHOT_STONE, o, v, 1, 77), 0.0)
+	var r := sounds.flying[0].replay
+	var e := SiegeKit.enemy(st, SiegeIds.ENEMY_SPEAR, 100.0)
+	e.pos = r.landing(0)
+	sounds.track(r.land_t[0] - SiegeShotSounds.RECENT_S - 0.5, st.enemies)
+	st.enemies.clear()
+	assert_eq(_surfaces(sounds.step(r.land_t[0] + 0.05, st.enemies)), ["dirt"] as Array[String])
+
+
+func test_an_upgraded_onager_reaches_further_with_its_splash() -> void:
+	for row: Array in [[0, "dirt"], [3, "flesh"]]:
+		var st := SiegeKit.state("short", 1, 0)
+		var sounds := SiegeShotSounds.new()
+		sounds.content = st.content
+		sounds.path = st.path
+		var o: Array[int] = [8000, 12000, 1500]
+		var v: Array[int] = [12000, 15000, 9000]
+		var ev := SiegeEvents.shot(0, SiegeIds.STATION_ONAGER, SiegeIds.SHOT_STONE, o, v, 1, 77)
+		sounds.add(ev, 0.0, row[0])
+		var r := sounds.flying[0].replay
+		var e := SiegeKit.enemy(st, SiegeIds.ENEMY_SPEAR, 100.0)
+		e.pos = r.landing(0) + Vector3(5.8, 0.0, 0.0)
+		assert_eq(
+			_surfaces(sounds.step(r.land_t[0] + 0.05, st.enemies)),
+			[row[1]] as Array[String],
+			"level %d" % row[0]
+		)
+
+
+func test_every_kill_of_a_real_wave_knows_its_side() -> void:
+	var seen := {}
+	var ctx := F.make_ctx(1, 3, "short", Wl.SOLO, 1, 3)
+	_game = F.make_game(ctx)
+	var plans := _game.build_effort_plans()
+	var final := {}
+	for peer: int in plans:
+		final[peer] = PlanValidator.finalize(plans[peer])
+	_view = _game.make_view() as SiegeView
+	add_child_autofree(_view)
+	var kills := [0, 0]
+	var on_kill := func(kind: String, data: Dictionary) -> void:
+		if kind != SiegeIds.EV_KILL:
+			return
+		kills[0] += 1
+		if _view.audio._shots.last_seen(int(data["id"])) is Vector3:
+			kills[1] += 1
+	_game.cue.connect(on_kill)
+	for tick in roundi(120.0 / Wl.SIM_DT):
+		_game.sim_step(Wl.SIM_DT, F.frame(ctx, final, tick))
+		_view.update(Wl.SIM_DT)
+		_collect(seen)
+	assert_gt(kills[0], 5, "the first wave kills")
+	assert_gte(kills[1], kills[0] - 2, "the host's kills found their bodies: %s" % [kills])
+
+
 func test_a_shield_bearer_blocks_by_the_hosts_own_stream() -> void:
 	var got := _surfaces(_sounds_of(SiegeIds.SHOT_ARROW, SiegeIds.ENEMY_SHIELD, true))
 	assert_true(got.has("shield") or got.has("flesh"), "%s" % [got])

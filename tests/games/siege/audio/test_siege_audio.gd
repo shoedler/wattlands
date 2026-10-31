@@ -344,6 +344,86 @@ func _land(v: SiegeView, seconds: float) -> void:
 		v.update(Wl.SIM_DT)
 
 
+## The one rider on station `id`, its wheel lit there.
+func _rider_on(st: SiegeState, id: int) -> void:
+	var r := st.rider_at(0)
+	r.target = id
+	r.connected = true
+	r.afk = false
+
+
+func _db_of_shot(st: SiegeState, src: int, kind: int, sound: String) -> float:
+	var v := _view(st)
+	var ev := _shot(kind)
+	ev["src"] = src
+	ev["tk"] = st.tick
+	v.audio.kit.clear_played()
+	v.audio.on_cue(SiegeIds.EV_SHOT, ev)
+	return float(_db_of(v, sound)[0])
+
+
+func test_your_own_stations_shots_are_over_the_others_and_a_scorpion_is_nobodys() -> void:
+	var st := SiegeKit.state("short", 1, 0)
+	_rider_on(st, SiegeIds.STATION_ARROWS)
+	var own := _db_of_shot(st, SiegeIds.STATION_ARROWS, SiegeIds.SHOT_ARROW, "arrow_release")
+	var st2 := SiegeKit.state("short", 1, 0)
+	_rider_on(st2, SiegeIds.STATION_BALLISTA)
+	var other := _db_of_shot(st2, SiegeIds.STATION_ARROWS, SiegeIds.SHOT_ARROW, "arrow_release")
+	assert_almost_eq(own - other, 5.0, 0.01, "another rider's rack, under yours and audible")
+	var v := _view(SiegeKit.state("short", 1, 0))
+	assert_false(v.audio.is_mine(SiegeIds.SRC_PAD + 1), "nobody drives a pad")
+
+
+func test_a_landing_keeps_the_side_of_the_shot_it_came_from() -> void:
+	var st := SiegeKit.state("short", 1, 0)
+	_rider_on(st, SiegeIds.STATION_BALLISTA)
+	var v := _view(st)
+	var ev := _shot(SiegeIds.SHOT_ARROW)
+	ev["src"] = SiegeIds.STATION_ARROWS
+	ev["tk"] = st.tick
+	v.audio.on_cue(SiegeIds.EV_SHOT, ev)
+	v.audio.kit.clear_played()
+	_land(v, v.audio.last_flight_s + 1.5)
+	var other := _db_of(v, "arrow_dirt")[0]
+	var st2 := SiegeKit.state("short", 1, 0)
+	_rider_on(st2, SiegeIds.STATION_ARROWS)
+	var w := _view(st2)
+	var ev2 := _shot(SiegeIds.SHOT_ARROW)
+	ev2["src"] = SiegeIds.STATION_ARROWS
+	ev2["tk"] = st2.tick
+	w.audio.on_cue(SiegeIds.EV_SHOT, ev2)
+	w.audio.kit.clear_played()
+	_land(w, w.audio.last_flight_s + 1.5)
+	assert_almost_eq(_db_of(w, "arrow_dirt")[0] - other, 4.0, 0.01)
+
+
+func test_only_your_own_stone_ducks_your_wheel() -> void:
+	AudioBuses.clear_ducks()
+	var st := SiegeKit.state("short", 1, 0)
+	_rider_on(st, SiegeIds.STATION_ARROWS)
+	_db_of_shot(st, SiegeIds.STATION_ONAGER, SiegeIds.SHOT_STONE, "onager_release")
+	AudioBuses.tick(0.005)
+	assert_eq(AudioBuses.duck_db(AudioBuses.MACHINES), 0.0, "another rider's stone")
+	var st2 := SiegeKit.state("short", 1, 0)
+	_rider_on(st2, SiegeIds.STATION_ONAGER)
+	_db_of_shot(st2, SiegeIds.STATION_ONAGER, SiegeIds.SHOT_STONE, "onager_release")
+	AudioBuses.tick(0.005)
+	assert_lt(AudioBuses.duck_db(AudioBuses.MACHINES), 0.0, "your own")
+	AudioBuses.clear_ducks()
+
+
+func test_volleys_trim_each_other_up_to_the_cap() -> void:
+	var v := _solo(0.0)
+	for k in 8:
+		v.audio.on_cue(SiegeIds.EV_SHOT, _shot(SiegeIds.SHOT_ARROW, k + 1))
+		_run(v, 0.1)
+	var levels := _db_of(v, "arrow_swarm")
+	assert_almost_eq(levels[0] - levels[1], 1.5, 0.01)
+	var cap := absf(SiegeAudio.VOLLEY_TRIM_DB) * SiegeAudio.VOLLEY_TRIM_MAX
+	assert_almost_eq(levels[0] - levels[levels.size() - 1], cap, 0.01, "and no further")
+	assert_gte(SiegeAudio.VOLLEY_TRIM_MAX, 5, "0.87 s a volley, 4 s in the air")
+
+
 func _shot_at(kind: int, st: SiegeState) -> Dictionary:
 	var ev := _shot(kind)
 	ev["tk"] = st.tick
@@ -363,6 +443,20 @@ func test_a_shot_lands_on_the_ground_with_nothing_there() -> void:
 		assert_false(v.audio.played.has(row[1]), "still in the air")
 		_land(v, v.audio.last_flight_s + 1.0)
 		assert_true(v.audio.played.has(row[1]), "lands: %s" % row[1])
+
+
+func test_a_kill_takes_its_side_from_where_the_body_was_last_seen() -> void:
+	var st := SiegeKit.state("short", 1, 0)
+	var e := SiegeKit.enemy(st, SiegeIds.ENEMY_SPEAR, 100.0)
+	var v := _view(st)
+	v.update(FRAME)
+	var want := v.audio._pan(e.pos)
+	assert_ne(want, 0.0, "the road is off to one side")
+	st.enemies.clear()
+	assert_almost_eq(
+		v.audio._enemy_pan(e.id), want, 0.001, "the rules took it off the list already"
+	)
+	assert_eq(v.audio._enemy_pan(99999), 0.0, "and one nobody saw is in the middle")
 
 
 func test_a_stone_on_a_ram_is_timber_and_on_spearmen_a_body() -> void:
@@ -556,13 +650,13 @@ func test_a_repaired_gate_does_not_sound_like_a_hit() -> void:
 
 func test_hooves_keep_their_timer_and_grow_with_the_horses() -> void:
 	var st := SiegeKit.state("short", 1, 0)
-	SiegeKit.enemy(st, SiegeIds.ENEMY_CHARIOT, 100.0)
+	SiegeKit.enemy(st, SiegeIds.ENEMY_CHARIOT, st.path.length_m - 40.0)
 	var v := _view(st)
 	_run(v, 2.0, 0.05)
 	assert_almost_eq(_count(v, "hooves"), 5, 1, "one gallop per 0.4 s")
 	var one := _db_of(v, "hooves")[0]
 	for k in 5:
-		SiegeKit.enemy(st, SiegeIds.ENEMY_CHARIOT, 110.0 + k)
+		SiegeKit.enemy(st, SiegeIds.ENEMY_CHARIOT, st.path.length_m - 40.0 + k)
 	_run(v, 0.5, 0.05)
 	assert_gt(_db_of(v, "hooves").max(), one)
 
@@ -575,7 +669,7 @@ func test_a_pause_stops_the_ram_and_the_hooves_over_a_frozen_picture() -> void:
 	var st := SiegeKit.state("short", 1, 0)
 	var ram := SiegeKit.enemy(st, SiegeIds.ENEMY_RAM, 100.0)
 	ram.st = SiegeIds.EN_BATTER
-	SiegeKit.enemy(st, SiegeIds.ENEMY_CHARIOT, 110.0)
+	SiegeKit.enemy(st, SiegeIds.ENEMY_CHARIOT, st.path.length_m - 40.0)
 	var v := _view(st)
 	_run(v, 2.0, 0.05)
 	assert_gt(_count(v, "ram_thud"), 0)
@@ -721,10 +815,21 @@ func test_the_junction_and_the_pour_run_only_in_a_wave() -> void:
 func test_hooves_cannot_cover_the_battle() -> void:
 	var st := SiegeKit.state("short", 1, 0)
 	for k in 8:
-		SiegeKit.enemy(st, SiegeIds.ENEMY_CHARIOT, 100.0 + k)
+		SiegeKit.enemy(st, SiegeIds.ENEMY_CHARIOT, st.path.length_m - 40.0 + k)
 	var v := _view(st)
 	_run(v, 1.0, 0.05)
-	assert_lte(_db_of(v, "hooves").max(), -16.0, "a live wave has them 96 % of the time")
+	assert_lte(_db_of(v, "hooves").max(), -16.0, "soft, whatever comes")
+
+
+func test_hooves_only_for_a_chariot_near_the_gate() -> void:
+	var st := SiegeKit.state("short", 1, 0)
+	var far := SiegeKit.enemy(st, SiegeIds.ENEMY_CHARIOT, 100.0)
+	var v := _view(st)
+	_run(v, 2.0, 0.05)
+	assert_eq(_count(v, "hooves"), 0, "they ran 75 % of a wave from the far end of the road")
+	far.prog_m = st.path.length_m - 40.0
+	_run(v, 2.0, 0.05)
+	assert_gt(_count(v, "hooves"), 0)
 
 
 func test_the_junction_rises_with_the_team() -> void:
