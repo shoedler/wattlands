@@ -1,2 +1,0 @@
-- Removed Diesel Domestiques' retired art tree and about 6000 lines of art generator nothing ran. The baked art is byte-identical. The card art now lives in `assets/tank/cards/` and the type in `assets/tank/hud/`.
-- `assets/tank/rigs.json` drops the four retired tanks and their machinery. The rules read the same numbers as before.

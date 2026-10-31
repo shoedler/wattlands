@@ -1,1 +1,0 @@
-- The games' plain-data record bases and intent rate limits now share `WlRecord` and `IntentRateLimiter` in the SDK. Nothing changes in play.

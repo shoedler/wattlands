@@ -1,1 +1,0 @@
-- Split Diesel Domestiques' `tank_view.gd` (1949 lines) into a chain of six classes, and its seats' crank phases now run on the shared `CrankClock`. Nothing on screen changes.

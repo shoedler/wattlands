@@ -2,6 +2,44 @@
 
 Releases, newest first. Modules and games write fragments in `docs/changelog.d/<module or game id>.md`; the lead merges them here at each release and empties them.
 
+## v0.9.3 (2026-10-31)
+
+The cleanup release: much less code, shared parts for every game, and the sound now keeps even time with your cadence. No one has ridden this on a real trainer or heard the audio yet.
+
+### For riders
+
+- The engine and machine sounds now keep time with your cadence evenly at every rpm. Godot's frame timing used to push each stroke up to a sixtieth of a second early or late, in a slow repeating wave; strokes now run on real time and stay within one frame of the crank on screen, for as long as you ride.
+- Workout's timeline plate has sharp text, like every other plate, and no longer blocks the mouse.
+- Diesel Domestiques' seat cards hold their crank still at or below 1 rpm instead of letting it creep. Turbo Reel's HUD clock uses the shared clock text.
+- A new README with pictures of every game.
+
+### Shared by every game now
+
+- `SnapHistory` and `SnapRenderClock`: the snapshot rows a view interpolates between and the clock it reads them at, in place of four copies. Interpolation no longer drops a tick in sessions past about 5000 s.
+- `HudArtControl`, `HudArtDraw`, `PixelFont` and `PixelPainter.line_pixels`: the base of every game's own HUD.
+- `WlRecord`, `IntentRateLimiter` and `IntentValue`: plain-data records, intent limits, and reading an intent's flags and whole numbers.
+- `FrameClockLock`: the audio kit's lock between the crank and the frame clock.
+- `tests/lib/`: `TestGdLex`, `TestGameFakes`, `TestGameSuite`, `TestGameStaticSuite` and `TestGameSessionSuite`, in place of about 900 copied test lines. `tools/lib/sim_report.mjs` is shared by the sim checkers.
+
+### Removed
+
+- Diesel Domestiques' retired art tree, `TankKit`, about 6000 lines of art generator nothing ran, and the four retired tanks in `assets/tank/rigs.json`. The baked art is byte-identical; the card art now lives in `assets/tank/cards/` and the type in `assets/tank/hud/`.
+- Unreferenced functions and constants across the platform and all four games, `SiegeDepthSprite`, Siege's old art proposal and orphaned files.
+- From the Windows build: demos, one-off art writers and the Tank art tools.
+
+### Structure
+
+- Diesel Domestiques' `tank_mech.gd` is one file per machine plus a shared kit, and `tank_view.gd` (1949 lines) is a chain of six classes. Its seats' crank phases run on the shared `CrankClock`. Nothing on screen changes.
+- Siege's art tools write PNGs through the repo's shared codec; the baked art is byte-identical.
+- CI: 20 workflows become 7. `lead.yml` runs every gate and also checks the rides FIT lap count; the Python bridge tests move to `trainer-bridge.yml`.
+- `tools/qa/` proves a refactor moved code without changing what it does: `verify_move.mjs`, `behaviour_hash.mjs` and `mech_hash.gd`.
+
+### Docs
+
+- `CLAUDE.md` has Gates, Merge queue and Agent rules sections, and `.claude/agents/` defines six agents: art, audio, game-developer and senior-engineer critics, a safety reviewer and a game builder.
+- `docs/GAME_SDK.md`, `docs/ARCHITECTURE.md` and the world2d page document the shared classes and `tests/lib`; `docs/OWNERSHIP.md`, `docs/BACKLOG.md`, `docs/ART_PIPELINE.md` and Tank's READMEs say what is true now.
+- `CREDITS.md` is rebuilt for the public release, game by game. `docs/DECISIONS.md` takes the platform decisions of the v1 run.
+
 ## v0.9.2 (2026-10-31)
 
 Diesel Domestiques gets its overhaul and its sound. No one has ridden this on a real trainer or heard the audio yet; `src/games/tank/HARDWARE_TEST.md` has the checklist.

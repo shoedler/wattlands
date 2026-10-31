@@ -1,1 +1,0 @@
-- Split Diesel Domestiques' `tank_mech.gd` into one file per machine plus a shared kit. Nothing changes on screen.

@@ -1,2 +1,0 @@
-- CI: 20 workflows become 7. `lead.yml` runs every gate and now also checks the rides FIT lap count; the Python bridge tests move to `trainer-bridge.yml`.
-- Tests: the Tank and Siege static suites share one lexer (`TestGdLex`), and their sim checkers share `tools/lib/sim_report.mjs`.
