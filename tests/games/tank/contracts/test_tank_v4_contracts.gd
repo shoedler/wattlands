@@ -566,7 +566,10 @@ func test_the_autopilot_ranks_every_seat() -> void:
 	var s := TankFixturesV4.make("repair")
 	TankTargets.build(s, TankAux.of(s))
 	var needs := TankAutopilot.seat_needs(s)
-	assert_eq(float(needs[TankIds.ENGINE_REPAIR]), 0.05, "a stub until builder E")
+	assert_almost_eq(
+		float(needs[TankIds.ENGINE_REPAIR]), TankAutopilot.repair_need(s), 0.0001, "hull at 55 %"
+	)
+	assert_gt(float(needs[TankIds.ENGINE_REPAIR]), 0.05, "more than the idle seat's rank")
 	for seat: String in TankIds.SEATS:
 		assert_true(needs.has(seat), seat)
 
