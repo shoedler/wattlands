@@ -126,7 +126,7 @@ static func gun_line(crew: int) -> TankState:
 	hv.telegraph_s = 1.5
 	s.enemies.append(hv)
 	for i in 2:
-		var dg := _enemy(22 + i, TankIds.ENEMY_DUGIN, front + 150.0 + 80.0 * i, 50.0, 1)
+		var dg := _enemy(22 + i, TankIds.ENEMY_MEDIUM, front + 150.0 + 80.0 * i, 50.0, 1)
 		dg.fixed = true
 		dg.gun_line = true
 		dg.mode = TankIds.EM_HOLD

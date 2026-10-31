@@ -27,15 +27,11 @@ func test_the_back_lane_stands_higher_darker_and_hazier() -> void:
 	assert_eq(TankView.lane_foot(1), 380.0, "the back lane")
 
 
-func test_every_enemy_sprite_carries_its_shading_masks() -> void:
-	var kit := TankKit.shared()
-	for kind: String in TankKit.ENEMY_KINDS:
-		var row: Dictionary = kit.enemies[kind]
-		for m: String in ["sil", "rim"]:
-			assert_true(row.has(m), "%s %s" % [kind, m])
-			assert_eq(
-				Vector2((row[m] as Texture2D).get_size()), row["size"], "%s %s size" % [kind, m]
-			)
+func test_every_enemy_kind_carries_its_silhouette() -> void:
+	var kit := TankEnemyKit.shared()
+	for kind: String in TankEnemyKit.SIZES:
+		var row := kit.kind(kind)
+		assert_eq((row["sil"] as Rect2).size, row["size"], "%s silhouette" % kind)
 
 
 func test_wrecks_stand_in_their_lane_and_the_beams_light_them() -> void:

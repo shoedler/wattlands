@@ -12,8 +12,9 @@ const COLD_OUTLINE := Color("#0b0806")
 const SLIT_CORE := Color("#d8fff4")
 const SLIT_GLOW := Color("#7fe0d0")
 ## Fastener heads: lit, and dimmed by grime. Colours nothing but a head uses.
-const RIV_LIT := Color("#656f63")
-const RIV_DIM := Color("#454e44")
+const RIV_LIT := Color("#505b4f")
+const RIV_DIM := Color("#384139")
+const RIV_LOW := Color("#262c27")
 ## The moon's rim (enemy_bake.gd COLD 18, 19).
 const MOON: Array[Color] = [Color("#46555a"), Color("#5c6e75")]
 ## A torn hole's mouth (enemy_bake.gd HOLE).
@@ -190,9 +191,13 @@ func _heads(r: Rect2) -> Array[Vector2i]:
 	for y in ri.size.y:
 		for x in ri.size.x:
 			var c := _atlas.get_pixel(ri.position.x + x, ri.position.y + y)
-			if c.a > 0.5 and (c.is_equal_approx(RIV_LIT) or c.is_equal_approx(RIV_DIM)):
+			if c.a > 0.5 and _is_head_colour(c):
 				out.append(Vector2i(x, y))
 	return out
+
+
+static func _is_head_colour(c: Color) -> bool:
+	return c.is_equal_approx(RIV_LIT) or c.is_equal_approx(RIV_DIM) or c.is_equal_approx(RIV_LOW)
 
 
 ## The gaps along the rows of heads: each head's distance to the next on (about) its row, when near enough to
@@ -274,6 +279,10 @@ func _mean_l(r: Rect2, y0: int, y1: int) -> float:
 	return total / maxf(float(n), 1.0)
 
 
+## Two ramp steps of L.
+const TURRET_OVER_HULL := 12.0
+
+
 func test_the_enemies_sit_at_the_tanks_armour_value() -> void:
 	for k: String in TankEnemyKit.SIZES:
 		var row := _kit.kind(k)
@@ -283,10 +292,14 @@ func test_the_enemies_sit_at_the_tanks_armour_value() -> void:
 		)
 		if row.has("turret"):
 			var t: Rect2 = row["turret"]["rect"]
-			assert_lte(
-				_mean_l(t, 0, int(t.size.y)),
-				HERO_ARMOUR_L + 5.0,
-				"%s: the turret, nearer the moon" % k
+			# Art critic, on frames: at the far panel's scale turret and hull were one tone. The turret stands two ramp
+			# steps over the hull now, and the hero's upper hull (p95 102) still tops it.
+			var turret_l := _mean_l(t, 0, int(t.size.y))
+			assert_lte(turret_l, HERO_ARMOUR_L + 22.0, "%s: the turret, nearer the moon" % k)
+			assert_gte(
+				turret_l,
+				_mean_l(row["base"], 0, whole) + TURRET_OVER_HULL,
+				"%s: the turret parts from the hull by value" % k
 			)
 
 
@@ -428,28 +441,56 @@ func _hull_l(k: String, whole: bool = false) -> Array:
 	return [base.size.x, h, ls]
 
 
-## Wear is hard-edged crumbs, not a filter: neighbours differ as much as on the hero's armour (tank_base.png's stern,
-## deck and bow: mean |dL| 9.3 to 14.8, 57 to 66 % of the pairs within 8). The Behemoth is the softest surface.
-func test_the_wear_is_crumbs_not_a_filter() -> void:
+## A plate is one clean paint, as our tank's armour reads by structure, never by noise (the lead's ruling on real
+## frames: the crumbs this used to ask for read as static at the far panel's scale). Most neighbours sit within a step
+## of each
+## other, the more so the bigger the kind's plates; what differs is an edge, a seam or a fastener.
+const CLEAN_SHARE := {
+	"light": 0.62, "medium": 0.67, "heavy": 0.74, "destroyer": 0.63, "behemoth": 0.77
+}
+## Lone pixels off all four neighbours, fasteners aside, per 100 px of hull.
+const MAX_SPECKLE := 2.5
+
+
+func test_a_plate_is_clean_not_speckled() -> void:
 	for k: String in ["light", "medium", "heavy", "destroyer", "behemoth"]:
+		var row := _kit.kind(k)
 		var hull := _hull_l(k)
 		var w: int = hull[0]
 		var ls: PackedFloat32Array = hull[2]
-		var total := 0.0
 		var close := 0
 		var n := 0
+		var px := 0
+		var lone := 0
 		for i in ls.size():
 			if ls[i] < 0.0:
 				continue
+			px += 1
 			for j: int in [i + 1, i + w]:
 				if j >= ls.size() or ls[j] < 0.0 or (j == i + 1 and j % w == 0):
 					continue
-				var d := absf(ls[i] - ls[j])
-				total += d
-				close += int(d <= 8.0)
+				close += int(absf(ls[i] - ls[j]) <= 8.0)
 				n += 1
-		assert_gte(total / n, 10.3, "%s: mean |dL| between neighbours" % k)
-		assert_lte(float(close) / n, 0.66, "%s: the share of pairs within 8" % k)
+			if _is_lone(ls, i, w) and not _is_head_at(row, hull, i):
+				lone += 1
+		assert_gte(float(close) / n, float(CLEAN_SHARE[k]), "%s: the share of pairs within 8" % k)
+		assert_lte(100.0 * float(lone) / float(px), MAX_SPECKLE, "%s: lone pixels per 100" % k)
+
+
+func _is_lone(ls: PackedFloat32Array, i: int, w: int) -> bool:
+	if i % w == 0 or i % w == w - 1 or i < w or i + w >= ls.size():
+		return false
+	for j: int in [i - 1, i + 1, i - w, i + w]:
+		if ls[j] < 0.0 or absf(ls[i] - ls[j]) <= 8.0:
+			return false
+	return true
+
+
+func _is_head_at(row: Dictionary, hull: Array, i: int) -> bool:
+	var w: int = hull[0]
+	var r: Rect2 = row["base"]
+	var c := _atlas.get_pixel(int(r.position.x) + i % w, int(r.position.y) + i / w)
+	return _is_head_colour(c)
 
 
 ## One row's single-pixel peaks, as x: brighter than both neighbours by a step of the ramp.
@@ -1180,8 +1221,13 @@ static func _diff(a: Color, b: Color) -> float:
 
 func test_a_broken_manifest_is_caught() -> void:
 	assert_eq(TankEnemyKit.check({}), ["no kinds"] as Array[String])
-	assert_eq(TankEnemyKit.check({"kinds": {}}).size(), 9, "7 kinds, bushes, far_ground")
+	assert_eq(
+		TankEnemyKit.check({"kinds": {}}).size(), 10, "7 kinds, bushes, far_ground, far_forest"
+	)
 	var kinds := {}
 	for k: String in TankEnemyKit.SIZES:
 		kinds[k] = {"size": [1, 1]}
-	assert_eq(TankEnemyKit.check({"kinds": kinds}), ["no bushes", "no far_ground"] as Array[String])
+	assert_eq(
+		TankEnemyKit.check({"kinds": kinds}),
+		["no bushes", "no far_ground", "no far_forest"] as Array[String]
+	)

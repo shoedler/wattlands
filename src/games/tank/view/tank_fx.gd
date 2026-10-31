@@ -12,6 +12,12 @@ const MAX_BOOMS := 24
 const MAX_SPARKS := 160
 const MAX_CASINGS := 48
 const MAX_TRACERS := 48
+const MAX_LEAVES := 64
+const MAX_WISPS := 90
+## A falling leaf: how fast it settles, how wide and how fast it sways.
+const LEAF_FALL := 11.0
+const LEAF_SWAY := 7.0
+const LEAF_SWAY_HZ := 1.3
 const GRAVITY := 160.0
 
 var rng := RandomNumberGenerator.new()
@@ -27,6 +33,11 @@ var sparks: Array[Dictionary] = []
 var casings: Array[Dictionary] = []
 ## {a, b, age, life, c}: a streak running from a to b over its life.
 var tracers: Array[Dictionary] = []
+## {pos, vel, age, life, len, h, a, c}: a wisp of exhaust streaming off a running vehicle: a thin hard dash that
+## stretches and thins; a run of them is a streak, where soft puffs would be a row of dots.
+var wisps: Array[Dictionary] = []
+## {pos, vel, age, life, c, phase}: a leaf thrown from a bush, fluttering down: a hard pixel or two, no soft blob.
+var leaves: Array[Dictionary] = []
 ## A flash lighting the scene (0..1), where and in what colour.
 var wash: float = 0.0
 var wash_pos: Vector2 = Vector2.ZERO
@@ -46,6 +57,8 @@ func count() -> int:
 		+ sparks.size()
 		+ casings.size()
 		+ tracers.size()
+		+ leaves.size()
+		+ wisps.size()
 	)
 
 
@@ -56,6 +69,8 @@ func clear() -> void:
 	sparks.clear()
 	casings.clear()
 	tracers.clear()
+	leaves.clear()
+	wisps.clear()
 	wash = 0.0
 
 
@@ -167,6 +182,33 @@ func casing(pos: Vector2, ground: float) -> void:
 	)
 
 
+## A wisp from `pos` at `vel`, up to `length` px long.
+func wisp(pos: Vector2, vel: Vector2, life: float, length: float, a: float, col: Color) -> void:
+	if wisps.size() >= MAX_WISPS:
+		wisps.pop_front()
+	wisps.append(
+		{
+			"pos": pos,
+			"vel": vel,
+			"age": 0.0,
+			"life": life,
+			"len": length,
+			"h": 2.0 if rng.randf() < 0.35 else 1.0,
+			"a": a,
+			"c": col
+		}
+	)
+
+
+## A leaf thrown from `pos` at `vel`, fluttering down for `life` s.
+func leaf(pos: Vector2, vel: Vector2, life: float, col: Color) -> void:
+	if leaves.size() >= MAX_LEAVES:
+		leaves.pop_front()
+	leaves.append(
+		{"pos": pos, "vel": vel, "age": 0.0, "life": life, "c": col, "phase": rng.randf() * TAU}
+	)
+
+
 func tracer(a: Vector2, b: Vector2, col: Color, life: float) -> void:
 	if tracers.size() >= MAX_TRACERS:
 		tracers.pop_front()
@@ -217,6 +259,26 @@ func step(dt: float, scroll: float) -> void:
 			keep3.append(c)
 	casings = keep3
 	tracers = _aged(tracers, dt)
+	var keep4: Array[Dictionary] = []
+	for l in leaves:
+		l["age"] = float(l["age"]) + dt
+		var v4: Vector2 = l["vel"]
+		v4 = v4 * (1.0 - 1.6 * dt) + Vector2(0, LEAF_FALL * 2.0 * dt)
+		l["vel"] = v4
+		l["pos"] = (l["pos"] as Vector2) + v4 * dt - Vector2(scroll, 0)
+		if float(l["age"]) < float(l["life"]):
+			keep4.append(l)
+	leaves = keep4
+	var keep5: Array[Dictionary] = []
+	for w in wisps:
+		w["age"] = float(w["age"]) + dt
+		var v5: Vector2 = w["vel"]
+		v5 = v5 * (1.0 - 0.9 * dt) + Vector2(0, -3.0 * dt)
+		w["vel"] = v5
+		w["pos"] = (w["pos"] as Vector2) + v5 * dt - Vector2(scroll * 0.45, 0)
+		if float(w["age"]) < float(w["life"]):
+			keep5.append(w)
+	wisps = keep5
 
 
 static func _aged(list: Array[Dictionary], dt: float) -> Array[Dictionary]:
@@ -236,6 +298,12 @@ func draw_smoke(ci: CanvasItem) -> void:
 		var a := float(p["a"]) * (1.0 - k) * minf(float(p["age"]) * 4.0, 1.0)
 		var c: Color = p["c"]
 		TankDraw.soft_at(ci, p["pos"], r, Color(c.r, c.g, c.b, a))
+	for w in wisps:
+		var kw := float(w["age"]) / float(w["life"])
+		var col: Color = w["c"]
+		col.a = float(w["a"]) * (1.0 - kw) * minf(float(w["age"]) * 12.0, 1.0)
+		var size := Vector2(roundf(lerpf(3.0, float(w["len"]), kw)), float(w["h"]))
+		ci.draw_rect(Rect2((w["pos"] as Vector2).floor(), size), col)
 
 
 ## Brass casings (normal blend).
@@ -245,6 +313,18 @@ func draw_solid(ci: CanvasItem) -> void:
 		ci.draw_rect(
 			Rect2((c["pos"] as Vector2).floor(), Vector2(2, 1)), Color(0.85, 0.62, 0.28, k)
 		)
+
+
+## The leaves (normal blend): behind the near threats and the tank, so none lies on their plates.
+func draw_leaves(ci: CanvasItem) -> void:
+	for l in leaves:
+		var age := float(l["age"])
+		var ph := float(l["phase"]) + age * LEAF_SWAY_HZ * TAU
+		var p: Vector2 = (l["pos"] as Vector2) + Vector2(sin(ph) * LEAF_SWAY, 0.0)
+		var col: Color = l["c"]
+		col.a = clampf((float(l["life"]) - age) * 2.0, 0.0, 1.0)
+		var flat := fposmod(ph, TAU) < PI
+		ci.draw_rect(Rect2(p.floor(), Vector2(2, 1) if flat else Vector2(1, 1)), col)
 
 
 ## Flashes, explosions, sparks and tracers (the additive layer).

@@ -22,7 +22,7 @@
   "player_options": [{"id": "miniature", "type": "toggle", "default": true, "label": "TANK_OPT_MINIATURE"}],
   "content_cards": {
     "ashfall_road": {"image": "res://assets/tank/v2/card_mission.png", "detail": "TANK_CARD_MISSION", "featured": true},
-    "ambush_15": {"image": "res://assets/tank/v2/card_mission.png", "detail": "TANK_CARD_AMBUSH", "featured": true},
+    "ambush_15": {"image": "res://assets/tank/v2/card_ambush.png", "detail": "TANK_CARD_AMBUSH", "featured": true},
     "roam_30": {"image": "res://assets/tank/v2/card_roam.png", "detail": "TANK_CARD_ROAM", "featured": true},
     "roam_10": {"image": "res://assets/tank/v2/card_roam.png", "detail": "TANK_CARD_ROAM", "featured": false},
     "roam_20": {"image": "res://assets/tank/v2/card_roam.png", "detail": "TANK_CARD_ROAM", "featured": false},

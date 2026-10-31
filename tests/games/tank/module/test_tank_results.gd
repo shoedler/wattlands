@@ -296,6 +296,6 @@ func test_the_difficulty_losses_and_repairs_in_the_results() -> void:
 	assert_eq(res.team["TANK_TEAM_LOSSES"], 2)
 	assert_eq(res.team["TANK_TEAM_DIFFICULTY"], "Hard")
 	assert_eq(res.ride_lines.size(), 5)
-	assert_eq(res.ride_lines[4], "2 tanks lost")
+	assert_eq(res.ride_lines[4], "Tanks lost: 2")
 	assert_eq(res.row(2)["stats"]["TANK_STAT_REPAIR_S"], 72)
 	assert_eq(res.row(2)["stats"]["TANK_STAT_REPAIRED"], 33)

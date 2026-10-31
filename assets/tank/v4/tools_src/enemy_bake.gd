@@ -8,6 +8,7 @@ extends SceneTree
 ##   enemies.json   every rect and anchor TankEnemyKit and TankEnemyDraw read
 ##   bushes.png     the roadside bushes the near threats burst from
 ##   far_ground.png the far panel's ground, 1024 x 170, tiling, soft at its top and bottom
+##   far_forest.png the far panel's treeline: three strips of firs, far to near, each tiling
 ## All procedural: no fal, no source image. Run: bash assets/tank/v4/tools_src/enemy_bake.sh
 
 const Px = preload("res://assets/tank/v3/tools_src/px.gd")
@@ -48,6 +49,7 @@ const COLD: Array[Color] = [
 	# the moon's edge: a colder step, only near the top edges
 	Color("#46555a"),
 	Color("#5c6e75"),
+	Color("#7f949b"),
 ]
 ## The one saturated hue on an enemy: slit and lamp glass.
 const SLIT_CORE := Color("#d8fff4")
@@ -57,41 +59,53 @@ const GLASS_DARK := Color("#0f1a1c")
 ## FALL_FROM of the way from the deck to the road it keeps falling to FALL_LOW of that, so a plate has no
 ## single value from deck to skirt and the lower third sinks to near the outline. Only the moon rim, put on
 ## afterwards, keeps its value.
-const NIGHT_K := 0.66
-const WHEEL_K := 0.66
-const GUN_K := 0.72
+const NIGHT_K := 0.6
+const WHEEL_K := 0.5
+const GUN_K := 0.78
 const FALL_FROM := 0.4
 const FALL_LOW := 0.26
+## The decks nearest the moon: over this share of the way from the deck to the road the ramp stands TOP_K higher, one
+## broad step down to the hull's mid. Decks light, hull mid, gear darkest: three values from across a field.
+const TOP_SHARE := 0.2
+const TOP_K := 1.3
 ## The moon reaches a top edge only with open sky over it for this many rows.
 const RIM_CLEAR := 5
-## Each plate's value on its part, a step or two from its neighbours' (two apart in this list too): the hull's
-## large-scale wear, as the hero's plates have.
-const PLATE_TONES: Array[float] = [0.7, 1.25, 0.95, 0.62, 1.4, 1.05]
-## The wear's patches, 6-20 px across, each on its own plate: above SCUFF_AT the plate is a ramp step lighter, below
-## GRIME_AT a step darker, nothing between.
-const SCUFF_AT := 0.61
-const GRIME_AT := 0.37
+## Each plate's one clean value on its part, well apart from its neighbours (two apart in this list too), so the
+## hull reads as plates at the far panel's scale, not as a mottled mass.
+const PLATE_TONES: Array[float] = [0.72, 1.3, 0.95, 0.58, 1.45, 1.08]
+## The turret stands nearer the moon: its plates over the hull's, so hull and turret part at a glance.
+const TURRET_TONE := 1.4
 ## A pixel this many ramp steps from its plate's value is a feature of the plate (a hatch's edge, a lip), not its paint.
-const FEATURE_STEPS := 2
-## One crumb of wear per this many px of plate where it is worn (a plate has worn zones and clean paint): as the hero's
-## armour, hard little clusters 2-5 px, not a filter.
-const CRUMB_AREA := 6
-## A peak along a row stands this far over both its neighbours (L, 0..255).
-const PEAK_DL := 4.0
+const FEATURE_STEPS := 4
+## A plate's edges against its paint, in ramp steps: the lit top and left, the seam's shadow, the dark bottom.
+const EDGE_LIT := 3
+const EDGE_LIT_SIDE := 1
+const EDGE_SEAM := -3
+const EDGE_LOW := -2
+## The odd worn mark on a large plate: one per this many px, a short hard stroke a step off the paint. No more.
+const MARK_AREA := 340
 ## Gashes keep within this many degrees of the horizontal, as a shot tears along the plate.
 const GASH_TILT := 35.0
+## A peak along a row stands this far over both its neighbours (L, 0..255).
+const PEAK_DL := 4.0
 ## A smashed bogie's iron against a live wheel's WHEEL_K: dull, its rims still catching a little.
 const BOGIE_K := 0.56
 ## A sprocket has one tooth to this many shoes, so each tooth sits in a gap of the belt.
 const SHOES_PER_TOOTH := 2.0
 ## The glow's sprite on the atlas: a soft round falloff, nothing at its edge.
 const GLOW_SIZE := 64
-## Fastener heads after the night: as bright as the hero's (#86683f, L 107), and the grimed ones. Colours of
-## their own, off the ramp, so a head can be told from a plate.
-const RIV_LIT := Color("#656f63")
-const RIV_DIM := Color("#454e44")
+## Fastener heads after the night: under the plates' lit edges, so a seam reads as a line of quiet heads and not as
+## pepper at the far panel's scale; the grimed ones barely off the paint. Colours of their own, off the ramp, so a
+## head can be told from a plate.
+const RIV_LIT := Color("#505b4f")
+const RIV_DIM := Color("#384139")
+## A head on a plate this dark (L) is a step over it and no more, its shadow pixel under it: on the low dark plates a
+## pale head reads as a speck of dust, not a fastener.
+const RIV_LOW := Color("#262c27")
+const RIV_LOW_UNDER := 0.075
 const BURN: Array[Color] = [Color("#0d0a08"), Color("#1c1410"), Color("#2b1e16"), Color("#3f2a1c")]
 const BURN_LIP := Color("#6a4628")
+const BURN_LUM_MAX := 0.14
 const HOLE := Color("#050403")
 const ASH := Color("#57504a")
 
@@ -114,12 +128,14 @@ func _init() -> void:
 	_rects(kinds)
 	atlas.save_png(ProjectSettings.globalize_path(OUT + "enemies.png"))
 	var manifest := {
-		"note": "The v4 enemies (assets/tank/v4/tools_src/enemy_bake.gd). Sprite px, origin top-left.",
+		"note":
+		"The v4 enemies (assets/tank/v4/tools_src/enemy_bake.gd). Sprite px, origin top-left.",
 		"atlas": "enemies.png",
 		"kinds": kinds,
 	}
 	manifest["bushes"] = _bushes()
 	manifest["far_ground"] = _far_ground()
+	manifest["far_forest"] = _far_forest()
 	var f := FileAccess.open(ProjectSettings.globalize_path(OUT + "enemies.json"), FileAccess.WRITE)
 	f.store_string(JSON.stringify(manifest, " ", false))
 	f.close()
@@ -164,7 +180,9 @@ func _bake_kind(id: String, L: Dictionary) -> Dictionary:
 	var whole := _rest_picture(L, base, front, null, null)
 	row["sil"] = _add(_silhouette(whole), Vector2i.ZERO)
 	if turret_img != null:
-		row["turret"]["sil"] = _add(_silhouette(turret_img.get_region(turret_img.get_used_rect())), Vector2i.ZERO)
+		row["turret"]["sil"] = _add(
+			_silhouette(turret_img.get_region(turret_img.get_used_rect())), Vector2i.ZERO
+		)
 	var wreck := _wreck(L, base, front, turret_img, gun_img)
 	row["wreck"] = _add(wreck["img"], Vector2i.ZERO)
 	row["wreck_sil"] = _add(_silhouette(wreck["img"]), Vector2i.ZERO)
@@ -172,6 +190,9 @@ func _bake_kind(id: String, L: Dictionary) -> Dictionary:
 	var first: Array = (wreck["fires"] as Array)[0]
 	row["wreck_fire"] = [first[0], first[1]]
 	row["glow"] = _glow_slot()
+	var warm := _warm_of(L)
+	row["vents"] = warm["vents"]
+	row["hatches"] = warm["hatches"]
 	row["shadow"] = _add(_shadow(sz.x), Vector2i.ZERO)
 	row["shadow_at"] = [-SHADOW_PAD, float(L["ground"]) - 2.0]
 	if L.has("furnace"):
@@ -215,12 +236,15 @@ func _hull_image(id: String, L: Dictionary) -> Dictionary:
 	_moon_rim(img)
 	_rivet_seams(img, L["parts"], L["details"], span)
 	_thin_peaks(img)
+	_quiet_specks(img)
+	_hatch_rooms(img, L["details"])
 	if not front.is_invisible():
 		front = _finish(front, sz)
 		_surface(front, L.get("front_parts", []), L.get("front_details", []), sz, span, seed + 5)
 		_under_overhang(front)
 		_rivet_seams(front, L.get("front_parts", []), L.get("front_details", []), span)
 		_thin_peaks(front)
+		_quiet_specks(front)
 	if id == "destroyer":
 		var g: Vector2i = L["glint"]
 		Px.rect(img, Rect2i(g.x - 2, g.y - 1, 5, 4), OUTLINE)
@@ -237,38 +261,72 @@ func _span(L: Dictionary) -> Vector2i:
 	return Vector2i(top, int(L.get("night_low", L["ground"])))
 
 
-## A built, finished picture to its night: the fasteners' grime, the dirt, the palette, each plate's value, and
-## the wear on top of that.
-func _surface(img: Image, parts: Array, details: Array, sz: Vector2i, span: Vector2i, seed: int) -> void:
+## A built, finished picture to its night: the fasteners' grime, the palette, each plate's one clean value, its lit top
+## edge and its seam's shadow, as our tank's armour reads: by structure, never by noise.
+func _surface(
+	img: Image,
+	parts: Array,
+	details: Array,
+	sz: Vector2i,
+	span: Vector2i,
+	seed: int,
+	tone_k: float = 1.0
+) -> void:
 	var plates: Array[Rect2i] = []
 	var ids := _plate_ids(parts, sz, plates)
 	_wear_fasteners(img, seed)
-	_weather(img, sz, seed, ids)
 	_snap(img)
 	_despeckle(img)
 	_calm(img, parts, sz)
-	_night(img, span.x, span.y, _plate_tones(parts, sz))
-	_wear(img, parts, details, span, seed, ids, plates)
+	var tones := _plate_tones(parts, sz)
+	for i in tones.size():
+		tones[i] *= tone_k
+	_night(img, span.x, span.y, tones)
+	_clean_plates(img, details, span, seed, ids, plates)
 
 
 func _finish(img: Image, sz: Vector2i) -> Image:
 	var fl := {
-		"rooms": {}, "shaft": Rect2i(), "rackwin": Rect2i(), "breechwin": Rect2i(), "boxwin": Rect2i(), "boxwin2": Rect2i(),
-		"cuts": [], "crate": Rect2i(), "plaques": [], "details": [], "gear": {"skirt_y": sz.y},
+		"rooms": {},
+		"shaft": Rect2i(),
+		"rackwin": Rect2i(),
+		"breechwin": Rect2i(),
+		"boxwin": Rect2i(),
+		"boxwin2": Rect2i(),
+		"cuts": [],
+		"crate": Rect2i(),
+		"plaques": [],
+		"details": [],
+		"gear": {"skirt_y": sz.y},
 	}
 	return Finish.apply(img, fl)["img"]
 
 
 func _turret_image(L: Dictionary) -> Image:
 	var sz: Vector2i = L["size"]
-	var TL := {"enemy": true, "size": sz, "parts": L["turret_parts"], "details": L.get("turret_details", [])}
+	var TL := {
+		"enemy": true,
+		"size": sz,
+		"parts": L["turret_parts"],
+		"details": L.get("turret_details", [])
+	}
 	var B := Hull.build(TL)
 	var img: Image = _finish(B["img"], sz)
 	var span := _span(L)
 	var parts: Array = L["turret_parts"]
-	_surface(img, parts, L.get("turret_details", []), sz, span, int((parts[0] as Dictionary)["seed"]) + 9)
+	_surface(
+		img,
+		parts,
+		L.get("turret_details", []),
+		sz,
+		span,
+		int((parts[0] as Dictionary)["seed"]) + 9,
+		TURRET_TONE
+	)
 	_moon_rim(img)
 	_rivet_seams(img, parts, L.get("turret_details", []), span)
+	_quiet_specks(img)
+	_hatch_rooms(img, L.get("turret_details", []))
 	return img
 
 
@@ -276,7 +334,11 @@ func _turret_row(row: Dictionary, L: Dictionary, img: Image) -> void:
 	var bb := img.get_used_rect()
 	var cut := img.get_region(bb)
 	var r := _add(cut, Vector2i.ZERO)
-	row["turret"] = {"rect": r, "at": [bb.position.x, bb.position.y], "pivot": [float(L["pivot_x"]), float(bb.end.y)]}
+	row["turret"] = {
+		"rect": r,
+		"at": [bb.position.x, bb.position.y],
+		"pivot": [float(L["pivot_x"]), float(bb.end.y)]
+	}
 
 
 ## A soft 2 px cast shadow on the deck under the turret's lower edge.
@@ -317,15 +379,17 @@ func _belly(img: Image, L: Dictionary) -> void:
 		low = maxf(low, float(w["y"]))
 		x0 = minf(x0, float(w["x"]) - r)
 		x1 = maxf(x1, float(w["x"]) + r)
-	# the belly band between the hull's plates and the wheels' hubs, closing any gap up to the plates
+	var tyres := bool(g.get("tyres", false))
+	# the belly band between the hull's plates and the wheels' hubs, closing any gap up to the plates; an armoured
+	# car's hull comes down between its wheels and keeps its plates there
 	for y in range(int(top) - 3, int(low) + 1):
 		for x in range(int(x0) + 1, int(x1)):
-			if y < int(top) - 1 and img.get_pixel(x, y).a > 0.5:
+			if (y < int(top) - 1 or tyres) and img.get_pixel(x, y).a > 0.5:
 				continue
 			var k := float(y - top) / maxf(low - top, 1.0)
 			Px.put(img, x, y, COLD[1] if k > 0.4 or Px.vnoise(x, y, 7.0, 73) < 0.55 else COLD[3])
 	for w2: Dictionary in wheels:
-		if bool(w2.get("far", false)):
+		if bool(w2.get("far", false)) or tyres:
 			continue
 		var r2 := float(w2["r"])
 		var c := Vector2(float(w2["x"]), float(w2["y"]))
@@ -434,7 +498,7 @@ func _mount(img: Image, L: Dictionary) -> void:
 		Px.put(img, floori(q.x), floori(q.y), COLD[16])
 
 
-## The Behemoth's furnace vent: bars over a dark mouth (draw_light adds the cold glow).
+## The Behemoth's furnace vent: bars over a dark mouth (draw_light lights the fire behind them).
 func _furnace(img: Image, L: Dictionary) -> void:
 	if not L.has("furnace"):
 		return
@@ -445,10 +509,6 @@ func _furnace(img: Image, L: Dictionary) -> void:
 		if (x - r.position.x) % 4 == 3:
 			for y in range(r.position.y, r.end.y):
 				Px.put(img, x, y, COLD[10])
-	for y2 in range(r.position.y + 2, r.end.y):
-		for x2 in range(r.position.x, r.end.x):
-			if (x2 - r.position.x) % 4 != 3:
-				Px.put(img, x2, y2, SLIT_GLOW.darkened(0.55 + 0.1 * (r.end.y - y2)))
 
 
 ## The Behemoth's bow secondary, on its sponson.
@@ -456,11 +516,48 @@ func _secondary(img: Image, L: Dictionary) -> void:
 	var s: Dictionary = L["secondary"]
 	var o: Vector2 = s["pivot"]
 	var ln := float(s["len"])
-	Px.profile(img, o, PI, [
-		[-2.0, 6.0, 2.6, 2.4, COLD[12], COLD[8], COLD[3]],
-		[6.0, ln, 1.3, 1.3, COLD[12], COLD[8], COLD[3]],
-		[ln - 3.0, ln, 1.8, 1.8, COLD[13], COLD[9], COLD[3]],
-	], OUTLINE)
+	(
+		Px
+		. profile(
+			img,
+			o,
+			PI,
+			[
+				[-2.0, 6.0, 2.6, 2.4, COLD[12], COLD[8], COLD[3]],
+				[6.0, ln, 1.3, 1.3, COLD[12], COLD[8], COLD[3]],
+				[ln - 3.0, ln, 1.8, 1.8, COLD[13], COLD[9], COLD[3]],
+			],
+			OUTLINE
+		)
+	)
+
+
+## A lit hatch's inside is dark in the atlas, under its frame: the amber is light, added by TankEnemyDraw._hatch, and
+## on a grey panel it would read as a grey sticker.
+func _hatch_rooms(img: Image, details: Array) -> void:
+	for d: Dictionary in details:
+		if str(d.get("kind", "")) == "hatch" and bool(d.get("lit", true)) and d.has("rect"):
+			Px.rect(img, (d["rect"] as Rect2i).grow(-1), COLD[1])
+
+
+## Where a kind shows warmth (TankEnemyDraw.draw_light): the louvres' engine vents and the lit hatches, each
+## [x, y, w, h, on_turret]. The atlas stays cold: the warmth is light, in the light layer. A hatch marked "lit": false
+## is a shut door.
+func _warm_of(L: Dictionary) -> Dictionary:
+	var vents: Array = []
+	var hatches: Array = []
+	for layer in 2:
+		var rows: Array = L.get("turret_details", []) if layer == 1 else L["details"]
+		for d: Dictionary in rows:
+			if not d.has("rect"):
+				continue
+			var r: Rect2i = d["rect"]
+			var out := [r.position.x, r.position.y, r.size.x, r.size.y, layer]
+			if str(d.get("kind", "")) == "louvre":
+				vents.append(out)
+			elif str(d.get("kind", "")) == "hatch" and bool(d.get("lit", true)):
+				hatches.append(out)
+	return {"vents": vents, "hatches": hatches}
 
 
 ## The hull's details and its furniture as details: all that the wear stays off.
@@ -538,7 +635,12 @@ func _detail_rects(details: Array, lines: bool = false) -> Array[Rect2i]:
 		elif lines and d.has("a"):
 			var a := Vector2i(d["a"])
 			var b := Vector2i(d["b"])
-			skip.append(Rect2i(mini(a.x, b.x), mini(a.y, b.y), absi(a.x - b.x) + 1, absi(a.y - b.y) + 1).grow(2))
+			skip.append(
+				(
+					Rect2i(mini(a.x, b.x), mini(a.y, b.y), absi(a.x - b.x) + 1, absi(a.y - b.y) + 1)
+					. grow(2)
+				)
+			)
 	return skip
 
 
@@ -555,7 +657,9 @@ func _jog(a: int, b: int) -> int:
 
 ## One head on the finished picture. Grime takes some, in patches, and dims others; the road's dark dims the
 ## low ones. Many weep a streak of 4-10 px, dark on a lit plate and pale salt on a dark one, that shows at 3x.
-func _rivet(img: Image, poly: PackedVector2Array, p: Vector2i, skip: Array[Rect2i], span: Vector2i) -> void:
+func _rivet(
+	img: Image, poly: PackedVector2Array, p: Vector2i, skip: Array[Rect2i], span: Vector2i
+) -> void:
 	for r in skip:
 		if r.has_point(p):
 			return
@@ -571,11 +675,16 @@ func _rivet(img: Image, poly: PackedVector2Array, p: Vector2i, skip: Array[Rect2
 	if roll < 0.09 or (grime > 0.74 and roll < 0.55):
 		return
 	var k := _night_k(p.y, span.x, span.y)
-	var dim := roll < 0.34 or grime > 0.62 or k < 0.42
-	Px.put(img, p.x, p.y, RIV_DIM if dim else RIV_LIT)
+	var dim := roll < 0.62 or grime > 0.62 or k < 0.42
+	var head := RIV_DIM if dim else RIV_LIT
+	if _lum(img.get_pixel(p.x, p.y)) < RIV_LOW_UNDER:
+		head = RIV_LOW
+	Px.put(img, p.x, p.y, head)
 	Px.put(img, p.x + 1, p.y + 1, COLD[1])
-	if Px.h2(p.x, p.y, 51) > 0.45:
-		_streak(img, poly, Vector2i(p.x, p.y + 2), 4 + floori(Px.h2(p.y, p.x, 53) * 7.0), p.x * 3 + p.y)
+	if Px.h2(p.x, p.y, 51) > 0.9:
+		_streak(
+			img, poly, Vector2i(p.x, p.y + 2), 4 + floori(Px.h2(p.y, p.x, 53) * 7.0), p.x * 3 + p.y
+		)
 
 
 ## A streak down a plate from `at`: `n` px, fading, stopping at the plate's end or anything that keeps its colour.
@@ -590,11 +699,47 @@ func _streak(img: Image, poly: PackedVector2Array, at: Vector2i, n: int, seed: i
 		var l := _lum(c)
 		var fade := float(i) / float(n)
 		var pale := l < 0.07 or Px.h2(seed, 3, 57) > 0.85
-		img.set_pixel(at.x, y, _ramp_of(l * (lerpf(1.9, 1.2, fade) if pale else lerpf(0.42, 0.85, fade))))
+		img.set_pixel(
+			at.x, y, _ramp_of(l * (lerpf(1.9, 1.2, fade) if pale else lerpf(0.42, 0.85, fade)))
+		)
 
 
 func _is_head(c: Color) -> bool:
-	return c.is_equal_approx(RIV_LIT) or c.is_equal_approx(RIV_DIM)
+	return c.is_equal_approx(RIV_LIT) or c.is_equal_approx(RIV_DIM) or c.is_equal_approx(RIV_LOW)
+
+
+## What is left of the pale specks on the dark plates, whatever made them: a lone pixel far over all its neighbours comes
+## down to a head's quiet value. A rim and a seam's run have neighbours of their light, and stay.
+func _quiet_specks(img: Image) -> void:
+	var src := img.duplicate() as Image
+	var w := src.get_width()
+	var h := src.get_height()
+	for y in range(1, h - 1):
+		for x in range(1, w - 1):
+			var c := src.get_pixel(x, y)
+			if c.a < 0.5 or _is_glass(c) or c.is_equal_approx(RIV_LOW):
+				continue
+			var l := _lum(c)
+			var most := 0.0
+			var open_side := false
+			for q: Vector2i in [
+				Vector2i(1, 0),
+				Vector2i(-1, 0),
+				Vector2i(0, 1),
+				Vector2i(0, -1),
+				Vector2i(1, 1),
+				Vector2i(-1, -1),
+				Vector2i(1, -1),
+				Vector2i(-1, 1)
+			]:
+				var n := src.get_pixel(x + q.x, y + q.y)
+				if n.a < 0.5:
+					open_side = true
+					break
+				most = maxf(most, _lum(n))
+			if open_side or most >= RIV_LOW_UNDER or l <= most * 1.5:
+				continue
+			img.set_pixel(x, y, RIV_LOW)
 
 
 ## Grime on the fasteners: in patches the heads are gone, under it they are dim; the rest keep their light.
@@ -620,15 +765,29 @@ func _wear_fasteners(img: Image, seed: int) -> void:
 
 
 func _in_run(src: Image, x: int, y: int) -> bool:
-	for q: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 1), Vector2i(-1, -1), Vector2i(1, -1), Vector2i(-1, 1)]:
-		if Px.inside(src, x + q.x, y + q.y) and src.get_pixel(x + q.x, y + q.y).is_equal_approx(Hull.RIV_HI_EN):
+	for q: Vector2i in [
+		Vector2i(1, 0),
+		Vector2i(-1, 0),
+		Vector2i(0, 1),
+		Vector2i(0, -1),
+		Vector2i(1, 1),
+		Vector2i(-1, -1),
+		Vector2i(1, -1),
+		Vector2i(-1, 1)
+	]:
+		if (
+			Px.inside(src, x + q.x, y + q.y)
+			and src.get_pixel(x + q.x, y + q.y).is_equal_approx(Hull.RIV_HI_EN)
+		):
 			return true
 	return y < 2 or src.get_pixel(x, y - 2).a < 0.5
 
 
 ## The night on a finished, snapped picture (see NIGHT_K), each plate at its own value. Slit glass keeps its
 ## light; a head stays a head until the road's dark takes it.
-func _night(img: Image, top: int, low: int, tones: PackedFloat32Array = PackedFloat32Array()) -> void:
+func _night(
+	img: Image, top: int, low: int, tones: PackedFloat32Array = PackedFloat32Array()
+) -> void:
 	var w := img.get_width()
 	for y in img.get_height():
 		var k := _night_k(y, top, low)
@@ -679,7 +838,9 @@ func _plate_tones(parts: Array, sz: Vector2i) -> PackedFloat32Array:
 		var plates := _plates_of(part)
 		var contrast := float(part.get("contrast", 1.0))
 		for k in plates.size():
-			var tone: float = 1.0 + (PLATE_TONES[posmod(k + seed, PLATE_TONES.size())] - 1.0) * contrast
+			var tone: float = (
+				1.0 + (PLATE_TONES[posmod(k + seed, PLATE_TONES.size())] - 1.0) * contrast
+			)
 			var pr: Rect2i = plates[k]
 			for y in range(maxi(pr.position.y, 0), mini(pr.end.y, sz.y)):
 				for x in range(maxi(pr.position.x, 0), mini(pr.end.x, sz.x)):
@@ -701,11 +862,19 @@ func _calm(img: Image, parts: Array, sz: Vector2i) -> void:
 		for pr: Rect2i in _plates_of(part):
 			for y in range(pr.position.y, pr.end.y):
 				for x in range(pr.position.x, pr.end.x):
-					if x < 0 or y < 0 or x >= sz.x or y >= sz.y or not Px.in_poly(Vector2(x + 0.5, y + 0.5), poly):
+					if (
+						x < 0
+						or y < 0
+						or x >= sz.x
+						or y >= sz.y
+						or not Px.in_poly(Vector2(x + 0.5, y + 0.5), poly)
+					):
 						continue
 					var across := mini(y - pr.position.y, pr.end.y - 1 - y)
 					var along := mini(x - pr.position.x, pr.end.x - 1 - x)
-					inner[y * sz.x + x] = 1 if mini(across, along) >= edge else (2 if across <= along else 3)
+					inner[y * sz.x + x] = (
+						1 if mini(across, along) >= edge else (2 if across <= along else 3)
+					)
 	var src := img.duplicate() as Image
 	for y2 in range(1, sz.y - 1):
 		for x2 in range(1, sz.x - 1):
@@ -739,43 +908,96 @@ func _plates_of(part: Dictionary) -> Array[Rect2i]:
 	var cast := bool(part.get("cast", false))
 	var split := not cast and bool(part.get("split", true))
 	return Hull._plates(
-		Px.poly_bounds(poly), part.get("seams_x", []), part.get("seams_y", []), int(part.get("seed", 0)), split
+		Px.poly_bounds(poly),
+		part.get("seams_x", []),
+		part.get("seams_y", []),
+		int(part.get("seed", 0)),
+		split
 	)
 
 
-## Wear at the plates' scale on the night picture, as the hero's armour has it. Each plate is one paint: its value
-## falling with the night, its patches its own (6-20 px across, broken edges, one ramp step off the paint and nothing
-## between), so a value changes at a seam and a patch never runs across one. Over that the crumbs. Details keep theirs.
-func _wear(
-	img: Image, parts: Array, details: Array, span: Vector2i, seed: int, ids: PackedInt32Array, plates: Array[Rect2i]
+## The plates on the night picture, as our tank's armour reads: each plate one clean paint whose value falls in broad
+## steps with the night, a dark seam line at its top, a lit edge under that and down its left, a dark bottom edge; here
+## and there a short worn stroke or a run of rust. Details and furniture keep theirs. No filter, no pepper.
+func _clean_plates(
+	img: Image,
+	details: Array,
+	span: Vector2i,
+	seed: int,
+	ids: PackedInt32Array,
+	plates: Array[Rect2i]
 ) -> void:
 	var skip := _detail_rects(details, true)
 	var src := img.duplicate() as Image
 	var w := src.get_width()
+	var h := src.get_height()
 	var paint := _plate_paints(src, ids, plates.size(), span, skip)
-	for y in src.get_height():
+	var base := PackedInt32Array()
+	base.resize(w * h)
+	base.fill(-1)
+	for y in h:
 		for x in w:
 			var id := ids[y * w + x]
 			var c := src.get_pixel(x, y)
-			if id < 0 or not _is_paint(c) or _skipped(skip, Vector2i(x, y)) or not _inside_plate(src, plates[id], x, y):
+			if id < 0 or not _is_paint(c) or _skipped(skip, Vector2i(x, y)):
 				continue
-			# the night's bands wander across a plate, never a ruled line
-			var sway := roundi((Px.vnoise(float(x), 0.0, 7.0, seed + 44 + id) - 0.5) * 8.0)
+			# the night's bands wander a little at the plate's scale, never a ruled line
+			var sway := roundi((Px.vnoise(float(x), 0.0, 23.0, seed + 44 + id) - 0.5) * 5.0)
 			var at := _ramp_index(paint[id] * _night_k(y + sway, span.x, span.y) / NIGHT_K)
 			if absi(_ramp_index(_lum(c)) - at) > FEATURE_STEPS:
 				continue
-			var s2 := seed + 40 + id * 11
-			var f := Px.vnoise(x, y, 9.0, s2) * 0.62 + Px.vnoise(x, y, 3.0, s2 + 1) * 0.38
-			f += (Px.h2(x, y, s2 + 2) - 0.5) * 0.09
-			if f > SCUFF_AT:
-				at += 1
-			elif f < GRIME_AT:
-				at -= 1
+			base[y * w + x] = at
 			img.set_pixel(x, y, COLD[clampi(at, 1, 15)])
-	var first := 0
-	for part: Dictionary in parts:
-		_plate_wear(img, part, plates, first, ids, skip, span, seed)
-		first += _plates_of(part).size()
+	for y2 in h:
+		for x2 in w:
+			var at2 := base[y2 * w + x2]
+			if at2 >= 0:
+				img.set_pixel(x2, y2, COLD[clampi(at2 + _edge_steps(ids, w, h, x2, y2), 1, 15)])
+	_marks(img, ids, base, plates, seed)
+
+
+## How many ramp steps an edge of its plate lifts or drops a pixel: the seam's shadow on a plate's top row, its lit edge
+## right under that (or under the outline), the left edge's light, the dark at its right and bottom.
+func _edge_steps(ids: PackedInt32Array, w: int, h: int, x: int, y: int) -> int:
+	var id := ids[y * w + x]
+	if y > 0 and ids[(y - 1) * w + x] != id:
+		return EDGE_SEAM if ids[(y - 1) * w + x] >= 0 else EDGE_LIT
+	if y > 1 and ids[(y - 2) * w + x] != id and ids[(y - 2) * w + x] >= 0:
+		return EDGE_LIT
+	if y < h - 1 and ids[(y + 1) * w + x] != id:
+		return EDGE_LOW
+	if x > 0 and ids[y * w + x - 1] != id:
+		return EDGE_LOW
+	if x > 1 and ids[y * w + x - 2] != id:
+		return EDGE_LIT_SIDE
+	if x < w - 1 and ids[y * w + x + 1] != id:
+		return EDGE_LOW + 1
+	return 0
+
+
+## Sparse hand marks on the largest plates: a short horizontal scuff a step lighter, or a run of rust from the top a
+## step darker. One to MARK_AREA px of plate: a plate stays one clean paint.
+func _marks(
+	img: Image, ids: PackedInt32Array, base: PackedInt32Array, plates: Array[Rect2i], seed: int
+) -> void:
+	var w := img.get_width()
+	for id in plates.size():
+		var pr: Rect2i = plates[id]
+		var s := seed + 40 + id * 11
+		for n in pr.get_area() / MARK_AREA:
+			var at := (
+				pr.position
+				+ Vector2i(int(Px.h2(n, 1, s) * pr.size.x), int(Px.h2(n, 2, s) * pr.size.y))
+			)
+			var run := Px.h2(n, 3, s) < 0.5
+			var ln := 3 + floori(Px.h2(n, 4, s) * 4.0)
+			for i in ln:
+				var q := at + (Vector2i(0, i) if run else Vector2i(i, 0))
+				if not Px.inside(img, q.x, q.y) or ids[q.y * w + q.x] != id:
+					continue
+				var b := base[q.y * w + q.x]
+				if b >= 0:
+					img.set_pixel(q.x, q.y, COLD[clampi(b + (-1 if run else 1), 1, 15)])
 
 
 ## A plate's paint: the median of its bare pixels with the night's fall taken out.
@@ -808,132 +1030,11 @@ func _is_paint(c: Color) -> bool:
 	return c.a > 0.5 and not _keeps(c) and not c.is_equal_approx(OUTLINE)
 
 
-## Two rows and columns in from the plate's seams and from the silhouette: a seam's dark and lit lines stay.
-func _inside_plate(src: Image, pr: Rect2i, x: int, y: int) -> bool:
-	if mini(mini(x - pr.position.x, pr.end.x - 1 - x), mini(y - pr.position.y, pr.end.y - 1 - y)) < 2:
-		return false
-	for q: Vector2i in [Vector2i(-2, 0), Vector2i(2, 0), Vector2i(0, -2), Vector2i(0, 2)]:
-		if not Px.inside(src, x + q.x, y + q.y) or src.get_pixel(x + q.x, y + q.y).a < 0.5:
-			return false
-	return true
-
-
 func _skipped(skip: Array[Rect2i], q: Vector2i) -> bool:
 	for r in skip:
 		if r.has_point(q):
 			return true
 	return false
-
-
-## One part's plates: crumbs of bare metal and of dirt over each; along a plate's edges, thickest at its corners, the
-## paint gone in crumbs of 3-6 px that follow the edge; dark runs down from the top here and there.
-func _plate_wear(
-	img: Image,
-	part: Dictionary,
-	plates: Array[Rect2i],
-	first: int,
-	ids: PackedInt32Array,
-	skip: Array[Rect2i],
-	span: Vector2i,
-	seed: int
-) -> void:
-	var poly: PackedVector2Array = part["poly"]
-	var pseed := int(part.get("seed", 0)) + seed
-	var count := _plates_of(part).size()
-	for k in count:
-		var id := first + k
-		var pr: Rect2i = plates[id]
-		var s := pseed + id * 37
-		for n in pr.get_area() / CRUMB_AREA:
-			var at := pr.position + Vector2i(int(Px.h2(n, 1, s) * pr.size.x), int(Px.h2(n, 2, s) * pr.size.y))
-			if Px.vnoise(at.x, at.y, 11.0, s + 9) < 0.32:
-				continue
-			var roll := Px.h2(n, 3, s)
-			var pts := _walk(at, 2 + floori(Px.h2(n, 4, s) * 4.0), Vector2i.ZERO, s + n * 3)
-			_crumb(img, ids, id, pts, 3 if roll < 0.2 else (2 if roll < 0.4 else -2), skip, span)
-		if bool(part.get("cast", false)) or pr.size.x < 7 or pr.size.y < 5:
-			continue
-		_edge_crumbs(img, ids, id, pr, skip, span, s)
-		for x in range(pr.position.x + 1, pr.end.x - 1):
-			if Px.h2(x, pr.position.y, s + 67) > 0.93 and pr.size.y >= 8:
-				_streak(img, poly, Vector2i(x, pr.position.y + 2), 4 + floori(Px.h2(x, k, s + 68) * 10.0), x + k)
-
-
-## Along each edge of a plate, in from its seam: the paint worn off in irregular crumbs, thicker near the corners. Lit
-## on the top and the sides; the bottom's seam wears dark instead.
-func _edge_crumbs(
-	img: Image, ids: PackedInt32Array, id: int, pr: Rect2i, skip: Array[Rect2i], span: Vector2i, s: int
-) -> void:
-	var runs: Array = [
-		[pr.position + Vector2i(0, 2), Vector2i(1, 0), pr.size.x, 2],
-		[Vector2i(pr.position.x, pr.end.y - 3), Vector2i(1, 0), pr.size.x, -2],
-		[pr.position + Vector2i(2, 0), Vector2i(0, 1), pr.size.y, 2],
-		[Vector2i(pr.end.x - 3, pr.position.y), Vector2i(0, 1), pr.size.y, 2],
-	]
-	for e in runs.size():
-		var from: Vector2i = runs[e][0]
-		var along: Vector2i = runs[e][1]
-		var ln: int = runs[e][2]
-		var lift: int = runs[e][3]
-		var i := 1
-		while i < ln - 1:
-			var corner := clampf(1.0 - float(mini(i, ln - 1 - i)) / 7.0, 0.0, 1.0)
-			var at := from + along * i
-			if Px.h2(at.x, at.y, s + e) < 0.1 + corner * 0.45:
-				var n := 3 + floori(Px.h2(at.y, at.x, s + 5) * 4.0)
-				var steps := lift + (1 if lift > 0 and Px.h2(i, e, s + 6) > 0.8 else 0)
-				_crumb(img, ids, id, _walk(at, n, along, s + i * 7 + e), steps, skip, span)
-			i += 2 + floori(Px.h2(i, e, s + 7) * 5.0)
-
-
-## A crumb's pixels: `n` px wandering from `at`, along `bias` when it has one. No two alike: every step is hashed.
-func _walk(at: Vector2i, n: int, bias: Vector2i, s: int) -> Array[Vector2i]:
-	var pts: Array[Vector2i] = [at]
-	var p := at
-	var dirs: Array[Vector2i] = [
-		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 1), Vector2i(-1, 1)
-	]
-	for i in n - 1:
-		var d: Vector2i = dirs[floori(Px.h2(s, i, 85) * dirs.size())]
-		if bias != Vector2i.ZERO and Px.h2(i, s, 83) < 0.55:
-			d = bias if Px.h2(i, s, 87) < 0.75 else -bias
-		p += d
-		pts.append(p)
-	# on the open plate a crumb has body: most of its px are two wide, hard edges, no pepper. Along an edge it is a line
-	# of broken paint, never a block.
-	if bias == Vector2i.ZERO:
-		for i2 in pts.size():
-			if Px.h2(i2, s, 89) < 0.65:
-				pts.append(pts[i2] + Vector2i(1, 0))
-	return pts
-
-
-## Lays a crumb on its plate, `steps` ramp steps from what is under it: bare metal with the paint's lip dark under it,
-## or dirt. It stops at the seam and at anything not paint. Paint at the ramp's floor has no dark left: there it shows
-## metal.
-## Dimmer as the road's dark falls: never the brightest shape on a plate.
-func _crumb(
-	img: Image, ids: PackedInt32Array, id: int, pts: Array[Vector2i], steps: int, skip: Array[Rect2i], span: Vector2i
-) -> void:
-	var w := img.get_width()
-	var ok: Array[Vector2i] = []
-	for q in pts:
-		if not Px.inside(img, q.x, q.y) or ids[q.y * w + q.x] != id or _skipped(skip, q):
-			continue
-		if _is_paint(img.get_pixel(q.x, q.y)) and not ok.has(q):
-			ok.append(q)
-	for q2 in ok:
-		var i := _ramp_index(_lum(img.get_pixel(q2.x, q2.y)))
-		var st := absi(steps) if i <= 1 else steps
-		var fall := _night_k(q2.y, span.x, span.y) / NIGHT_K
-		var top := roundi(lerpf(4.0, 10.0, fall))
-		img.set_pixel(q2.x, q2.y, COLD[clampi(i + st, 1, maxi(top, i))])
-		if st > 0:
-			var sh := q2 + Vector2i(1, 1)
-			if not ok.has(sh) and Px.inside(img, sh.x, sh.y) and ids[sh.y * w + sh.x] == id:
-				var under := img.get_pixel(sh.x, sh.y)
-				if _is_paint(under):
-					img.set_pixel(sh.x, sh.y, COLD[clampi(_ramp_index(_lum(under)) - 1, 1, 15)])
 
 
 ## No row is a comb: where single-pixel peaks stand under 4 px apart along a row (the densest regular detail on a hull
@@ -1000,6 +1101,8 @@ func _despeckle(img: Image) -> void:
 ## The ramp's factor at a row.
 func _night_k(y: int, top: int, low: int) -> float:
 	var t := clampf(float(y - top) / maxf(float(low - top), 1.0), 0.0, 1.0)
+	if t <= TOP_SHARE:
+		return NIGHT_K * TOP_K
 	if t <= FALL_FROM:
 		return NIGHT_K
 	return NIGHT_K * lerpf(1.0, FALL_LOW, (t - FALL_FROM) / (1.0 - FALL_FROM))
@@ -1030,8 +1133,8 @@ func _ramp_index(l: float) -> int:
 	return best
 
 
-## The moon: its colder rim one row under an outline with open sky above it, in broken runs, a few pixels of
-## it brighter. Nothing under an overhang gets any.
+## The moon: a two-tone colder rim under an outline with open sky above it, in long broken runs, the top row bright and
+## the row under it dimmer, so it holds at the far panel's scale. Nothing under an overhang gets any.
 func _moon_rim(img: Image) -> void:
 	var src := img.duplicate() as Image
 	var w := src.get_width()
@@ -1045,12 +1148,34 @@ func _moon_rim(img: Image) -> void:
 				if y - k >= 0 and src.get_pixel(x, y - k).a > 0.5:
 					open = false
 					break
-			if not open or Px.vnoise(x, y, 5.0, 7) < 0.42:
+			if not open or Px.vnoise(x, y, 5.0, 7) < 0.34:
 				continue
-			var ry := y + 1
-			var under := src.get_pixel(x, ry)
-			if under.a > 0.5 and not _keeps(under):
-				img.set_pixel(x, ry, COLD[19] if Px.h2(x / 2, y, 7) > 0.72 else COLD[18])
+			# only a level edge takes the bright step and the second row: a stair of them would be pepper
+			var level := _level_edge(src, x, y)
+			var hot := level and Px.h2(x / 3, y, 7) > 0.5
+			_moon_px(img, src, x, y + 1, COLD[20] if hot else COLD[19])
+			if level and y + 2 < h:
+				var below := src.get_pixel(x, y + 2)
+				_moon_px(img, src, x, y + 2, COLD[clampi(_ramp_index(_lum(below)) + 1, 1, 15)])
+
+
+## True when the top edge at (x, y) runs level for 3 px each side, with sky over it.
+func _level_edge(src: Image, x: int, y: int) -> bool:
+	for dx in range(-3, 4):
+		var q := x + dx
+		if q < 0 or q >= src.get_width():
+			return false
+		if src.get_pixel(q, y).a < 0.5 or src.get_pixel(q, y - 1).a > 0.5:
+			return false
+	return true
+
+
+func _moon_px(img: Image, src: Image, x: int, y: int, c: Color) -> void:
+	if y >= src.get_height():
+		return
+	var under := src.get_pixel(x, y)
+	if under.a > 0.5 and not _keeps(under) and not under.is_equal_approx(OUTLINE):
+		img.set_pixel(x, y, c)
 
 
 ## A skirt hangs under the hull's overhang: no moon on it, its top rows in the hull's shade.
@@ -1080,33 +1205,6 @@ func _ports(img: Image, L: Dictionary) -> void:
 			Px.put(img, c.x - 1, c.y - 1, COLD[18])
 
 
-## Weathering (Hull.build leaves it out on enemies): grime in clumps low on each plate's run, streaks running
-## down from fasteners. Tones of the cold ramp only.
-func _weather(img: Image, sz: Vector2i, seed: int, ids: PackedInt32Array) -> void:
-	var src := img.duplicate() as Image
-	for y in sz.y:
-		for x in sz.x:
-			var c := src.get_pixel(x, y)
-			if c.a < 0.5:
-				continue
-			# each plate its own dirt: no blotch runs across a seam
-			var ps := seed + maxi(ids[y * sz.x + x], 0) * 13
-			var depth := 0
-			for k in range(1, 14):
-				if y + k >= sz.y or src.get_pixel(x, y + k).a < 0.5:
-					break
-				depth = k
-			var grime := Px.vnoise(x, y, 9.0, ps) * 0.5 + (1.0 - clampf(depth / 8.0, 0.0, 1.0)) * 0.55
-			if grime > 0.62 and Px.vnoise(x, y, 3.0, ps + 1) < (grime - 0.3):
-				Px.mix(img, x, y, COLD[2], 0.55)
-			if c.is_equal_approx(Hull.RIV_HI_EN) and Px.h2(x, y, seed + 3) > 0.55:
-				var ln := 4 + floori(Px.h2(y, x, seed + 4) * 7.0)
-				for k2 in ln:
-					var yy := y + 2 + k2
-					if yy < sz.y and src.get_pixel(x, yy).a > 0.5:
-						Px.mix(img, x, yy, COLD[1], 0.8 * (1.0 - float(k2) / ln))
-
-
 func _lum(c: Color) -> float:
 	return c.r * 0.3 + c.g * 0.55 + c.b * 0.15
 
@@ -1126,7 +1224,11 @@ func _snap(img: Image) -> void:
 
 
 func _is_glass(c: Color) -> bool:
-	return c.is_equal_approx(SLIT_CORE) or c.is_equal_approx(SLIT_GLOW) or c.is_equal_approx(GLASS_DARK)
+	return (
+		c.is_equal_approx(SLIT_CORE)
+		or c.is_equal_approx(SLIT_GLOW)
+		or c.is_equal_approx(GLASS_DARK)
+	)
 
 
 func _keeps(c: Color) -> bool:
@@ -1134,9 +1236,11 @@ func _keeps(c: Color) -> bool:
 		_is_glass(c)
 		or c.is_equal_approx(RIV_LIT)
 		or c.is_equal_approx(RIV_DIM)
+		or c.is_equal_approx(RIV_LOW)
 		or c.is_equal_approx(Hull.RIV_HI_EN)
 		or c.is_equal_approx(COLD[18])
 		or c.is_equal_approx(COLD[19])
+		or c.is_equal_approx(COLD[20])
 	)
 
 
@@ -1200,43 +1304,80 @@ func _gun_row(row: Dictionary, L: Dictionary) -> Image:
 	var b := COLD[8]
 	var c := COLD[3]
 	if style == "mg":
-		Px.profile(img, o, 0.0, [
-			[0.0, ln * 0.45, 1.6, 1.4, a, b, c],
-			[ln * 0.45, ln, 0.9, 0.9, a, b, c],
-			[ln - 2.0, ln, 1.3, 1.3, lit, b, c],
-		], OUTLINE)
+		(
+			Px
+			. profile(
+				img,
+				o,
+				0.0,
+				[
+					[0.0, ln * 0.45, 1.9, 1.7, a, b, c],
+					[ln * 0.45, ln, 1.4, 1.4, a, b, c],
+					[ln - 2.0, ln, 1.9, 1.9, lit, b, c],
+				],
+				OUTLINE
+			)
+		)
 	elif style == "cannon":
 		var bh := hw * 0.5
-		Px.profile(img, o, 0.0, [
-			[0.0, ln * 0.3, bh + 0.8, bh + 0.5, a, b, c],
-			[ln * 0.3, ln * 0.8, bh, bh * 0.9, a, b, c],
-			[ln * 0.3 - 1.0, ln * 0.3, bh + 0.9, bh + 0.9, lit, a, c],
-			[ln * 0.8, ln - 1.0, bh, bh, a, b, c],
-			[ln - 2.0, ln, bh + 0.6, bh + 0.6, lit, a, c],
-		], OUTLINE)
+		(
+			Px
+			. profile(
+				img,
+				o,
+				0.0,
+				[
+					[0.0, ln * 0.3, bh + 0.8, bh + 0.5, a, b, c],
+					[ln * 0.3, ln * 0.8, bh, bh * 0.9, a, b, c],
+					[ln * 0.3 - 1.0, ln * 0.3, bh + 0.9, bh + 0.9, lit, a, c],
+					[ln * 0.8, ln - 1.0, bh, bh, a, b, c],
+					[ln - 2.0, ln, bh + 0.6, bh + 0.6, lit, a, c],
+				],
+				OUTLINE
+			)
+		)
 	elif style == "big":
 		# the heavy's: a thick tube and a great double-baffle brake, the biggest thing on its outline
-		Px.profile(img, o, 0.0, [
-			[0.0, ln * 0.26, 3.2, 2.7, a, b, c],
-			[ln * 0.26, ln - 13.0, 2.0, 1.8, a, b, c],
-			[ln * 0.5 - 1.0, ln * 0.5 + 1.0, 3.0, 3.0, lit, a, c],
-			[ln - 13.0, ln - 9.0, 4.4, 4.4, lit, a, c],
-			[ln - 9.0, ln - 6.0, 1.8, 1.8, c, c, c],
-			[ln - 6.0, ln, 4.4, 4.4, lit, a, c],
-		], OUTLINE)
+		(
+			Px
+			. profile(
+				img,
+				o,
+				0.0,
+				[
+					[0.0, ln * 0.26, 3.2, 2.7, a, b, c],
+					[ln * 0.26, ln - 13.0, 2.0, 1.8, a, b, c],
+					[ln * 0.5 - 1.0, ln * 0.5 + 1.0, 3.0, 3.0, lit, a, c],
+					[ln - 13.0, ln - 9.0, 4.4, 4.4, lit, a, c],
+					[ln - 9.0, ln - 6.0, 1.8, 1.8, c, c, c],
+					[ln - 6.0, ln, 4.4, 4.4, lit, a, c],
+				],
+				OUTLINE
+			)
+		)
 	else:
 		var bh2 := hw * 0.5
-		Px.profile(img, o, 0.0, [
-			[0.0, ln * 0.28, bh2 + 1.0, bh2 + 0.7, a, b, c],
-			[ln * 0.28, ln * 0.62, bh2 + 0.1, bh2 * 0.95, a, b, c],
-			[ln * 0.62 - 1.0, ln * 0.62 + 1.0, bh2 + 1.0, bh2 + 1.0, lit, a, c],
-			[ln * 0.62 + 1.0, ln - 8.0, bh2 * 0.9, bh2 * 0.85, a, b, c],
-			[ln - 8.0, ln - 5.0, bh2 + 1.6, bh2 + 1.6, lit, a, c],
-			[ln - 5.0, ln - 3.0, bh2 * 0.6, bh2 * 0.6, c, c, c],
-			[ln - 3.0, ln, bh2 + 1.6, bh2 + 1.6, lit, a, c],
-		], OUTLINE)
+		(
+			Px
+			. profile(
+				img,
+				o,
+				0.0,
+				[
+					[0.0, ln * 0.28, bh2 + 1.0, bh2 + 0.7, a, b, c],
+					[ln * 0.28, ln * 0.62, bh2 + 0.1, bh2 * 0.95, a, b, c],
+					[ln * 0.62 - 1.0, ln * 0.62 + 1.0, bh2 + 1.0, bh2 + 1.0, lit, a, c],
+					[ln * 0.62 + 1.0, ln - 8.0, bh2 * 0.9, bh2 * 0.85, a, b, c],
+					[ln - 8.0, ln - 5.0, bh2 + 1.6, bh2 + 1.6, lit, a, c],
+					[ln - 5.0, ln - 3.0, bh2 * 0.6, bh2 * 0.6, c, c, c],
+					[ln - 3.0, ln, bh2 + 1.6, bh2 + 1.6, lit, a, c],
+				],
+				OUTLINE
+			)
+		)
 	_snap(img)
 	_night_flat(img, GUN_K)
+	_lit_barrel(img)
 	var tr: Vector2 = g["trunnion"]
 	var face := float(L["faces"])
 	var r := _add(img, Vector2i.ZERO)
@@ -1247,8 +1388,30 @@ func _gun_row(row: Dictionary, L: Dictionary) -> Image:
 	row["muzzle_at_0"] = [tr.x + face * ln, tr.y]
 	if L.has("secondary"):
 		var s: Dictionary = L["secondary"]
-		row["secondary_muzzle"] = [(s["pivot"] as Vector2).x - float(s["len"]), (s["pivot"] as Vector2).y]
+		row["secondary_muzzle"] = [
+			(s["pivot"] as Vector2).x - float(s["len"]), (s["pivot"] as Vector2).y
+		]
 	return img
+
+
+## A barrel in two tones: its top row catches the moon, its body is mid, its underside dark. A thin gun stays one clean
+## shape against rails and aerials instead of a line among them.
+func _lit_barrel(img: Image) -> void:
+	for x in img.get_width():
+		var ys: Array[int] = []
+		for y in img.get_height():
+			var c := img.get_pixel(x, y)
+			if c.a > 0.5 and not c.is_equal_approx(OUTLINE):
+				ys.append(y)
+		if ys.is_empty():
+			continue
+		for i in ys.size():
+			var col := COLD[8]
+			if i == 0:
+				col = COLD[15]
+			elif i == ys.size() - 1 and ys.size() > 2:
+				col = COLD[3]
+			img.set_pixel(x, ys[i], col)
 
 
 # --- running gear ------------------------------------------------------------------------------------------
@@ -1351,9 +1514,9 @@ func _wheel(img: Image, c: Vector2, r: float, ang: float, kind: String, teeth: i
 			elif kind == "roller":
 				col = (COLD[13] if lit > 0.2 else COLD[8]) if rho > 0.8 else COLD[3]
 			elif kind == "road" and rho > r - 1.2:
-				col = COLD[6] if lit > 0.35 else COLD[2]
+				col = COLD[8] if lit > 0.35 else COLD[3]
 			elif rho > r - (2.3 if kind == "road" else 1.6):
-				col = COLD[14] if lit > 0.15 else (COLD[9] if lit > -0.5 else COLD[6])
+				col = COLD[15] if lit > 0.15 else (COLD[10] if lit > -0.5 else COLD[7])
 			elif rho < maxf(r * 0.3, 1.5):
 				# the hub, the brightest thing on a wheel: even a little wheel shows it
 				col = COLD[4] if rho < 0.7 else (COLD[14] if lit > -0.2 else COLD[11])
@@ -1480,8 +1643,8 @@ func _track(thick: float, pitch: float) -> Dictionary:
 			var lit := lit_i == 0
 			# the belt is dark iron: the top run lies in the hull's shade, two ramp steps under the plates, so only
 			# its gaps and grousers read, and almost no light on the sides and the lower run
-			var hi: Color = COLD[4] if lit else COLD[5]
-			var mid: Color = COLD[3] if lit else COLD[4]
+			var hi: Color = COLD[5] if lit else COLD[5]
+			var mid: Color = COLD[4] if lit else COLD[4]
 			var low: Color = COLD[1] if lit else COLD[3]
 			var body: Color = COLD[1] if lit else COLD[2]
 			var joint: Color = OUTLINE if lit else COLD[1]
@@ -1493,13 +1656,8 @@ func _track(thick: float, pitch: float) -> Dictionary:
 					var grouser := u >= gr0 and u < gr1
 					var col := Color(0, 0, 0, 0)
 					var outl := false
-					if dd < -1.0:
-						outl = horn
-					elif dd < 0.0:
-						if horn:
-							col = mid if lit else low
-						else:
-							outl = true
+					if dd < 0.0:
+						outl = dd >= -0.5 and not horn
 					elif dd < 1.0:
 						if lit:
 							col = hi if u < 1.0 else (low if u > pitch - 1.0 else joint)
@@ -1522,7 +1680,15 @@ func _track(thick: float, pitch: float) -> Dictionary:
 						col = OUTLINE
 					img.set_pixel(iu, lit_i * rows + iv, col)
 		_sheets[key] = _add(img, Vector2i.ZERO)
-	return {"rect": _sheets[key], "sub_u": sub_u, "rows": rows, "dd0": -2.0, "row_px": 0.5, "lit_ny": -0.35, "pitch": pitch}
+	return {
+		"rect": _sheets[key],
+		"sub_u": sub_u,
+		"rows": rows,
+		"dd0": -2.0,
+		"row_px": 0.5,
+		"lit_ny": -0.35,
+		"pitch": pitch
+	}
 
 
 # --- the Behemoth's bogies -----------------------------------------------------------------------------------
@@ -1536,9 +1702,24 @@ func _bogies(row: Dictionary, L: Dictionary) -> void:
 		var fr: Rect2i = b["frame"]
 		var sz: Vector2i = L["size"]
 		var part := {
-			"poly": Layouts.P([fr.position.x, fr.position.y, fr.end.x, fr.position.y, fr.end.x + 2, fr.end.y, fr.position.x - 2, fr.end.y]),
+			"poly":
+			Layouts.P(
+				[
+					fr.position.x,
+					fr.position.y,
+					fr.end.x,
+					fr.position.y,
+					fr.end.x + 2,
+					fr.end.y,
+					fr.position.x - 2,
+					fr.end.y
+				]
+			),
 			"seams_x": [fr.position.x + fr.size.x / 3, fr.position.x + 2 * fr.size.x / 3],
-			"split": false, "seed": seed, "rivet": 8, "tone": 0.04,
+			"split": false,
+			"seed": seed,
+			"rivet": 8,
+			"tone": 0.04,
 		}
 		var B := Hull.build({"enemy": true, "size": sz, "parts": [part], "details": []})
 		var img: Image = _finish(B["img"], sz)
@@ -1558,10 +1739,21 @@ func _bogies(row: Dictionary, L: Dictionary) -> void:
 		var rl: Array = []
 		for r2: Dictionary in b["rollers"]:
 			rl.append({"c": _v(r2["c"]), "r": r2["r"]})
-		out.append({
-			"rect": rect, "at": [bb.position.x, bb.position.y], "wrecked": wrect, "wrecked_at": [wb.position.x, wb.position.y],
-			"x_offset": b["x_offset"], "wheels": wh_out, "rollers": rl, "sprocket": {"c": _v(sp["c"]), "r": sp["r"]},
-		})
+		(
+			out
+			. append(
+				{
+					"rect": rect,
+					"at": [bb.position.x, bb.position.y],
+					"wrecked": wrect,
+					"wrecked_at": [wb.position.x, wb.position.y],
+					"x_offset": b["x_offset"],
+					"wheels": wh_out,
+					"rollers": rl,
+					"sprocket": {"c": _v(sp["c"]), "r": sp["r"]},
+				}
+			)
+		)
 	row["bogies"] = out
 
 
@@ -1578,7 +1770,14 @@ func _wrecked_bogie(L: Dictionary, b: Dictionary, frame: Image, seed: int) -> Im
 	var ground := float(L["ground"])
 	_fallen_track(run, b, pitch, thick, seed)
 	var sp: Dictionary = b["sprocket"]
-	_wheel(run, (sp["c"] as Vector2) + Vector2(0, 2), float(sp["r"]), 0.4, "sprocket", _teeth_of(float(sp["r"]), pitch))
+	_wheel(
+		run,
+		(sp["c"] as Vector2) + Vector2(0, 2),
+		float(sp["r"]),
+		0.4,
+		"sprocket",
+		_teeth_of(float(sp["r"]), pitch)
+	)
 	for i in wheels.size():
 		var wh: Dictionary = wheels[i]
 		var c := Vector2(float(wh["x"]), float(wh["y"]))
@@ -1598,7 +1797,9 @@ func _wrecked_bogie(L: Dictionary, b: Dictionary, frame: Image, seed: int) -> Im
 		for x in sz.x:
 			var q := run.get_pixel(x, y)
 			if q.a > 0.5:
-				var iron: Color = OUTLINE if q.is_equal_approx(OUTLINE) else _ramp_of(_lum(q) * BOGIE_K)
+				var iron: Color = (
+					OUTLINE if q.is_equal_approx(OUTLINE) else _ramp_of(_lum(q) * BOGIE_K)
+				)
 				var fleck := _lum(q) > 0.1 and Px.h2(x, y, seed + 92) > 0.85
 				w.set_pixel(x, y, BURN[2] if fleck else iron)
 	var bb := frame.get_used_rect()
@@ -1614,7 +1815,11 @@ func _wrecked_bogie(L: Dictionary, b: Dictionary, frame: Image, seed: int) -> Im
 			var top := y2 == bb.position.y or frame.get_pixel(x2, y2 - 1).a < 0.5
 			var soot: Color = _ramp_of(_lum(f) * 0.55)
 			var burnt := Px.vnoise(x2, y2, 5.0, seed + 93) > 0.7
-			w.set_pixel(x2, y2, BURN[1] if burnt else (COLD[5] if top and Px.h2(x2, y2, seed + 91) > 0.5 else soot))
+			w.set_pixel(
+				x2,
+				y2,
+				BURN[1] if burnt else (COLD[5] if top and Px.h2(x2, y2, seed + 91) > 0.5 else soot)
+			)
 	return w
 
 
@@ -1656,7 +1861,9 @@ func _fallen_track(img: Image, b: Dictionary, pitch: float, thick: float, seed: 
 
 
 ## A cut end of track sagging down to the road: `dir` the way it goes, each shoe steeper than the last.
-func _sag(img: Image, from: Vector2, dir: float, pitch: float, thick: float, floor_y: float) -> void:
+func _sag(
+	img: Image, from: Vector2, dir: float, pitch: float, thick: float, floor_y: float
+) -> void:
 	var at := from
 	var a := 0.3
 	for i in 3:
@@ -1669,7 +1876,9 @@ func _sag(img: Image, from: Vector2, dir: float, pitch: float, thick: float, flo
 
 
 ## A broken length of track lying on the road: each shoe kinked a little off the last, never a ruled line.
-func _shoe_run(img: Image, from: Vector2, n: int, pitch: float, thick: float, floor_y: float, seed: int) -> void:
+func _shoe_run(
+	img: Image, from: Vector2, n: int, pitch: float, thick: float, floor_y: float, seed: int
+) -> void:
 	var at := from
 	var a := (Px.h2(1, 1, seed) - 0.5) * 0.3
 	for i in n:
@@ -1732,12 +1941,17 @@ func _rest_picture(L: Dictionary, base: Image, front: Image, turret: Image, gun:
 
 
 ## One track run at rest: the belt round its circles, clockwise on screen from the leftmost end wheel.
-func _rest_run(img: Image, L: Dictionary, sp: Dictionary, idl: Variant, rollers: Array, wheels: Array) -> void:
+func _rest_run(
+	img: Image, L: Dictionary, sp: Dictionary, idl: Variant, rollers: Array, wheels: Array
+) -> void:
 	var circles: Array = []
 	var ends: Array = [sp]
 	if idl != null:
 		ends.append(idl)
-	ends.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return (a["c"] as Vector2).x < (b["c"] as Vector2).x)
+	ends.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool:
+			return (a["c"] as Vector2).x < (b["c"] as Vector2).x
+	)
 	circles.append({"c": ends[0]["c"], "r": float(ends[0]["r"]) + 0.5})
 	for r2: Dictionary in rollers:
 		circles.append({"c": r2["c"], "r": float(r2["r"]) + 0.5})
@@ -1753,7 +1967,9 @@ func _rest_run(img: Image, L: Dictionary, sp: Dictionary, idl: Variant, rollers:
 		_wheel(img, r3["c"], float(r3["r"]), 0.2, "roller")
 	if idl != null:
 		_wheel(img, idl["c"], float(idl["r"]), 0.2, "idler")
-	_wheel(img, sp["c"], float(sp["r"]), 0.2, "sprocket", _teeth_of(float(sp["r"]), float(L["pitch"])))
+	_wheel(
+		img, sp["c"], float(sp["r"]), 0.2, "sprocket", _teeth_of(float(sp["r"]), float(L["pitch"]))
+	)
 
 
 ## The picture's solid shape in white, every hole it encloses filled (the gaps between the wheels inside the
@@ -1864,7 +2080,9 @@ func _top_of(img: Image, x: int) -> int:
 		var cx := clampi(x + o, 2, img.get_width() - 3)
 		for y in img.get_height() - 3:
 			var solid := true
-			for q: Vector2i in [Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(-2, 1), Vector2i(2, 1)]:
+			for q: Vector2i in [
+				Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(-2, 1), Vector2i(2, 1)
+			]:
 				solid = solid and img.get_pixel(cx + q.x, y + q.y).a > 0.5
 			if solid:
 				return y
@@ -1894,10 +2112,17 @@ func _throw_shoes(img: Image, L: Dictionary, seed: int) -> void:
 	var n := clampi(ln / int(pitch * 5.0), 2, 4)
 	for i in n:
 		var at := Vector2(
-			x0 + ln * (0.3 + 0.4 * Px.h2(i, 7, seed)) + i * 3.0, float(gr) + Px.h2(i, 8, seed) * 2.0 - thick * 0.2
+			x0 + ln * (0.3 + 0.4 * Px.h2(i, 7, seed)) + i * 3.0,
+			float(gr) + Px.h2(i, 8, seed) * 2.0 - thick * 0.2
 		)
 		_shoe(img, at, (Px.h2(i, 9, seed) - 0.5) * 2.2, pitch, thick)
-	_shoe(img, Vector2(x0 + ln + w * 0.07, float(gr) + 1.0), (Px.h2(5, 9, seed) - 0.5) * 1.6, pitch, thick)
+	_shoe(
+		img,
+		Vector2(x0 + ln + w * 0.07, float(gr) + 1.0),
+		(Px.h2(5, 9, seed) - 0.5) * 1.6,
+		pitch,
+		thick
+	)
 
 
 ## Bites out of the silhouette's top edge.
@@ -1917,7 +2142,9 @@ func _bites(img: Image, seed: int) -> void:
 		var rb := 2.0 + Px.h2(k, 8, seed) * (2.0 + w / 60.0)
 		for y1 in range(top - 1, mini(top + ceili(rb) + 1, h)):
 			for x1 in range(maxi(int(bx - rb) - 1, 0), mini(int(bx + rb) + 2, w)):
-				var q := Vector2(x1 - bx, (y1 - top) * 1.3).length() + Px.h2(x1, y1, seed + 11) * 1.8
+				var q := (
+					Vector2(x1 - bx, (y1 - top) * 1.3).length() + Px.h2(x1, y1, seed + 11) * 1.8
+				)
 				if q < rb:
 					img.set_pixel(x1, y1, Color(0, 0, 0, 0))
 
@@ -1945,8 +2172,12 @@ func _char(img: Image, seed: int, fires: Array[Vector3], gear_top: int) -> void:
 				soot = maxf(soot, exp(-dv.length() / (reach * (0.5 + f.z / 36.0))))
 			# low down the burn is dirt: what is near the road loses its light first
 			var low := smoothstep(0.55, 1.0, float(y - bb.position.y) / float(maxi(bb.size.y, 1)))
-			var v := _lum(c) * lerpf(2.5, 2.1, low) + 0.02 - soot * 0.32
-			v += (Px.vnoise(x, y, 11.0, seed) - 0.5) * 0.3 + (Px.vnoise(x, y, 4.0, seed + 1) - 0.5) * 0.1
+			# the lit decks burn as dark as the rest: soot has no idea which plate faced the moon
+			var v := minf(_lum(c), BURN_LUM_MAX) * lerpf(2.5, 2.1, low) + 0.07 - soot * 0.53
+			v += (
+				(Px.vnoise(x, y, 11.0, seed) - 0.5) * 0.3
+				+ (Px.vnoise(x, y, 4.0, seed + 1) - 0.5) * 0.1
+			)
 			var col: Color = BURN[clampi(floori(v * BURN.size()), 0, 2)]
 			if y > 0 and src.get_pixel(x, y - 1).a < 0.5:
 				if soot < 0.35 and Px.h2(x, y, seed + 3) > 0.7:
@@ -1957,7 +2188,8 @@ func _char(img: Image, seed: int, fires: Array[Vector3], gear_top: int) -> void:
 	# holes: one big, the others smaller and of other kinds
 	for k2 in 2 + w / 60:
 		var c2 := Vector2(
-			bb.position.x + Px.h2(k2, 1, seed) * bb.size.x, bb.position.y + bb.size.y * (0.22 + Px.h2(k2, 2, seed) * 0.46)
+			bb.position.x + Px.h2(k2, 1, seed) * bb.size.x,
+			bb.position.y + bb.size.y * (0.22 + Px.h2(k2, 2, seed) * 0.46)
 		)
 		var big := 1.0 if k2 == 0 else (0.5 + 0.5 * Px.h2(k2, 3, seed))
 		var kind := posmod(k2 + seed, 3)
@@ -1971,7 +2203,9 @@ func _char(img: Image, seed: int, fires: Array[Vector3], gear_top: int) -> void:
 	# plate tears: short splits, a lit bent lip on them
 	for k3 in 1 + w / 50:
 		var tx := bb.position.x + Px.h2(k3, 4, seed) * bb.size.x
-		var ty := minf(bb.position.y + bb.size.y * (0.25 + Px.h2(k3, 5, seed) * 0.45), gear_top - 5.0)
+		var ty := minf(
+			bb.position.y + bb.size.y * (0.25 + Px.h2(k3, 5, seed) * 0.45), gear_top - 5.0
+		)
 		var ln := 4 + int(Px.h2(k3, 6, seed) * w * 0.07)
 		var slope := (Px.h2(k3, 9, seed) - 0.5) * 1.4
 		for i in ln:
@@ -1988,7 +2222,9 @@ func _char(img: Image, seed: int, fires: Array[Vector3], gear_top: int) -> void:
 ## behind a dark wall, whose far (lower right) side catches a little; a cold hole's upper left lip is a bent petal of
 ## lit plate, its lower lip plain dark. Round a burning one the plate is lit in broken crumbs, thinning as the glow
 ## does, all the way round: no ring and no cup. Nothing of it reaches `floor_y`.
-func _hole(img: Image, src: Image, c: Vector2, r: float, kind: int, seed: int, burning: bool, floor_y: int) -> void:
+func _hole(
+	img: Image, src: Image, c: Vector2, r: float, kind: int, seed: int, burning: bool, floor_y: int
+) -> void:
 	var dir := Vector2.from_angle(Px.h2(seed, 1, 23) * PI)
 	if kind == 1 or burning:
 		dir = Vector2.from_angle(deg_to_rad(lerpf(-GASH_TILT, GASH_TILT, Px.h2(seed, 1, 23))))
@@ -2004,7 +2240,10 @@ func _hole(img: Image, src: Image, c: Vector2, r: float, kind: int, seed: int, b
 			var a := v.dot(dir) / stretch
 			var b := v.dot(dir.orthogonal()) * (stretch * 0.6 if stretch > 1.5 else 1.0)
 			var ang := atan2(b, a)
-			var rim := r * _jag(ang, seed, ragged, 4 if kind == 1 else 0) + (Px.h2(x, y, seed + 2) - 0.5) * 0.4
+			var rim := (
+				r * _jag(ang, seed, ragged, 4 if kind == 1 else 0)
+				+ (Px.h2(x, y, seed + 2) - 0.5) * 0.4
+			)
 			if kind == 1:
 				# a tear's edge is saw teeth along its length, each its own size: torn plate, no capsule
 				var tooth := 4.0 + 3.0 * Px.h2(floori(a / 5.0), seed, 33)
@@ -2023,9 +2262,13 @@ func _hole(img: Image, src: Image, c: Vector2, r: float, kind: int, seed: int, b
 					img.set_pixel(x, y, BURN_LIP if hot else (BURN[3] if out < 0.65 else BURN[2]))
 			elif toward > 0.1:
 				# the petals: tabs of bent plate on the lit side, of unequal length, the odd tip ash
-				var petal := 1.0 + (1.1 if kind == 1 else 2.2) * maxf(sin(ang * 3.0 + seed * 1.3), 0.0)
+				var petal := (
+					1.0 + (1.1 if kind == 1 else 2.2) * maxf(sin(ang * 3.0 + seed * 1.3), 0.0)
+				)
 				if rho < rim + petal and (kind != 1 or Px.h2(x / 2, y, seed + 7) > 0.35):
-					var tip := rho > rim + petal - 0.9 and petal > 2.4 and Px.h2(x, y, seed + 6) > 0.5
+					var tip := (
+						rho > rim + petal - 0.9 and petal > 2.4 and Px.h2(x, y, seed + 6) > 0.5
+					)
 					img.set_pixel(x, y, ASH if tip else BURN[3])
 			elif rho < rim + 0.9:
 				img.set_pixel(x, y, HOLE)
@@ -2037,7 +2280,9 @@ func _jag(ang: float, seed: int, ragged: float, more: int) -> float:
 	var n := 7 + more + floori(Px.h2(seed, 3, 27) * 5.0)
 	var t := fposmod(ang, TAU) / TAU * float(n)
 	var i := floori(t)
-	return lerpf(_jag_corner(i % n, seed, ragged), _jag_corner((i + 1) % n, seed, ragged), t - float(i))
+	return lerpf(
+		_jag_corner(i % n, seed, ragged), _jag_corner((i + 1) % n, seed, ragged), t - float(i)
+	)
 
 
 func _jag_corner(i: int, seed: int, ragged: float) -> float:
@@ -2076,7 +2321,10 @@ func _add(img: Image, _o: Vector2i) -> Array:
 ## A shelf packer, tallest first, 1 px gutter.
 func _pack() -> Image:
 	var order := _parts.duplicate()
-	order.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return (a["img"] as Image).get_height() > (b["img"] as Image).get_height())
+	order.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool:
+			return (a["img"] as Image).get_height() > (b["img"] as Image).get_height()
+	)
 	var x := 0
 	var y := 0
 	var shelf := 0
@@ -2112,16 +2360,28 @@ func _v(p: Variant) -> Array:
 
 # --- the bushes ------------------------------------------------------------------------------------------------
 
-
 const LEAF: Array[Color] = [
-	Color("#050a0b"), Color("#081010"), Color("#0c1614"), Color("#111d1a"), Color("#172620"), Color("#1f3027"), Color("#2a3d30"),
+	Color("#050a0b"),
+	Color("#081010"),
+	Color("#0c1614"),
+	Color("#111d1a"),
+	Color("#172620"),
+	Color("#1f3027"),
+	Color("#2a3d30"),
 ]
 const LEAF_MOON := Color("#46605f")
 
 
 ## Six bushes, foot at the bottom centre: leaf clumps lit from the top left, a moonlit crown.
 func _bushes() -> Dictionary:
-	var sizes := [Vector2i(44, 26), Vector2i(64, 36), Vector2i(36, 22), Vector2i(82, 44), Vector2i(54, 40), Vector2i(72, 30)]
+	var sizes := [
+		Vector2i(44, 26),
+		Vector2i(64, 36),
+		Vector2i(36, 22),
+		Vector2i(82, 44),
+		Vector2i(54, 40),
+		Vector2i(72, 30)
+	]
 	var total := 0
 	for s: Vector2i in sizes:
 		total += s.x + 2
@@ -2190,9 +2450,16 @@ func _is_rim(val: PackedFloat32Array, sz: Vector2i, x: int, y: int) -> bool:
 
 # --- the far panel's ground ------------------------------------------------------------------------------------
 
-
 const GROUND: Array[Color] = [
-	Color("#07090a"), Color("#0a0d0d"), Color("#0e1211"), Color("#121715"), Color("#171c19"), Color("#1c221e"), Color("#232a24"), Color("#2c342c"),
+	Color("#07090a"),
+	Color("#0b0f0f"),
+	Color("#101514"),
+	Color("#151b19"),
+	Color("#1b221f"),
+	Color("#222a26"),
+	Color("#2a332d"),
+	Color("#343e36"),
+	Color("#414c43"),
 ]
 const GROUND_W := 1024
 const GROUND_H := 170
@@ -2210,56 +2477,75 @@ func _pnoise(x: float, y: float, cells: int, seed: int) -> float:
 	tx = tx * tx * (3.0 - 2.0 * tx)
 	ty = ty * ty * (3.0 - 2.0 * ty)
 	var a := lerpf(Px.h2(posmod(ix, cells), iy, seed), Px.h2(posmod(ix + 1, cells), iy, seed), tx)
-	var b := lerpf(Px.h2(posmod(ix, cells), iy + 1, seed), Px.h2(posmod(ix + 1, cells), iy + 1, seed), tx)
+	var b := lerpf(
+		Px.h2(posmod(ix, cells), iy + 1, seed), Px.h2(posmod(ix + 1, cells), iy + 1, seed), tx
+	)
 	return lerpf(a, b, ty)
 
 
-## The long lens's field: the far treeline's dark soft at the top (fading out, so the forest shows through),
-## moonlit churned earth where the enemy stands (rows 40..100), two old track ruts that wander and rejoin
-## round the band, stones and grass, the foreground soft and dark. Tiles in x.
+## The long lens's field, with depth. The top fades out over the treeline's foot. Below it the earth's clods and streaks
+## grow with nearness: long thin moonlit streaks at the horizon, broad lumps in front. Wheel ruts run along it, further
+## apart and wider the nearer they are, each with a lit lip. Stones and grass tufts grow with nearness too, and the last
+## rows are a dark bank of grass that frames the field. The moon lies on the rows where the enemy stands. Tiles in x.
 func _far_ground() -> String:
 	var img := Px.blank(GROUND_W, GROUND_H)
-	var ruts: Array[PackedFloat32Array] = []
-	for k in 3:
+	var ruts: Array = []
+	for rut: Array in [
+		[34.0, 2.0, 3.0, 11],
+		[42.0, 2.0, 3.5, 12],
+		[66.0, 3.0, 5.0, 13],
+		[80.0, 3.0, 5.5, 14],
+		[108.0, 5.0, 8.0, 15],
+		[128.0, 6.0, 9.0, 16]
+	]:
 		var line := PackedFloat32Array()
+		var on := PackedFloat32Array()
 		line.resize(GROUND_W)
+		on.resize(GROUND_W)
 		for x0 in GROUND_W:
 			var t := TAU * x0 / GROUND_W
-			line[x0] = 52.0 + k * 17.0 + 3.5 * sin(t * (2 + k) + k) + 2.0 * sin(t * (7 - k) + 2.0 * k)
-		ruts.append(line)
+			line[x0] = (
+				float(rut[0])
+				+ float(rut[2]) * sin(t * 3.0 + float(rut[0]))
+				+ float(rut[2]) * 0.5 * sin(t * 7.0 + float(rut[1]))
+				+ (_pnoise(x0, float(rut[3]) * 40.0, 64, 311) - 0.5) * 4.0
+			)
+			# a rut comes and goes: broken stretches, never a line across the panel
+			on[x0] = smoothstep(0.42, 0.58, _pnoise(x0, float(rut[3]) * 60.0, 16, 313))
+		ruts.append([line, float(rut[1]), on])
 	for y in GROUND_H:
 		var fy := float(y) / GROUND_H
+		# the nearer, the bigger the clods: two fixed noises mixed, so nothing shears into wedges along the rows
+		var near := clampf((fy - 0.08) / 0.8, 0.0, 1.0)
+		# the moon lies on the rows the enemy stands on, the near rows sink into the dark bank
+		var v0 := 0.2 + 0.2 * exp(-pow((fy - 0.3) / 0.22, 2.0))
+		v0 -= smoothstep(0.5, 1.0, fy) * 0.2
 		for x in GROUND_W:
-			var v := 0.3
-			v += (_pnoise(x, y * 3.0, 32, 301) - 0.5) * 0.35
-			v += (_pnoise(x, y * 2.0, 128, 302) - 0.5) * 0.3
-			v += (_pnoise(x, y * 1.0, 512, 304) - 0.5) * 0.18
-			# moonlit where the enemy stands
-			v += 0.2 * exp(-pow((fy - 0.42) / 0.2, 2.0))
-			for line2 in ruts:
+			var v := v0
+			var fine := _pnoise(x, y * 5.0, 128, 301) - 0.5
+			var broad := _pnoise(x, y * 2.0, 32, 306) - 0.5
+			var clod := _pnoise(x, y * 1.5, 192, 302) - 0.5
+			v += _step_of(lerpf(fine * 0.2, broad * 0.34, near), 0.055)
+			v += _step_of(clod * near * 0.18, 0.055)
+			for row: Array in ruts:
+				var line2: PackedFloat32Array = row[0]
+				var wd: float = row[1]
+				var on2: PackedFloat32Array = row[2]
 				var dy := float(y) - line2[x]
-				if dy >= 0.0 and dy < 2.0:
-					v -= 0.2
-				elif dy >= -1.0 and dy < 0.0:
-					v += 0.14
-			v -= smoothstep(0.62, 1.0, fy) * 0.42
-			img.set_pixel(x, y, Px.dither(GROUND, clampf(v, 0.0, 1.0), x, y))
-	for k2 in 420:
-		var tx := int(Px.h2(k2, 1, 305) * GROUND_W)
-		var ty := 26 + int(Px.h2(k2, 2, 305) * 120.0)
-		if Px.h2(k2, 3, 305) < 0.72:
-			var n := 2 + int(Px.h2(k2, 4, 305) * 4.0)
-			for j in n:
-				var hh := 1 + int(Px.h2(k2, j + 5, 305) * 3.0)
-				for yy in hh:
-					_put_wrap(img, tx + j, ty - yy, GROUND[6 if yy == hh - 1 else 3])
-		else:
-			_put_wrap(img, tx, ty, GROUND[7])
-			_put_wrap(img, tx + 1, ty, GROUND[5])
-			_put_wrap(img, tx, ty + 1, GROUND[1])
-			_put_wrap(img, tx + 1, ty + 1, GROUND[0])
-	var soft := _soften(img, 34, 5)
-	soft = _soften_bottom(soft, GROUND_H - 40, 3)
+				if dy >= 0.0 and dy < wd:
+					v -= 0.16 * on2[x]
+				elif dy >= wd and dy < wd + 1.0:
+					v += 0.07 * on2[x]
+			img.set_pixel(
+				x,
+				y,
+				GROUND[clampi(
+					roundi(clampf(v, 0.0, 1.0) * (GROUND.size() - 1)), 0, GROUND.size() - 1
+				)]
+			)
+	_ground_litter(img)
+	_grass_bank(img)
+	var soft := _soften(img, 20, 3)
 	for y2 in 14:
 		var a := floorf((float(y2) + 1.0) / 14.0 * 8.0) / 8.0
 		for x2 in GROUND_W:
@@ -2268,6 +2554,181 @@ func _far_ground() -> String:
 			soft.set_pixel(x2, y2, c)
 	soft.save_png(ProjectSettings.globalize_path(OUT + "far_ground.png"))
 	return "far_ground.png"
+
+
+## A value on the ramp's steps: broad clean patches, no dither.
+func _step_of(v: float, step: float) -> float:
+	return roundf(v / step) * step
+
+
+## Stones and tufts, growing with nearness. Sparse: they say how far a row is, nothing more.
+func _ground_litter(img: Image) -> void:
+	for k in 150:
+		var ty := 26 + int(pow(Px.h2(k, 2, 305), 0.7) * 104.0)
+		var near := float(ty - 26) / 104.0
+		var tx := int(Px.h2(k, 1, 305) * GROUND_W)
+		if Px.h2(k, 3, 305) < 0.6:
+			var n := 2 + int(near * 5.0)
+			for j in n:
+				var hh := 1 + int(Px.h2(k, j + 5, 305) * (1.0 + near * 6.0))
+				for yy in hh:
+					_put_wrap(img, tx + j, ty - yy, GROUND[3 if yy >= hh - 1 else 1])
+		else:
+			var sw := 2 + int(near * 6.0)
+			var sh := 1 + int(near * 3.0)
+			for j2 in sw:
+				for yy2 in sh:
+					_put_wrap(img, tx + j2, ty - yy2, GROUND[5 if yy2 == sh - 1 else 2])
+				_put_wrap(img, tx + j2, ty + 1, GROUND[0])
+
+
+## The near bank: a dark mass of grass along the bottom, its blades up against the field, a few catching the moon.
+func _grass_bank(img: Image) -> void:
+	var top := PackedFloat32Array()
+	top.resize(GROUND_W)
+	for x in GROUND_W:
+		var t := TAU * x / GROUND_W
+		top[x] = GROUND_H - 22.0 + 5.0 * sin(t * 3.0) + 3.0 * sin(t * 7.0 + 1.0)
+	for x2 in GROUND_W:
+		for y in range(int(top[x2]), GROUND_H):
+			img.set_pixel(x2, y, GROUND[0 if y > top[x2] + 6 else 1])
+	for k in 520:
+		var bx := int(Px.h2(k, 1, 307) * GROUND_W)
+		var bh := 3 + int(Px.h2(k, 2, 307) * 9.0)
+		var lean := 1 if Px.h2(k, 3, 307) > 0.5 else -1
+		var lit := Px.h2(k, 4, 307) > 0.86
+		for i in bh:
+			var y2 := int(top[posmod(bx, GROUND_W)]) + 2 - i
+			var q := bx + (lean * i) / 4
+			_put_wrap(img, q, y2, GROUND[3] if lit and i >= bh - 3 else GROUND[1])
+
+
+# --- the far panel's treeline -----------------------------------------------------------------------------------
+
+const FOREST_W := 1024
+const SCRUB_H := 36
+## Far to near: [strip height, tree height, spacing, tooth, value]. The far wall is pale with the air, the near one dark.
+const FOREST: Array = [
+	[60, Vector2(18, 36), Vector2(5, 11), Color("#17323a"), Color("#21444c")],
+	[84, Vector2(30, 58), Vector2(8, 18), Color("#0f242a"), Color("#1b3a40")],
+	[112, Vector2(46, 92), Vector2(13, 34), Color("#081417"), Color("#17302f")],
+]
+
+
+## Three strips of firs on one sheet, each tiling, stacked from row 0. A tree: tiers of boughs narrowing up to a thin
+## leader, the moon on each tier's upper left. The canopy rises and falls along a strip, and the near strip leaves gaps.
+## Returns {"atlas", "rects"} as the bushes.
+func _far_forest() -> Dictionary:
+	var total := SCRUB_H
+	for row: Array in FOREST:
+		total += int(row[0])
+	var img := Px.blank(FOREST_W, total)
+	var y0 := 0
+	var rects: Array = []
+	for i in FOREST.size():
+		var row2: Array = FOREST[i]
+		_forest_strip(
+			img,
+			y0,
+			int(row2[0]),
+			row2[1],
+			row2[2],
+			row2[3],
+			row2[4],
+			400 + i * 17,
+			i == FOREST.size() - 1
+		)
+		rects.append([0, y0, FOREST_W, int(row2[0])])
+		y0 += int(row2[0])
+	_scrub_strip(img, y0)
+	img.save_png(ProjectSettings.globalize_path(OUT + "far_forest.png"))
+	return {"atlas": "far_forest.png", "rects": rects, "scrub": [0, y0, FOREST_W, SCRUB_H]}
+
+
+func _forest_strip(
+	img: Image,
+	y0: int,
+	h: int,
+	tall: Vector2,
+	gap: Vector2,
+	col: Color,
+	moon: Color,
+	seed: int,
+	gaps: bool
+) -> void:
+	# the wall's mass under the trees, so no sky shows through the strip's foot
+	var foot := y0 + h
+	var x := 0
+	var n := 0
+	while x < FOREST_W:
+		var t := TAU * x / FOREST_W
+		var canopy := (
+			0.62 + 0.26 * sin(t * 3.0 + float(seed)) + 0.12 * sin(t * 8.0 + float(seed) * 0.7)
+		)
+		var tree_h := lerpf(
+			tall.x, tall.y, clampf(canopy + (Px.h2(n, 1, seed) - 0.5) * 0.5, 0.0, 1.0)
+		)
+		var clear := gaps and sin(t * 5.0 + 1.3) > 0.72
+		if not clear:
+			_fir(img, x, foot, tree_h, col, moon, seed + n)
+		x += int(lerpf(gap.x, gap.y, Px.h2(n, 2, seed)))
+		n += 1
+	var low := int(tall.x * 0.5)
+	for x2 in FOREST_W:
+		var t2 := TAU * x2 / FOREST_W
+		var mass := float(low)
+		if gaps:
+			# undergrowth in a clearing: the wall's mass sinks and rises in a slope, never a step
+			mass *= clampf((0.8 - sin(t2 * 5.0 + 1.3)) / 0.35, 0.22, 1.0)
+		var top := (
+			foot
+			- int(mass)
+			- int(2.0 * sin(t2 * 9.0 + float(seed)) + 1.5 * sin(t2 * 37.0 + float(seed)))
+		)
+		for y in range(maxi(top, y0), foot):
+			img.set_pixel(x2, y, col)
+
+
+## The scrub at the treeline's foot, the panel's fourth strip: a dark mass with a torn lower edge over the ground's top,
+## bushes and low firs rising out of it, so the forest never meets the field on a ruled line.
+func _scrub_strip(img: Image, y0: int) -> void:
+	var foot := y0 + SCRUB_H
+	var dark := Color("#07131a")
+	var body := Color("#0a1a1e")
+	var moon := Color("#1a3338")
+	for x in FOREST_W:
+		var t := TAU * x / FOREST_W
+		var low := 7.0 * (0.5 + 0.5 * sin(t * 11.0 + 0.7)) + 4.0 * _pnoise(x, 12.0, 96, 321)
+		var top := 8.0 + 5.0 * (0.5 + 0.5 * sin(t * 17.0 + 2.1)) + 5.0 * _pnoise(x, 40.0, 128, 323)
+		for y in range(foot - int(low) - int(top), foot - int(low)):
+			img.set_pixel(x, y, dark if y > foot - low - top * 0.5 else body)
+	var n := 0
+	var bx := 0
+	while bx < FOREST_W:
+		var h := lerpf(12.0, SCRUB_H - 8.0, Px.h2(n, 1, 325))
+		_fir(img, bx, foot - 6, h, body, moon, 700 + n)
+		bx += int(lerpf(9.0, 46.0, Px.h2(n, 2, 325)))
+		n += 1
+
+
+func _fir(img: Image, cx: int, foot: int, h: float, col: Color, moon: Color, seed: int) -> void:
+	var half := h * (0.2 + 0.07 * Px.h2(seed, 3, 11))
+	var tiers := 4.0 + floorf(h / 18.0)
+	var top := foot - int(h)
+	for y in range(top, foot):
+		var d := float(y - top) / h
+		var tier := fmod(d * tiers, 1.0)
+		var w := half * (0.08 + 0.92 * d) * (0.55 + 0.45 * tier)
+		var lean := roundi((Px.h2(y / 3, seed, 13) - 0.5) * 1.6)
+		var l := cx + lean - roundi(w)
+		var r := cx + lean + roundi(w)
+		for x in range(l, r + 1):
+			img.set_pixel(posmod(x, FOREST_W), y, col)
+		# the moon on a bough's upper left
+		if tier < 0.3 and d > 0.06:
+			img.set_pixel(posmod(l, FOREST_W), y, moon)
+			if tier < 0.12:
+				img.set_pixel(posmod(l + 1, FOREST_W), y, moon)
 
 
 func _put_wrap(img: Image, x: int, y: int, c: Color) -> void:
@@ -2292,22 +2753,4 @@ func _soften(img: Image, rows: int, rad: int) -> Image:
 				n += 1.0
 			c = Color(c.r / n, c.g / n, c.b / n, 1.0)
 			out.set_pixel(x, y, c.darkened(0.25 * k))
-	return out
-
-
-func _soften_bottom(img: Image, from_y: int, rad: int) -> Image:
-	var out := img.duplicate() as Image
-	for y in range(from_y, GROUND_H):
-		var k := float(y - from_y) / (GROUND_H - from_y)
-		var r := maxi(roundi(rad * k * 2.0), 1)
-		for x in GROUND_W:
-			var c := Color(0, 0, 0, 1)
-			var n := 0.0
-			for o in range(-r, r + 1):
-				var q := img.get_pixel(posmod(x + o, GROUND_W), y)
-				c.r += q.r
-				c.g += q.g
-				c.b += q.b
-				n += 1.0
-			out.set_pixel(x, y, Color(c.r / n, c.g / n, c.b / n, 1.0).darkened(0.3 * k))
 	return out

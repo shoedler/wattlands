@@ -461,6 +461,8 @@ static func terrain_grade_pct(
 
 
 func _loader_step(state: TankState, ri: TankRiderInput) -> void:
+	if TankAux.of(state).cover.has(ri.peer):
+		return  # a bot covers this rider's seat: its band stays as it was until it is back
 	var want := false
 	var r := state.rider(ri.peer)
 	var seat := r.engine if r != null else ri.engine
@@ -658,7 +660,8 @@ func _seat_step(state: TankState, inputs: TankInputs, ending: bool) -> void:
 			float(aux.last_switch_s.get(ri.peer, -INF)),
 			state.t,
 			ending or (state.seg.objective_done and state.seg.open_ended),
-			not ending
+			not ending,
+			r.is_bot
 		)
 		r.mode_wait_s = float(f["wait_s"])
 		r.mode_to = str(f["mode_to"])
@@ -687,10 +690,13 @@ func _seat_step(state: TankState, inputs: TankInputs, ending: bool) -> void:
 
 
 ## True while rider `ri` sits on another seat than the one its plan phase is set up for (its
-## trainer has not yet followed the seat; pattern 9).
+## trainer has not yet followed the seat; pattern 9). Never while a bot covers it: the swap is the bot's,
+## the plan stays the rider's own, and nothing on its trainer moves (TankBots.cover).
 static func _waits_for_seat(state: TankState, ri: TankRiderInput) -> bool:
 	var r := state.rider(ri.peer)
-	return r != null and r.engine != "" and r.engine != ri.engine
+	if r == null or r.engine == "" or r.engine == ri.engine:
+		return false
+	return not TankAux.of(state).cover.has(ri.peer)
 
 
 func _request(peer: int, fields: Dictionary) -> bool:

@@ -8,6 +8,7 @@ extends Control
 ##   crew=<1..4>        the tank (default 3; 4 is the Citadel's fixture with an arc-generator rider)
 ##   flex               pixel_flex on (min 852 x 480), as the GameHost sets it
 ##   nohud              no HUD (the picker and content cards are rendered this way)
+##   nopip              no shell screen (the cards too)
 ##   kind=state|gun_line|boss|cap|roam|v4:<name>   the fixture (default state); cap is the Citadel at
 ##                      the snapshot caps, 16 enemies and 24 shells always in view, the gun firing every
 ##                      0.4 s; roam is free roam on roam_30's valley (TankViewUtil.roam_state) with the
@@ -62,6 +63,9 @@ func _ready() -> void:
 		_v4 = kind_opt.trim_prefix("v4:")
 		_v4_cues_due = true
 		state = TankFixturesV4.make(_v4, crew)
+		# the cap fixture fills every field for the snapshot's size: its frame is the crowded field, not a tow
+		if _v4 == "cap_v4":
+			state.hull.tow_s = 0.0
 		content = TankFixturesV4.content_id(_v4)
 		crew = state.riders.size()
 		for r in state.riders:
@@ -113,6 +117,8 @@ func _ready() -> void:
 	add_child(pv)
 	view = game.make_view() as TankView
 	pv.set_game_view(view)
+	if _opts.has("nopip") and view.pip != null:
+		view.pip.visible = false
 	if _opts.has("nohud"):
 		return
 	hud = HudLayer.new()

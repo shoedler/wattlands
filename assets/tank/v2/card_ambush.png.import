@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dq542ixnm2pbg"
-path="res://.godot/imported/light.png-9664b7f474ea35e6a2da9c709e208ad7.ctex"
+uid="uid://40mbun2pfs0"
+path="res://.godot/imported/card_ambush.png-0f11ce8f68f386c0252b0227eeee50e9.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/tank/v2/enemies/light.png"
-dest_files=["res://.godot/imported/light.png-9664b7f474ea35e6a2da9c709e208ad7.ctex"]
+source_file="res://assets/tank/v2/card_ambush.png"
+dest_files=["res://.godot/imported/card_ambush.png-0f11ce8f68f386c0252b0227eeee50e9.ctex"]
 
 [params]
 

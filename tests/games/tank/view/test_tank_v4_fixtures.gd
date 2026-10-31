@@ -196,7 +196,9 @@ func test_the_enemy_kit_has_every_kind_at_its_size() -> void:
 		assert_eq(kit.kind(k)["size"], sizes[k], k)
 	assert_eq(kit.kind("nothing")["size"], sizes["medium"], "size is always there")
 	assert_not_null(kit.texture(), "the baked atlas")
-	assert_eq(TankEnemyKit.check({"kinds": {}}).size(), 9, "7 kinds, bushes, far_ground")
+	assert_eq(
+		TankEnemyKit.check({"kinds": {}}).size(), 10, "7 kinds, bushes, far_ground, far_forest"
+	)
 	assert_eq(TankEnemyKit.check({}), ["no kinds"] as Array[String])
 
 
@@ -210,12 +212,29 @@ func test_the_enemy_kit_has_bushes_and_far_ground() -> void:
 	for k: String in TankEnemyKit.SIZES:
 		kinds[k] = {"size": [1, 1]}
 	var problems := TankEnemyKit.check({"kinds": kinds})
-	assert_eq(problems, ["no bushes", "no far_ground"] as Array[String])
+	assert_eq(problems, ["no bushes", "no far_ground", "no far_forest"] as Array[String])
+	var forest := {"rects": [[0, 0, 8, 8]]}
 	assert_eq(
-		TankEnemyKit.check({"kinds": kinds, "bushes": {"rects": []}, "far_ground": "g.png"}).size(),
+		(
+			TankEnemyKit
+			. check(
+				{
+					"kinds": kinds,
+					"bushes": {"rects": []},
+					"far_ground": "g.png",
+					"far_forest": forest
+				}
+			)
+			. size()
+		),
 		1
 	)
-	var whole := {"kinds": kinds, "bushes": {"rects": [[0, 0, 8, 8]]}, "far_ground": "g.png"}
+	var whole := {
+		"kinds": kinds,
+		"bushes": {"rects": [[0, 0, 8, 8]]},
+		"far_ground": "g.png",
+		"far_forest": forest,
+	}
 	assert_eq(TankEnemyKit.check(whole).size(), 0, "a whole manifest")
 
 

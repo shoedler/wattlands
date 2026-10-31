@@ -266,7 +266,7 @@ static func _bow_duel(crew: int) -> TankState:
 	else:
 		_seat(s, s.rider_at(arc.slot), TankIds.ENGINE_FEED)
 	feed.rounds = 412
-	feed.rpm = 180.0
+	feed.rpm = 420.0
 	feed.fire_tick = s.tick
 	var rc := s.enemy(41)
 	rc.hp = rc.hp_max * 0.4

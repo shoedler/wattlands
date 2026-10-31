@@ -91,6 +91,7 @@ func test_enemies_in_range_counts_far_kinds_and_the_behemoth_never_a_near_threat
 	assert_eq(TankAutopilot.enemies_in_range(s), 0, "a dead enemy is no target")
 	var b := TankFixtures.boss(2)
 	b.enemies.clear()
+	b.boss.range_m = 1100.0
 	assert_eq(TankAutopilot.enemies_in_range(b), 1, "the Behemoth stands")
 
 

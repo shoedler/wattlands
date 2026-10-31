@@ -216,9 +216,17 @@ func tracers(v: TankView) -> Array[Dictionary]:
 		var k := int(r["k"])
 		var age := float(r["age"])
 		var m := v.bow_muzzle(k)
-		var sd := v.bow_vector(k)
-		out.append({"p": tracer_head(m, sd, age), "muzzle": m, "flash": _bow_flash(age)})
+		var sd := v.bow_shot(k)
+		out.append({"p": _head(v, m, sd, age), "muzzle": m, "flash": _bow_flash(age)})
 	return out
+
+
+## A tracer's head, stopped where it strikes the near threat the guns fire at.
+static func _head(v: TankView, m: Vector2, sd: Vector2, age: float) -> Vector2:
+	var tp := tracer_head(m, sd, age)
+	if v.bow_target != Vector2.ZERO and m.distance_to(tp) > m.distance_to(v.bow_target):
+		return v.bow_target
+	return tp
 
 
 static func _bow_flash(age: float) -> float:
@@ -234,10 +242,10 @@ func _rounds(ci: CanvasItem, v: TankView) -> void:
 		var k := int(r["k"])
 		var age := float(r["age"])
 		var m := v.bow_muzzle(k)
-		var sd := v.bow_vector(k)
+		var sd := v.bow_shot(k)
 		var nn := Vector2(-sd.y, sd.x)
-		if age < ROUND_S:
-			var tp := tracer_head(m, sd, age)
+		var tp := _head(v, m, sd, age)
+		if age < ROUND_S and (v.bow_target == Vector2.ZERO or tp != v.bow_target):
 			for s in TRACER_LEN:
 				var c := F_WHITE if s < 3 else (F_YEL if s < 6 else F_ORA)
 				if s >= TRACER_LEN - 2:

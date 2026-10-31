@@ -32,6 +32,10 @@ const SEARCH := Color(1.0, 0.94, 0.78)
 ## The beams' warm light on what they cross.
 const BEAM_LIT := Color(1.0, 0.8, 0.52)
 const BEAM_LIT_A := 0.16
+## A live near threat takes only this of it: its dark plates and cold rim stay.
+const THREAT_LIT := 0.4
+## The headlight stops on a near threat: its cone fades out this far into the sprite.
+const HEAD_INTO_THREAT := 14.0
 ## The headlight's beam: degrees below the hull's line, length, half spread (degrees).
 const HEAD_DEG := 9.0
 const HEAD_LEN := 210.0
@@ -65,11 +69,24 @@ static func draw(ci: CanvasItem, v: TankView, state: TankState) -> void:
 	_running_lights(ci, v)
 	_scene_flash(ci, v)
 	_bow_rounds(ci, v)
+	_near_lights(ci, v, state)
 	_shells(ci, v, state)
 	v.fx.draw_light(ci)
 	if v.fx.wash > 0.0:
 		var c := v.fx.wash_color
 		TankDraw.glow_at(ci, v.fx.wash_pos, 320.0, Color(c.r, c.g, c.b, 0.16 * v.fx.wash))
+
+
+## The near threats' own lights and what the beams leave on them, over their sprites (TankWorldDraw.draw_near_threats).
+static func _near_lights(ci: CanvasItem, v: TankView, state: TankState) -> void:
+	for id: int in v.enemy_feet:
+		var e := state.enemy(id)
+		if e == null:
+			continue
+		var kind := v.enemy_kind(e)
+		if v.lanes.has(id):
+			_beam_lit(ci, v, state, kind, v.enemy_rects[id], int(v.lanes[id]), THREAT_LIT)
+		TankEnemyDraw.draw_light(ci, v.enemy_kit, kind, v.enemy_feet[id], v.near_pose(e))
 
 
 static func draw_world(ci: CanvasItem, v: TankView, state: TankState) -> void:
@@ -78,12 +95,7 @@ static func draw_world(ci: CanvasItem, v: TankView, state: TankState) -> void:
 	for bx in TankForest.bases(v, state):
 		TankForest.draw_base_light(ci, v, bx)
 	_fires(ci, v)
-	_lit_by_beams(ci, v, state)
-	for id: int in v.enemy_feet:
-		var e := state.enemy(id)
-		if e != null:
-			var kind := v.enemy_kind(e)
-			TankEnemyDraw.draw_light(ci, v.enemy_kit, kind, v.enemy_feet[id], v.near_pose(e))
+	_lit_by_beams(ci, v)
 
 
 ## The tank's beams this frame: [{p (the lens, stage px), ang, half (radians), len, k, head}].
@@ -101,7 +113,7 @@ static func beams(v: TankView, state: TankState) -> Array[Dictionary]:
 					"p": v.at_sprite((hd["at"] as Vector2) + Vector2(3.5, 0)),
 					"ang": v.hull_rot + deg_to_rad(HEAD_DEG),
 					"half": deg_to_rad(HEAD_HALF),
-					"len": HEAD_LEN,
+					"len": head_len(v, v.at_sprite((hd["at"] as Vector2) + Vector2(3.5, 0))),
 					"k": hk,
 					"head": true,
 				}
@@ -139,6 +151,18 @@ static func beams(v: TankView, state: TankState) -> Array[Dictionary]:
 				}
 			)
 		)
+	return out
+
+
+## The headlight's reach from lens `p`: it ends on the nearest near threat ahead, so its cone does not flatten the
+## sprite with its warm wash.
+static func head_len(v: TankView, p: Vector2) -> float:
+	var out := HEAD_LEN
+	for id: int in v.enemy_rects:
+		var r: Rect2 = v.enemy_rects[id]
+		var d := r.position.x - p.x + HEAD_INTO_THREAT
+		if d > 0.0:
+			out = minf(out, d)
 	return out
 
 
@@ -386,13 +410,10 @@ static func _world_lamps(ci: CanvasItem, v: TankView, state: TankState) -> void:
 		TankDraw.glow_at(ci, tl + Vector2(0, 16), 34.0, Color(AMBER.r, AMBER.g, AMBER.b, 0.26))
 
 
-## The beams' warm light on the near threats and the wrecks they cross: over the kit's silhouette; the
-## back lane less (haze). The kit's stub has no silhouette, so nothing shows until its art.
-static func _lit_by_beams(ci: CanvasItem, v: TankView, state: TankState) -> void:
-	for id: int in v.enemy_rects:
-		var e := state.enemy(id)
-		if e != null and v.lanes.has(id):
-			_beam_lit(ci, v, state, v.enemy_kind(e), v.enemy_rects[id], int(v.lanes[id]))
+## The beams' warm light on the wrecks they cross: over the kit's silhouette; the back lane less (haze). The kit's stub
+## has no silhouette, so nothing shows until its art.
+static func _lit_by_beams(ci: CanvasItem, v: TankView) -> void:
+	var state := v.game.state
 	for w in v.wrecks:
 		if v.wreck_collapse(w) < 1.0:
 			var wr := TankWorldDraw.wreck_rect(v, w)
