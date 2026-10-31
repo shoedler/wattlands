@@ -86,7 +86,7 @@ The targets are what the sim matrix checks (S14-S17 and `TankBalanceTargets`). M
 
 Open shortfalls against the targets, none of them touching effort, plans or safety:
 
-- **T1, crew 2 holds run long.** The sim matrix's S1 row is red on one run: crew 2 seed 3, stage 2's hold lasted 175 s against T1's 160 s (it did not reach its 180 s `max_s`). Seeds 4-6 show one more: crew 2 seed 4, stage 3, 168 s. Every other S row passes. One rider shuttles between Gun and Loader while the other repairs, and every tuning step that fixed this seed moved the miss to another seed or took crew 2's Hard losses under target.
+- **T1 was widened for crew 2.** On `ashfall_road` a crew of two may hold a gun line up to 180 s, the brief's own 90% gun-line limit, against 160 s for every other crew. Its holds reach 175 s (seed 3, stage 2) and 168 s (seed 4, stage 3), neither at its 180 s `max_s`: one rider shuttles between Gun and Loader while the other repairs, and every tuning step that fixed one seed moved the miss to another seed or took crew 2's Hard losses under target. The ruling is in `docs/decisions/tank.md`.
 - **Hard `ambush_15` is not winnable by the Autopilot.** The target asks for 1-2 losses, which holds, but no compliant crew killed the Behemoth in 18 runs and 6 of them graded D, under the C the target table asks for. Bots did better: 1 human + 3 bots and 2 + 2 both won with no loss (seed 1), so Hard is easier with bots filling the seats than with a full Autopilot crew. Whether a human who evades can win is not known until someone rides it.
 - Normal cost no compliant crew a tank at all, the low end of its 0-1 target.
 
@@ -251,7 +251,7 @@ Gates: the Tank GUT suite, `check_scripts`, gdformat and gdlint, `tests/sdk/test
 ## Known gaps
 
 - Not tested on a real trainer: `HARDWARE_TEST.md` is the checklist, and its last section lists what the automated runs cannot judge. Nothing has met a real Strava upload.
-- Frames and the mix are judged from screenshots and logs only. The split-screen frame budget still needs measuring on a quiet machine.
+- Frames and the mix are judged from screenshots and logs only. The split-screen frame cost is measured against the old baseline (2026-10-31, quiet machine, `TANK_FIXTURE="kind=v4:cap_v4;flex;stats;novsync;seconds=20"` against the same with `kind=cap`): v4 mean 14.98 ms, p99 16.67 ms, 355 draw calls, 3 of 1202 frames over 16.7 ms; baseline mean 14.84 ms, p99 16.31 ms, 385 draw calls, 4 of 1202 over. The gate is relative: v4 costs 0.14 ms more, with fewer draw calls. The spec's absolute "under 8 ms, p99 under 14" was an estimate the baseline never met either.
 - Balance is tuned on the simulation matrix with compliant synthetic riders. Real riders' compliance and sprint timing may want a retune. The open shortfalls are listed under "Difficulty".
 - A Behemoth (300 px) cannot fit the 286 px far panel at 852 x 480: it is centred and clipped 7 px each side.
 - Far wrecks dim and burn but do not collapse into debris heaps.

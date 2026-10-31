@@ -567,3 +567,20 @@ Short ADRs for the tank game: date, decision, alternatives, reason. Game session
 - Alternatives: `checkpoint_hp` 40, stabilizer 2.4, `per_degree` 0.65, patrols 60-130 s and cheaper roam points all fit the sims, but each breaks a pin taken from the brief, so none was kept.
 - Open: S1 is red on one run (crew 2 seed 3, hold 2, 175 s against 160 s), the Autopilot never wins Hard ambush_15 (0 of 18) and 6 of those runs grade D. README "Difficulty" states them. Perf gate 4.2 waits for a quiet machine.
 
+## 2026-10-31 v4: T1 for crew 2
+
+- Decision (lead's ruling): on `ashfall_road`, crew 2's gun line may last up to 180 s (`T1_CREW2_GUN_LINE_MAX_S` in `check_sims.mjs`), the brief's own 90% gun-line limit (`docs/games/tank.md` 4.6.1 checks). Every other crew and every other T1 row stay as they are, `ambush_15` included. No BRIEF 4.6 or BRIEF 7 assertion and no safety pin moved.
+- Alternatives: more tuning for crew 2 (tried for hours; each step moved the miss to another seed or took crew 2's Hard losses under target); leaving S1 red as an open shortfall; widening T1 for every crew (no other crew needs it).
+- Reason: a crew of two has one rider shuttling between Gun and Loader while the other repairs. Its holds reach 175 s (seed 3, stage 2) and 168 s (seed 4, stage 3) and neither reaches `max_s`, so nobody rides longer than the brief allows and no overrun is scored. `TankBalanceTargets.t1`, the tuning tool's own copy, stays at 160 s as a tuning aim.
+
+## 2026-10-31 v4: the frame budget
+
+- Decision (lead's ruling): the gate is relative to the old baseline. Measured on a quiet machine with `TANK_FIXTURE="kind=v4:cap_v4;flex;stats;novsync;seconds=20"` against the same command with `kind=cap`: v4 mean 14.98 ms, p99 16.67 ms, 355 draw calls, 3 of 1202 frames over 16.7 ms; baseline mean 14.84 ms, p99 16.31 ms, 385 draw calls, 4 of 1202 over. v4 costs 0.14 ms more and uses fewer draw calls.
+- Alternatives: hold the spec's absolute "under 8 ms, p99 under 14" and cut art to reach it.
+- Reason: that number was an estimate the old baseline never met either, so it never described this game on this machine.
+
+## 2026-10-31 v4: closing the rules review
+
+- Decision: a bot never holds a segment's end, in depth. `TankSeatPlan.follow`'s `no_hold` keeps a bot's split from outlasting the segment's min_s, `TankSegments.riders_may_end` now skips bots as well, and the director asks a bot still inside its own min_s only once that has passed, so the platform refuses nothing. A human's own seat move may still hold the end: that effort is the human's choice.
+- Decision: `follow()` keeps the rest's offset at `offset + elapsed` inside the first 300 s instead of checking with `elapsed + SIM_DT`, as the review proposed. The router validates at `tracker.elapsed_s`, so a rest shorter by the tick would pass a check at `elapsed + SIM_DT` and still be refused there. The rest reaches 300 s in the router's model and 300 s plus a tick in real time; a test runs it through the real `DirectiveRouter` and `PhaseTracker`.
+- Decision: `TankEnemyState.side` stays, always +1, because the snapshot's `E_SIDE` column carries it. Nothing else reads it (static test).
