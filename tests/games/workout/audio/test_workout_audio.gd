@@ -905,6 +905,29 @@ func test_a_scored_sprint_rides_from_the_rules_to_one_sound_per_event_on_every_r
 	_assert_one_sound_per_event(client.audio.kit, "client")
 
 
+func test_a_routine_banner_cries_no_wolf_through_the_real_hud() -> void:
+	var sfx := get_node_or_null("/root/Sfx") as WlSfx
+	assert_not_null(sfx, "the Sfx autoload")
+	var was_muted := sfx.muted
+	sfx.muted = true
+	var g := U.game("easy_30", U.players(1), Wl.SOLO, 1)
+	autofree(g)
+	var layer := HudLayer.new()
+	add_child_autofree(layer)
+	layer.sounds = true
+	layer.build(g.hud_spec(), g.ctx)
+	g.ctx.hud = layer.local_feed()
+	var plays := sfx.play_count
+	var last := sfx.last_played
+	var i := _scored_sprint(g.state)
+	g.state.phase_index = i
+	g._announce({"type": WorkoutRules.EV_INTERVAL_START, "i": i})
+	assert_ne(layer.banner().game_text(), "", "the banner still shows")
+	assert_eq(sfx.play_count, plays, "no sound from the banner")
+	assert_eq(sfx.last_played, last)
+	sfx.muted = was_muted
+
+
 func test_a_client_sounds_events_as_they_arrive() -> void:
 	var view := _view("easy_30", U.players(2), Wl.CLIENT, 2)
 	view.game.apply_event({"type": WorkoutRules.EV_INTERVAL_END, "i": 0, "r": []})

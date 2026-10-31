@@ -436,6 +436,9 @@ function bandDb(x, t0, t1, lo, hi) {
 }
 
 test('a phase change reads through its real stack: chime, phase, toast, then the bell', () => {
+  // `warning` is not in it: Workout's HudSpec silences its routine banner. The GUT test holds that through the real HUD.
+  const hud = fs.readFileSync(path.resolve(HERE, '..', '..', '..', '..', 'src', 'games', 'workout', 'hud', 'workout_hud.gd'), 'utf8');
+  assert.match(hud, /hs\.banner_sound = ""/);
   const quiet = stack([], []);
   const all = stack(['interval_end', 'interval_start'], ['phase', 'toast']);
   const T = all.T;
