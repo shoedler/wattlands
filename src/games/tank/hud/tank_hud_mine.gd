@@ -9,7 +9,7 @@ extends TankHudCtl
 ## (shaded, a 1 px needle), the cadence as a key number over its band gauge, ONE instruction line in
 ## large type for your seat (TankHudModel.instruction: Drive HOLD 152-210 W or SURGE 240+ W 0:04,
 ## Gun HOLD (ERG), Loader BUILD 216+ W or OVER 264+ W 0:04, Lights HOLD, Secondaries SPIN 60+
-## 180/MIN, RESERVE), and SPRINT (W') and the virtual gear as small bars (the gear lit in SIM).
+## 180/MIN, Repairs HOLD (ERG), RESERVE, KEEP RIDING under a tow), and SPRINT (W') and the virtual gear as small bars (the gear lit in SIM).
 ## The local rider's numbers come from their own telemetry (set_telemetry), the bands from the
 ## HudLayer (power_band_of, cadence_band_of) and the plan. The spec sets shows_power: this plate
 ## always shows raw W and %FTP.
@@ -143,7 +143,7 @@ func _header(eng: String) -> void:
 	D.icon(self, eng, Vector2(6, 5), D.AMBER)
 	var seat := str(m["seat"])
 	var x := 16.0 + D.tall(self, 16, 4, tx(seat).to_upper() if seat != "" else "", D.AMBER)
-	var mach := tx("TANK_HUD_ENG_" + eng.to_upper()).to_lower()
+	var mach := tx(TankHudModel.machine_key(eng)).to_lower()
 	var right := W - 20.0
 	var hr := int(m.get("hr", 0))
 	if hr > 0:

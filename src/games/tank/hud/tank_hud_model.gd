@@ -3,8 +3,8 @@ extends RefCounted
 ## What Diesel Domestiques' own HUD shows, as plain data computed from TankGame.state (pure and
 ## static, so tests read it without drawing; brief 2.3, 2.4, 3.6): the local rider's band and their
 ## one instruction line (v3 per seat: HOLD / SURGE / BUILD / OVER / SPIN / RESERVE), the seat panel's
-## cards in seat order, the rack and the feed's rate,
-## the telegraphing shooters, the mission plate's stage strip and objective, the halt distance and
+## cards in seat order, the rack, the feed's rate and the Repairs card's numbers,
+## the telegraphing shooters and the incoming evadable shell, the difficulty and the losses, the mission plate's stage strip and objective, the halt distance and
 ## the boss bars. It only reads the state.
 
 ## The sprint rule's threshold (brief 2.4: >= 1.2 x FTP over the last 3 s, raw W).
@@ -35,7 +35,7 @@ const TELEGRAPH_S := {
 }
 ## Instruction kinds (v3: per seat). Drive HOLD (SURGE to evade), Gun HOLD (ERG), Loader BUILD
 ## (OVER inside the Overpressure window, SPIN once the rack is full), Lights HOLD (ERG), Secondaries
-## FEED (SPIN with the rounds a minute).
+## FEED (SPIN with the rounds a minute), Repairs HOLD (ERG); everyone KEEP RIDING under a tow.
 const DO_NONE := ""
 const DO_HOLD := "hold"
 const DO_SPIN := "spin"
@@ -44,6 +44,9 @@ const DO_BUILD := "build"
 const DO_OVER := "over"
 const DO_FEED := "feed"
 const DO_RESERVE := "reserve"
+const DO_TOW := "tow"
+## An evadable shell's pips: its longest flight is about 4 s (SPEC_TANK section 2).
+const SHELL_PIPS_S := 4.0
 ## The machine TankMech paints for each seat's engine.
 const MECH := {
 	TankIds.ENGINE_DIESEL: "diesel",
@@ -83,9 +86,9 @@ static func band_state(in_band: bool, ratio: float) -> int:
 
 
 ## The seat panel (v3 seat panel A): one card per seat in TankIds.SEATS order (Drive, Gun, Loader,
-## Lights, Secondaries), manned or not: {engine, mech, mode (the seat's ERG / SIM), empty, slot (-1
-## empty), peer, w, cad, ratio, state (band_state), in_band, local, reserve, wait_s and mode_to (the
-## rider's trainer switch to come, 0.3.1)}. The local rider's watts and cadence come from `local`
+## Lights, Secondaries, Repairs), manned or not: {engine, mech, mode (the seat's ERG / SIM), empty,
+## slot (-1 empty), peer, w, cad, ratio, state (band_state), in_band, local, bot, reserve, wait_s and
+## mode_to (the rider's trainer switch to come, 0.3.1)}. The local rider's watts and cadence come from `local`
 ## ({"w", "cad"}) when given (their own telemetry).
 static func seat_cards(state: TankState, local_peer: int, local: Dictionary = {}) -> Array:
 	var out: Array = []
@@ -105,6 +108,7 @@ static func seat_cards(state: TankState, local_peer: int, local: Dictionary = {}
 			"in_band": false,
 			"state": -1,
 			"local": false,
+			"bot": false,
 			"reserve": false,
 			"wait_s": 0.0,
 			"mode_to": "",
@@ -137,6 +141,7 @@ static func _manned(
 		"in_band": r.in_band,
 		"state": band_state(r.in_band, ratio),
 		"local": is_local,
+		"bot": r.is_bot,
 		"reserve": away,
 		"wait_s": r.mode_wait_s,
 		"mode_to": r.mode_to,
@@ -157,6 +162,36 @@ static func feed_rpm(state: TankState) -> float:
 		return 0.0
 	var fd := state.station(TankIds.ENGINE_FEED) as TankFeedState
 	return fd.rpm if fd != null and not fd.is_empty() else 0.0
+
+
+## The Repairs card (`w` the rider's watts): {working, hull (0..1), rate (hull HP a second now, 0 unless
+## working)}: tanks.json repair.hp_per_kj x the difficulty's repair x kW. Raw watts stand in for P_eff,
+## which stays on the host. {} without a Repairs room.
+static func repair(state: TankState, w: float) -> Dictionary:
+	var rp := state.station(TankIds.ENGINE_REPAIR) as TankRepairState if state != null else null
+	if rp == null:
+		return {}
+	var rate := 0.0
+	if rp.working and state.content != null:
+		var per_kj := state.content.num("tanks", "repair.hp_per_kj", 3.0)
+		rate = maxf(w, 0.0) / 1000.0 * per_kj * TankDifficulty.mult(state, "repair")
+	var frac := clampf(state.hull.hp / maxf(state.hull.hp_max, 1.0), 0.0, 1.0)
+	return {"working": rp.working, "hull": frac, "rate": rate}
+
+
+## The string key of `engine`'s machine, the one beside the seat's name in my numbers.
+static func machine_key(engine: String) -> String:
+	if engine == TankIds.ENGINE_REPAIR:
+		return "TANK_ENGINE_REPAIR"
+	return "TANK_HUD_ENG_" + engine.to_upper()
+
+
+## The difficulty as a plate shows it: {key (TANK_HUD_DIFF_*), hard}.
+static func difficulty(state: TankState) -> Dictionary:
+	var level := state.difficulty
+	if level == TankIds.DIFF_AUTO or not TankIds.DIFFICULTIES.has(level):
+		level = TankIds.DIFF_NORMAL
+	return {"key": "TANK_HUD_DIFF_" + level.to_upper(), "hard": level == TankIds.DIFF_HARD}
 
 
 ## The local rider's heart rate (bpm) from their own telemetry (Telemetry.heart_rate_bpm: local
@@ -224,6 +259,7 @@ static func telegraphs(state: TankState) -> Array:
 		var total := float(TELEGRAPH_S.get(kind, 3.0))
 		if state.content != null:
 			total = float(state.content.enemy_def(kind).get("telegraph_s", total))
+		total *= TankDifficulty.mult(state, "telegraph")
 		var tot := maxf(total, e.telegraph_s)
 		out.append({"id": e.id, "boss": false, "left": e.telegraph_s, "total": tot})
 	var b := state.boss
@@ -233,18 +269,36 @@ static func telegraphs(state: TankState) -> Array:
 		if state.content != null:
 			var main: Dictionary = state.content.boss_def().get("main", {})
 			total_b = float(main.get("telegraph_s", total_b))
+		total_b *= TankDifficulty.mult(state, "telegraph")
 		var tot_b := maxf(total_b, b.telegraph_s)
 		out.append({"id": 0, "boss": true, "left": b.telegraph_s, "total": tot_b})
 	return out
 
 
-## The shortest telegraph left (s; 0 when none).
+## The incoming evadable shell nearest its landing: {id, left, total}; {} when none is in the air.
+static func evadable_shell(state: TankState) -> Dictionary:
+	if state == null:
+		return {}
+	var out := {}
+	for sh in state.shells:
+		if not sh.far or not sh.evadable or sh.friendly or sh.left_s <= 0.0:
+			continue
+		if out.is_empty() or sh.left_s < float(out["left"]):
+			out = {"id": sh.id, "left": sh.left_s, "total": maxf(SHELL_PIPS_S, sh.left_s)}
+	return out
+
+
+## The shortest time left to make a shot miss (s; 0 when none): a telegraph, or an evadable shell's
+## flight, since the sprint counts through both.
 static func telegraph_left(state: TankState) -> float:
 	var left := 0.0
 	for t: Dictionary in telegraphs(state):
 		var l := float(t["left"])
 		if left <= 0.0 or l < left:
 			left = l
+	var sh := evadable_shell(state)
+	if not sh.is_empty() and (left <= 0.0 or float(sh["left"]) < left):
+		left = float(sh["left"])
 	return left
 
 
@@ -285,13 +339,16 @@ static func band_w(
 ## nnn+ W with the time left for a SIM rider who can evade while a shooter telegraphs;
 ## Secondaries: SPIN nn+ and the bow guns' rounds a minute (FEED); Loader in WORK: SPIN 50+ RPM
 ## with the rack full, else BUILD nnn+ W; SPIN nn+ RPM where the rule is cadence (the depot,
-## checkpoints, an ERG rider under the cadence floor); else HOLD lo-hi W (Drive, Gun, Lights).
+## checkpoints, an ERG rider under the cadence floor); else HOLD lo-hi W (Drive, Gun, Lights,
+## Repairs). Under a tow (after RESERVE) everyone reads KEEP RIDING: the plan runs on.
 static func instruction(state: TankState, r: TankRiderState, nums: Dictionary) -> Dictionary:
 	if state == null or r == null or r.engine == "" or state.in_cooldown():
 		return _line(DO_NONE, "", [], 0.0)
 	var st := state.station_of(r.slot)
 	if r.afk or not r.connected or (st != null and st.reserve) or state.all_afk:
 		return _line(DO_RESERVE, "TANK_HUD_DO_RESERVE", [], 0.0)
+	if state.hull.tow_s > 0.0:
+		return _line(DO_TOW, "TANK_HUD_DO_TOW", [], 0.0)
 	var mode := str(nums.get("mode", plan_mode(state, r.engine)))
 	var sprint := str(roundi(SPRINT_FTP * r.ftp))
 	var stm := st as TankSteamState
@@ -332,8 +389,9 @@ static func _line(kind: String, key: String, args: Array, left: float) -> Dictio
 
 ## The mission plate: {title (the segment's label key), left_s (to the nominal end, or to the
 ## latest end of an open-ended segment), blocks [{type, len}] (every segment by its nominal
-## length), index, progress (0..1 of the nominal length), obj_key / obj_value (the gun line's
-## guns, or Regroup), warn, next (the next segment's label key)}; {} without content.
+## length), index, progress (0..1 of the nominal length), obj_key and obj_args (the holding force,
+## or Regroup), warn, next (the next segment's label key), diff_key and hard (difficulty()),
+## losses}; {} without content.
 static func mission(state: TankState) -> Dictionary:
 	if state == null or state.content == null:
 		return {}
@@ -346,14 +404,15 @@ static func mission(state: TankState) -> Dictionary:
 	var dur := float(cur.get("duration_s", 0.0))
 	var end_s := float(cur.get("max_s", dur))
 	var obj_key := ""
-	var obj_value := ""
+	var obj_args: Array = []
 	if state.seg.seg == TankIds.SEG_GUN_LINE:
 		var total := state.gun_line.guns_total
-		obj_key = "TANK_HUD_GUNS"
-		obj_value = "%d/%d" % [clampi(total - state.gun_line.guns_left, 0, total), total]
+		obj_key = "TANK_OBJ_HOLD"
+		obj_args = [clampi(total - state.gun_line.guns_left, 0, total), total]
 	if state.seg.regroup:
 		obj_key = "TANK_OBJ_REGROUP"
-		obj_value = ""
+		obj_args = []
+	var diff := difficulty(state)
 	return {
 		"title": str(cur.get("label", "")),
 		"left_s": maxf(end_s - state.seg.elapsed_s, 0.0),
@@ -361,9 +420,12 @@ static func mission(state: TankState) -> Dictionary:
 		"index": i,
 		"progress": clampf(state.seg.elapsed_s / maxf(dur, 1.0), 0.0, 1.0),
 		"obj_key": obj_key,
-		"obj_value": obj_value,
+		"obj_args": obj_args,
 		"warn": state.seg.regroup,
 		"next": str(nxt.get("label", "")),
+		"diff_key": diff["key"],
+		"hard": diff["hard"],
+		"losses": state.score.losses,
 	}
 
 
@@ -417,7 +479,7 @@ static func objective(state: TankState) -> Dictionary:
 		TankIds.SEG_GUN_LINE:
 			var total := state.gun_line.guns_total
 			return {
-				"key": "TANK_OBJ_GUN_LINE",
+				"key": "TANK_OBJ_HOLD",
 				"args": [clampi(total - state.gun_line.guns_left, 0, total), total],
 				"warn": false
 			}
@@ -440,7 +502,7 @@ static func boss_bars(state: TankState) -> Dictionary:
 	var bogie_max := b.bogie_max
 	var turret_max := b.turret_max
 	if state.content != null:
-		scale_k = state.content.enemy_scale(state.hull.tank)
+		scale_k = state.content.enemy_scale(state.hull.tank) * TankDifficulty.mult(state, "hp")
 		bogie_max = float(state.content.boss_def().get("bogie_hp", 100)) * scale_k
 		turret_max = float(state.content.boss_def().get("turret_hp", 300)) * scale_k
 	var bogies: Array[float] = []
