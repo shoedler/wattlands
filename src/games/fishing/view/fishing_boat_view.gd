@@ -64,6 +64,8 @@ var winch_mps: float = 0.0
 ## Rod tension 0..1.
 var tension: float = 0.0
 
+## The crank: its one phase source, read by the drawing and by FishingAudio's strokes.
+var crank_clock: CrankClock = CrankClock.new()
 ## True on the farther row (another rider's boat): see set_far().
 var far: bool = false
 var body: Node2D = null
@@ -72,7 +74,6 @@ var crew: Sprite2D = null
 var winch: Sprite2D = null
 var prop: Sprite2D = null
 var _near: FishingDrawLayer = null
-var _crank: float = 0.0
 var _prop_t: float = 0.0
 var _winch_t: float = 0.0
 var _mats: Array[ShaderMaterial] = []
@@ -169,13 +170,13 @@ func crew_frame() -> int:
 
 ## The crank angle (radians, 0 .. TAU).
 func crank() -> float:
-	return _crank
+	return crank_clock.angle()
 
 
 ## One frame of `dt` seconds: eases the clutch, turns the parts, places the body.
 func advance(dt: float) -> void:
 	fishing = move_toward(fishing, fishing_target, dt / FISHING_EASE_S)
-	_crank = fmod(_crank + cadence / 60.0 * TAU * dt, TAU)
+	crank_clock.advance(cadence, dt)
 	_prop_t += PROP_FPS_FULL * prop_drive * (1.0 - fishing) * dt
 	_winch_t += absf(winch_mps) * WINCH_FPS_PER_MPS * fishing * dt
 	_update_pose()
@@ -237,7 +238,7 @@ func line_above() -> Color:
 
 func _paint_near(c: CanvasItem) -> void:
 	var at := FishingRig.CREW_AT + Vector2(0, tilt_at(CREW_SEAT_X))
-	for p in FishingRig.drivetrain(_crank):
+	for p in FishingRig.drivetrain(crank()):
 		c.draw_rect(Rect2(at + Vector2(p.x, p.y), Vector2.ONE), FishingRig.DRIVE_COLOURS[p.z])
 	var col := player_color()
 	var rod := rod_points()

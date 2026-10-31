@@ -287,7 +287,11 @@ func test_cues_come_from_every_event_type() -> void:
 	assert_eq(int(j[0]["l"]), 2)
 	var l := FishingCues.from_event(FishingEvents.landed(1, 3, 1, 12.0, 80, 1.0))
 	assert_eq(int(l[0]["grade"]), FishingConst.GRADE_TROPHY)
-	assert_eq(FishingCues.from_event(FishingEvents.landing(0, 1)).size(), 0)
+	var gaff := FishingCues.from_event(FishingEvents.landing(0, 1))
+	assert_eq(str(gaff[0]["k"]), FishingCues.CUE_LANDING)
+	var again := FishingCues.from_event(FishingEvents.replacement(1, 3))
+	assert_eq(str(again[0]["k"]), FishingCues.CUE_HOOKUP)
+	assert_eq(int(again[0]["l"]), 1)
 
 
 func test_state_edges_raise_cues_without_events() -> void:
