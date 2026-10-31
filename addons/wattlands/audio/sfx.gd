@@ -39,7 +39,7 @@ const SHARED_DIR := "res://assets/_shared/audio/"
 const SAFETY_SOUNDS: Array[String] = ["warning", "rescue"]
 const SFX_BUILTINS: Array[String] = ["coin", "hit", "boom", "whoosh"]
 const SAFETY_DUCK_ATTACK_S := 0.02
-const SAFETY_DUCK_RELEASE_S := 1.2
+const SAFETY_DUCK_RELEASE_S := 2.0
 
 ## Added to every play() volume.
 var master_db: float = 0.0
@@ -90,9 +90,9 @@ func play(sound: String, volume_db: float = 0.0, pitch: float = 1.0) -> void:
 	p.pitch_scale = clampf(pitch, 0.05, 4.0)
 	p.play()
 	if SAFETY_SOUNDS.has(sound):
-		AudioBuses.duck(AudioBuses.MACHINES, -6.0, SAFETY_DUCK_ATTACK_S, SAFETY_DUCK_RELEASE_S)
-		AudioBuses.duck(AudioBuses.AMBIENCE, -6.0, SAFETY_DUCK_ATTACK_S, SAFETY_DUCK_RELEASE_S)
-		AudioBuses.duck(AudioBuses.SFX, -4.0, SAFETY_DUCK_ATTACK_S, SAFETY_DUCK_RELEASE_S)
+		AudioBuses.duck(AudioBuses.MACHINES, -14.0, SAFETY_DUCK_ATTACK_S, SAFETY_DUCK_RELEASE_S)
+		AudioBuses.duck(AudioBuses.AMBIENCE, -14.0, SAFETY_DUCK_ATTACK_S, SAFETY_DUCK_RELEASE_S)
+		AudioBuses.duck(AudioBuses.SFX, -20.0, SAFETY_DUCK_ATTACK_S, SAFETY_DUCK_RELEASE_S)
 
 
 ## The bus a play(sound) goes to. A safety prompt goes to Master: only the master volume governs it, no sub-slider can

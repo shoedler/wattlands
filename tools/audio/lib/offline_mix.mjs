@@ -18,10 +18,11 @@ const LIMITER_LOOKAHEAD = 66;
 const LIMITER_RELEASE_S = 0.1;
 // HudLayer._play is the only way a safety prompt reaches WlSfx, and it plays every sound at this level (hud_layer.gd). A test pins the two together.
 export const PROMPT_VOICE_DB = -4;
-const SAFETY_DUCK = [
-  { bus: 'Machines', db: -6, attack_s: 0.02, release_s: 1.2 },
-  { bus: 'Ambience', db: -6, attack_s: 0.02, release_s: 1.2 },
-  { bus: 'Sfx', db: -4, attack_s: 0.02, release_s: 1.2 },
+// WlSfx.play's ducks (sfx.gd). A test pins the two together.
+export const SAFETY_DUCK = [
+  { bus: 'Machines', db: -14, attack_s: 0.02, release_s: 2 },
+  { bus: 'Ambience', db: -14, attack_s: 0.02, release_s: 2 },
+  { bus: 'Sfx', db: -20, attack_s: 0.02, release_s: 2 },
 ];
 export const STEM_BUSES = ['Machines', 'Ambience', 'Sfx', 'UI', 'Master'];
 

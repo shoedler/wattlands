@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { allFiles, bankWavBytes, loadBank } from './bank.mjs';
 import { bandShareDb, fft, gainToDb, powerSpectrum } from './dsp.mjs';
-import { integratedLufs, loudnessRange, momentaryMaxLufs, truePeakDb } from './lufs.mjs';
+import { integratedLufs, loudnessRange, momentaryMaxLufs, momentaryTrack, truePeakDb } from './lufs.mjs';
 import { BankAudio, MIX_RATE, PROMPT_VOICE_DB, mixdown, segmentsLength, simulate } from './offline_mix.mjs';
 import { curvePasses } from './pattern.mjs';
 
@@ -41,6 +41,32 @@ function peakDb(x) {
   let m = 0;
   for (let i = 0; i < x.length; i++) m = Math.max(m, Math.abs(x[i]));
   return gainToDb(m);
+}
+
+const D5_WINDOW_S = 0.6;
+const D5_OTHER_BUSES = ['Machines', 'Ambience', 'Sfx', 'UI'];
+/** Where D5 plays a prompt, from the start of the loudest 400 ms. */
+const D5_AROUND_LOUDEST_S = [-0.4, -0.2, 0];
+
+function sumOfBuses(mix, buses, from, to) {
+  const out = [new Float64Array(to - from), new Float64Array(to - from)];
+  for (const bus of buses) {
+    for (let c = 0; c < 2; c++) {
+      const b = mix.stems[bus][c];
+      for (let i = from; i < to; i++) out[c][i - from] += b[i];
+    }
+  }
+  return out;
+}
+
+/** The start of the loudest 400 ms of everything a safety prompt plays over. */
+function loudestMomentS(mix) {
+  let best = { t: 0, lufs: -Infinity };
+  const n = mix.stems.Machines[0].length;
+  for (const m of momentaryTrack(sumOfBuses(mix, D5_OTHER_BUSES, 0, n), MIX_RATE)) {
+    if (m.lufs > best.lufs) best = m;
+  }
+  return best.t;
 }
 
 function leadMachine(p) {
@@ -406,30 +432,32 @@ export function scoreBank(doc, dir, { shared, root = null, rpms = null, stems = 
     rows.push({ id: 'D4', pass: level < -60, value: round(level), target: 'Machines below -60 dBFS 400 ms after the stop' });
   }
 
-  // D5: the safety prompts over the mix, ducking counted.
+  // D5: the safety prompts over the mix, ducking counted: at the mix's midpoint, and on and just before its loudest moment, where a duck that is already releasing meets what is coming.
   if (shared) {
     let worst = Infinity;
-    const midT = segmentsLength(seg.filter((s) => s.rpm > 0)) / 2;
+    let worstAt = null;
+    const midT = segmentsLength(moving) / 2;
+    const loudest = loudestMomentS(mix);
+    const lengthS = segmentsLength(seg);
+    const times = [midT, ...D5_AROUND_LOUDEST_S.map((d) => loudest + d)].filter((t) => t >= 0 && t + D5_WINDOW_S <= lengthS);
     for (const name of ['warning', 'rescue']) {
-      const promptSim = simulate(bank, { ...scenario, prompts: [{ t: midT, name }], shared });
-      const pm = mixdown(bank, promptSim, { shared });
-      const from = Math.round(midT * mixRate);
-      const to = Math.round((midT + 0.6) * mixRate);
-      const slice = (st) => [st[0].subarray(from, to), st[1].subarray(from, to)];
-      const others = [new Float64Array(to - from), new Float64Array(to - from)];
-      for (const bus of ['Machines', 'Ambience', 'Sfx', 'UI']) {
-        const b = slice(pm.stems[bus]);
-        for (let i = 0; i < to - from; i++) {
-          others[0][i] += b[0][i];
-          others[1][i] += b[1][i];
+      for (const t of times) {
+        const promptSim = simulate(bank, { ...scenario, prompts: [{ t, name }], shared });
+        const pm = mixdown(bank, promptSim, { shared });
+        const from = Math.round(t * mixRate);
+        const to = Math.round((t + D5_WINDOW_S) * mixRate);
+        const slice = (st) => [st[0].subarray(from, to), st[1].subarray(from, to)];
+        const others = sumOfBuses(pm, D5_OTHER_BUSES, from, to);
+        const diff = momentaryMaxLufs(slice(pm.stems.Master), mixRate) - momentaryMaxLufs(others, mixRate);
+        if (diff < worst) {
+          worst = diff;
+          worstAt = `${name} at ${round(t)} s`;
         }
       }
-      const diff = momentaryMaxLufs(slice(pm.stems.Master), mixRate) - momentaryMaxLufs(others, mixRate);
-      worst = Math.min(worst, diff);
     }
-    rows.push({ id: 'D5', pass: worst >= 6, value: round(worst), target: 'warning, rescue >= +6 LU over the mix' });
+    rows.push({ id: 'D5', pass: worst >= 6, value: round(worst), target: 'warning, rescue >= +6 LU over the mix, midpoint and loudest moment', note: worstAt });
   } else {
-    rows.push({ id: 'D5', pass: false, value: 'no _shared bank', target: 'warning, rescue >= +6 LU over the mix' });
+    rows.push({ id: 'D5', pass: false, value: 'no _shared bank', target: 'warning, rescue >= +6 LU over the mix, midpoint and loudest moment' });
   }
 
   // D6, D7: eight riders.
