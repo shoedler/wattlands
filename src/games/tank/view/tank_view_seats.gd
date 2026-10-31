@@ -2,6 +2,9 @@ class_name TankViewSeats
 extends TankViewMotion
 ## TankView's seats layer: who rides what, the machines and the lights they drive, and the public effects.
 
+## seat id -> its CrankClock, made on first use; phases[seat] is its revs.
+var _cranks: Dictionary = {}
+
 # --- Seats and machines ----------------------------------------------------------------------------------
 
 
@@ -41,7 +44,12 @@ func _seats(state: TankState, feed: Dictionary, render_dt: float) -> void:
 			var f: Vector2 = feed.get(r.peer, Vector2(r.raw_w, r.cadence_rpm))
 			rpm = f.y if f.y > 1.0 else 0.0
 		cadences[seat] = rpm
-		phases[seat] = float(phases.get(seat, 0.0)) + rpm / 60.0 * render_dt
+		var crank: CrankClock = _cranks.get(seat, null)
+		if crank == null:
+			crank = CrankClock.new()
+			_cranks[seat] = crank
+		crank.advance(rpm, render_dt)
+		phases[seat] = crank.revs
 		powers[seat] = power_ratio(r)
 
 
