@@ -16,7 +16,7 @@ var hp: float = 0.0
 var hp_max: float = 0.0
 ## [snap] TankIds.EM_*.
 var mode: int = TankIds.EM_ENTER
-## [snap] +1 ahead of the tank, -1 behind it.
+## [snap] Always +1 (v4: nothing comes from behind); kept for the snapshot's E_SIDE column.
 var side: int = 1
 ## The held distance in art px from the hull's nearer end to the enemy's near edge.
 var hold_px: float = 0.0

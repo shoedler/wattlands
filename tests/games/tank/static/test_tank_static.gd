@@ -368,6 +368,18 @@ func test_effort_code_never_reads_the_difficulty() -> void:
 	assert_true(seat_plan.contains("class_name TankSeatPlan"), "the seat plan lives in effort/")
 
 
+## v4: nothing comes from behind. `TankEnemyState.side` is only carried on the wire (E_SIDE, snapshot v5),
+## always +1; no code may branch on it, and the rear and dug-in ids are gone.
+func test_nothing_reads_an_enemys_side() -> void:
+	for path in files(GAME_DIR, ["gd"]):
+		if path.ends_with("net/tank_snapshot.gd"):
+			continue
+		assert_eq(hit(read(path), "\\.side\\b"), "", path)
+	var ids: Dictionary = (TankIds as GDScript).get_script_constant_map()
+	for gone: String in ["FROM_REAR", "ENEMY_DUGIN", "INTENT_TRAVERSE"]:
+		assert_false(ids.has(gone), gone)
+
+
 func test_the_difficulty_scan_catches_every_form() -> void:
 	var bad := [
 		'var m := TankDifficulty.mult(state, "damage")',

@@ -33,6 +33,40 @@ const TEAM_KEYS: Array[String] = [
 ]
 
 
+## The text on the results: the kill label names what tank_game.gd joins, in that order, a loss line that
+## reads for one tank, no key or word left of the dug-in gun, and no "gun line" where the mission now says
+## Holding action.
+func test_the_results_text_matches_what_the_game_writes() -> void:
+	var text := {}
+	var f := FileAccess.open(F.CONTENT_DIR.path_join("strings.csv"), FileAccess.READ)
+	while not f.eof_reached():
+		var row := f.get_csv_line()
+		if row.size() >= 2:
+			text[row[0]] = row[1]
+	var codes: Array[int] = [
+		TankIds.enemy_code(TankIds.ENEMY_LIGHT),
+		TankIds.enemy_code(TankIds.ENEMY_MEDIUM),
+		TankIds.enemy_code(TankIds.ENEMY_DESTROYER),
+		TankIds.enemy_code(TankIds.ENEMY_HEAVY),
+		TankIds.BOSS_CODE,
+		TankIds.enemy_code(TankIds.ENEMY_RECON),
+		TankIds.enemy_code(TankIds.ENEMY_TANKETTE),
+	]
+	assert_eq(TankGame.TEAM_KILL_CODES, codes, "the order the label names")
+	assert_eq(
+		text["TANK_TEAM_KILLS"], "Kills (light/medium/destroyer/heavy/Behemoth/recon/tankette)"
+	)
+	assert_eq(text["TANK_TEAM_ROAM_KILLS"], "Kills (light/medium/destroyer/heavy/recon/tankette)")
+	assert_false(text.has("TANK_ENEMY_DUGIN"))
+	assert_eq(str(text["TANK_RIDE_LOSSES"]).format([1]), "Tanks lost: 1")
+	for key: String in text:
+		var low := str(text[key]).to_lower()
+		assert_false(low.contains("gun line"), key)
+		assert_false(low.contains("gun-line"), key)
+		assert_false(low.contains("dug-in"), key)
+		assert_false(low.contains("dugin"), key)
+
+
 func _played(crew: int, kj: float = 300.0) -> TankGame:
 	var ctx := F.make_ctx(crew)
 	var rows := {}
