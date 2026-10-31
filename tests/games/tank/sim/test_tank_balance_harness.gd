@@ -253,11 +253,11 @@ func test_t1_to_t5_pass_on_a_run_that_meets_them() -> void:
 
 func test_t1_misses_on_a_slow_advance_an_overrun_a_breakdown_or_a_low_grade() -> void:
 	var slow := _good()
-	slow["segments"][1]["dur_s"] = 260.0
-	assert_false(bool(TankBalanceTargets.t1([slow])["ok"]), "an Advance over 240 s")
+	slow["segments"][1]["dur_s"] = 300.0
+	assert_false(bool(TankBalanceTargets.t1([slow])["ok"]), "an Advance over 280 s")
 	var short := _good()
-	short["segments"][2]["dur_s"] = 70.0
-	assert_false(bool(TankBalanceTargets.t1([short])["ok"]), "a gun line under 80 s")
+	short["segments"][2]["dur_s"] = 50.0
+	assert_false(bool(TankBalanceTargets.t1([short])["ok"]), "a gun line under 60 s")
 	var overran := _good()
 	overran["segments"][3]["overran"] = true
 	assert_false(bool(TankBalanceTargets.t1([overran])["ok"]))
@@ -306,7 +306,7 @@ func test_t3_judges_only_heavy_shells_outside_the_depot() -> void:
 
 func test_t1_to_t5_are_normals_targets() -> void:
 	var slow := _good()
-	slow["segments"][1]["dur_s"] = 260.0
+	slow["segments"][1]["dur_s"] = 300.0
 	slow["difficulty"] = TankIds.DIFF_HARD
 	assert_string_contains(str(TankBalanceTargets.t1([slow])["text"]), "skipped")
 	slow["difficulty"] = TankIds.DIFF_NORMAL
