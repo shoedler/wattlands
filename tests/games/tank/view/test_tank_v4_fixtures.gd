@@ -194,17 +194,17 @@ func test_the_enemy_kit_has_every_kind_at_its_size() -> void:
 	for k: String in sizes:
 		assert_eq(kit.kind(k)["size"], sizes[k], k)
 	assert_eq(kit.kind("nothing")["size"], sizes["medium"], "size is always there")
-	assert_null(kit.texture(), "no atlas in the stub")
+	assert_not_null(kit.texture(), "the baked atlas")
 	assert_eq(TankEnemyKit.check({"kinds": {}}).size(), 9, "7 kinds, bushes, far_ground")
 	assert_eq(TankEnemyKit.check({}), ["no kinds"] as Array[String])
 
 
-## SPEC_TANK 4.3 and 4.7: A bakes these while V draws them, so V's branch must load nothing and guard on null.
-func test_the_enemy_kit_stubs_bushes_and_far_ground() -> void:
+## SPEC_TANK 4.3 and 4.7: A's bake holds the bushes and the far ground the view draws.
+func test_the_enemy_kit_has_bushes_and_far_ground() -> void:
 	var kit := TankEnemyKit.shared()
-	assert_null(kit.bushes(), "no bush sheet in the stub")
-	assert_eq(kit.bush_rects().size(), 0, "no bush frames in the stub")
-	assert_null(kit.far_ground(), "no far ground in the stub")
+	assert_not_null(kit.bushes(), "the bush sheet")
+	assert_gt(kit.bush_rects().size(), 0, "bush frames")
+	assert_not_null(kit.far_ground(), "the far ground")
 	var kinds := {}
 	for k: String in TankEnemyKit.SIZES:
 		kinds[k] = {"size": [1, 1]}
