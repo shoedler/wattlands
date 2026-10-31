@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "game": "import_proof",
+  "sounds": {
+    "import_proof_loop": {
+      "dur": 0.5, "seed": 901, "loop": true, "compress": "pcm", "xfade_s": 0.1,
+      "layers": [{"src": "tri", "f": 220, "gain": 0.7}]
+    },
+    "import_proof_qoa": {
+      "dur": 1.0, "ch": 2, "seed": 902, "loop": true, "compress": "qoa", "xfade_s": 0.2,
+      "layers": [{"src": "noise", "color": "pink", "gain": 0.8, "fx": [{"lp": {"f": 1800}}]}]
+    },
+    "import_proof_locked": {
+      "dur": 0.1, "seed": 903, "locked": true,
+      "layers": [{"src": "noise", "color": "white", "env": {"a": 0.0005, "d": 0.09}, "fx": [{"bp": {"f": 1200, "q": 0.8}}]}]
+    }
+  }
+}
