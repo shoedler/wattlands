@@ -35,6 +35,8 @@ var enemy_shift: Dictionary = {}
 var near_left: Dictionary = {}
 ## v4: the depth lane the next near threat takes (they alternate 0, 1).
 var near_lane: int = 0
+## v4: the segment's elapsed_s when its stage last restarted (0 before): a near list counts from it.
+var stage_from_s: float = 0.0
 ## v4: the Behemoth's d(range)/dt in m/s this tick (the lead solver reads it).
 var boss_rate_mps: float = 0.0
 ## Enemy shell id -> seconds until it lands (the arrival resolves the hit rolled at fire time).

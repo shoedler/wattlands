@@ -6,6 +6,10 @@ extends RefCounted
 ## holding action or the boss fight, the Behemoth, the depot's drill wrecks. Counts scale with the crew
 ## and difficulty.count (TankContent.crew_count). No random spawns: the mission file lists everything,
 ## so the plan builder knows every segment before the ride starts. Owner: rules (combat).
+##
+## TANK LOST (lose, restart): the field clears, the crew is towed back for hull.tow_s with nothing
+## moving, firing or spawning, then the current stage starts over with its enemies back. Rules only:
+## the plan's phase and clock run on, no directive, no replan, no lap; max_s still cuts the phase.
 
 
 ## A new segment began (TankSegments.track): clears the previous one's world and sets this one up.
@@ -14,7 +18,6 @@ extends RefCounted
 static func begin(
 	state: TankState, aux: TankAux, prev_seg: String, overran: bool, events: Array[Dictionary]
 ) -> void:
-	var hull := state.hull
 	var gl := state.gun_line
 	var barrage := overran and prev_seg == TankIds.SEG_GUN_LINE
 	if barrage:
@@ -22,11 +25,30 @@ static func begin(
 			if e.gun_line:
 				TankShells.kill_enemy(state, aux, e, TankEvents.BY_BARRAGE, -1, events)
 	gl.barrage = barrage
-	gl.guns_total = 0
-	gl.guns_left = 0
+	clear_field(state, aux)
+	state.obstacles.clear()
+	state.seg.next_near = 0
+	aux.stage_from_s = 0.0
+	aux.drill_wrecks = false
+	_clear_hull(state)
+	var towed := state.hull.tow_s > 0.0
+	state.hull.tow_s = 0.0
+	if towed:
+		_refit(state)
+	var seg := state.content.segment(state.seg.segment_index)
+	aux.drills = seg.get("drills", [])
+	_set_up(state, aux, seg, events)
+	if state.seg.seg == TankIds.SEG_COOLDOWN:
+		TankBoss.withdraw(state, aux, events)
+
+
+## Clears everything that moves off the field with no credit: enemies, shells and what the aux keeps
+## about them. Obstacles stay.
+static func clear_field(state: TankState, aux: TankAux) -> void:
+	state.gun_line.guns_total = 0
+	state.gun_line.guns_left = 0
 	state.enemies.clear()
 	state.shells.clear()
-	state.obstacles.clear()
 	aux.enemy_vx.clear()
 	aux.enemy_dist.clear()
 	aux.enemy_age.clear()
@@ -39,17 +61,31 @@ static func begin(
 	aux.near_left.clear()
 	aux.near_lane = 0
 	aux.boss_rate_mps = 0.0
-	state.seg.next_near = 0
 	aux.evade.clear()
-	aux.drill_wrecks = false
+	aux.targets.clear()
+	aux.aim_valid = false
+
+
+static func _clear_hull(state: TankState) -> void:
+	var hull := state.hull
 	hull.berm_hp = 0.0
 	hull.berm_j = 0.0
 	hull.blocked_by = 0
 	hull.traps_cleared = false
 	hull.target_id = 0
-	var c := state.content
-	var seg := c.segment(state.seg.segment_index)
-	aux.drills = seg.get("drills", [])
+
+
+## The tow is over: the hull comes back with at least hull.restart_hp_frac of its maximum.
+static func _refit(state: TankState) -> void:
+	var hull := state.hull
+	var frac := state.content.num("tanks", "hull.restart_hp_frac", 0.7)
+	hull.hp = maxf(hull.hp, hull.hp_max * frac)
+
+
+## The world of the current segment: an Advance's obstacles, a holding force, the Behemoth.
+static func _set_up(
+	state: TankState, aux: TankAux, seg: Dictionary, events: Array[Dictionary]
+) -> void:
 	match state.seg.seg:
 		TankIds.SEG_ADVANCE, TankIds.SEG_SKIRMISH:
 			for o: Variant in seg.get("obstacles", []):
@@ -61,8 +97,55 @@ static func begin(
 			_gun_line(state, aux, seg)
 		TankIds.SEG_BOSS:
 			TankBoss.start(state, aux, events)
-		TankIds.SEG_COOLDOWN:
-			TankBoss.withdraw(state, aux, events)
+
+
+## TANK LOST (the hull at 0 on Normal or Hard, TankHullRules): the tow starts, the field clears with
+## no credit and the Behemoth is gone (a boss segment's restart raises it again; a cool-down reached
+## under tow finds none to withdraw). Obstacles stay until the restart. From the next tick nothing
+## moves, fires or spawns while hull.tow_s runs.
+static func lose(state: TankState, aux: TankAux, events: Array[Dictionary]) -> void:
+	var c := state.content
+	var hull := state.hull
+	hull.hp = 0.0
+	hull.tow_s = c.num("tanks", "hull.tow_s", 8.0)
+	hull.speed_mps = 0.0
+	hull.blocked_by = 0
+	var cda := c.num("tanks", "drive.cda_m2", 0.5)
+	hull.speed_model(cda, c.num("tanks", "drive.mass_offset_kg", 8.0)).v_mps = 0.0
+	state.score.losses += 1
+	clear_field(state, aux)
+	var b := state.boss
+	b.phase = TankIds.BOSS_NONE
+	b.telegraph_s = 0.0
+	b.evaded = false
+	aux.boss_tele_total = 0.0
+	TankRoam.field_cleared(state)
+	events.append(TankEvents.tank_lost(state.score.losses, state.seg.seg, state.seg.stage))
+
+
+## The tow ended: the stage starts over. A mission's road, encounters, near list and objective go back
+## to the segment's start and its world is set up again; free roam just drives on from where it stood,
+## the field clear. The hull comes back (_refit), the rack as at the start.
+static func restart(state: TankState, aux: TankAux, events: Array[Dictionary]) -> void:
+	var c := state.content
+	var sg := state.seg
+	var hull := state.hull
+	hull.tow_s = 0.0
+	_clear_hull(state)
+	_refit(state)
+	TankStations.top_up_rack(state, int(c.num("tanks", "steam.rack_start", 0.0)))
+	if state.roam.active:
+		TankRoam.field_cleared(state)
+	else:
+		hull.distance_m = 0.0
+		hull.x_px = 0.0
+		sg.next_encounter = 0
+		sg.next_near = 0
+		sg.objective_done = false
+		aux.stage_from_s = sg.elapsed_s
+		state.obstacles.clear()
+		_set_up(state, aux, c.segment(sg.segment_index), events)
+	events.append(TankEvents.stage_restart(sg.seg, sg.stage, hull.hp))
 
 
 ## Adds an obstacle or prop of `type` with its left edge at world x `x_px`.
@@ -104,6 +187,8 @@ static func advance(state: TankState, aux: TankAux, events: Array[Dictionary]) -
 	var sg := state.seg
 	if sg.seg != TankIds.SEG_ADVANCE and sg.seg != TankIds.SEG_SKIRMISH:
 		return
+	if state.hull.tow_s > 0.0:
+		return
 	var list: Array = state.content.segment(sg.segment_index).get("encounters", [])
 	var counts := crew_counts(state, list)
 	while sg.next_encounter < list.size():
@@ -121,10 +206,12 @@ static func advance(state: TankState, aux: TankAux, events: Array[Dictionary]) -
 
 
 ## A holding action and the boss fight: near threats burst from the bushes by seconds into the segment
-## (its "near" list, {at_s, enemy, count, min_crew?}).
+## (its "near" list, {at_s, enemy, count, min_crew?}); after a restart, by seconds since the restart.
 static func near_step(state: TankState, aux: TankAux, events: Array[Dictionary]) -> void:
 	var sg := state.seg
 	if (sg.seg != TankIds.SEG_GUN_LINE and sg.seg != TankIds.SEG_BOSS) or sg.objective_done:
+		return
+	if state.hull.tow_s > 0.0:
 		return
 	var list: Array = state.content.segment(sg.segment_index).get("near", [])
 	if sg.next_near >= list.size():
@@ -132,7 +219,7 @@ static func near_step(state: TankState, aux: TankAux, events: Array[Dictionary])
 	var counts := crew_counts(state, list)
 	while sg.next_near < list.size():
 		var enc: Dictionary = list[sg.next_near]
-		if sg.elapsed_s < float(enc.get("at_s", 0.0)):
+		if sg.elapsed_s - aux.stage_from_s < float(enc.get("at_s", 0.0)):
 			return
 		for _i in counts[sg.next_near]:
 			TankNear.spawn(state, aux, str(enc.get("enemy", "")), -1, events)

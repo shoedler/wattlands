@@ -3,8 +3,8 @@ extends GutTest
 ## flips, every tick checked against the state's invariants (no NaN, bounds, caps, unique ids,
 ## the Loader's rack and Overpressure, seats). Seeded, so a failure repeats.
 
-const KINDS := ["seat", "aim", "target", "traverse", "fire", "latch", "over"]
-const TO := ["next", "prev", "diesel", "dynamo", "steam", "arc", "feed"]
+const KINDS := ["seat", "aim", "target", "fire", "latch", "over"]
+const TO := ["next", "prev", "diesel", "dynamo", "steam", "arc", "feed", "repair"]
 
 
 func _random_intent(rng: RandomNumberGenerator) -> Dictionary:
@@ -40,6 +40,7 @@ func _check(rig: TankRulesRig, label: String) -> void:
 		assert_true(
 			is_finite(e.x_px) and e.hp > 0.0 and e.hp <= e.hp_max, "%s enemy %d" % [label, e.id]
 		)
+		_check_frame(rig, e, label)
 	for sh in s.shells:
 		assert_false(ids.has(sh.id), "%s unique shell id" % label)
 		ids[sh.id] = true
@@ -71,6 +72,20 @@ func _check(rig: TankRulesRig, label: String) -> void:
 	assert_between(s.score.crew_kills, 0, 10000)
 	for r in s.riders:
 		assert_true(is_finite(r.work_s) and r.band_s <= r.work_s + 1e-6, "%s band <= work" % label)
+
+
+## v4: nothing behind the tank, far kinds in the far frame, near kinds ahead of the hull's front,
+## no enemy in a checkpoint.
+func _check_frame(rig: TankRulesRig, e: TankEnemyState, label: String) -> void:
+	var s := rig.state
+	assert_eq(e.side, 1, "%s side" % label)
+	assert_false(e.fixed, "%s no stationary gun" % label)
+	if e.is_near():
+		assert_gt(TankEnemies.distance(s, e), 0.0, "%s near threat ahead of the front" % label)
+	else:
+		assert_gt(e.range_m, 0.0, "%s far range" % label)
+		assert_lte(e.range_m, TankConst.FAR_SPAWN_M + 0.5, "%s far range" % label)
+	assert_ne(s.seg.seg, TankIds.SEG_CHECKPOINT, "%s no enemy in a checkpoint" % label)
 
 
 func _fuzz(crew: int, rng_seed: int) -> TankRulesRig:
@@ -144,6 +159,23 @@ func test_random_play_keeps_every_invariant_for_a_crew_of_3() -> void:
 	assert_gt(rig.of_type("latch").size(), 2, "shells were latched")
 	assert_gt(rig.of_type("shot").size(), 10)
 	assert_gt(rig.of_type("kill").size(), 0)
+
+
+## Every 100 ticks of a 20-minute run: the v4 frame holds, losses and restarts included.
+func test_a_twenty_minute_hard_run_keeps_the_frame() -> void:
+	for crew in [2, 4]:
+		var rig := TankRulesRig.new(crew, "ashfall_road", crew)
+		rig.state.difficulty = TankIds.DIFF_HARD
+		rig.auto_phase = true
+		rig.bank_director = true
+		rig.enter(1, 0.0)
+		for i in roundi(1200.0 / Wl.SIM_DT):
+			rig.step()
+			if i % 100 == 0:
+				_check(rig, "crew %d tick %d" % [crew, i])
+			if rig.in_cooldown():
+				break
+		assert_gt(rig.of_type("shot").size(), 10)
 
 
 func test_random_play_keeps_every_invariant_for_a_crew_of_4() -> void:

@@ -100,33 +100,6 @@ func test_elevation_slows_linearly_to_2_degrees_a_second_at_an_empty_bank() -> v
 		assert_almost_eq(rig.hull().elev_deg, rows[bank], 0.7, "bank %.0f" % bank)
 
 
-func test_a_traverse_costs_15_units_and_takes_2_5_s_at_a_full_bank_8_s_at_empty() -> void:
-	var rig := _quiet(2)
-	var dy := rig.dynamo()
-	dy.bank = 100.0
-	rig.power_w[2] = 50.0
-	assert_eq(rig.hull().facing, TankIds.FACE_RIGHT)
-	rig.send(2, {"k": "traverse"})
-	rig.run(0.1)
-	assert_almost_eq(dy.bank, 85.0, 0.01)
-	assert_almost_eq(rig.hull().traverse_s, 2.5 - 0.05, 0.06)
-	rig.run(2.6)
-	assert_eq(rig.hull().facing, TankIds.FACE_LEFT, "the facing flips when the traverse completes")
-	assert_eq(rig.hull().traverse_s, 0.0)
-	var empty := _quiet(2)
-	empty.dynamo().bank = 0.0
-	empty.power_w[2] = 50.0
-	empty.send(2, {"k": "traverse"})
-	empty.run(0.1)
-	assert_almost_eq(empty.hull().traverse_s, 8.0 - 0.05, 0.06)
-	var mid := _quiet(2)
-	mid.dynamo().bank = 25.0
-	mid.power_w[2] = 50.0
-	mid.send(2, {"k": "traverse"})
-	mid.run(0.1)
-	assert_almost_eq(mid.hull().traverse_s, 5.25 - 0.05, 0.06, "linear between 0 and 50 units")
-
-
 func test_the_depot_fills_the_bank_on_a_script() -> void:
 	var rig := TankRulesRig.new(2)
 	rig.enter(DEPOT, 5.0)

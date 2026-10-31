@@ -25,6 +25,14 @@ const DRILL := [
 	["skirmish", "WARMUP", 70.0, 0.0, 0.0],
 	["checkpoint", "RECOVERY", 30.0, 0.0, 0.0],
 ]
+## v4: SPEC_TANK 3.8.
+const AMBUSH := [
+	["depot", "WARMUP", 300.0, 0.0, 0.0],
+	["advance", "WORK", 120.0, 80.0, 160.0],
+	["gun_line", "WORK", 90.0, 60.0, 120.0],
+	["checkpoint", "RECOVERY", 60.0, 0.0, 0.0],
+	["boss", "WORK", 150.0, 100.0, 190.0],
+]
 
 
 func _plans(content_id: String, crew: int) -> Dictionary:
@@ -99,8 +107,9 @@ func _warmup_ok(plan: EffortPlan) -> bool:
 ## Each segment's type, kind, duration_s, min_s and max_s exactly as the brief's table, in the
 ## mission file and in every rider's plan.
 func test_every_segment_matches_the_brief_table() -> void:
-	for mission: String in ["ashfall_road", "drill"]:
-		var want: Array = ASHFALL if mission == "ashfall_road" else DRILL
+	var tables := {"ashfall_road": ASHFALL, "drill": DRILL, "ambush_15": AMBUSH}
+	for mission: String in tables:
+		var want: Array = tables[mission]
 		var segs := _content(mission).segments()
 		assert_eq(segs.size(), want.size(), mission)
 		for i in want.size():
@@ -122,6 +131,66 @@ func test_every_segment_matches_the_brief_table() -> void:
 					var w: Array = want[i]
 					var got := [ph.kind, ph.duration_s, ph.min_s, ph.max_s, ph.lap]
 					assert_eq(got, [w[1], w[2], w[3], w[4], true], "%s %d.%d" % [mission, peer, i])
+
+
+## v4 (SPEC_TANK 3.5): nothing in a plan moves with the difficulty: the plan builder never reads it.
+func test_the_plans_are_identical_on_every_difficulty_for_every_content() -> void:
+	for content_id: String in F.manifest()["contents"]:
+		for crew in [1, 4]:
+			var want := {}
+			for d: String in [TankIds.DIFF_AUTO, TankIds.DIFF_EASY, TankIds.DIFF_HARD]:
+				var ctx := F.make_ctx(crew, 0, content_id)
+				ctx.options["difficulty"] = d
+				var game: TankGame = autofree(F.make_game(ctx))
+				var plans := game.build_effort_plans()
+				for peer: int in plans:
+					var dump: Dictionary = (plans[peer] as EffortPlan).to_dict()
+					if want.has(peer):
+						assert_eq(dump, want[peer], "%s crew %d %s" % [content_id, crew, d])
+					want[peer] = dump
+
+
+## v4: every content's table holds the Repairs seat, inside the seat's envelope (ERG 55-70 %, BRIEF
+## 4.6.8's 65 % in a warm-up).
+func test_every_content_has_a_repairs_plan_on_every_segment() -> void:
+	for content_id: String in F.manifest()["contents"]:
+		var c := _content(content_id)
+		for s: Variant in c.segments():
+			var e := c.plan_entry(TankIds.ENGINE_REPAIR, str(s["type"]))
+			assert_false(e.is_empty(), "%s %s" % [content_id, s["type"]])
+			assert_eq(str(e.get("mode", "")), Wl.ERG, "%s %s" % [content_id, s["type"]])
+			var top := float(e.get("target_pct", 0.0))
+			top = maxf(top, float(e.get("ramp_to_pct", 0.0)))
+			if e.get("range_pct") is Array:
+				top = maxf(top, float(e["range_pct"][1]))
+			var cap := 70.0 if str(s.get("kind", "")) == Wl.WORK else 65.0
+			assert_lte(top, cap, "%s %s" % [content_id, s["type"]])
+
+
+## v4: Ambush's 15 minutes (SPEC_TANK 3.8): nominal 900 s, 780 s at the min_s, 1010 s at the max_s.
+func test_ambush_15_is_fifteen_minutes_and_six_laps() -> void:
+	var nominal := 180.0
+	var lo := 180.0
+	var hi := 180.0
+	for w: Array in AMBUSH:
+		nominal += float(w[2])
+		lo += float(w[3]) if float(w[3]) > 0.0 else float(w[2])
+		hi += float(w[4]) if float(w[4]) > 0.0 else float(w[2])
+	assert_eq(nominal, 900.0)
+	assert_eq(lo, 780.0)
+	assert_eq(hi, 1010.0)
+	for crew in [1, 2, 3, 4]:
+		var plans := _plans("ambush_15", crew)
+		for peer: int in plans:
+			var plan: EffortPlan = plans[peer]
+			var laps := 0
+			for i in plan.size():
+				if plan.phase(i).lap:
+					laps += 1
+			assert_eq(
+				laps, 5, "crew %d: five segments; the platform's cool-down is the sixth" % crew
+			)
+			assert_eq(plan.nominal_length_s(), 720.0, "crew %d: 900 s with the cool-down" % crew)
 
 
 ## The drill (brief 2.9): 130 s, at most one ERG <-> SIM switch per rider (the cool-down included),

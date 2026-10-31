@@ -66,6 +66,9 @@ static func fire(state: TankState, aux: TankAux, dt: float, events: Array[Dictio
 			TankNear.fire(state, aux, e, def, dt, events)
 		else:
 			TankFar.fire(state, aux, e, def, dt, events)
+		if state.hull.tow_s > 0.0:
+			# A shot at the shell cap resolved at once and lost the tank: the field is clear.
+			return
 
 
 ## A shot's hit chance before the driver's evasive factor (launch and launch_far apply that):
@@ -191,34 +194,3 @@ static func launch(
 	s.source = src_id
 	state.shells.append(s)
 	aux.shell_left[sid] = flight
-
-
-# --- Until the free-roam rewrite (SPEC_TANK 3.9): tank_roam.gd still names these, part two deletes them.
-
-
-static func clamp_hold(_state: TankState, _w: int, _side: int, hold: float) -> float:
-	return hold
-
-
-static func reserve_hold(
-	_state: TankState, _aux: TankAux, _e: TankEnemyState, _want: float, _lane: int
-) -> void:
-	pass
-
-
-## Far kinds through TankFar (a dug-in is a heavy now), near kinds through TankNear.
-static func spawn(
-	state: TankState,
-	aux: TankAux,
-	type: String,
-	_side: int,
-	_hold: float,
-	_fixed: bool,
-	gun_line: bool,
-	encounter: int
-) -> TankEnemyState:
-	if TankIds.NEAR_KINDS.has(type):
-		var ignored: Array[Dictionary] = []
-		return TankNear.spawn(state, aux, type, encounter, ignored)
-	var kind := TankIds.ENEMY_HEAVY if type == TankIds.ENEMY_DUGIN else type
-	return TankFar.spawn(state, aux, kind, -1.0, gun_line, encounter)

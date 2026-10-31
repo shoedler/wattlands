@@ -7,9 +7,10 @@ extends RefCounted
 ##   band       crew mean of each rider's WORK time in band / WORK time (0 with no WORK time)
 ##   accuracy   main-gun hits / shots, 0 when no shot was fired
 ##   objectives stage_frac x stages completed without overrun / stages + boss_frac if the
-##              Behemoth died
-##   survival   max(0, 1 - survival_per_breakdown x breakdowns)
-## Grades: S >= 900, A >= 800, B >= 650, C >= 500, else D. XP = round(kJ / 10) + grade bonus.
+##              Behemoth died (stages: the mission's score_stages, default scoring.json's)
+##   survival   max(0, 1 - survival_per_breakdown x breakdowns - survival_per_loss x losses)
+## Grades: S >= 900, A >= 800, B >= 650, C >= 500, else D; any loss caps it at loss_grade_cap (A).
+## XP = round(kJ / 10) + grade bonus.
 
 
 ## {score, grade, band, accuracy, objectives, survival} for the crew.
@@ -23,13 +24,18 @@ static func summary(state: TankState) -> Dictionary:
 	band = band / n if n > 0 else 0.0
 	var sc := state.score
 	var accuracy: float = float(sc.hits) / sc.shots if sc.shots > 0 else 0.0
-	var stages := c.num("scoring", "objectives.stages", 3.0)
+	var stages := float(c.mission().get("score_stages", c.num("scoring", "objectives.stages", 3.0)))
 	var objectives := (
 		c.num("scoring", "objectives.stage_frac", 0.6) * minf(sc.stages_clean, stages) / stages
 		+ (c.num("scoring", "objectives.boss_frac", 0.4) if sc.behemoth_killed else 0.0)
 	)
 	var survival := maxf(
-		0.0, 1.0 - c.num("scoring", "survival_per_breakdown", 0.25) * sc.breakdowns
+		0.0,
+		(
+			1.0
+			- c.num("scoring", "survival_per_breakdown", 0.25) * sc.breakdowns
+			- c.num("scoring", "survival_per_loss", 0.35) * sc.losses
+		)
 	)
 	var score := (
 		c.num("scoring", "scale", 1000.0)
@@ -42,7 +48,7 @@ static func summary(state: TankState) -> Dictionary:
 	)
 	return {
 		"score": score,
-		"grade": grade_of(c, score),
+		"grade": _capped(c, grade_of(c, score), sc.losses),
 		"band": band,
 		"accuracy": accuracy,
 		"objectives": objectives,
@@ -57,6 +63,15 @@ static func grade_of(c: TankContent, score: float) -> String:
 	return "D"
 
 
+## Any loss caps the grade at scoring.json loss_grade_cap (S needs none); never lifts a lower one.
+static func _capped(c: TankContent, grade: String, losses: int) -> String:
+	if losses <= 0:
+		return grade
+	var order := TankContentSchema.GRADES
+	var cap := str(c.value("scoring", "loss_grade_cap", "A"))
+	return order[maxi(order.find(grade), order.find(cap))]
+
+
 static func xp(c: TankContent, kj: float, grade: String) -> int:
 	return (
 		roundi(kj / c.num("scoring", "xp.kj_per_xp", 10.0))
@@ -65,7 +80,7 @@ static func xp(c: TankContent, kj: float, grade: String) -> int:
 
 
 ## The unlock ids a session earned (cosmetics.json order): finish, grade (min_grade or better),
-## behemoth_no_breakdown. `finished` is false for a run cut short (timeout or pause).
+## behemoth_no_breakdown (no loss either). `finished` is false for a run cut short (timeout or pause).
 static func unlocks(state: TankState, grade: String, finished: bool) -> Array[String]:
 	var out: Array[String] = []
 	if not finished:
@@ -79,7 +94,11 @@ static func unlocks(state: TankState, grade: String, finished: bool) -> Array[St
 			"grade":
 				ok = order.find(grade) <= order.find(str(u.get("min_grade", "S")))
 			"behemoth_no_breakdown":
-				ok = state.score.behemoth_killed and state.score.breakdowns == 0
+				ok = (
+					state.score.behemoth_killed
+					and state.score.breakdowns == 0
+					and state.score.losses == 0
+				)
 		if ok:
 			out.append(str(u["id"]))
 	return out

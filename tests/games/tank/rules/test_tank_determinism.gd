@@ -66,13 +66,10 @@ func _capped() -> TankRulesRig:
 
 
 func _top_up(rig: TankRulesRig) -> void:
-	var aux := TankAux.of(rig.state)
 	var i := 0
 	while rig.state.enemies.size() < TankConst.MAX_ENEMIES:
-		var type: String = TankIds.ENEMY_TYPES[i % 5]
-		var e := TankEnemies.spawn(
-			rig.state, aux, type, -1 if i % 4 == 0 else 1, -1.0, false, false, 0
-		)
+		var type: String = TankIds.ENEMY_TYPES[i % TankIds.ENEMY_TYPES.size()]
+		var e := rig.spawn(type)
 		e.hp = 100000.0
 		e.hp_max = 100000.0
 		e.mode = TankIds.EM_HOLD

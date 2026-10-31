@@ -15,7 +15,8 @@ extends RefCounted
 ## back in that order. Everything is split by topic over rules/ and combat/; the signatures here
 ## (new_state, step, in_band) are the module's contract. Free roam (brief 2.10, TankRoam) adds its
 ## turn, time up, strongpoints and patrols before the drive, and its points, engagement halt and
-## time-up finish at the end.
+## time-up finish at the end. v4: a lost tank's tow counts down right after the riders are read; when
+## it ends the stage restarts (TankEncounters.restart), the plan's phase and clock untouched.
 
 
 ## A fresh state (TankState.create) for `players` (ctx.players order) on `mission`, with the
@@ -42,6 +43,10 @@ static func step(state: TankState, inputs: TankInputs, dt: float) -> Array[Dicti
 	TankSeats.step(state, inputs, events)
 	_update_riders(state, inputs, dt)
 	state.hull.breech_s = maxf(state.hull.breech_s - dt, 0.0)
+	if state.hull.tow_s > 0.0:
+		state.hull.tow_s = maxf(state.hull.tow_s - dt, 0.0)
+		if state.hull.tow_s <= 0.0:
+			TankEncounters.restart(state, aux, events)
 	TankRoam.pre(state, inputs, aux, dt, events)
 	TankEncounters.advance(state, aux, events)
 	TankEncounters.near_step(state, aux, events)

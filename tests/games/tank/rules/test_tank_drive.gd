@@ -292,7 +292,8 @@ func test_the_berm_clears_when_the_segment_ends() -> void:
 
 func test_zero_hp_is_a_breakdown_that_ignores_damage_until_5_kj_repair_it() -> void:
 	var rig := _sprint_rig()
-	rig.hull().hp = 5.0
+	rig.state.difficulty = TankIds.DIFF_EASY
+	rig.hull().hp = 3.0
 	var events: Array[Dictionary] = []
 	TankHullRules.hit(rig.state, 12.0, TankIds.SHELL_ENEMY, 300.0, events)
 	assert_true(rig.hull().breakdown)
@@ -318,6 +319,7 @@ func test_zero_hp_is_a_breakdown_that_ignores_damage_until_5_kj_repair_it() -> v
 func test_repair_time_is_12_to_30_seconds_across_the_p_eff_range() -> void:
 	for w: float in [417.0, 250.0, 167.0]:
 		var rig := _sprint_rig()
+		rig.state.difficulty = TankIds.DIFF_EASY
 		rig.p_eff[1] = w
 		rig.hull().hp = 1.0
 		var events: Array[Dictionary] = []
@@ -328,6 +330,7 @@ func test_repair_time_is_12_to_30_seconds_across_the_p_eff_range() -> void:
 
 func test_the_repair_is_paid_by_the_reserve_when_the_driver_is_afk() -> void:
 	var rig := _sprint_rig(2)
+	rig.state.difficulty = TankIds.DIFF_EASY
 	rig.hull().hp = 1.0
 	TankHullRules.hit(rig.state, 5.0, TankIds.SHELL_ENEMY, 0.0, [])
 	rig.afk[1] = true
@@ -339,6 +342,7 @@ func test_the_repair_is_paid_by_the_reserve_when_the_driver_is_afk() -> void:
 ## v3: the crew works the repair: the mean P_eff of the manned seats, whatever seats they are.
 func test_the_crew_pays_the_repair_with_its_mean_p_eff() -> void:
 	var rig := _sprint_rig(2)
+	rig.state.difficulty = TankIds.DIFF_EASY
 	rig.p_eff[1] = 300.0
 	rig.p_eff[2] = 100.0
 	rig.hull().hp = 1.0

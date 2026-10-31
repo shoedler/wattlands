@@ -48,7 +48,9 @@
 		"hp": 150,
 		"checkpoint_hp": 30,
 		"repair_j": 5000,
-		"repair_hp": 40
+		"repair_hp": 40,
+		"tow_s": 8,
+		"restart_hp_frac": 0.7
 	},
 	"drive": {
 		"cda_m2": 0.5,

@@ -94,6 +94,9 @@ static func step(state: TankState, aux: TankAux, dt: float, events: Array[Dictio
 		b.main_s = _roll(state, main.get(key, [35, 45]))
 		b.telegraph_s = 0.0
 		aux.boss_tele_total = 0.0
+		if state.hull.tow_s > 0.0:
+			# The shot resolved at once at the shell cap and lost the tank.
+			return
 	var sec: Dictionary = def.get("secondary", {})
 	b.secondary_s -= dt
 	if b.secondary_s <= 0.0:

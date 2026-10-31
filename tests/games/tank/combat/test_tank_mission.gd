@@ -403,3 +403,49 @@ func test_min_crew_entries_skip_the_smaller_crews() -> void:
 	(bad["mission"]["segments"][2]["enemies"][0] as Dictionary)["min_crew"] = 5
 	var errors := TankContentSchema.validate_mission(bad["mission"], "ashfall_road")
 	assert_true(", ".join(errors).contains("min_crew"), ", ".join(errors))
+
+
+# --- Ambush (SPEC_TANK 3.8) -----------------------------------------------------------------------
+
+
+func test_ambush_15_defaults_to_hard_and_lists_its_enemies() -> void:
+	var c := TankFixtures.content("ambush_15")
+	assert_true(c.ok(), "; ".join(c.errors))
+	assert_eq(TankDifficulty.resolve("auto", c), TankIds.DIFF_HARD)
+	assert_eq(TankDifficulty.resolve("easy", c), TankIds.DIFF_EASY, "the host's choice wins")
+	var adv := c.segment(1)
+	assert_eq(float(adv["length_m"]), 700.0)
+	var enemies: Array = (adv["encounters"] as Array).map(
+		func(e: Dictionary) -> Array: return [float(e["at_m"]), str(e["enemy"])]
+	)
+	assert_eq(
+		enemies,
+		[
+			[35.0, "medium"],
+			[105.0, "recon"],
+			[210.0, "light"],
+			[315.0, "destroyer"],
+			[420.0, "tankette"],
+			[525.0, "medium"]
+		]
+	)
+	var hold := c.segment(2)
+	assert_eq(str(hold["enemies"][0]["enemy"]), "heavy")
+	assert_eq(hold["enemies"][1]["hold_m"], [1100.0, 1350.0])
+	assert_eq((hold["near"] as Array).size(), 2)
+	assert_eq((c.segment(4)["near"] as Array).size(), 2)
+	assert_eq(float(c.segment(4)["end_hold_s"]), 7.5)
+	var stages: Array = c.segments().map(func(s: Dictionary) -> int: return int(s["stage"]))
+	assert_eq(stages, [0, 1, 1, 1, 4])
+
+
+func test_ambush_15_plays_to_the_cool_down_on_every_difficulty() -> void:
+	for d: String in TankIds.DIFFICULTIES:
+		var rig := TankRulesRig.new(3, "ambush_15", 2)
+		rig.state.difficulty = d
+		rig.auto_seat = true
+		rig.bank_director = true
+		var t := rig.play(1.0, 1100.0)
+		assert_true(rig.in_cooldown(), d)
+		assert_lt(t, 835.0, "%s: 830 s at the max_s before the 180 s cool-down" % d)
+		assert_has([TankIds.OUTCOME_VICTORY, TankIds.OUTCOME_WITHDRAWN], rig.state.outcome, d)

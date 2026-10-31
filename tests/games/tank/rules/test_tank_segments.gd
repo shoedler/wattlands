@@ -121,7 +121,7 @@ func test_an_advance_is_done_at_the_halt_line_and_holds_until_min_s() -> void:
 
 
 func test_a_gun_line_is_done_when_every_gun_has_fallen() -> void:
-	var rig := TankRulesRig.new(1)
+	var rig := TankRulesRig.new(2)
 	rig.enter(GUN_LINE, 1.0)
 	var aux := TankAux.of(rig.state)
 	assert_false(rig.state.seg.objective_done)

@@ -23,6 +23,9 @@ static func step(state: TankState, aux: TankAux, dt: float, events: Array[Dictio
 			alive = _fly_friendly(state, aux, s, dt, events)
 		else:
 			alive = _fly_enemy(state, aux, s, dt, events)
+		if state.shells.is_empty():
+			# That shell lost the tank: TankEncounters.lose cleared the field, the rest with it.
+			return
 		if alive:
 			keep.append(s)
 	state.shells = keep
