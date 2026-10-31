@@ -81,38 +81,82 @@ func _assert_handed_back(state: Dictionary, what: String) -> void:
 	assert_false(state["reset_due"], "%s: the reset is done" % what)
 
 
+const STOPS_AT_20_S := "erg+cadence_drop:rpm=0,at_s=20"
+const STEPS_TO_PAUSE := 1200
+const STEPS_TO_SURGE := 800
+
+
 func _spec_for(state: String) -> String:
-	return "erg+cadence_drop:rpm=35,at_target_pct=60,for_s=30" if state == "rescue" else "erg"
+	match state:
+		"rescue":
+			return "erg+cadence_drop:rpm=35,at_target_pct=60,for_s=30"
+		"surge":
+			return "erg+surge:every_s=30,for_s=4,lift=0.3"
+		"auto_pause", "shared_pause":
+			return STOPS_AT_20_S
+	return "erg"
 
 
-## Puts `s` in `state`; `step` advances the whole session one step.
+func _speed(s: AppSessionScreen) -> float:
+	return float((s.local_rider().device as MockTrainer).last_sample().speed_kmh)
+
+
+## Puts `s` in `state`, the rider's way there, and fails the row unless it is in it when the way out
+## is picked. `step` advances the whole session one step.
 func _reach(s: AppSessionScreen, state: String, step: Callable) -> void:
 	for _i in 300:
 		step.call()
+	var r := s.local_rider()
+	var base := _speed(s)
 	match state:
 		"pause":
 			s.feed_action(&"pause")
 		"panic":
 			s.panic()
+		"auto_pause", "shared_pause":
+			_step_until(step, STEPS_TO_PAUSE, func() -> bool: return s.host.is_paused())
 		"rescue":
-			var r := s.local_rider()
-			var n := 0
-			while not r.governor.is_rescue() and n < MAX_RESCUE_STEPS:
-				step.call()
-				n += 1
-			assert_true(r.governor.is_rescue(), "the rescue began")
+			_step_until(step, MAX_RESCUE_STEPS, func() -> bool: return r.governor.is_rescue())
+		"surge":
+			_step_until(step, STEPS_TO_SURGE, func() -> bool: return _speed(s) > base * 1.1)
 	for _i in 5:
 		step.call()
+	match state:
+		"riding":
+			assert_eq(s.host.state, "running", "the row is riding")
+			assert_false(s.overlay.visible, "the row is riding")
+		"pause":
+			assert_true(s.host.is_paused(), "the row is paused")
+			assert_false(s.auto_paused(), "by the rider")
+		"auto_pause":
+			assert_true(s.host.is_paused(), "the row is paused")
+			assert_true(s.auto_paused(), "on not pedaling")
+		"shared_pause":
+			assert_true(s.host.is_paused(), "the shared pause: role %s" % s.role)
+			assert_true(r.is_ride_paused(), "this rider stopped")
+		"panic":
+			assert_true(r.governor.is_panic(), "the row is in a panic")
+		"rescue":
+			assert_true(r.governor.is_rescue(), "the row is in a rescue")
+		"surge":
+			assert_gt(_speed(s), base * 1.1, "the row is in a surge")
+
+
+func _step_until(step: Callable, max_steps: int, done: Callable) -> void:
+	var n := 0
+	while not done.call() and n < max_steps:
+		step.call()
+		n += 1
 
 
 func _way_out(s: AppSessionScreen, way: String) -> void:
 	if not s.overlay.visible:
 		s.open_menu()
 	if way == "end":
-		s.pick_id("end")
+		assert_true(s.pick_id("end"), "End is on the menu")
 	else:
-		s.pick_id("discard")
-		s.pick_id("yes")
+		assert_true(s.pick_id("discard"), "Discard is on the menu")
+		assert_true(s.pick_id("yes"), "the confirm opened")
 
 
 ## The state just after the screen leaves, and 10 s of menu time later.
@@ -146,7 +190,7 @@ func _solo_run(way: String, state: String) -> Dictionary:
 
 
 func test_solo_a_discard_leaves_the_trainer_as_end_does() -> void:
-	for state: String in ["riding", "pause", "panic", "rescue"]:
+	for state: String in ["riding", "pause", "auto_pause", "panic", "rescue", "surge"]:
 		var ended := _solo_run("end", state)
 		var discarded := _solo_run("discard", state)
 		assert_eq(ended["app"], "results", state)
@@ -182,13 +226,18 @@ func _player_info(f: AppFixture, net: WlNetSession, games: Dictionary) -> void:
 	)
 
 
+## The shared pause needs every human rider stopped; the other states are the acting rider's own.
+func _room_spec(state: String, acting: bool) -> String:
+	return _spec_for(state) if acting or state == "shared_pause" else "erg"
+
+
 ## One rider of a two-rider room ends or discards from `state`; {} if the room did not start.
 func _room_run(who: String, way: String, state: String) -> Dictionary:
 	var registry := get_tree().root.get_node("GameRegistry") as WlGameRegistry
 	var games := AppLobbyModel.installed_games(registry)
 	var hub: RefCounted = LoopbackTransport.create_hub()
 	var hf := _new_fixture(220.0, "Host")
-	var hsvc := _real(hf, _spec_for(state) if who == "host" else "erg")
+	var hsvc := _real(hf, _room_spec(state, who == "host"))
 	var hnet := _loop_net(hub, "HostNet")
 	hf.services.net = hnet
 	_player_info(hf, hnet, games)
@@ -199,7 +248,7 @@ func _room_run(who: String, way: String, state: String) -> Dictionary:
 	hnet.set_game("workout", str(registry.manifest("workout").get("version", "")), "e2e")
 	hnet.set_ready(true)
 	var cf := _new_fixture(200.0, "Guest")
-	var csvc := _real(cf, _spec_for(state) if who == "client" else "erg")
+	var csvc := _real(cf, _room_spec(state, who == "client"))
 	var cnet := _loop_net(hub, "ClientNet")
 	cf.services.net = cnet
 	_player_info(cf, cnet, games)
@@ -284,13 +333,14 @@ func _room_case(who: String, state: String) -> void:
 
 
 func test_host_a_discard_leaves_the_trainers_as_end_does() -> void:
-	for state: String in ["riding", "pause", "panic", "rescue"]:
+	for state: String in ["riding", "shared_pause", "panic", "rescue", "surge"]:
 		_room_case("host", state)
 
 
-## A client has no pause of its own (BRIEF 4.6.4: multiplayer riders go AFK).
+## In a room no rider pauses by choice (GameHost.pause() is SOLO only). The session pauses when
+## every human rider has stopped (_update_shared_pause), and a client follows it from the roster.
 func test_client_a_discard_leaves_the_trainer_as_leave_does() -> void:
-	for state: String in ["riding", "panic", "rescue"]:
+	for state: String in ["riding", "shared_pause", "panic", "rescue", "surge"]:
 		_room_case("client", state)
 
 
