@@ -15,7 +15,7 @@ Commands that drive the trainer pass `--allow-hw` to the wrapper (`tools/godot.p
 
 ## 2. Rescue in a work interval
 
-- [ ] In Endurance 2 (65% FTP, above the 60% rescue threshold), drop below 45 rpm for 3 s. Expected: the target drops to 50% FTP, the rescue banner shows, your rider sits up with the rescue bubble over its head and its whip pennant hanging, your crew card reads `RESCUE`, and the time in band stops rising. Hold 70 rpm for 3 s: the target ramps back over 10 s, the rider goes back to the seated pose and the pennant lifts.
+- [ ] In Endurance 2 (65% FTP, above the 60% rescue threshold), drop below 45 rpm for 3 s. Expected: the target drops to 50% FTP, the rescue banner shows, your rider sits up with the rescue bubble over its head and its whip pennant hanging, your crew card reads `RESCUE`, the instruction line reads `SPIN`, and the time in band stops rising. Hold 70 rpm for 3 s: the target ramps back over 10 s, the rider goes back to the seated pose and the pennant lifts.
 
 ## 3. VO2, 5 minutes from the first interval
 
