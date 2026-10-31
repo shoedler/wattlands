@@ -1073,12 +1073,16 @@ func test_a_full_crew_keeps_every_lead_stroke_and_thins_only_the_others() -> voi
 			if lead_sounds.has(id):
 				heard += 1
 		assert_gt(heard, 0, lead_seat)
-		assert_lte(heard, voice.fired, "%s: at most what it planned" % lead_seat)
+		assert_eq(heard, voice.fired, "%s: every stroke it planned" % lead_seat)
 		assert_eq(voice.dropped, 0, "%s: none dropped" % lead_seat)
-		assert_gte(
-			heard, voice.fired - 2, "%s: all of them, bar the seam of a shared id" % lead_seat
-		)
 		assert_almost_eq(voice.planned_to(), float(revs[lead_seat]), 0.3, lead_seat)
+		if lead_seat == "drive":
+			# And what it planned is the pattern, exactly: the first seat's revs start at 0.
+			assert_eq(
+				a.played.count("diesel_fire_a"),
+				_pattern_count(0.2778, voice.planned_to()),
+				"one per revolution of cylinder a"
+			)
 		assert_gt(a.kit.thinned, 0, "%s: a crew at 110 rpm asks more than the cap" % lead_seat)
 
 

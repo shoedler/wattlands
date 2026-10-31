@@ -53,8 +53,8 @@ Short ADRs for Diesel Domestiques' sound on the audio kit. "SPEC" is the run's S
 ## 2026-10-31 Levels: working harder brightens every seat, within the fatigue rule
 
 - Decision: the review's levels for the arc, dynamo and feed, except `link_clink`, which stays 16 dB under the feed's main stroke. The review's -11 breaks SPEC 5's fatigue rule, which `test_nothing_locked_above_two_kilohertz_outshouts_its_machine` holds, so it is -17. Repair: `rivet_ring` -7 by power, the compressor flatter.
-- Numbers, power 0.5 to 1.2 at 90 rpm, power-weighted centroid: diesel +101 %, dynamo +32 %, steam +36 %, arc +48 %, feed +13 %, repair about +28 %. Solo peaks at power 1.2: dynamo -0.0 dBFS reaches the limiter ceiling alone at the top of the range; feed -1.4.
-- Reason: a seat you stay on should answer your legs. The feed lands short of the review's look at the same +10 % goal only by the margin the fatigue rule costs, so it stays there.
+- Numbers, power 0.5 to 1.2 at 90 rpm, power-weighted centroid: diesel +101 %, dynamo +34 %, steam +36 %, arc +48 %, feed +13 %, repair +30 %. `cap_dump` comes down 1 dB, because the dynamo alone reached 0 dBFS at power 1.2.
+- Reason: a seat you stay on should answer your legs.
 
 ## 2026-10-31 An overrun's barrage rolls
 
