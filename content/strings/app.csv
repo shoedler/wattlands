@@ -98,6 +98,14 @@ APP_SESSION_RESUME,Resume
 APP_SESSION_RESUME_TRAINER,Resume the trainer
 APP_SESSION_END,End the ride
 APP_SESSION_LEAVE,Leave the ride
+APP_SESSION_DISCARD,Discard the ride
+APP_SESSION_DISCARD_TITLE,Discard the ride?
+APP_SESSION_DISCARD_DETAIL,Nothing from this ride is kept.
+APP_SESSION_DISCARD_DETAIL_CLIENT,Nothing from your ride is kept. The others ride on.
+APP_SESSION_DISCARD_DETAIL_HOST,"Nothing from your ride is kept. The session ends for everyone, and the others keep their results and rides."
+APP_SESSION_DISCARD_HOW,Pick Yes with the keyboard or gamepad. The pedals can't.
+APP_SESSION_DISCARD_KEEP,Keep riding
+APP_SESSION_DISCARD_YES,"Yes, discard"
 APP_SESSION_ERROR_TITLE,Can't start
 APP_SESSION_SETUP_FAILED,The session could not start: {0}
 APP_RESULTS_TITLE,{0}: results

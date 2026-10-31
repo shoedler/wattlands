@@ -520,7 +520,7 @@ func test_overlay_panic() -> void:
 	assert_eq((fx.trainer.local_rider() as FakeRider).panics, 1)
 	assert_true(s.panicked)
 	assert_true(s.overlay.visible)
-	assert_eq(menu(s).ids(), ["resume_trainer", "end"])
+	assert_eq(menu(s).ids(), ["resume_trainer", "end", "discard"])
 	confirm_pick(s, "resume_trainer")
 	assert_false(s.panicked)
 
