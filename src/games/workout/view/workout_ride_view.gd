@@ -729,7 +729,9 @@ func _place(
 	m["grey"] = grey_of(r)
 	m["bubble"] = bubble_of(r)
 	m["blink"] = floori(env_t * BLINK_HZ * 2.0) % 2
-	m["flutter"] = floori(shown * FLUTTER_PER_M * 2.0) % 2
+	# A flag at rest hangs still, whatever the bike does.
+	var limp := r.rescue or r.afk or not r.connected
+	m["flutter"] = 0 if limp else floori(shown * FLUTTER_PER_M * 2.0) % 2
 	m["dust"] = _dust(m, r, state, shown)
 
 
