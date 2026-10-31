@@ -87,8 +87,9 @@ func _sheet(name: String, size: Vector2i, scale: int, fill: Callable) -> void:
 func _run() -> void:
 	_sheet("lineup_960", Vector2i(960, 540), 1, _lineup)
 	_sheet("kinds_3x", Vector2i(470, 330), 3, _kinds)
+	_sheet("sil_1x", Vector2i(700, 260), 2, _sil)
 	_sheet("wrecks_3x", Vector2i(470, 330), 3, _wrecks)
-	_sheet("motion_3x", Vector2i(470, 310), 3, _motion)
+	_sheet("motion_3x", Vector2i(760, 340), 2, _motion)
 	_sheet("far_852", Vector2i(286, 480), 2, _far852)
 	_sheet("bushes_3x", Vector2i(330, 80), 3, _bushes)
 	_sheet("cap_cost", Vector2i(960, 540), 1, _cap)
@@ -161,14 +162,26 @@ func _lineup(st: Stage, vp: SubViewport) -> void:
 	if fg != null:
 		st.bg.append([fg, Rect2(630, 320, 330, 170), true])
 	_hero(vp, st, Vector2(18, g - 209.0))
-	st.calls.append(["recon", Vector2(556, g), {"travel": 3.0, "turret_sx": -1.0}])
-	st.calls.append(["tankette", Vector2(525, g - 12.0), {"travel": 1.0, "turret_sx": -1.0}])
+	st.calls.append(["recon", Vector2(572, g), {"travel": 3.0, "turret_sx": -1.0}])
+	st.calls.append(["tankette", Vector2(508, g - 14.0), {"travel": 1.0, "turret_sx": -1.0}])
 	st.bg.append([Color(0.2, 0.2, 0.2), Rect2(622, 0, 8, 540)])
-	st.calls.append(["destroyer", Vector2(905, 374), {"haze": 0.36, "travel": 2.0}])
-	st.calls.append(["heavy", Vector2(800, 380), {"haze": 0.24, "travel": 2.0, "elev_deg": 6.0}])
-	st.calls.append(["medium", Vector2(700, 386), {"haze": 0.16, "travel": 1.0, "elev_deg": 5.0}])
-	st.calls.append(["light", Vector2(660, 400), {"haze": 0.12, "travel": 1.0}])
-	st.calls.append(["behemoth", Vector2(770, 300), {"haze": 0.2, "travel": 1.0, "bogies_wrecked": [false, true, false]}])
+	# the far panel as the view stands them, back to front, on the ground band; the haze is the field's
+	st.calls.append(["behemoth", Vector2(800, 356), {"haze": 0.16, "travel": 1.0, "bogies_wrecked": [false, true, false]}])
+	st.calls.append(["destroyer", Vector2(880, 378), {"haze": 0.46, "travel": 2.0}])
+	st.calls.append(["heavy", Vector2(780, 396), {"haze": 0.3, "travel": 2.0, "elev_deg": 6.0}])
+	st.calls.append(["medium", Vector2(880, 420), {"haze": 0.22, "travel": 1.0, "elev_deg": 5.0}])
+	st.calls.append(["light", Vector2(690, 430), {"haze": 0.14, "travel": 1.0}])
+
+
+## Every kind as a filled shape at 1x, front to the left: what must tell them apart at 0.2 s.
+func _sil(st: Stage, _vp: SubViewport) -> void:
+	var white := {"flash": 1.0}
+	var rows := [
+		["light", Vector2(60, 60)], ["medium", Vector2(190, 70)], ["heavy", Vector2(370, 84)], ["destroyer", Vector2(570, 66)],
+		["tankette", Vector2(50, 200)], ["recon", Vector2(140, 210)], ["behemoth", Vector2(400, 250)],
+	]
+	for r: Array in rows:
+		st.calls.append([r[0], r[1], white])
 
 
 func _kinds(st: Stage, _vp: SubViewport) -> void:
@@ -197,15 +210,16 @@ func _wrecks(st: Stage, _vp: SubViewport) -> void:
 func _motion(st: Stage, _vp: SubViewport) -> void:
 	var bump := func(x: float) -> float: return 60.0 + 3.0 * sin(x * 0.2)
 	for i in 4:
-		st.calls.append(["medium", Vector2(70 + i * 110, 60), {"travel": float(i) * 1.0}])
+		st.calls.append(["medium", Vector2(80 + i * 170, 60), {"travel": float(i) * 1.0}])
 	for i2 in 4:
-		st.calls.append(["light", Vector2(55 + i2 * 110, 110), {"turret_sx": 1.0 - i2 * 0.66, "elev_deg": i2 * 4.0}])
+		st.calls.append(["light", Vector2(70 + i2 * 170, 110), {"turret_sx": 1.0 - i2 * 0.66, "elev_deg": i2 * 4.0}])
 	for i3 in 4:
-		st.calls.append(["medium", Vector2(70 + i3 * 110, 170), {"recoil": float(i3) * 2.0, "flash": 0.25 * i3, "elev_deg": 8.0}])
+		st.calls.append(["medium", Vector2(80 + i3 * 170, 180), {"recoil": float(i3) * 2.0, "flash": 0.25 * i3, "elev_deg": 8.0}])
 	for i4 in 4:
-		var shifted := func(x: float) -> float: return float(bump.call(x + i4 * 12.0)) + 180.0
-		st.calls.append(["heavy", Vector2(90 + i4 * 100 + (i4 % 2) * 20, 240), {"ground": shifted, "travel": i4 * 2.0}])
-	st.calls.append(["recon", Vector2(60, 300), {"ground": func(x: float) -> float: return 300.0 + 3.0 * sin(x * 0.3), "turret_sx": -1.0}])
+		var shifted := func(x: float) -> float: return float(bump.call(x + i4 * 12.0)) + 190.0
+		st.calls.append(["heavy", Vector2(95 + i4 * 180, 250), {"ground": shifted, "travel": i4 * 2.0}])
+	st.calls.append(["recon", Vector2(60, 320), {"ground": func(x: float) -> float: return 320.0 + 3.0 * sin(x * 0.3), "turret_sx": -1.0}])
+	st.calls.append(["tankette", Vector2(180, 320), {"ground": func(x: float) -> float: return 320.0 + 3.0 * sin(x * 0.3), "turret_sx": -1.0}])
 
 
 func _bushes(st: Stage, _vp: SubViewport) -> void:
@@ -227,10 +241,18 @@ func _cap(st: Stage, _vp: SubViewport) -> void:
 		st.timed.append([k, Vector2(100 + i2 * 90, 400), {"travel": 3.0 + i2, "ground": g, "turret_sx": -1.0}])
 
 
+## Three enemies on the 852 canvas's 286 px panel, each at its range's place and foot (TankFarMap) and the
+## haze the far panel gives that range.
 func _far852(st: Stage, _vp: SubViewport) -> void:
 	var fg := _kit.far_ground()
 	if fg != null:
 		st.bg.append([fg, Rect2(0, 300, 286, 170), true])
-	st.calls.append(["destroyer", Vector2(220, 360), {"haze": 0.36, "travel": 1.0}])
-	st.calls.append(["heavy", Vector2(120, 372), {"haze": 0.22, "travel": 1.0, "elev_deg": 6.0}])
-	st.calls.append(["medium", Vector2(70, 390), {"haze": 0.12, "travel": 1.0}])
+	st.calls.append(["destroyer", _far_foot("destroyer", 2200.0, 1), {"haze": 0.46, "travel": 1.0}])
+	st.calls.append(["heavy", _far_foot("heavy", 1640.0, 0), {"haze": 0.31, "travel": 1.0, "elev_deg": 6.0}])
+	st.calls.append(["medium", _far_foot("medium", 1100.0, 0), {"haze": 0.2, "travel": 1.0}])
+
+
+func _far_foot(kind: String, range_m: float, lane: int) -> Vector2:
+	var half := float(_kit.kind(kind)["size"].x) * 0.5
+	var x := clampf(TankFarMap.range_x(range_m, 286.0), half + 1.0, 286.0 - half - 1.0)
+	return Vector2(roundf(x), TankFarMap.foot_y(range_m, lane))

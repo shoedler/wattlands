@@ -141,6 +141,49 @@ func test_the_action_is_in_the_cards_middle() -> void:
 	assert_gt(float(mid) / float(_diff(a, b)), 0.6, "most of what moves is in the middle 60 px")
 
 
+## The hammer is the hero: the head is the card's lit mass and the cam stays small beside it (the critic's
+## "boulder" was a cam of 13 px radius).
+func test_the_hammer_is_the_cards_hero_and_the_cam_stays_small() -> void:
+	assert_lte(TankMech.R_CAM_R + TankMech.R_LIFT, 9.0, "a small drawn cam on its shaft")
+	assert_gte(TankMech.R_HEAD_LIFT, 12.0, "a stroke you can see at 72 x 41")
+	var top := _paint("repair", 3.85, 1.0)
+	var low := _paint("repair", 3.3, 1.0)
+	var head := Rect2i(
+		int(TankMech.R_HEAD_X) - 8, roundi(TankMech.R_REST_Y - TankMech.R_HEAD_LIFT), 17, 8
+	)
+	var cam := Rect2i(int(TankMech.R_CAM.x) - 6, int(TankMech.R_CAM.y) - 6, 12, 12)
+	assert_gt(_mean_v(top, head), _mean_v(top, cam) + 0.1, "the head outshines the cam")
+	assert_ne(_mean_v(top, head), _mean_v(low, head), "and it moves")
+
+
+func _mean_v(img: Image, r: Rect2i) -> float:
+	var total := 0.0
+	for y in range(r.position.y, r.end.y):
+		for x in range(r.position.x, r.end.x):
+			total += img.get_pixel(x, y).v
+	return total / float(r.size.x * r.size.y)
+
+
+## The card's colour: its own, a pinker copper, not hotter than its neighbours.
+func test_the_repair_card_is_a_pinker_copper_than_drive() -> void:
+	var rep := _mean_colour(_paint("repair", 3.5, 1.0))
+	var die := _mean_colour(_paint("diesel", 3.5, 1.0))
+	assert_lt(rep.h, die.h, "hue %.3f is pinker than Drive's %.3f" % [rep.h, die.h])
+	assert_lte(rep.s, 0.62, "sat %.2f: copper, not orange" % rep.s)
+
+
+func _mean_colour(img: Image) -> Color:
+	var c := Color(0, 0, 0)
+	for y in img.get_height():
+		for x in img.get_width():
+			var q := img.get_pixel(x, y)
+			c.r += q.r
+			c.g += q.g
+			c.b += q.b
+	var n := float(img.get_width() * img.get_height())
+	return Color(c.r / n, c.g / n, c.b / n)
+
+
 # --- The Repairs room (TankInterior.repair_bay) ---------------------------------------------------------------
 
 
@@ -168,6 +211,37 @@ func test_the_room_shows_the_rider_the_press_and_the_plates() -> void:
 		"plates stack by patches"
 	)
 	assert_eq(_diff(_room(5.6, 1, true, 0.3, 1), _room(5.6, 1, true, 0.3, 6)), 0, "patches mod 5")
+
+
+## The room's edge is not a TV screen: its border rows keep the hull's art round it; the middle is the room's.
+func test_the_room_dissolves_into_the_hull_at_its_edge() -> void:
+	var rig := TankRig.shared()
+	if rig.base_img == null:
+		pass_test("no base picture headless")
+		return
+	var room := _room(5.6, 1, true)
+	var r := Rect2i(rig.rooms["turret_drive"])
+	var edge := 0.0
+	var inner := 0.0
+	for x in r.size.x:
+		edge += _px_diff(
+			room.get_pixel(x, 0), rig.base_img.get_pixel(r.position.x + x, r.position.y)
+		)
+		inner += _px_diff(
+			room.get_pixel(x, 6), rig.base_img.get_pixel(r.position.x + x, r.position.y + 6)
+		)
+	assert_lt(edge, inner, "the top row stays nearer the base than a row inside")
+
+
+static func _px_diff(a: Color, b: Color) -> float:
+	return absf(a.r - b.r) + absf(a.g - b.g) + absf(a.b - b.b)
+
+
+## The machine takes the lamp: no neutral grey line of a diagram on it.
+func test_the_rooms_machine_takes_the_lamp() -> void:
+	for ramp: Array[Color] in [TankInterior.RP_IRON, TankInterior.RP_HEAD]:
+		for c in ramp:
+			assert_gt(c.r, c.b, "%s leans to the lamp" % c.to_html(false))
 
 
 func test_the_room_key_repaints_on_press_and_patches() -> void:

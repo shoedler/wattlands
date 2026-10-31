@@ -23,9 +23,9 @@ const SIZES := {
 	"behemoth": [300, 148, -1],
 }
 ## The row's keys that are rects and points in the manifest's plain arrays.
-const RECT_KEYS: Array[String] = ["base", "front", "sil", "wreck"]
+const RECT_KEYS: Array[String] = ["base", "front", "sil", "wreck", "wreck_sil", "shadow"]
 const POINT_KEYS: Array[String] = [
-	"muzzle_at_0", "exhaust", "hit_centre", "wreck_fire", "secondary_muzzle"
+	"muzzle_at_0", "exhaust", "hit_centre", "wreck_fire", "secondary_muzzle", "shadow_at"
 ]
 
 static var _shared: TankEnemyKit = null
@@ -109,6 +109,8 @@ static func _row(m: Dictionary) -> Dictionary:
 		"len": float(g["len"]),
 		"origin": vec_of(g["origin"]),
 	}
+	if g.has("sil"):
+		gi["sil"] = rect_of(g["sil"])
 	if g.has("elev"):
 		gi["elev"] = vec_of(g["elev"])
 	row["gun"] = gi

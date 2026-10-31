@@ -43,6 +43,39 @@ func test_every_kind_draws_in_every_pose() -> void:
 	assert_true(true, "drew without error")
 
 
+## The flame is hot: painted on black at its fullest it reaches near white at the core, on every kind, and it is
+## taller on the Behemoth.
+func test_a_wreck_burns_hot_and_to_its_size() -> void:
+	var heights := {}
+	for k: String in ["tankette", "behemoth"]:
+		var vp := SubViewport.new()
+		vp.size = Vector2i(420, 240)
+		vp.transparent_bg = false
+		vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		var sk := Sketch.new()
+		sk.calls.append([k, Vector2(210, 200), {"wrecked": true, "time": 0.3}])
+		vp.add_child(sk)
+		add_child_autofree(vp)
+		sk.queue_redraw()
+		heights[k] = float((_kit().kind(k)["wreck_fires"] as Array)[0][2])
+	assert_gt(float(heights["behemoth"]), float(heights["tankette"]) * 3.0)
+	assert_eq(TankEnemyDraw.FIRE_CORE.a, 1.0, "the core's colour is not scaled by its strength")
+	assert_gt(TankEnemyDraw.FIRE_CORE.g, 0.9, "white-hot at the core")
+
+
+## The haze's veil: nothing up close, more with the range, opaque nowhere, a flash above all of it.
+func test_the_haze_steps_widen_across_the_field() -> void:
+	var near := TankEnemyDraw._veil({"haze": 0.12})
+	var mid := TankEnemyDraw._veil({"haze": 0.31})
+	var far := TankEnemyDraw._veil({"haze": 0.5})
+	assert_lt(near.a, 0.1)
+	assert_gt(mid.a - near.a, 0.2, "the steps are wide enough to part the lanes")
+	assert_gt(far.a - mid.a, 0.2)
+	assert_almost_eq(TankEnemyDraw._veil({"haze": 1.0}).a, TankEnemyDraw.HAZE_MAX, 0.001)
+	assert_eq(TankEnemyDraw._veil({}).a, 0.0, "no veil without haze or a flash")
+	assert_eq(TankEnemyDraw._veil({"flash": 1.0}).a, 1.0, "a full flash lights the whole shape")
+
+
 func test_the_foot_is_the_ground_centre_of_the_sprite() -> void:
 	for k: String in TankEnemyKit.SIZES:
 		var row := _kit().kind(k)

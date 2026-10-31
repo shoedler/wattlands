@@ -8,19 +8,29 @@ extends RefCounted
 ## pose: {travel: float, turret_sx: float (1 to the kind's front, -1 back), elev_deg: float, recoil: float,
 ##        dim: float, haze: float, flash: float, ground: Callable (x -> stage y) or null, wrecked: bool,
 ##        bogies_wrecked: Array[bool], flip: bool, time: float}
-## Layer order: hull, track, wheels, sprocket, skirts, gun, turret; then the haze and flash silhouettes. Far
-## kinds are drawn with their bow to the left, near kinds to the right; `flip` mirrors about foot.x.
+## Layer order: the ground's shadow, hull, track, wheels, sprocket, skirts, then the veil (haze and flash) on
+## that, the gun and its veil, the turret and its veil, so no part is veiled twice. Far kinds are drawn with
+## their bow to the left, near kinds to the right; `flip` mirrors about foot.x.
 
-const HAZE := Color(0.27, 0.31, 0.36)
+## The night's haze: a dark cold blue, so far kinds lose contrast without lifting past the tank's armour.
+const HAZE := Color(0.15, 0.18, 0.22)
+## The veil's alpha for a pose's haze: nothing up close, steep across the field's 0.12..0.5, nearly all at 1.
+const HAZE_FROM := 0.08
+const HAZE_SLOPE := 1.5
+const HAZE_MAX := 0.92
 const FLASH := Color(1.0, 1.0, 0.9)
 const SLIT := Color(0.5, 0.88, 0.82)
 const SLIT_CORE := Color(0.85, 1.0, 0.96)
-## A wreck's fire, the one warm thing an enemy shows, and it is on fire.
-const FIRE := Color(1.0, 0.48, 0.16)
+## A wreck's fire, the one warm thing an enemy shows: hot at its core, red at its edge.
+const FIRE_CORE := Color(1.0, 0.95, 0.68)
+const FIRE := Color(1.0, 0.66, 0.16)
+const FIRE_EDGE := Color(0.94, 0.27, 0.05)
+## A flame's flicker steps this many times a second (pixel art: no smooth wobble).
+const FIRE_STEPS := 12.0
 ## Far-side wheels of the recon car sit in shadow.
 const FAR_WHEEL := Color(0.5, 0.55, 0.52)
 ## The mean of an enemy's albedo: how much a part's tint must lift to read as hazed.
-const ALBEDO := Color(0.17, 0.2, 0.17)
+const ALBEDO := Color(0.1, 0.115, 0.1)
 ## Hull rotations under this stay flat: nearest sampling of a hair's tilt only makes the rows jag.
 const ROT_SNAP := 0.012
 ## The hull's bob over the wheels: rows of bob, and its period in px of travel.
@@ -37,14 +47,21 @@ static func draw(
 	var row := kit.kind(kind)
 	if tex == null or not row.has("base"):
 		return
+	var veil := _veil(pose)
 	if bool(pose.get("wrecked", false)):
 		_set_xf(ci, _flat(row, foot, pose))
+		_shadow(ci, tex, row, pose)
 		ci.draw_texture_rect_region(tex, _at(Vector2.ZERO, row["wreck"]), row["wreck"], _tint(pose))
+		if veil.a > 0.0:
+			ci.draw_texture_rect_region(
+				tex, _at(Vector2.ZERO, row["wreck_sil"]), row["wreck_sil"], veil
+			)
 		ci.draw_set_transform_matrix(Transform2D.IDENTITY)
 		return
 	var hull := hull_pose(row, foot, pose)
 	var xf: Transform2D = hull["stage"]
 	_set_xf(ci, xf)
+	_shadow(ci, tex, row, pose)
 	var tint := _tint(pose)
 	ci.draw_texture_rect_region(tex, _at(Vector2.ZERO, row["base"]), row["base"], tint)
 	if row.has("bogies"):
@@ -53,16 +70,22 @@ static func draw(
 		_gear(ci, tex, kind, row, row["gear"], hull["wheels"], pose, tint)
 	if row.has("front"):
 		ci.draw_texture_rect_region(tex, _at(Vector2.ZERO, row["front"]), row["front"], tint)
+	if veil.a > 0.0:
+		ci.draw_texture_rect_region(tex, _at(Vector2.ZERO, row["sil"]), row["sil"], veil)
 	var txf := turret_xf(row, pose)
 	_set_xf(ci, xf * _gun_xf(row, pose, txf))
 	var g: Dictionary = row["gun"]
 	var grect: Rect2 = g["rect"]
-	ci.draw_texture_rect_region(tex, Rect2(-(g["origin"] as Vector2), grect.size), grect, tint)
+	var gat := Rect2(-(g["origin"] as Vector2), grect.size)
+	ci.draw_texture_rect_region(tex, gat, grect, tint)
+	if veil.a > 0.0:
+		ci.draw_texture_rect_region(tex, gat, g["sil"], veil)
 	if row.has("turret"):
 		var t: Dictionary = row["turret"]
 		_set_xf(ci, xf * txf)
 		ci.draw_texture_rect_region(tex, _at(t["at"], t["rect"]), t["rect"], tint)
-	_veils(ci, tex, row, xf, txf, pose)
+		if veil.a > 0.0:
+			ci.draw_texture_rect_region(tex, _at(t["at"], t["sil"]), t["sil"], veil)
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
 
 
@@ -241,31 +264,27 @@ static func _tint(pose: Dictionary) -> Color:
 	)
 
 
-## The haze's and the flash's veils: the hull's and the turret's silhouettes at alpha, so the distance
-## flattens the contrast and a hit lights the whole shape.
-static func _veils(
-	ci: CanvasItem,
-	tex: Texture2D,
-	row: Dictionary,
-	xf: Transform2D,
-	txf: Transform2D,
-	pose: Dictionary
-) -> void:
-	var h := clampf(float(pose.get("haze", 0.0)), 0.0, 1.0) * 0.72
+## The veil over each part's silhouette: the distance flattens the contrast, a hit lights the whole shape.
+## Alpha 0 when there is neither.
+static func _veil(pose: Dictionary) -> Color:
+	var h := clampf(
+		(clampf(float(pose.get("haze", 0.0)), 0.0, 1.0) - HAZE_FROM) * HAZE_SLOPE, 0.0, HAZE_MAX
+	)
 	var fl := clampf(float(pose.get("flash", 0.0)), 0.0, 1.0)
 	if h <= 0.004 and fl <= 0.004:
-		return
+		return Color(0, 0, 0, 0)
 	var d := 1.0 - clampf(float(pose.get("dim", 0.0)), 0.0, 1.0)
-	var a := 1.0 - (1.0 - h) * (1.0 - fl)
 	var col := HAZE.lerp(FLASH, fl / maxf(fl + h, 0.001))
-	col = Color(col.r * d, col.g * d, col.b * d, a)
-	_set_xf(ci, xf)
-	ci.draw_texture_rect_region(tex, _at(Vector2.ZERO, row["sil"]), row["sil"], col)
-	if row.has("turret"):
-		var t: Dictionary = row["turret"]
-		_set_xf(ci, xf * txf)
-		ci.draw_texture_rect_region(tex, _at(t["at"], t["sil"]), t["sil"], col)
-	_set_xf(ci, xf)
+	return Color(col.r * d, col.g * d, col.b * d, 1.0 - (1.0 - h) * (1.0 - fl))
+
+
+## The kind's shadow on the ground under its belt, thinning with the haze. The transform is already set.
+static func _shadow(ci: CanvasItem, tex: Texture2D, row: Dictionary, pose: Dictionary) -> void:
+	if not row.has("shadow"):
+		return
+	var k := 1.0 - 0.6 * clampf(float(pose.get("haze", 0.0)), 0.0, 1.0)
+	var r: Rect2 = row["shadow"]
+	ci.draw_texture_rect_region(tex, Rect2(row["shadow_at"], r.size), r, Color(1, 1, 1, k))
 
 
 # --- Running gear --------------------------------------------------------------------------------------------
@@ -494,22 +513,80 @@ static func along(pts: Array, total: float, s: float, cursor: int) -> Array:
 # --- Light ---------------------------------------------------------------------------------------------------
 
 
+## The wreck's fires, each its flame out of its torn mouth, sized with the kind.
 static func _fire(ci: CanvasItem, row: Dictionary, foot: Vector2, pose: Dictionary) -> void:
-	if not row.has("wreck_fire"):
+	var fires: Array = row.get("wreck_fires", [])
+	if fires.is_empty():
 		return
-	var t := float(pose.get("time", 0.0))
-	var fl := 0.65 + 0.35 * sin(t * 11.0 + foot.x) * sin(t * 4.3)
 	var d := 1.0 - clampf(float(pose.get("dim", 0.0)), 0.0, 1.0)
+	d *= 1.0 - 0.45 * clampf(float(pose.get("haze", 0.0)), 0.0, 1.0)
+	var t := floorf(float(pose.get("time", 0.0)) * FIRE_STEPS) / FIRE_STEPS
 	_set_xf(ci, _flat(row, foot, pose))
-	var c: Vector2 = (row["wreck_fire"] as Vector2).floor()
-	# a tongue of flame out of the torn hatch: wide at the foot, licking to one side, no box
-	var lick := roundf(sin(t * 6.0 + foot.x * 0.3))
-	var base_k := fl * d
-	ci.draw_rect(Rect2(c + Vector2(-4, -1), Vector2(9, 3)), FIRE * (0.16 * base_k))
-	ci.draw_rect(Rect2(c + Vector2(-2, 0), Vector2(5, 2)), FIRE * (0.55 * base_k))
-	ci.draw_rect(Rect2(c + Vector2(-1 + lick, -2), Vector2(3, 2)), FIRE * (0.5 * base_k))
-	ci.draw_rect(Rect2(c + Vector2(lick, -4), Vector2(1, 2)), FIRE * (0.3 * base_k))
+	for i in fires.size():
+		var f: Array = fires[i]
+		_flame(
+			ci,
+			Vector2(float(f[0]), float(f[1])),
+			float(f[2]),
+			t + float(i) * 1.37,
+			foot.x + i * 13.0,
+			d
+		)
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+
+## One tongue of fire `height` px tall, standing on `at`: stepped rows, wide at the foot, licking to one side,
+## its edge red, then orange, a yellow-white core low down. `a` is the fire's strength, never its colour.
+static func _flame(
+	ci: CanvasItem, at: Vector2, height: float, t: float, seed: float, a: float
+) -> void:
+	var row_h := maxf(floorf(height / 12.0), 1.0)
+	var rows := int(height / row_h)
+	var breathe := 0.82 + 0.18 * sin(t * 13.0 + seed)
+	var w0 := maxf(height * 0.46, 3.0)
+	# its glow on what is round it
+	_glow(ci, at - Vector2(0.0, height * 0.35), height * 0.8, FIRE_EDGE, 0.09 * a * breathe)
+	_glow(ci, at - Vector2(0.0, height * 0.3), height * 0.45, FIRE, 0.14 * a * breathe)
+	for k in rows:
+		var u := float(k) / float(rows)
+		if u > breathe:
+			break
+		var y := at.y + 1.0 - float(k + 1) * row_h
+		var lick := roundf(sin(t * 7.0 + seed + float(k) * 0.55) * u * height * 0.2)
+		var w := roundf(w0 * pow(1.0 - u, 0.7) * (0.85 + 0.15 * sin(t * 17.0 + float(k) + seed)))
+		if w < 1.0:
+			continue
+		var x := at.x + lick
+		ci.draw_rect(
+			Rect2(x - roundf(w * 0.5), y, w, row_h),
+			Color(FIRE_EDGE.r, FIRE_EDGE.g, FIRE_EDGE.b, a * (1.0 - u * 0.45))
+		)
+		var mid := roundf(w * 0.66)
+		if mid >= 1.0 and u < 0.8:
+			ci.draw_rect(
+				Rect2(x - roundf(mid * 0.5), y, mid, row_h), Color(FIRE.r, FIRE.g, FIRE.b, a)
+			)
+		var core := roundf(w * 0.34)
+		if core >= 1.0 and u < 0.55:
+			ci.draw_rect(
+				Rect2(x - roundf(core * 0.5), y, core, row_h),
+				Color(FIRE_CORE.r, FIRE_CORE.g, FIRE_CORE.b, a)
+			)
+
+
+## A soft round glow in stepped rows.
+static func _glow(ci: CanvasItem, c: Vector2, r: float, col: Color, a: float) -> void:
+	var step := maxf(ceilf(r / 5.0), 1.0)
+	var y := -r
+	while y < r:
+		var mid := y + step * 0.5
+		var half := roundf(sqrt(maxf(r * r - mid * mid, 0.0)))
+		if half >= 1.0:
+			ci.draw_rect(
+				Rect2(roundf(c.x) - half, roundf(c.y + y), half * 2.0, step),
+				Color(col.r, col.g, col.b, a)
+			)
+		y += step
 
 
 # --- No kit --------------------------------------------------------------------------------------------------

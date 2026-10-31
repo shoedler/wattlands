@@ -54,6 +54,17 @@ const PATCH_STACK := 5
 const REPAIR_WALL := Color("#2a1a18")
 const REPAIR_LAMP := Color(1.0, 0.7, 0.48)
 const REPAIR_HOT := Color(1.0, 0.72, 0.42)
+## v4: the machine's iron under that lamp (never the neutral greys of a diagram), dark to light.
+const RP_IRON: Array[Color] = [
+	Color("#160d0b"), Color("#2e1d18"), Color("#4c312a"), Color("#74503f"), Color("#a67a60")
+]
+## The hammer's forged head: the room's lightest iron, the thing the eye goes to first.
+const RP_HEAD: Array[Color] = [
+	Color("#21140f"), Color("#5a4034"), Color("#94705a"), Color("#d9b394"), Color("#f7dcc0")
+]
+const RP_HAFT: Array[Color] = [Color("#1e100a"), Color("#59331d"), Color("#8c5a33")]
+const RP_CHAIN: Array[Color] = [Color("#1d120d"), Color("#5a3a26"), Color("#8c6240")]
+const RP_PLATE: Array[Color] = [Color("#3c1e13"), Color("#7a4326"), Color("#ad6c40")]
 
 const OUT := Color("#0b0806")
 const OUT6 := Color("#050302")
@@ -364,10 +375,11 @@ func wheel(c: Vector2, r: float, ang: float, rim: Color, spokes: int = 4, teeth:
 # --- Repair --------------------------------------------------------------------------------------------
 
 
-## v4: the Repairs machine in room `rr`, facing right from the saddle: the crank chains to a flywheel, the
-## flywheel's tappet lifts the helve of a rivet hammer, and the head falls on the patch on its anvil once per
-## crank revolution (a pure function of `revs`: TankMech.hammer_lift), with sparks. The screw press to the
-## right closes at `press_t`, and `patches` mod PATCH_STACK plates lie stacked by it.
+## v4: the Repairs machine in room `rr`, facing right from the saddle: one chain from the crank to the flywheel,
+## a cam on the flywheel's own shaft, a tappet from the cam to the helve, and the helve's forged head falling on
+## the patch on its anvil once per crank revolution (a pure function of `revs`: TankMech.hammer_lift), with
+## sparks. The screw press to the right closes at `press_t`, and `patches` mod PATCH_STACK plates lie stacked by
+## it.
 func repair_bay(rr: Rect2, revs: float, slot: int, on: bool, press_t: float, patches: int) -> void:
 	var r := Rect2i(rr)
 	img.blit_rect(_repair_wall(r, on), Rect2i(Vector2i.ZERO, r.size), r.position)
@@ -376,96 +388,220 @@ func repair_bay(rr: Rect2, revs: float, slot: int, on: bool, press_t: float, pat
 	var y0 := r.position.y
 	var rv := revs if on else 0.0
 	var ang := rv * TAU
-	var cc := seat(x0 + 2, fy, ang, slot)
-	# the flywheel and its chain, 1:1 with the crank
-	var fw := Vector2(x0 + 25.5, fy - 7.5)
-	pr(Rect2i(floori(fw.x) - 3, fy - 2, 7, 2), ST1)
-	pr(Rect2i(floori(fw.x) - 3, fy - 2, 7, 1), ST2)
-	chain(cc, fw, 2.5, 2.5, rv * 8.0)
-	wheel(fw, 5.0, ang, ST2, 5)
-	# the hammer's helve on its pillar, the tappet riding the flywheel's cam under it
+	var cc := seat(x0 + 1, fy, ang, slot)
 	var lift := TankMech.hammer_lift(rv)
-	var piv := Vector2(x0 + 30.5, y0 + 6.5)
-	pr(Rect2i(x0 + 29, y0 + 7, 3, fy - y0 - 7), ST1)
-	pr(Rect2i(x0 + 29, y0 + 7, 1, fy - y0 - 7), ST2)
-	var rest_y := piv.y + 6.0
-	var head_x := x0 + 51.5
+	# the helve's pillar, behind everything
+	pr(Rect2i(x0 + 18, y0 + 4, 4, fy - y0 - 4), RP_IRON[1])
+	pr(Rect2i(x0 + 18, y0 + 4, 1, fy - y0 - 4), RP_IRON[3])
+	pr(Rect2i(x0 + 21, y0 + 4, 1, fy - y0 - 4), RP_IRON[0])
+	pr(Rect2i(x0 + 16, fy - 2, 8, 2), RP_IRON[2])
+	pr(Rect2i(x0 + 16, fy - 2, 8, 1), RP_IRON[3])
+	# the flywheel on its pedestal, its one chain, 1:1 with the crank
+	var fw := Vector2(x0 + 30.5, fy - 6.5)
+	pr(Rect2i(floori(fw.x) - 4, fy - 2, 9, 2), RP_IRON[2])
+	pr(Rect2i(floori(fw.x) - 4, fy - 2, 9, 1), RP_IRON[3])
+	_rp_chain(cc, fw, 2.5, 2.0, rv * 8.0)
+	wheel(fw, 6.0, ang, RP_IRON[3], 5)
+	# the cam on its shaft: a lobe that lifts the tappet; the tappet to the helve
+	var piv := Vector2(x0 + 20.5, y0 + 4.5)
+	var head_x := x0 + 48.5
+	var rest_y := fy - 12.0
 	var end := Vector2(head_x, rest_y - 9.0 * lift)
-	var tap_x := x0 + 37.5
+	var tap_x := fw.x
 	var tap_top := piv.y + (end.y - piv.y) * (tap_x - piv.x) / (head_x - piv.x)
-	var cam := Vector2(tap_x, fy - 4.5)
-	pr(Rect2i(floori(cam.x) - 3, fy - 1, 7, 1), ST2)
-	wheel(cam, 2.5, ang, BR1, 3)
-	var lobe := cam + Vector2(cos(ang - PI * 0.5), sin(ang - PI * 0.5)) * 3.0
-	p(floori(lobe.x), floori(lobe.y), BR2)
-	chain(fw, cam, 1.5, 1.5, rv * 8.0)
-	pl(Vector2(tap_x, tap_top), Vector2(tap_x, cam.y - 2.0), ST3)
-	pl(piv + Vector2(0, 1), end + Vector2(0, 1), OUT)
-	pl(piv, end, CU1)
-	p(floori(piv.x), floori(piv.y), BR2)
-	# the head and the anvil with the patch on it
-	var anvil := Rect2i(x0 + 46, fy - 6, 11, 6)
-	box(anvil, ST2, ST4, ST0)
-	pr(Rect2i(x0 + 44, fy - 7, 15, 1), CU1)
-	box(Rect2i(floori(head_x) - 3, floori(end.y) - 1, 7, 6), ST2, ST3, ST0)
+	var cam_top := fw.y - 2.0 - 2.6 * lift
+	pl(Vector2(tap_x, tap_top + 1.0), Vector2(tap_x, cam_top), RP_IRON[4])
+	for a2 in 16:
+		var th := TAU * float(a2) / 16.0
+		var along := fposmod(th / TAU + 0.25 - fposmod(rv, 1.0), 1.0)
+		var rad := 1.6 + 2.6 * TankMech.hammer_lift(fposmod(rv, 1.0) - along)
+		for k3 in 3:
+			var q2 := fw + Vector2(cos(th), sin(th)) * rad * (1.0 - float(k3) * 0.35)
+			p(floori(q2.x), floori(q2.y), RP_IRON[4] if k3 == 0 and sin(th) < 0.2 else RP_IRON[2])
+	p(floori(fw.x), floori(fw.y), RP_IRON[0])
+	# the helve: wood with iron straps, a bearing on the pillar, its end in the head's eye
+	pl(piv + Vector2(0, 1), end + Vector2(0, 1), RP_HAFT[0])
+	pl(piv, end, RP_HAFT[2])
+	for k4 in 3:
+		var q3 := piv.lerp(end, 0.3 + float(k4) * 0.24)
+		p(floori(q3.x), floori(q3.y), RP_IRON[4])
+		p(floori(q3.x), floori(q3.y) + 1, RP_IRON[2])
+	pr(Rect2i(floori(piv.x) - 1, floori(piv.y) - 1, 3, 3), RP_IRON[1])
+	p(floori(piv.x), floori(piv.y), RP_IRON[4])
+	_rp_hammer(end)
+	# the anvil on its stump and the patch plate on it, under the head
+	var anvil := Rect2i(x0 + 42, fy - 6, 14, 4)
+	box(anvil, RP_IRON[2], RP_IRON[4], RP_IRON[0])
+	pr(Rect2i(x0 + 45, fy - 3, 8, 3), RP_IRON[1])
+	pr(Rect2i(x0 + 45, fy - 3, 1, 3), RP_IRON[3])
+	pr(Rect2i(x0 + 39, fy - 7, 20, 1), RP_PLATE[1])
+	pr(Rect2i(x0 + 39, fy - 7, 7, 1), RP_PLATE[2])
 	# the strike's sparks, on the whole revolution
 	var since := TankMech.since_strike(rv)
 	if on and since < TankMech.R_SPARK:
 		var k := 1.0 - since / TankMech.R_SPARK
 		var st := floorf(rv)
-		for i in 5:
-			var a := -PI * (0.1 + 0.8 * TankPx.h2(int(st), i, 11))
-			var spd := 5.0 + 7.0 * TankPx.h2(int(st), i, 12)
+		for i in 9:
+			var a := -PI * (0.05 + 0.9 * TankPx.h2(int(st), i, 11))
+			var spd := 6.0 + 11.0 * TankPx.h2(int(st), i, 12)
 			var q := (
 				Vector2(head_x, fy - 8.0)
 				+ Vector2(cos(a), sin(a)) * spd * (since / TankMech.R_SPARK)
 			)
 			p(floori(q.x), floori(q.y), REPAIR_HOT)
-		glow(Vector2(head_x, fy - 8.0), 9.0, REPAIR_HOT, 0.55 * k)
+		glow(Vector2(head_x, fy - 8.0), 12.0, REPAIR_HOT, 0.7 * k)
 	# the screw press on the right: it closes at press_t; the plates lie by its foot
 	var px := x0 + 60
-	pr(Rect2i(px - 1, y0 + 1, 1, fy - y0 - 1), ST2)
-	pr(Rect2i(px + 5, y0 + 1, 1, fy - y0 - 1), ST1)
-	pr(Rect2i(px - 1, y0 + 1, 7, 2), ST3)
+	pr(Rect2i(px - 1, y0 + 1, 1, fy - y0 - 1), RP_IRON[3])
+	pr(Rect2i(px + 5, y0 + 1, 1, fy - y0 - 1), RP_IRON[1])
+	pr(Rect2i(px - 1, y0 + 1, 7, 2), RP_IRON[3])
 	var ty := y0 + 5 + roundi(clampf(press_t, 0.0, 1.0) * float(fy - y0 - 11))
-	pl(Vector2(px + 2.5, y0 + 3), Vector2(px + 2.5, ty), BR1)
-	box(Rect2i(px, ty, 5, 3), ST2, ST3, ST0)
+	pl(Vector2(px + 2.5, y0 + 3), Vector2(px + 2.5, ty), RP_IRON[4])
+	box(Rect2i(px, ty, 5, 3), RP_IRON[2], RP_IRON[4], RP_IRON[0])
 	var stack := posmod(patches, PATCH_STACK)
 	for s2 in stack:
 		var sy := fy - 1 - s2 * 2
-		pr(Rect2i(px, sy, 5, 1), CU2 if s2 % 2 == 0 else CU1)
+		pr(Rect2i(px, sy, 5, 1), RP_PLATE[2] if s2 % 2 == 0 else RP_PLATE[1])
 		pr(Rect2i(px, sy + 1, 5, 1), OUT)
 	# the lamp
 	if on:
-		p(x0 + 40, y0 + 2, Color(1.0, 0.92, 0.8))
-		glow(Vector2(x0 + 40.5, y0 + 2.5), 7.0, REPAIR_LAMP, 0.5)
+		p(x0 + 40, y0 + 3, Color(1.0, 0.92, 0.8))
+		glow(Vector2(x0 + 40.5, y0 + 3.5), 8.0, REPAIR_LAMP, 0.5)
 	else:
-		p(x0 + 40, y0 + 2, CU0)
+		p(x0 + 40, y0 + 3, RP_IRON[2])
 
 
-## The room's backing: the base's picture sunk into the room's own colour (so the machine reads), lit from
-## the lamp when the seat works. Made once per state.
+## The Repairs chain: dark oily links, every fourth catching the lamp, so it travels without beading.
+func _rp_chain(a: Vector2, b: Vector2, ra: float, rb: float, phase: float) -> void:
+	var d := (b - a).normalized()
+	var n := Vector2(-d.y, d.x)
+	for side: float in [-1.0, 1.0]:
+		var p0: Vector2 = a + n * ra * side
+		var p1: Vector2 = b + n * rb * side
+		var m := maxi(ceili(p0.distance_to(p1)), 1)
+		for k in m + 1:
+			var q := p0.lerp(p1, float(k) / float(m))
+			var s := fposmod(float(k) - phase * side, 4.0)
+			p(
+				floori(q.x),
+				floori(q.y),
+				RP_CHAIN[2] if s < 1.0 else RP_CHAIN[0] if s < 2.0 else RP_CHAIN[1]
+			)
+
+
+## The forged hammer head hung on the helve's end at `end`: a poll, a broad cheek, a narrower face below.
+func _rp_hammer(end: Vector2) -> void:
+	var x := floori(end.x)
+	var y := floori(end.y)
+	# the outline, then the shaded forging
+	pr(Rect2i(x - 5, y - 3, 11, 9), OUT)
+	pr(Rect2i(x - 3, y + 6, 7, 2), OUT)
+	pr(Rect2i(x - 4, y - 2, 9, 7), RP_HEAD[2])
+	pr(Rect2i(x - 4, y - 2, 9, 1), RP_HEAD[4])
+	pr(Rect2i(x - 4, y - 1, 1, 6), RP_HEAD[3])
+	pr(Rect2i(x + 4, y - 1, 1, 6), RP_HEAD[1])
+	pr(Rect2i(x - 3, y + 4, 8, 1), RP_HEAD[1])
+	pr(Rect2i(x - 2, y + 5, 5, 2), RP_HEAD[2])
+	pr(Rect2i(x - 2, y + 6, 5, 1), RP_HEAD[3])
+	pr(Rect2i(x - 3, y + 2, 7, 1), RP_HEAD[1])
+
+
+## The room's backing: the base's picture sunk into the room's own colour (so the machine reads) and fading
+## back to it at the room's edge, plated wall with what a repair shop hangs on one, lit from the lamp when the
+## seat works. Made once per state.
 func _repair_wall(r: Rect2i, on: bool) -> Image:
 	if _repair_walls.has(on):
 		return _repair_walls[on]
 	var w := Image.create_empty(r.size.x, r.size.y, false, Image.FORMAT_RGBA8)
-	var lamp := Vector2(40.5, 3.0)
+	var lamp := Vector2(40.5, 4.0)
 	for y in r.size.y:
 		for x in r.size.x:
 			var o := REPAIR_WALL
 			if rig.base_img != null:
 				o = rig.base_img.get_pixel(r.position.x + x, r.position.y + y)
-			var c := o.lerp(REPAIR_WALL, 0.74)
+			# the room's edge dissolves into the hull's art round it, unevenly
+			var edge := float(mini(mini(x, r.size.x - 1 - x), mini(y, r.size.y - 1 - y)))
+			edge += (TankPx.h2(x, y, 31) - 0.5) * 3.0 + (TankPx.h2(x / 5, y / 4, 33) - 0.5) * 3.0
+			var sink := lerpf(0.12, 0.8, clampf(edge / 5.0, 0.0, 1.0))
+			var c := o.lerp(_rp_wall_at(x, y, r.size), sink)
 			c.a = 1.0
-			var d := Vector2(x, y).distance_to(lamp) / 34.0
-			var k := maxf(1.0 - d, 0.0)
-			k = k * k * (0.34 if on else 0.08)
-			c.r = minf(c.r + REPAIR_LAMP.r * k, 1.0)
-			c.g = minf(c.g + REPAIR_LAMP.g * k, 1.0)
-			c.b = minf(c.b + REPAIR_LAMP.b * k, 1.0)
 			w.set_pixel(x, y, c)
+	_rp_clutter(w, r.size)
+	for y2 in r.size.y:
+		for x2 in r.size.x:
+			var c2 := w.get_pixel(x2, y2)
+			var k := maxf(1.0 - Vector2(x2, y2).distance_to(lamp) / 36.0, 0.0)
+			k = k * k * (0.3 if on else 0.07)
+			c2.r = minf(c2.r + REPAIR_LAMP.r * k, 1.0)
+			c2.g = minf(c2.g + REPAIR_LAMP.g * k, 1.0)
+			c2.b = minf(c2.b + REPAIR_LAMP.b * k, 1.0)
+			w.set_pixel(x2, y2, c2)
 	_repair_walls[on] = w
 	return w
+
+
+## The wall's own picture at (x, y): plates of different tones with their seams, grime rising from the deck.
+func _rp_wall_at(x: int, y: int, size: Vector2i) -> Color:
+	var col := REPAIR_WALL
+	var plate := floori(float(x + 3) / 19.0) + (floori(float(y) / 12.0) * 3)
+	col = col.lightened((TankPx.h2(plate, 3, 37) - 0.4) * 0.14)
+	var low := float(y) / float(size.y)
+	col = col.darkened(smoothstep(0.55, 1.0, low) * 0.45)
+	col = col.darkened((TankPx.h2(x, y, 39) - 0.3) * 0.16)
+	if (x + 3) % 19 == 0 or y % 12 == 0:
+		col = col.darkened(0.55)
+	elif (x + 3) % 19 == 1 or y % 12 == 1:
+		col = col.lightened(0.1)
+	return col
+
+
+## What a repair shop keeps on its wall, all in the lamp's iron: a pipe along the ceiling running out through
+## both walls, a shelf of tins and a box, tools on nails, patches leaning in the corner.
+func _rp_clutter(w: Image, size: Vector2i) -> void:
+	# the pipe
+	for x in size.x:
+		w.set_pixel(x, 1, RP_PLATE[1])
+		w.set_pixel(x, 2, RP_PLATE[0])
+		if x % 17 == 8:
+			for y in range(0, 4):
+				w.set_pixel(x, y, RP_IRON[3] if y == 0 else RP_IRON[2])
+	# a drop off the pipe, to a valve
+	for y2 in range(3, 7):
+		w.set_pixel(27, y2, RP_PLATE[1])
+	w.set_pixel(26, 6, RP_IRON[3])
+	w.set_pixel(28, 6, RP_IRON[3])
+	# the shelf, its brackets and what is on it
+	for x2 in range(31, 45):
+		w.set_pixel(x2, 11, RP_HAFT[1])
+		w.set_pixel(x2, 12, RP_IRON[0])
+	for x3: int in [33, 42]:
+		w.set_pixel(x3, 13, RP_IRON[2])
+		w.set_pixel(x3, 14, RP_IRON[1])
+	_rp_block(w, Rect2i(32, 8, 3, 3), RP_IRON[3], RP_IRON[1])
+	_rp_block(w, Rect2i(36, 9, 2, 2), RP_PLATE[2], RP_PLATE[0])
+	_rp_block(w, Rect2i(39, 7, 5, 4), RP_HAFT[2], RP_HAFT[1])
+	# tools on nails, between the anvil and the press
+	for y3 in range(5, 13):
+		w.set_pixel(56, y3, RP_IRON[3])
+	w.set_pixel(55, 12, RP_IRON[3])
+	w.set_pixel(57, 12, RP_IRON[3])
+	for y4 in range(5, 11):
+		w.set_pixel(53, y4, RP_HAFT[1])
+	_rp_block(w, Rect2i(52, 3, 3, 2), RP_IRON[3], RP_IRON[1])
+	# grime under the shelf, a stain from the pipe's flange
+	for k in 9:
+		var sx := 9 + (k % 3)
+		for y5 in range(3, 12 - k % 4):
+			var c := w.get_pixel(25 + sx, y5)
+			w.set_pixel(25 + sx, y5, c.darkened(0.25))
+
+
+func _rp_block(w: Image, r: Rect2i, c: Color, lo: Color) -> void:
+	for y in range(r.position.y, r.end.y):
+		for x in range(r.position.x, r.end.x):
+			w.set_pixel(x, y, lo if x == r.end.x - 1 or y == r.end.y - 1 else c)
+	for x2 in range(r.position.x, r.end.x):
+		w.set_pixel(x2, r.end.y, OUT)
 
 
 # --- The pedal station ------------------------------------------------------------------------------------
