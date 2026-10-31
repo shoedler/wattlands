@@ -368,10 +368,31 @@ func test_a_pause_makes_no_strokes_and_resumes_without_a_burst() -> void:
 	var ticks := _count(view, "chain_tick")
 	_ride(view, 90.0, 5.0)
 	assert_eq(_count(view, "chain_tick"), ticks, "a crank under the mute")
+	var sounds_before := view.audio.kit.played.size()
 	bus.paused_changed.emit(false, "test")
 	view.game.sim_alive()
 	view.advance(1.0 / 60.0)
 	assert_lte(_count(view, "chain_tick") - ticks, 1, "no burst")
+	assert_lte(view.audio.kit.played.size() - sounds_before, 3, "strokes, loops or spots")
+
+
+## The real bank's bed at dawn, its busiest: a pause of two minutes starts no more spots in the first second of the
+## resume than a second of that bed does.
+func test_a_long_pause_saves_up_no_bed_spots_for_the_resume() -> void:
+	var kit := GameAudioKit.new()
+	add_child_autofree(kit)
+	assert_true(kit.setup(WorkoutAudio.BANK_PATH, 7))
+	kit.set_bed(WorkoutAudio.BED)
+	kit.bed_params({"speed": 0.0, "day": 0.2, "gust": 0.5, "tractor": 0.0})
+	kit._on_paused_changed(true, "test")
+	for i in 120 * 60:
+		kit.commit(1.0 / 60.0)
+	var before := kit.played.size()
+	assert_gt(before, 30, "the bed's details go on under the pause")
+	kit._on_paused_changed(false, "test")
+	for i in 60:
+		kit.commit(1.0 / 60.0)
+	assert_lte(kit.played.size() - before, 4, "no burst of spots on resume")
 
 
 # --- the group ------------------------------------------------------------------------
