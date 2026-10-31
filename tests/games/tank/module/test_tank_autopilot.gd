@@ -329,6 +329,22 @@ func test_the_solo_loader_stops_at_the_shells_that_clear_the_field() -> void:
 	assert_eq(TankAutopilot._hits_to_clear(s), TankConst.RACK_MAX, "the Behemoth wants a full rack")
 
 
+## The Behemoth is dead: only the cool-down comes, so nobody takes a seat its trainer could never reach.
+func test_no_seat_move_once_the_last_fight_is_won() -> void:
+	var s := _quiet(3)
+	s.seg.seg = TankIds.SEG_BOSS
+	s.seg.phase_index = s.content.segments().size() - 1
+	s.seg.segment_index = s.content.segments().size() - 1
+	s.seg.objective_done = true
+	s.seg.open_ended = true
+	s.seg.elapsed_s = 200.0
+	s.tick = 0
+	s.t = 1000.0
+	assert_eq(TankAutopilot.next_fight_segment(s), TankIds.SEG_NONE)
+	for r in s.riders:
+		assert_eq(TankAutopilot.seat_intent(s, r), {})
+
+
 func test_an_advance_with_nobody_on_drive_opens_the_crews_moves() -> void:
 	var s := TankFixturesV4.make("advance_far", 3)
 	s.seg.elapsed_s = 1.0

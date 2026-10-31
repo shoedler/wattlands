@@ -205,6 +205,8 @@ static func seat_intent(state: TankState, rider: TankRiderState) -> Dictionary:
 		return {}
 	if at_end:
 		seg = next_fight_segment(state)
+		if seg == TankIds.SEG_NONE:
+			return {}  # the last fight is won: nothing but the cool-down comes, and it has no seats
 		sit = expected(state, seg)
 	var want := (
 		seat_wanted_solo(state, rider, sit, seg)

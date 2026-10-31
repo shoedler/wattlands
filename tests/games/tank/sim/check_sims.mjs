@@ -1594,9 +1594,6 @@ export function seatProblems(name, r) {
         ok = after !== null && after !== undefined && after.start <= next + EPS && engineAt(r, peer, after.start + 0.01) === want;
       }
       if (!ok && next === Infinity && e._t > num(r.game_seconds, Infinity) - SWITCH_SPACING_S) ok = true;
-      // The cool-down has no seats: the fight ended before the switch spacing let the trainer follow.
-      const cool = spans.find((sp) => sp.kind === 'COOLDOWN');
-      if (!ok && cool && e._t <= cool.start + EPS && cool.start <= deadline + EPS) ok = true;
       if (!ok) probs.push(`${name}: slot ${slot} moved to ${want} at ${fmt(e._t)} s; its trainer never followed`);
     });
   }
