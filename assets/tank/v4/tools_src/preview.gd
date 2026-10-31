@@ -4,10 +4,14 @@ extends SceneTree
 ##   tools/godot.sh --timeout=180 --path . --resolution 1280x720 -s assets/tank/v4/tools_src/preview.gd
 ## Writes build/tank/v4_art/*.png: lineup_960 (a 960 x 540 stage: our tank, the near threats ahead of its
 ## nose, the far kinds as they stand on the far panel), kinds_3x, wrecks_3x, motion_3x (track and wheels over
-## one shoe pitch, turret traverse, gun recoil, a bump), far_852 (three enemies on the 286 px panel).
+## one shoe pitch, turret traverse, gun recoil, a bump), far_852 (three enemies on the 286 px panel, in the game's
+## sky and ridges), bogie_3x (a live Behemoth with one bogie smashed and nothing in front of it).
 
 const OUTDIR := "res://build/tank/v4_art/"
 const NIGHT := Color("#090c13")
+## The game frame's far air (tank_view's sky and mountain layers), so a sheet can judge the haze against them.
+const FAR_SKY := Color("#081519")
+const FAR_RIDGE := Color("#0e2429")
 
 var _kit: TankEnemyKit
 var _sheets: Array = []
@@ -106,6 +110,7 @@ func _run() -> void:
 	_sheet("wrecks_3x", Vector2i(470, 330), 3, _wrecks)
 	_sheet("motion_3x", Vector2i(760, 340), 2, _motion)
 	_sheet("far_852", Vector2i(286, 480), 2, _far852)
+	_sheet("bogie_3x", Vector2i(330, 170), 3, _bogie)
 	_sheet("bushes_3x", Vector2i(330, 80), 3, _bushes)
 	_sheet("cap_cost", Vector2i(960, 540), 1, _cap)
 	_repair_strip()
@@ -173,6 +178,7 @@ func _hero(vp: SubViewport, st: Stage, at: Vector2) -> void:
 func _lineup(st: Stage, vp: SubViewport) -> void:
 	var g := 396.0
 	_ground(st, g, 960.0)
+	_far_air(st, 630.0, 330.0, 320.0)
 	var fg := _kit.far_ground()
 	if fg != null:
 		st.bg.append([fg, Rect2(630, 320, 330, 170), true])
@@ -259,12 +265,29 @@ func _cap(st: Stage, _vp: SubViewport) -> void:
 ## Three enemies on the 852 canvas's 286 px panel, each at its range's place and foot (TankFarMap) and the
 ## haze the far panel gives that range.
 func _far852(st: Stage, _vp: SubViewport) -> void:
+	_far_air(st, 0.0, 286.0, 300.0)
 	var fg := _kit.far_ground()
 	if fg != null:
 		st.bg.append([fg, Rect2(0, 300, 286, 170), true])
 	st.calls.append(["destroyer", _far_foot("destroyer", 2200.0, 1), {"haze": 0.46, "travel": 1.0}])
 	st.calls.append(["heavy", _far_foot("heavy", 1640.0, 0), {"haze": 0.31, "travel": 1.0, "elev_deg": 6.0}])
 	st.calls.append(["medium", _far_foot("medium", 1100.0, 0), {"haze": 0.2, "travel": 1.0}])
+
+
+## The far panel's air down to row `h`: the game's sky and a ridge line of its mountains.
+func _far_air(st: Stage, x0: float, w: float, h: float) -> void:
+	st.bg.append([FAR_SKY, Rect2(x0, 0, w, h + 20.0)])
+	var x := 0
+	while float(x) < w:
+		var top := h - 56.0 + 26.0 * sin(float(x) * 0.031 + 1.0) + 9.0 * sin(float(x) * 0.13) + 4.0 * sin(float(x) * 0.41)
+		st.bg.append([FAR_RIDGE, Rect2(x0 + float(x), roundf(top), 2.0, h + 20.0 - roundf(top))])
+		x += 2
+
+
+## A live Behemoth with its middle bogie smashed, alone, on a road: the sheet to score that bogie from.
+func _bogie(st: Stage, _vp: SubViewport) -> void:
+	_ground(st, 160.0, 330.0)
+	st.calls.append(["behemoth", Vector2(165, 160), {"travel": 1.0, "elev_deg": 3.0, "bogies_wrecked": [false, true, false]}])
 
 
 func _far_foot(kind: String, range_m: float, lane: int) -> Vector2:

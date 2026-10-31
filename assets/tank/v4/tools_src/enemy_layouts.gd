@@ -119,7 +119,7 @@ static func light() -> Dictionary:
 	return {
 		"name": "light", "enemy": true, "size": Vector2i(96, 44), "ground": 41.0, "faces": -1, "pitch": 4.0, "night_low": 32,
 		"parts": [
-			{"poly": P([5, 21, 18, 10, 56, 10, 60, 14, 80, 14, 90, 19, 91, 22, 7, 22]), "seams_x": [24, 44, 62, 76], "seams_y": [15], "split": false, "seed": 19, "rivet": 7},
+			{"poly": P([5, 21, 18, 10, 56, 10, 60, 14, 80, 14, 90, 19, 91, 22, 7, 22]), "seams_x": [24, 44, 62, 76], "seams_y": [15], "split": false, "seed": 18, "rivet": 7, "contrast": 1.5},
 		],
 		"details": [
 			{"kind": "hatch", "rect": Rect2i(58, 15, 8, 5)},

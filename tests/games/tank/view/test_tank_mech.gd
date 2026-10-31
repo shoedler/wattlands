@@ -283,6 +283,65 @@ func test_the_chain_and_the_helve_stand_off_the_wall() -> void:
 	)
 
 
+static func _luma(c: Color) -> float:
+	return (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) * 255.0
+
+
+## The room is a dark room with a lamp pool, as its neighbours on the deck (median L 27-38, p95 3.4-4.2 times that):
+## no bright flat panel, its corners near their median.
+func test_the_room_is_a_lamp_pool_not_a_panel() -> void:
+	var room := _room(5.6, 1, true)
+	var ls: Array[float] = []
+	for y in room.get_height():
+		for x in room.get_width():
+			ls.append(_luma(room.get_pixel(x, y)))
+	ls.sort()
+	var med: float = ls[ls.size() / 2]
+	var p95: float = ls[ls.size() * 95 / 100]
+	assert_lte(med, 44.0, "median L")
+	assert_gte(p95 / med, 3.2, "the pool stands out of the wall")
+	var w := room.get_width()
+	var corner := 0.0
+	for q: Vector2i in [Vector2i(3, 4), Vector2i(w - 4, 4), Vector2i(w - 4, 20)]:
+		for y2 in 3:
+			for x2 in 3:
+				corner += _luma(room.get_pixel(q.x + x2 - 1, q.y + y2 - 1))
+	corner /= 27.0
+	assert_lte(corner, 40.0, "the corners fall to the neighbours' median")
+
+
+## No pale frame: no full-width pipe or post stands lit round the room. No column and no row of the wall holds a long
+## straight run of bright iron.
+func test_no_pale_frame_round_the_machine() -> void:
+	var room := _room(5.6, 1, true)
+	var w := room.get_width()
+	var h := room.get_height()
+	for y in 4:
+		var bright := 0
+		for x in w:
+			bright += int(_luma(room.get_pixel(x, y)) > 70.0)
+		assert_lt(bright, w / 3, "row %d of the ceiling: %d px bright" % [y, bright])
+	for x2 in range(w - 10, w):
+		var run := 0
+		var best := 0
+		for y2 in h:
+			run = run + 1 if _luma(room.get_pixel(x2, y2)) > 60.0 else 0
+			best = maxi(best, run)
+		assert_lt(best, 10, "column %d: a straight lit run of %d" % [x2, best])
+
+
+## What stands under the lamp is not the loudest shape after the hammer: no flat saturated square over the head.
+func test_nothing_flat_and_loud_under_the_lamp() -> void:
+	var it := TankInterior.new(TankRig.shared())
+	var wall := it._repair_wall(Rect2i(TankRig.shared().rooms["turret_drive"]), true)
+	var loud := 0
+	for y in range(3, 14):
+		for x in range(28, 52):
+			var c := wall.get_pixel(x, y)
+			loud += int(c.s > 0.45 and _luma(c) > 110.0)
+	assert_lte(loud, 3, "%d px of loud colour on the wall under the lamp" % loud)
+
+
 func test_the_room_key_repaints_on_press_and_patches() -> void:
 	var it := TankInterior.new(TankRig.shared())
 	var rp := {"slot": 1, "revs": 2.0, "on": true, "press_t": 0.1, "patches": 0}

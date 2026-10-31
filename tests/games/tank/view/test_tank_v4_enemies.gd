@@ -91,6 +91,66 @@ func test_a_fire_has_tongues_to_its_size() -> void:
 	assert_eq(TankEnemyDraw.tongues_of(32.0), 3, "the Behemoth's")
 
 
+## A flame comes out of its mouth: its foot no wider than the mouth, an uneven lower edge, widening 2-4 rows up, and
+## its tongues one body below 70 % of its height, so no dark counter opens there (no glyph, no 8).
+func test_a_flame_comes_out_of_its_mouth() -> void:
+	for height: float in [7.0, 11.0, 14.0, 16.0, 18.0, 24.0, 32.0]:
+		var mouth := TankEnemyDraw.mouth_r(height)
+		var uneven := false
+		for i in 40:
+			var t := float(i) * 0.083
+			var seed := 13.0 + float(i) * 3.7
+			var rows := TankEnemyDraw.flame_rows(height, t, seed)
+			assert_gt(rows.size(), 3, "a fire of %d stands" % height)
+			var foot: Array[Vector2] = rows[0][3]
+			assert_eq(foot.size(), 1, "one foot")
+			assert_lte(foot[0].y, mouth * 2.0 + 0.01, "the foot of %d fits its mouth" % height)
+			assert_lte(absf(foot[0].x + foot[0].y * 0.5), mouth, "and stands in it")
+			var belly := 0.0
+			for k in rows.size():
+				if k >= 1 and k <= 4:
+					for sp: Vector2 in rows[k][3]:
+						belly = maxf(belly, sp.y)
+				if float(rows[k][2]) < TankEnemyDraw.FIRE_BODY:
+					assert_eq((rows[k][3] as Array).size(), 1, "one body at %d of %d" % [k, height])
+			if height >= 14.0:
+				assert_gt(
+					belly, foot[0].y, "a fire of %d widens within 4 rows of its foot" % height
+				)
+			var drops := {}
+			for x in range(-int(foot[0].y * 0.5), int(foot[0].y * 0.5)):
+				drops[TankEnemyDraw.flame_drop(x, floorf(t * 6.0), seed, height)] = true
+			uneven = uneven or drops.size() > 1
+		assert_true(uneven, "the lower edge of a fire of %d is uneven" % height)
+
+
+## The far air: the haze is the hue of the game's own far sky and ridges (191-194), so far kinds fade into them; it
+## stops at half, so the farthest keeps its seams.
+func test_the_haze_is_the_far_airs_hue() -> void:
+	assert_between(
+		TankEnemyDraw.HAZE.h * 360.0, 186.0, 198.0, "hue of the sky #081519 and ridges #0e2429"
+	)
+	assert_lte(TankEnemyDraw.HAZE_MAX, 0.5)
+	assert_lte(
+		TankEnemyDraw._veil({"haze": 0.46}).a, 0.5, "the destroyer at 2200 m keeps its seams"
+	)
+
+
+## The furnace: lit between the louvre's bars and only there, its gaps at different heats.
+func test_the_furnace_burns_between_its_bars() -> void:
+	var fr := Rect2(100, 50, 22, 8)
+	var gaps := TankEnemyDraw.furnace_gaps(fr)
+	assert_gte(gaps.size(), 5)
+	for g: Rect2 in gaps:
+		for x in range(int(g.position.x), int(g.end.x)):
+			assert_ne((x - int(fr.position.x)) % 4, 3, "x %d is a bar" % x)
+		assert_true(fr.encloses(g), "inside the vent")
+	for i in 5:
+		assert_ne(TankEnemyDraw.furnace_heat(i), TankEnemyDraw.furnace_heat(i + 1), "no even heat")
+	var cold := TankEnemyDraw.SLIT_CORE
+	assert_gt(cold.b, cold.r, "one hue with the slits")
+
+
 ## Each tooth near the top of a sprocket stands in a gap of the belt, at rest and on the move: the sprocket turns
 ## with the belt, on its pitch circle.
 func test_a_sprocket_tooth_sits_in_a_shoes_gap() -> void:

@@ -12,12 +12,14 @@ extends RefCounted
 ## that, the gun and its veil, the turret and its veil, so no part is veiled twice. Far kinds are drawn with
 ## their bow to the left, near kinds to the right; `flip` mirrors about foot.x.
 
-## The night's haze: a dark cold blue, so far kinds lose contrast without lifting past the tank's armour.
-const HAZE := Color(0.15, 0.18, 0.22)
-## The veil's alpha for a pose's haze: nothing up close, steep across the field's 0.12..0.5, nearly all at 1.
+## The night's haze: the far air of the game's own frame (sky #081519, ridges #0e2429, hue about 192), so far kinds
+## fade into what is behind them and lose contrast without lifting past the tank's armour.
+const HAZE := Color(0.11, 0.19, 0.21)
+## The veil's alpha for a pose's haze: nothing up close, steady across the field's 0.12..0.5. It stops at half, so the
+## farthest kind keeps its plate seams.
 const HAZE_FROM := 0.08
-const HAZE_SLOPE := 1.5
-const HAZE_MAX := 0.92
+const HAZE_SLOPE := 1.2
+const HAZE_MAX := 0.5
 const FLASH := Color(1.0, 1.0, 0.9)
 const SLIT := Color(0.5, 0.88, 0.82)
 const SLIT_CORE := Color(0.85, 1.0, 0.96)
@@ -27,6 +29,13 @@ const FIRE := Color(1.0, 0.66, 0.16)
 const FIRE_EDGE := Color(0.94, 0.27, 0.05)
 ## A flame's flicker steps this many times a second (pixel art: no smooth wobble).
 const FIRE_STEPS := 12.0
+## The torn mouth a fire comes out of (enemy_bake.gd tears it to these numbers): radius and depth under the fire's
+## row, each a share of the flame's height.
+const MOUTH_K := 0.13
+const MOUTH_MIN := 1.6
+const MOUTH_DROP := 0.05
+## Below this share of a fire's height its tongues are one body: no dark counter opens in it.
+const FIRE_BODY := 0.7
 ## Far-side wheels of the recon car sit in shadow.
 const FAR_WHEEL := Color(0.5, 0.55, 0.52)
 ## The mean of an enemy's albedo: how much a part's tint must lift to read as hazed.
@@ -119,11 +128,45 @@ static func draw_light(
 		ci.draw_rect(Rect2(c + Vector2(-1, 0), Vector2(3, 2)), SLIT * (0.6 * k))
 		ci.draw_rect(Rect2(c + Vector2(1, 0), Vector2(1, 1)), SLIT_CORE * k)
 	if row.has("furnace"):
-		var fr := TankEnemyKit.rect_of(row["furnace"])
-		var fl := 0.75 + 0.25 * sin(float(pose.get("time", 0.0)) * 7.0)
-		ci.draw_rect(fr.grow(3.0), SLIT * (0.1 * k * fl))
-		ci.draw_rect(fr, SLIT * (0.4 * k * fl))
+		_furnace(ci, kit.texture(), row, k, float(pose.get("time", 0.0)))
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+
+## The Behemoth's furnace: the slit's own hue, white-hot in the gaps between the louvre's bars, each gap at its own
+## heat, a soft steady spill on the plate under it. Only the core flickers. The transform is already set.
+static func _furnace(
+	ci: CanvasItem, tex: Texture2D, row: Dictionary, k: float, time: float
+) -> void:
+	var fr := TankEnemyKit.rect_of(row["furnace"])
+	var glow: Rect2 = row.get("glow", Rect2())
+	if tex != null and glow.size.x > 0.0:
+		var under := fr.position + Vector2(fr.size.x * 0.5, fr.size.y + 2.0)
+		_glow(ci, tex, glow, under, fr.size.x * 0.75, SLIT, 0.42 * k)
+	var t := floorf(time * FIRE_STEPS) / FIRE_STEPS
+	var gaps := furnace_gaps(fr)
+	for i in gaps.size():
+		var heat := furnace_heat(i)
+		var gap: Rect2 = gaps[i]
+		ci.draw_rect(gap, SLIT * (0.6 * k))
+		var fl := 0.82 + 0.18 * sin(t * 9.0 + float(i) * 2.1)
+		var hot := Rect2(gap.position.x, gap.end.y - 2.0, gap.size.x, 2.0)
+		ci.draw_rect(hot, SLIT_CORE * (heat * k * fl))
+
+
+## The furnace louvre's open gaps: its bars stand every 4th px (enemy_bake.gd _furnace).
+static func furnace_gaps(fr: Rect2) -> Array[Rect2]:
+	var out: Array[Rect2] = []
+	var x := 0.0
+	while x < fr.size.x:
+		var w := minf(3.0, fr.size.x - x)
+		out.append(Rect2(fr.position.x + x, fr.position.y, w, fr.size.y))
+		x += 4.0
+	return out
+
+
+## A gap's heat: no two side by side alike; the fire is not even behind the bars.
+static func furnace_heat(i: int) -> float:
+	return [0.62, 1.0, 0.78, 0.92, 0.55, 0.85][i % 6]
 
 
 ## The strength of the slits and lamps in a pose: dimmed and hazed with the rest, and gone under a hit's flash,
@@ -557,8 +600,8 @@ static func _fire(
 	var glow: Rect2 = row.get("glow", Rect2())
 	for i in fires.size():
 		var f: Array = fires[i]
-		var at := Vector2(float(f[0]), float(f[1]))
 		var height := float(f[2])
+		var at := Vector2(float(f[0]), float(f[1]) + mouth_drop(height))
 		var seed := foot.x + i * 13.0
 		var breathe := 0.82 + 0.18 * sin((t + float(i) * 1.37) * 13.0 + seed)
 		# its glow on what is round it, from the mouth: strongest on the plate it lights, nothing at its edge
@@ -582,76 +625,140 @@ static func tongues_of(height: float) -> int:
 	return 1 if height < 9.0 else (2 if height < 22.0 else 3)
 
 
-## A fire `height` px tall standing on `at`: its tongues, the shorter ones behind, and an ember or two above.
+## The radius of the torn mouth a fire of `height` px comes out of.
+static func mouth_r(height: float) -> float:
+	return maxf(height * MOUTH_K, MOUTH_MIN)
+
+
+## How far below the fire's row its mouth's centre lies.
+static func mouth_drop(height: float) -> float:
+	return height * MOUTH_DROP
+
+
+## A fire `height` px tall out of the mouth centred on `at`: its body and tongues, its foot in the mouth, an ember or
+## two above.
 static func _flame(
 	ci: CanvasItem, at: Vector2, height: float, t: float, seed: float, a: float
 ) -> void:
+	var base := at.round() + Vector2(0.0, 1.0)
+	var edge := Color(FIRE_EDGE.r, FIRE_EDGE.g, FIRE_EDGE.b, a)
+	var mid := Color(FIRE.r, FIRE.g, FIRE.b, a)
+	var core := Color(FIRE_CORE.r, FIRE_CORE.g, FIRE_CORE.b, a)
+	for row: Array in flame_rows(height, t, seed):
+		var y := base.y + float(row[0])
+		var rh := float(row[1])
+		var u := float(row[2])
+		var col := edge
+		col.a = a * (1.0 - u * 0.45)
+		for sp: Vector2 in row[3]:
+			ci.draw_rect(Rect2(base.x + sp.x, y, sp.y, rh), col)
+			var m := roundf(sp.y * 0.66)
+			if m >= 1.0 and u < 0.8:
+				ci.draw_rect(Rect2(base.x + sp.x + roundf((sp.y - m) * 0.5), y, m, rh), mid)
+			var c := roundf(sp.y * 0.26)
+			if c >= 1.0 and u < 0.42:
+				ci.draw_rect(Rect2(base.x + sp.x + roundf((sp.y - c) * 0.5), y, c, rh), core)
+	# its lower edge, uneven: the foot's columns run on down into the mouth, each its own length
+	var half := flame_foot(height) * 0.5
+	var step_t := floorf(t * 6.0)
+	for x in range(-int(half), int(half)):
+		var drop := flame_drop(x, step_t, seed, height)
+		if drop > 0.0:
+			ci.draw_rect(Rect2(base.x + float(x), base.y, 1.0, drop), mid)
 	var n := tongues_of(height)
-	for i in range(n - 1, -1, -1):
-		var share: float = [1.0, 0.66, 0.44][i]
-		var off: float = [0.0, -0.3, 0.34][i] * height * 0.5
-		_tongue(
-			ci,
-			at + Vector2(roundf(off), 0.0),
-			height * share,
-			t + float(i) * 0.7,
-			seed + i * 5.3,
-			a
-		)
 	if n > 1:
 		for e in n - 1:
 			# embers climb off the tip, each on its own clock
-			var u := fposmod(t * (0.9 + 0.3 * float(e)) + seed * 0.37 + float(e) * 0.41, 1.0)
+			var v := fposmod(t * (0.9 + 0.3 * float(e)) + seed * 0.37 + float(e) * 0.41, 1.0)
 			var q := (
 				at
 				+ Vector2(
-					roundf(sin(u * 5.0 + seed + float(e)) * height * 0.18 + float(e) * 3.0 - 1.0),
-					-roundf(height * (0.86 + 0.5 * u))
+					roundf(sin(v * 5.0 + seed + float(e)) * height * 0.18 + float(e) * 3.0 - 1.0),
+					-roundf(height * (0.86 + 0.5 * v))
 				)
 			)
-			var col := FIRE if u < 0.5 else FIRE_EDGE
-			ci.draw_rect(Rect2(q, Vector2.ONE), Color(col.r, col.g, col.b, a * (1.0 - u * 0.7)))
+			var ec := FIRE if v < 0.5 else FIRE_EDGE
+			ci.draw_rect(Rect2(q, Vector2.ONE), Color(ec.r, ec.g, ec.b, a * (1.0 - v * 0.7)))
 
 
-## One tongue of fire: stepped rows, wide at the foot, licking to one side, its edge red and broken, then orange, a
-## yellow-white core low down. It ends in a torn tip, never a thin stick. `a` is the fire's strength, never its
-## colour.
-static func _tongue(
-	ci: CanvasItem, at: Vector2, height: float, t: float, seed: float, a: float
-) -> void:
+## A flame's width at its foot: it fits inside its mouth, whatever its height.
+static func flame_foot(height: float) -> float:
+	return maxf(floorf(mouth_r(height) * 2.0), 2.0)
+
+
+## How far a column of the foot runs on below the flame's bottom row, into the mouth.
+static func flame_drop(x: int, step_t: float, seed: float, height: float) -> float:
+	var k := fposmod(sin(float(x) * 12.9 + seed * 7.1 + step_t * 3.3) * 43758.5, 1.0)
+	return floorf(k * (minf(mouth_r(height), 3.0) + 1.0))
+
+
+## One fire's rows, foot first: [dy (px from the foot, up is negative), row height, u (0 at the foot, 1 at the top),
+## spans (Vector2: left of the mouth's centre, width)]. The foot is no wider than its mouth; the flame widens over the
+## next 2-4 rows, holds, then each tongue tears away to its tip, its two edges broken each on its own beat. Below
+## FIRE_BODY of the height the tongues are one span, so no dark counter opens in the body; only their tips part. Pure.
+static func flame_rows(height: float, t: float, seed: float) -> Array:
+	var n := tongues_of(height)
 	var row_h := maxf(floorf(height / 14.0), 1.0)
 	var rows := int(height / row_h)
-	var breathe := 0.82 + 0.18 * sin(t * 13.0 + seed)
-	var w0 := maxf(height * 0.42, 3.0)
+	var belly_rows := clampi(rows / 4, 2, 4)
+	var foot := flame_foot(height)
+	var torn := minf(height * 0.07, 2.0)
+	var out: Array = []
 	for k in rows:
+		var spans: Array[Vector2] = []
 		var u := float(k) / float(rows)
-		if u > breathe:
-			break
-		var y := at.y + 1.0 - float(k + 1) * row_h
-		var lick := roundf(sin(t * 7.0 + seed + float(k) * 0.55) * u * height * 0.2)
-		var w := w0 * pow(1.0 - u, 0.8) * (0.85 + 0.15 * sin(t * 17.0 + float(k) + seed))
-		# a broken edge: this row wider or narrower than the last, on no regular beat
-		w += roundf(sin(float(k) * 2.4 + seed * 1.7 + floorf(t * 6.0)) * minf(height * 0.05, 1.5))
-		w = roundf(w)
-		if w < (2.0 if height >= 14.0 else 1.0):
-			break
-		var x := at.x + lick
-		var left := x - roundf(w * 0.5)
-		ci.draw_rect(
-			Rect2(left, y, w, row_h),
-			Color(FIRE_EDGE.r, FIRE_EDGE.g, FIRE_EDGE.b, a * (1.0 - u * 0.45))
-		)
-		var mid := roundf(w * 0.66)
-		if mid >= 1.0 and u < 0.8:
-			ci.draw_rect(
-				Rect2(x - roundf(mid * 0.5), y, mid, row_h), Color(FIRE.r, FIRE.g, FIRE.b, a)
-			)
-		var core := roundf(w * 0.34)
-		if core >= 1.0 and u < 0.55:
-			ci.draw_rect(
-				Rect2(x - roundf(core * 0.5), y, core, row_h),
-				Color(FIRE_CORE.r, FIRE_CORE.g, FIRE_CORE.b, a)
-			)
+		for i in n:
+			var share: float = [1.0, 0.88, 0.62][i]
+			var side: float = [0.0, -1.0, 1.0][i]
+			var tseed := seed + float(i) * 5.3
+			var tt := t + float(i) * 0.7
+			var v := u / share
+			if v > 0.82 + 0.18 * sin(tt * 13.0 + tseed):
+				continue
+			var belly := maxf(height * 0.46 * share, foot)
+			if k == 0:
+				spans.append(Vector2(-roundf(foot * 0.5), foot))
+				continue
+			var w := lerpf(foot, belly, float(k) / float(belly_rows))
+			var beat := floorf(tt * 6.0)
+			var lick := sin(tt * 7.0 + tseed + float(k) * 0.55) * v * height * 0.1
+			# a side tongue stays in the body and only leans out towards its tip
+			var lean := side * height * 0.24 * pow(maxf(v - 0.35, 0.0) / 0.65, 1.5)
+			var l_edge := 0.0
+			var r_edge := 0.0
+			if k >= belly_rows:
+				var taper := (
+					float(k - belly_rows) / maxf(float(rows) * share - float(belly_rows), 1.0)
+				)
+				w = (
+					belly
+					* pow(maxf(1.0 - taper, 0.0), 0.62)
+					* (0.88 + 0.12 * sin(tt * 17.0 + float(k) + tseed))
+				)
+				l_edge = roundf(sin(float(k) * 2.4 + tseed * 1.7 + beat) * torn)
+				r_edge = roundf(sin(float(k) * 1.7 + tseed * 3.1 + beat * 2.0) * torn)
+			var left := roundf(lick + lean - w * 0.5) + l_edge
+			var right := roundf(lick + lean + w * 0.5) + r_edge
+			if right - left < (2.0 if height >= 14.0 else 1.0):
+				continue
+			spans.append(Vector2(left, right - left))
+		if spans.is_empty():
+			continue
+		out.append([-float(k + 1) * row_h, row_h, u, _flame_spans(spans, u)])
+	return out
+
+
+## A row's spans: below FIRE_BODY one span round them all.
+static func _flame_spans(spans: Array[Vector2], u: float) -> Array[Vector2]:
+	if u >= FIRE_BODY or spans.size() < 2:
+		return spans
+	var left := INF
+	var right := -INF
+	for sp in spans:
+		left = minf(left, sp.x)
+		right = maxf(right, sp.x + sp.y)
+	var one: Array[Vector2] = [Vector2(left, right - left)]
+	return one
 
 
 ## A soft glow: the atlas's falloff, scaled, so it has no steps and no edge. The colour's alpha is its strength.

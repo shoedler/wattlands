@@ -67,9 +67,21 @@ const RIM_CLEAR := 5
 ## Each plate's value on its part, a step or two from its neighbours' (two apart in this list too): the hull's
 ## large-scale wear, as the hero's plates have.
 const PLATE_TONES: Array[float] = [0.7, 1.25, 0.95, 0.62, 1.4, 1.05]
-## The wear's patches, 6-20 px across: above SCUFF_AT the plate is rubbed lighter, below GRIME_AT it is dark.
+## The wear's patches, 6-20 px across, each on its own plate: above SCUFF_AT the plate is a ramp step lighter, below
+## GRIME_AT a step darker, nothing between.
 const SCUFF_AT := 0.61
 const GRIME_AT := 0.37
+## A pixel this many ramp steps from its plate's value is a feature of the plate (a hatch's edge, a lip), not its paint.
+const FEATURE_STEPS := 2
+## One crumb of wear per this many px of plate where it is worn (a plate has worn zones and clean paint): as the hero's
+## armour, hard little clusters 2-5 px, not a filter.
+const CRUMB_AREA := 6
+## A peak along a row stands this far over both its neighbours (L, 0..255).
+const PEAK_DL := 4.0
+## Gashes keep within this many degrees of the horizontal, as a shot tears along the plate.
+const GASH_TILT := 35.0
+## A smashed bogie's iron against a live wheel's WHEEL_K: dull, its rims still catching a little.
+const BOGIE_K := 0.56
 ## A sprocket has one tooth to this many shoes, so each tooth sits in a gap of the belt.
 const SHOES_PER_TOOTH := 2.0
 ## The glow's sprite on the atlas: a soft round falloff, nothing at its edge.
@@ -199,14 +211,16 @@ func _hull_image(id: String, L: Dictionary) -> Dictionary:
 	var seed := int((L["parts"][0] as Dictionary).get("seed", 3))
 	# finish.gd's speckle pass takes single bright pixels, so the rivets go on after it, last of all
 	img = _finish(img, sz)
-	_surface(img, L["parts"], L["details"], sz, span, seed)
+	_surface(img, L["parts"], _details_of_hull(L), sz, span, seed)
 	_moon_rim(img)
 	_rivet_seams(img, L["parts"], L["details"], span)
+	_thin_peaks(img)
 	if not front.is_invisible():
 		front = _finish(front, sz)
 		_surface(front, L.get("front_parts", []), L.get("front_details", []), sz, span, seed + 5)
 		_under_overhang(front)
 		_rivet_seams(front, L.get("front_parts", []), L.get("front_details", []), span)
+		_thin_peaks(front)
 	if id == "destroyer":
 		var g: Vector2i = L["glint"]
 		Px.rect(img, Rect2i(g.x - 2, g.y - 1, 5, 4), OUTLINE)
@@ -226,13 +240,15 @@ func _span(L: Dictionary) -> Vector2i:
 ## A built, finished picture to its night: the fasteners' grime, the dirt, the palette, each plate's value, and
 ## the wear on top of that.
 func _surface(img: Image, parts: Array, details: Array, sz: Vector2i, span: Vector2i, seed: int) -> void:
+	var plates: Array[Rect2i] = []
+	var ids := _plate_ids(parts, sz, plates)
 	_wear_fasteners(img, seed)
-	_weather(img, sz, seed)
+	_weather(img, sz, seed, ids)
 	_snap(img)
 	_despeckle(img)
 	_calm(img, parts, sz)
 	_night(img, span.x, span.y, _plate_tones(parts, sz))
-	_wear(img, parts, details, span, seed)
+	_wear(img, parts, details, span, seed, ids, plates)
 
 
 func _finish(img: Image, sz: Vector2i) -> Image:
@@ -307,7 +323,7 @@ func _belly(img: Image, L: Dictionary) -> void:
 			if y < int(top) - 1 and img.get_pixel(x, y).a > 0.5:
 				continue
 			var k := float(y - top) / maxf(low - top, 1.0)
-			Px.put(img, x, y, COLD[1] if k > 0.4 or (x + y) % 3 else COLD[3])
+			Px.put(img, x, y, COLD[1] if k > 0.4 or Px.vnoise(x, y, 7.0, 73) < 0.55 else COLD[3])
 	for w2: Dictionary in wheels:
 		if bool(w2.get("far", false)):
 			continue
@@ -447,6 +463,33 @@ func _secondary(img: Image, L: Dictionary) -> void:
 	], OUTLINE)
 
 
+## The hull's details and its furniture as details: all that the wear stays off.
+func _details_of_hull(L: Dictionary) -> Array:
+	var out: Array = []
+	out.append_array(L["details"])
+	if L.has("net"):
+		out.append({"rect": L["net"]["rect"]})
+	if L.has("furnace"):
+		out.append({"rect": L["furnace"]})
+	for key: String in ["mount", "spare"]:
+		if L.has(key):
+			out.append({"rect": _round_rect(L[key]["c"], float(L[key]["r"]))})
+	for a: Dictionary in L.get("arches", []):
+		out.append({"rect": _round_rect(a["c"], float(a["r"]))})
+	for p: Array in L.get("ports", []):
+		out.append({"at": Vector2i(int(p[0]), int(p[1]))})
+	if L.has("secondary"):
+		var s: Dictionary = L["secondary"]
+		var o: Vector2 = s["pivot"]
+		out.append({"rect": Rect2i(int(o.x - float(s["len"])), int(o.y) - 3, int(s["len"]) + 8, 7)})
+	return out
+
+
+func _round_rect(c: Vector2, r: float) -> Rect2i:
+	var q := ceili(r) + 1
+	return Rect2i(int(c.x) - q, int(c.y) - q, q * 2 + 1, q * 2 + 1)
+
+
 ## Rivets one per 7-9 px along every seam and round each plated part's edge (Hull.build rivets only some
 ## plates): one bright head, its shadow down-right, never quite on a ruled line. A cast part takes only the
 ## seams it lists. Never on a detail, never doubling one already there.
@@ -484,14 +527,18 @@ func _rivet_seams(img: Image, parts: Array, details: Array, span: Vector2i) -> v
 			x2 += _pace(step, x2, top)
 
 
-## What wear and rivets stay off: each detail, with a little room.
-func _detail_rects(details: Array) -> Array[Rect2i]:
+## What wear and rivets stay off: each detail, with a little room. `lines`: rails and links too.
+func _detail_rects(details: Array, lines: bool = false) -> Array[Rect2i]:
 	var skip: Array[Rect2i] = []
 	for d: Dictionary in details:
 		if d.has("rect"):
 			skip.append((d["rect"] as Rect2i).grow(3))
 		elif d.has("at"):
 			skip.append(Rect2i(Vector2i(d["at"]) - Vector2i(5, 5), Vector2i(11, 11)))
+		elif lines and d.has("a"):
+			var a := Vector2i(d["a"])
+			var b := Vector2i(d["b"])
+			skip.append(Rect2i(mini(a.x, b.x), mini(a.y, b.y), absi(a.x - b.x) + 1, absi(a.y - b.y) + 1).grow(2))
 	return skip
 
 
@@ -602,6 +649,24 @@ func _night(img: Image, top: int, low: int, tones: PackedFloat32Array = PackedFl
 			img.set_pixel(x, y, _ramp_of(_lum(c) * k * tone))
 
 
+## Which plate each pixel of a picture of `sz` lies on, -1 on none: Hull's own plates, a later part over an earlier
+## one. `plates` takes the plates' rects by that index. Wear keeps to the plate it starts on.
+func _plate_ids(parts: Array, sz: Vector2i, plates: Array[Rect2i]) -> PackedInt32Array:
+	var ids := PackedInt32Array()
+	ids.resize(sz.x * sz.y)
+	ids.fill(-1)
+	for part: Dictionary in parts:
+		var poly: PackedVector2Array = part["poly"]
+		for pr: Rect2i in _plates_of(part):
+			var id := plates.size()
+			plates.append(pr)
+			for y in range(maxi(pr.position.y, 0), mini(pr.end.y, sz.y)):
+				for x in range(maxi(pr.position.x, 0), mini(pr.end.x, sz.x)):
+					if Px.in_poly(Vector2(x + 0.5, y + 0.5), poly):
+						ids[y * sz.x + x] = id
+	return ids
+
+
 ## Each plate's value (PLATE_TONES) over a picture of `sz`, 1 where no plate lies: Hull's own plates, so a
 ## step of value falls on a seam.
 func _plate_tones(parts: Array, sz: Vector2i) -> PackedFloat32Array:
@@ -612,8 +677,9 @@ func _plate_tones(parts: Array, sz: Vector2i) -> PackedFloat32Array:
 		var poly: PackedVector2Array = part["poly"]
 		var seed := int(part.get("seed", 0))
 		var plates := _plates_of(part)
+		var contrast := float(part.get("contrast", 1.0))
 		for k in plates.size():
-			var tone: float = PLATE_TONES[posmod(k + seed, PLATE_TONES.size())]
+			var tone: float = 1.0 + (PLATE_TONES[posmod(k + seed, PLATE_TONES.size())] - 1.0) * contrast
 			var pr: Rect2i = plates[k]
 			for y in range(maxi(pr.position.y, 0), mini(pr.end.y, sz.y)):
 				for x in range(maxi(pr.position.x, 0), mini(pr.end.x, sz.x)):
@@ -622,9 +688,10 @@ func _plate_tones(parts: Array, sz: Vector2i) -> PackedFloat32Array:
 	return t
 
 
-## Hull's ordered dither goes from inside each plate (at the hero's scale the wear is clumps, not an even weave):
-## a plate's inner pixels take the mean of the 3 x 3 round them. Its edge rows and columns, where the seam's dark
-## and lit lines are, stay; so do fasteners, glass and details' own hard colours.
+## Hull's ordered dither goes from each plate (at the hero's scale the wear is clumps, not an even weave): a plate's
+## inner pixels take the mean of the 3 x 3 round them. Its edge rows and columns, where the seam's dark and lit lines
+## are, take the mean along their own line, so a line stays a line and no comb runs along a seam. Fasteners, glass and
+## details' own hard colours stay.
 func _calm(img: Image, parts: Array, sz: Vector2i) -> void:
 	var inner := PackedByteArray()
 	inner.resize(sz.x * sz.y)
@@ -636,8 +703,9 @@ func _calm(img: Image, parts: Array, sz: Vector2i) -> void:
 				for x in range(pr.position.x, pr.end.x):
 					if x < 0 or y < 0 or x >= sz.x or y >= sz.y or not Px.in_poly(Vector2(x + 0.5, y + 0.5), poly):
 						continue
-					var deep := mini(mini(x - pr.position.x, pr.end.x - 1 - x), mini(y - pr.position.y, pr.end.y - 1 - y))
-					inner[y * sz.x + x] = 1 if deep >= edge else 0
+					var across := mini(y - pr.position.y, pr.end.y - 1 - y)
+					var along := mini(x - pr.position.x, pr.end.x - 1 - x)
+					inner[y * sz.x + x] = 1 if mini(across, along) >= edge else (2 if across <= along else 3)
 	var src := img.duplicate() as Image
 	for y2 in range(1, sz.y - 1):
 		for x2 in range(1, sz.x - 1):
@@ -648,9 +716,17 @@ func _calm(img: Image, parts: Array, sz: Vector2i) -> void:
 				continue
 			var total := 0.0
 			var n := 0
-			for dy in range(-1, 2):
-				for dx in range(-1, 2):
-					var q := src.get_pixel(x2 + dx, y2 + dy)
+			# an edge's mean runs over 4 px along it, so a 2 px weave comes out level
+			var mode := inner[y2 * sz.x + x2]
+			var xs: Array = [-1, 0, 1] if mode == 1 else ([-1, 0, 1, 2] if mode == 2 else [0])
+			var ys: Array = [-1, 0, 1] if mode == 1 else ([-1, 0, 1, 2] if mode == 3 else [0])
+			for dy: int in ys:
+				for dx: int in xs:
+					var qx := x2 + dx
+					var qy := y2 + dy
+					if qx < 0 or qy < 0 or qx >= sz.x or qy >= sz.y:
+						continue
+					var q := src.get_pixel(qx, qy)
 					if q.a > 0.5 and not _keeps(q) and not q.is_equal_approx(OUTLINE):
 						total += _lum(q)
 						n += 1
@@ -667,28 +743,79 @@ func _plates_of(part: Dictionary) -> Array[Rect2i]:
 	)
 
 
-## Wear at the plates' scale on the night picture, as the hero's armour has it: rubbed patches and dark ones
-## 6-20 px across with broken edges, chips clustered on the plates' corners and worn runs along their edges, a
-## dark run down from a plate's top here and there. Details keep their own value.
-func _wear(img: Image, parts: Array, details: Array, span: Vector2i, seed: int) -> void:
-	var skip := _detail_rects(details)
+## Wear at the plates' scale on the night picture, as the hero's armour has it. Each plate is one paint: its value
+## falling with the night, its patches its own (6-20 px across, broken edges, one ramp step off the paint and nothing
+## between), so a value changes at a seam and a patch never runs across one. Over that the crumbs. Details keep theirs.
+func _wear(
+	img: Image, parts: Array, details: Array, span: Vector2i, seed: int, ids: PackedInt32Array, plates: Array[Rect2i]
+) -> void:
+	var skip := _detail_rects(details, true)
 	var src := img.duplicate() as Image
+	var w := src.get_width()
+	var paint := _plate_paints(src, ids, plates.size(), span, skip)
 	for y in src.get_height():
-		for x in src.get_width():
+		for x in w:
+			var id := ids[y * w + x]
 			var c := src.get_pixel(x, y)
-			if c.a < 0.5 or _keeps(c) or c.is_equal_approx(OUTLINE) or _skipped(skip, Vector2i(x, y)):
+			if id < 0 or not _is_paint(c) or _skipped(skip, Vector2i(x, y)) or not _inside_plate(src, plates[id], x, y):
 				continue
-			var f := Px.vnoise(x, y, 9.0, seed + 40) * 0.68 + Px.vnoise(x, y, 3.0, seed + 41) * 0.32
-			var k := 1.0
+			# the night's bands wander across a plate, never a ruled line
+			var sway := roundi((Px.vnoise(float(x), 0.0, 7.0, seed + 44 + id) - 0.5) * 8.0)
+			var at := _ramp_index(paint[id] * _night_k(y + sway, span.x, span.y) / NIGHT_K)
+			if absi(_ramp_index(_lum(c)) - at) > FEATURE_STEPS:
+				continue
+			var s2 := seed + 40 + id * 11
+			var f := Px.vnoise(x, y, 9.0, s2) * 0.62 + Px.vnoise(x, y, 3.0, s2 + 1) * 0.38
+			f += (Px.h2(x, y, s2 + 2) - 0.5) * 0.09
 			if f > SCUFF_AT:
-				k = 1.3
+				at += 1
 			elif f < GRIME_AT:
-				k = 0.72
-			if k != 1.0:
-				img.set_pixel(x, y, _ramp_of(_lum(c) * k))
+				at -= 1
+			img.set_pixel(x, y, COLD[clampi(at, 1, 15)])
+	var first := 0
 	for part: Dictionary in parts:
-		if not bool(part.get("cast", false)):
-			_plate_wear(img, part, skip, span)
+		_plate_wear(img, part, plates, first, ids, skip, span, seed)
+		first += _plates_of(part).size()
+
+
+## A plate's paint: the median of its bare pixels with the night's fall taken out.
+func _plate_paints(
+	src: Image, ids: PackedInt32Array, n: int, span: Vector2i, skip: Array[Rect2i]
+) -> PackedFloat32Array:
+	var vals: Array = []
+	for i in n:
+		vals.append([])
+	var w := src.get_width()
+	for y in src.get_height():
+		var k := _night_k(y, span.x, span.y) / NIGHT_K
+		for x in w:
+			var id := ids[y * w + x]
+			var c := src.get_pixel(x, y)
+			if id >= 0 and _is_paint(c) and not _skipped(skip, Vector2i(x, y)):
+				(vals[id] as Array).append(_lum(c) / k)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for i2 in n:
+		var v: Array = vals[i2]
+		if v.is_empty():
+			continue
+		v.sort()
+		out[i2] = v[v.size() / 2]
+	return out
+
+
+func _is_paint(c: Color) -> bool:
+	return c.a > 0.5 and not _keeps(c) and not c.is_equal_approx(OUTLINE)
+
+
+## Two rows and columns in from the plate's seams and from the silhouette: a seam's dark and lit lines stay.
+func _inside_plate(src: Image, pr: Rect2i, x: int, y: int) -> bool:
+	if mini(mini(x - pr.position.x, pr.end.x - 1 - x), mini(y - pr.position.y, pr.end.y - 1 - y)) < 2:
+		return false
+	for q: Vector2i in [Vector2i(-2, 0), Vector2i(2, 0), Vector2i(0, -2), Vector2i(0, 2)]:
+		if not Px.inside(src, x + q.x, y + q.y) or src.get_pixel(x + q.x, y + q.y).a < 0.5:
+			return false
+	return true
 
 
 func _skipped(skip: Array[Rect2i], q: Vector2i) -> bool:
@@ -698,58 +825,155 @@ func _skipped(skip: Array[Rect2i], q: Vector2i) -> bool:
 	return false
 
 
-## One part's plates: chips on some corners, worn runs along exposed edges, dark runs down from the top.
-func _plate_wear(img: Image, part: Dictionary, skip: Array[Rect2i], span: Vector2i) -> void:
+## One part's plates: crumbs of bare metal and of dirt over each; along a plate's edges, thickest at its corners, the
+## paint gone in crumbs of 3-6 px that follow the edge; dark runs down from the top here and there.
+func _plate_wear(
+	img: Image,
+	part: Dictionary,
+	plates: Array[Rect2i],
+	first: int,
+	ids: PackedInt32Array,
+	skip: Array[Rect2i],
+	span: Vector2i,
+	seed: int
+) -> void:
 	var poly: PackedVector2Array = part["poly"]
-	var seed := int(part.get("seed", 0))
-	var plates := _plates_of(part)
-	for k in plates.size():
-		var pr: Rect2i = plates[k]
-		if pr.size.x < 7 or pr.size.y < 5:
-			continue
-		var chips: Array[Vector2i] = []
-		for ci in 4:
-			if Px.h2(k * 7 + ci, seed, 61) < 0.5:
+	var pseed := int(part.get("seed", 0)) + seed
+	var count := _plates_of(part).size()
+	for k in count:
+		var id := first + k
+		var pr: Rect2i = plates[id]
+		var s := pseed + id * 37
+		for n in pr.get_area() / CRUMB_AREA:
+			var at := pr.position + Vector2i(int(Px.h2(n, 1, s) * pr.size.x), int(Px.h2(n, 2, s) * pr.size.y))
+			if Px.vnoise(at.x, at.y, 11.0, s + 9) < 0.4:
 				continue
-			var at := Vector2i(
-				pr.position.x + 1 if ci % 2 == 0 else pr.end.x - 2, pr.position.y + 2 if ci < 2 else pr.end.y - 3
-			)
-			var dir := Vector2i(1 if ci % 2 == 0 else -1, 1 if ci < 2 else -1)
-			# a worn corner: a solid little wedge, its edge torn
-			var size := 2.0 + Px.h2(k + ci, seed, 62) * 3.5
-			for dy in 4:
-				for dx in 7:
-					var q := at + Vector2i(dir.x * dx, dir.y * dy)
-					if float(dx) + float(dy) * 1.6 + Px.h2(q.x, q.y, seed + 63) * 1.4 < size:
-						chips.append(q)
+			var roll := Px.h2(n, 3, s)
+			var pts := _walk(at, 2 + floori(Px.h2(n, 4, s) * 4.0), Vector2i.ZERO, s + n * 3)
+			_crumb(img, ids, id, pts, 3 if roll < 0.3 else (2 if roll < 0.55 else -2), skip, span)
+		if bool(part.get("cast", false)) or pr.size.x < 7 or pr.size.y < 5:
+			continue
+		_edge_crumbs(img, ids, id, pr, skip, span, s)
 		for x in range(pr.position.x + 1, pr.end.x - 1):
-			# a run along the top, in clumps; the bottom's seam wears dark instead
-			if Px.vnoise(x, pr.position.y, 7.0, seed + 65) > 0.66:
-				chips.append(Vector2i(x, pr.position.y + 2))
-				if Px.vnoise(x, pr.position.y, 3.0, seed + 66) > 0.6:
-					chips.append(Vector2i(x, pr.position.y + 3))
-			if Px.h2(x, pr.position.y, seed + 67) > 0.93 and pr.size.y >= 8:
-				_streak(img, poly, Vector2i(x, pr.position.y + 2), 4 + floori(Px.h2(x, k, seed + 68) * 10.0), x + k)
-		_chip(img, poly, skip, chips, span)
+			if Px.h2(x, pr.position.y, s + 67) > 0.93 and pr.size.y >= 8:
+				_streak(img, poly, Vector2i(x, pr.position.y + 2), 4 + floori(Px.h2(x, k, s + 68) * 10.0), x + k)
 
 
-## Bare metal showing: lit pixels, the shadow of the paint's lip under each. Dimmer as the road's dark falls.
-func _chip(img: Image, poly: PackedVector2Array, skip: Array[Rect2i], chips: Array[Vector2i], span: Vector2i) -> void:
+## Along each edge of a plate, in from its seam: the paint worn off in irregular crumbs, thicker near the corners. Lit
+## on the top and the sides; the bottom's seam wears dark instead.
+func _edge_crumbs(
+	img: Image, ids: PackedInt32Array, id: int, pr: Rect2i, skip: Array[Rect2i], span: Vector2i, s: int
+) -> void:
+	var runs: Array = [
+		[pr.position + Vector2i(0, 2), Vector2i(1, 0), pr.size.x, 2],
+		[Vector2i(pr.position.x, pr.end.y - 3), Vector2i(1, 0), pr.size.x, -2],
+		[pr.position + Vector2i(2, 0), Vector2i(0, 1), pr.size.y, 2],
+		[Vector2i(pr.end.x - 3, pr.position.y), Vector2i(0, 1), pr.size.y, 2],
+	]
+	for e in runs.size():
+		var from: Vector2i = runs[e][0]
+		var along: Vector2i = runs[e][1]
+		var ln: int = runs[e][2]
+		var lift: int = runs[e][3]
+		var i := 1
+		while i < ln - 1:
+			var corner := clampf(1.0 - float(mini(i, ln - 1 - i)) / 7.0, 0.0, 1.0)
+			var at := from + along * i
+			if Px.h2(at.x, at.y, s + e) < 0.1 + corner * 0.45:
+				var n := 3 + floori(Px.h2(at.y, at.x, s + 5) * 4.0)
+				var steps := lift + (1 if lift > 0 and Px.h2(i, e, s + 6) > 0.8 else 0)
+				_crumb(img, ids, id, _walk(at, n, along, s + i * 7 + e), steps, skip, span)
+			i += 2 + floori(Px.h2(i, e, s + 7) * 5.0)
+
+
+## A crumb's pixels: `n` px wandering from `at`, along `bias` when it has one. No two alike: every step is hashed.
+func _walk(at: Vector2i, n: int, bias: Vector2i, s: int) -> Array[Vector2i]:
+	var pts: Array[Vector2i] = [at]
+	var p := at
+	var dirs: Array[Vector2i] = [
+		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 1), Vector2i(-1, 1)
+	]
+	for i in n - 1:
+		var d: Vector2i = dirs[floori(Px.h2(s, i, 85) * dirs.size())]
+		if bias != Vector2i.ZERO and Px.h2(i, s, 83) < 0.55:
+			d = bias if Px.h2(i, s, 87) < 0.75 else -bias
+		p += d
+		pts.append(p)
+	# on the open plate a crumb has body: most of its px are two wide, hard edges, no pepper. Along an edge it is a line
+	# of broken paint, never a block.
+	if bias == Vector2i.ZERO:
+		for i2 in pts.size():
+			if Px.h2(i2, s, 89) < 0.65:
+				pts.append(pts[i2] + Vector2i(1, 0))
+	return pts
+
+
+## Lays a crumb on its plate, `steps` ramp steps from what is under it: bare metal with the paint's lip dark under it,
+## or dirt. It stops at the seam and at anything not paint. A dark plate has no dark left, so there it shows metal.
+## Dimmer as the road's dark falls: never the brightest shape on a plate.
+func _crumb(
+	img: Image, ids: PackedInt32Array, id: int, pts: Array[Vector2i], steps: int, skip: Array[Rect2i], span: Vector2i
+) -> void:
+	var w := img.get_width()
 	var ok: Array[Vector2i] = []
-	for q in chips:
-		if not Px.inside(img, q.x, q.y) or not Px.in_poly(Vector2(q) + Vector2(0.5, 0.5), poly):
+	for q in pts:
+		if not Px.inside(img, q.x, q.y) or ids[q.y * w + q.x] != id or _skipped(skip, q):
 			continue
-		var c := img.get_pixel(q.x, q.y)
-		if c.a < 0.5 or _keeps(c) or c.is_equal_approx(OUTLINE) or _skipped(skip, q):
-			continue
-		ok.append(q)
+		if _is_paint(img.get_pixel(q.x, q.y)) and not ok.has(q):
+			ok.append(q)
 	for q2 in ok:
-		var sh := q2 + Vector2i(1, 1)
-		if Px.inside(img, sh.x, sh.y) and img.get_pixel(sh.x, sh.y).a > 0.5 and not _keeps(img.get_pixel(sh.x, sh.y)):
-			img.set_pixel(sh.x, sh.y, COLD[2])
-	for q3 in ok:
-		var fall := _night_k(q3.y, span.x, span.y) / NIGHT_K
-		img.set_pixel(q3.x, q3.y, COLD[clampi(roundi(lerpf(4.0, 10.0, fall)), 1, 15)])
+		var i := _ramp_index(_lum(img.get_pixel(q2.x, q2.y)))
+		var st := absi(steps) if i <= 2 else steps
+		var fall := _night_k(q2.y, span.x, span.y) / NIGHT_K
+		var top := roundi(lerpf(4.0, 10.0, fall))
+		img.set_pixel(q2.x, q2.y, COLD[clampi(i + st, 1, maxi(top, i))])
+		if st > 0:
+			var sh := q2 + Vector2i(1, 1)
+			if not ok.has(sh) and Px.inside(img, sh.x, sh.y) and ids[sh.y * w + sh.x] == id:
+				var under := img.get_pixel(sh.x, sh.y)
+				if _is_paint(under):
+					img.set_pixel(sh.x, sh.y, COLD[clampi(_ramp_index(_lum(under)) - 1, 1, 15)])
+
+
+## No row is a comb: where single-pixel peaks stand under 4 px apart along a row (the densest regular detail on a hull
+## is a rivet row, one per 7-9 px), every other one comes down to its neighbours, whatever raised it. Heads, glass and
+## the moon count as peaks and stay.
+func _thin_peaks(img: Image) -> void:
+	for y in img.get_height():
+		for _pass in 4:
+			var peaks: Array[int] = []
+			for x in range(1, img.get_width() - 1):
+				var a := img.get_pixel(x - 1, y)
+				var c := img.get_pixel(x, y)
+				var b := img.get_pixel(x + 1, y)
+				if a.a < 0.5 or b.a < 0.5 or c.a < 0.5:
+					continue
+				if _luma(c) >= _luma(a) + PEAK_DL and _luma(c) >= _luma(b) + PEAK_DL:
+					peaks.append(x)
+			if peaks.size() < 6:
+				break
+			var gaps: Array[int] = []
+			for i in range(1, peaks.size()):
+				gaps.append(peaks[i] - peaks[i - 1])
+			gaps.sort()
+			if gaps[gaps.size() / 2] >= 5:
+				break
+			var removed := 0
+			for k in peaks.size():
+				var x2 := peaks[k]
+				var close := k + 1 < peaks.size() and peaks[k + 1] - x2 < 5
+				if close and (k + removed) % 2 == 0 and not _keeps(img.get_pixel(x2, y)):
+					var left := img.get_pixel(x2 - 1, y)
+					var right := img.get_pixel(x2 + 1, y)
+					img.set_pixel(x2, y, left if _luma(left) > _luma(right) else right)
+					removed += 1
+			if removed == 0:
+				break
+
+
+## Display luma, 0..255: what a neighbour's step looks like.
+func _luma(c: Color) -> float:
+	return (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) * 255.0
 
 
 ## A lone pixel brighter than the four round it goes (finish.gd's chips are single pixels at the hull's value):
@@ -791,6 +1015,10 @@ func _night_flat(img: Image, k: float) -> void:
 
 ## The value's nearest step of the ramp proper (no moon, no heads, not the outline's own black).
 func _ramp_of(l: float) -> Color:
+	return COLD[_ramp_index(l)]
+
+
+func _ramp_index(l: float) -> int:
 	var best := 1
 	var bd := INF
 	for i in range(1, 16):
@@ -798,7 +1026,7 @@ func _ramp_of(l: float) -> Color:
 		if d < bd:
 			bd = d
 			best = i
-	return COLD[best]
+	return best
 
 
 ## The moon: its colder rim one row under an outline with open sky above it, in broken runs, a few pixels of
@@ -833,8 +1061,10 @@ func _under_overhang(img: Image) -> void:
 		for y in range(1, h - 2):
 			if src.get_pixel(x, y).a > 0.5 and src.get_pixel(x, y - 1).a < 0.5:
 				img.set_pixel(x, y + 1, COLD[2])
-				if not _keeps(src.get_pixel(x, y + 2)) and src.get_pixel(x, y + 2).a > 0.5:
-					img.set_pixel(x, y + 2, COLD[3] if (x + y) % 2 == 0 else src.get_pixel(x, y + 2))
+				# the shade's lower edge wanders at the plate's scale, never a comb
+				var under := src.get_pixel(x, y + 2)
+				if under.a > 0.5 and not _keeps(under) and Px.vnoise(x, y, 7.0, 71) > 0.38:
+					img.set_pixel(x, y + 2, COLD[3])
 
 
 ## The Behemoth's portholes: a riveted ring round dark glass; the odd one catches the moon.
@@ -851,20 +1081,22 @@ func _ports(img: Image, L: Dictionary) -> void:
 
 ## Weathering (Hull.build leaves it out on enemies): grime in clumps low on each plate's run, streaks running
 ## down from fasteners. Tones of the cold ramp only.
-func _weather(img: Image, sz: Vector2i, seed: int) -> void:
+func _weather(img: Image, sz: Vector2i, seed: int, ids: PackedInt32Array) -> void:
 	var src := img.duplicate() as Image
 	for y in sz.y:
 		for x in sz.x:
 			var c := src.get_pixel(x, y)
 			if c.a < 0.5:
 				continue
+			# each plate its own dirt: no blotch runs across a seam
+			var ps := seed + maxi(ids[y * sz.x + x], 0) * 13
 			var depth := 0
 			for k in range(1, 14):
 				if y + k >= sz.y or src.get_pixel(x, y + k).a < 0.5:
 					break
 				depth = k
-			var grime := Px.vnoise(x, y, 9.0, seed) * 0.5 + (1.0 - clampf(depth / 8.0, 0.0, 1.0)) * 0.55
-			if grime > 0.62 and Px.vnoise(x, y, 3.0, seed + 1) < (grime - 0.3):
+			var grime := Px.vnoise(x, y, 9.0, ps) * 0.5 + (1.0 - clampf(depth / 8.0, 0.0, 1.0)) * 0.55
+			if grime > 0.62 and Px.vnoise(x, y, 3.0, ps + 1) < (grime - 0.3):
 				Px.mix(img, x, y, COLD[2], 0.55)
 			if c.is_equal_approx(Hull.RIV_HI_EN) and Px.h2(x, y, seed + 3) > 0.55:
 				var ln := 4 + floori(Px.h2(y, x, seed + 4) * 7.0)
@@ -1315,20 +1547,8 @@ func _bogies(row: Dictionary, L: Dictionary) -> void:
 		_rivet_seams(img, [part], [], span)
 		var bb := img.get_used_rect()
 		var rect := _add(img.get_region(bb), Vector2i.ZERO)
-		# wrecked: the frame charred, the wheels baked on it, the track fallen off, gaps torn
-		var w := Px.blank(sz.x, sz.y)
-		for wh: Dictionary in b["wheels"]:
-			var c := Vector2(float(wh["x"]), float(wh["y"]) + 1.0)
-			_wheel(w, c, float(wh["r"]), Px.h2(int(c.x), 4, seed) * TAU, "road")
+		var w := _wrecked_bogie(L, b, img, seed)
 		var sp: Dictionary = b["sprocket"]
-		var teeth := _teeth_of(float(sp["r"]), float(L["pitch"]))
-		_wheel(w, (sp["c"] as Vector2) + Vector2(0, 2), float(sp["r"]), 0.4, "sprocket", teeth)
-		_night_flat(w, WHEEL_K)
-		w.blend_rect(img, Rect2i(Vector2i.ZERO, sz), Vector2i.ZERO)
-		_fallen_track(w, b, float(L["pitch"]), float(L["gear"]["T"]), seed)
-		var mid := float(fr.position.x + fr.size.x / 2)
-		var soot: Array[Vector3] = [Vector3(mid, float(fr.position.y + 4), 22.0)]
-		_char(w, seed, soot)
 		var wb := w.get_used_rect()
 		var wrect := _add(w.get_region(wb), Vector2i.ZERO)
 		var wh_out: Array = []
@@ -1342,6 +1562,80 @@ func _bogies(row: Dictionary, L: Dictionary) -> void:
 			"x_offset": b["x_offset"], "wheels": wh_out, "rollers": rl, "sprocket": {"c": _v(sp["c"]), "r": sp["r"]},
 		})
 	row["bogies"] = out
+
+
+## A bogie smashed on a hull still alive: its frame sooted and bitten, two road wheels still on their arms (one cocked
+## down), a third fallen over at their feet, the sprocket whole, the other wheels gone and the belt thrown off onto the
+## road. Cold char, the hull's own iron gone dark, flecked with burn: it must read as wheels at 1x and stay quiet below
+## the deck, where nothing else is warm.
+func _wrecked_bogie(L: Dictionary, b: Dictionary, frame: Image, seed: int) -> Image:
+	var sz: Vector2i = L["size"]
+	var run := Px.blank(sz.x, sz.y)
+	var wheels: Array = b["wheels"]
+	var pitch := float(L["pitch"])
+	var thick := float(L["gear"]["T"])
+	var ground := float(L["ground"])
+	_fallen_track(run, b, pitch, thick, seed)
+	var sp: Dictionary = b["sprocket"]
+	_wheel(run, (sp["c"] as Vector2) + Vector2(0, 2), float(sp["r"]), 0.4, "sprocket", _teeth_of(float(sp["r"]), pitch))
+	for i in wheels.size():
+		var wh: Dictionary = wheels[i]
+		var c := Vector2(float(wh["x"]), float(wh["y"]))
+		var r := float(wh["r"])
+		if i == 0 or i == 3:
+			# still on its arm, the arm bent: the second hangs lower
+			var drop := 1.0 if i == 0 else 2.0
+			_arm(run, c + Vector2(0, drop), r)
+			_wheel(run, c + Vector2(0, drop), r, Px.h2(int(c.x), 4, seed) * TAU, "road")
+		elif i == 1:
+			# fallen over: a ring squeezed by its tilt, leaning on the road
+			_lying_wheel(run, Vector2(c.x + 3.0, ground - r * 0.62 + 1.0), r, 0.62, -0.5, seed)
+		else:
+			_arm(run, c, r)
+	var w := Px.blank(sz.x, sz.y)
+	for y in sz.y:
+		for x in sz.x:
+			var q := run.get_pixel(x, y)
+			if q.a > 0.5:
+				var iron: Color = OUTLINE if q.is_equal_approx(OUTLINE) else _ramp_of(_lum(q) * BOGIE_K)
+				var fleck := _lum(q) > 0.1 and Px.h2(x, y, seed + 92) > 0.85
+				w.set_pixel(x, y, BURN[2] if fleck else iron)
+	var bb := frame.get_used_rect()
+	for y2 in range(bb.position.y, bb.end.y):
+		for x2 in range(bb.position.x, bb.end.x):
+			var f := frame.get_pixel(x2, y2)
+			if f.a < 0.5:
+				continue
+			# bites out of its lower edge, so the wheels' arms show
+			var edge := bb.end.y - 1 - y2
+			if edge < 3 and Px.vnoise(x2, 0.0, 6.0, seed + 90) * 3.2 > float(edge) + 1.3:
+				continue
+			var top := y2 == bb.position.y or frame.get_pixel(x2, y2 - 1).a < 0.5
+			var soot: Color = _ramp_of(_lum(f) * 0.55)
+			var burnt := Px.vnoise(x2, y2, 5.0, seed + 93) > 0.7
+			w.set_pixel(x2, y2, BURN[1] if burnt else (COLD[5] if top and Px.h2(x2, y2, seed + 91) > 0.5 else soot))
+	return w
+
+
+## A trailing arm with no wheel on it, or a bent one under a wheel: from the frame down to the hub.
+func _arm(img: Image, c: Vector2, r: float) -> void:
+	var piv := c + Vector2(-r + 1.0, -r - 3.0)
+	Px.linef(img, c + Vector2(0, 1), piv + Vector2(0, 1), COLD[3])
+	Px.linef(img, c, piv, COLD[9])
+
+
+## A road wheel fallen over: its picture squeezed by `squash` across its axis and turned by `tilt`.
+func _lying_wheel(img: Image, c: Vector2, r: float, squash: float, tilt: float, seed: int) -> void:
+	var half := ceili(r) + 2
+	var one := Px.blank(half * 2, half * 2)
+	_wheel(one, Vector2(half, half), r, Px.h2(int(c.x), 5, seed) * TAU, "road")
+	var mid := Vector2(half, half)
+	for y in range(floori(c.y) - half, ceili(c.y) + half):
+		for x in range(floori(c.x) - half, ceili(c.x) + half):
+			var d := (Vector2(x + 0.5, y + 0.5) - c).rotated(-tilt)
+			var q := Vector2i((Vector2(d.x, d.y / squash) + mid).floor())
+			if Px.inside(one, q.x, q.y) and one.get_pixel(q.x, q.y).a > 0.5:
+				Px.put(img, x, y, one.get_pixel(q.x, q.y))
 
 
 ## A thrown track: one end still hangs off the bogie and sags to the road, a kinked length lies under it, and a
@@ -1548,8 +1842,18 @@ func _wreck(L: Dictionary, base: Image, front: Image, turret: Image, gun: Image)
 		var top := _top_of(plain, x)
 		fires.append(Vector3(x, top + 2, float(f[1])))
 		out.append([float(x), float(top + 2), float(f[1])])
-	_char(img, seed, fires)
+	_char(img, seed, fires, _gear_top(L))
 	return {"img": img, "fires": out}
+
+
+## The top of the running gear (a Behemoth's bogie frames count): no hole is torn on or under it.
+func _gear_top(L: Dictionary) -> int:
+	var top := int(L["ground"])
+	for w: Dictionary in L["gear"]["wheels"]:
+		top = mini(top, int(float(w["y"]) - float(w["r"])) - 1)
+	for b: Dictionary in L.get("bogies", []):
+		top = mini(top, (b["frame"] as Rect2i).position.y)
+	return top
 
 
 ## The top of the solid plate at a column (or at the nearest one that has any): rails, posts and stacks, thin
@@ -1622,7 +1926,7 @@ func _bites(img: Image, seed: int) -> void:
 ## burn colours. The third is what caught the light; the fourth only torn lips and exposed edges; ash lies on the
 ## cool upward faces. Holes of different kinds (punched, gashed, burst), each torn out irregularly, then the mouths
 ## the fires come out of.
-func _char(img: Image, seed: int, fires: Array[Vector3]) -> void:
+func _char(img: Image, seed: int, fires: Array[Vector3], gear_top: int) -> void:
 	var w := img.get_width()
 	var h := img.get_height()
 	var bb := img.get_used_rect()
@@ -1656,35 +1960,42 @@ func _char(img: Image, seed: int, fires: Array[Vector3]) -> void:
 		)
 		var big := 1.0 if k2 == 0 else (0.5 + 0.5 * Px.h2(k2, 3, seed))
 		var kind := posmod(k2 + seed, 3)
-		_hole(img, src, c2, (1.5 + w / 50.0) * big + 0.6, kind, seed + k2 * 7, false)
+		var hr := (1.5 + w / 50.0) * big + 0.6
+		# off the gear line: a hole's whole reach stays on the armour
+		c2.y = maxf(minf(c2.y, gear_top - hr * (2.0 if kind == 1 else 1.6)), bb.position.y + 1.0)
+		_hole(img, src, c2, hr, kind, seed + k2 * 7, false, gear_top)
 	for f2 in fires:
-		_hole(img, src, Vector2(f2.x, f2.y + f2.z * 0.05), maxf(f2.z * 0.13, 1.6), 2, seed + int(f2.x), true)
+		var mouth := Vector2(f2.x, f2.y + TankEnemyDraw.mouth_drop(f2.z))
+		_hole(img, src, mouth, TankEnemyDraw.mouth_r(f2.z), 2, seed + int(f2.x), true, gear_top)
 	# plate tears: short splits, a lit bent lip on them
 	for k3 in 1 + w / 50:
 		var tx := bb.position.x + Px.h2(k3, 4, seed) * bb.size.x
-		var ty := bb.position.y + bb.size.y * (0.25 + Px.h2(k3, 5, seed) * 0.45)
+		var ty := minf(bb.position.y + bb.size.y * (0.25 + Px.h2(k3, 5, seed) * 0.45), gear_top - 5.0)
 		var ln := 4 + int(Px.h2(k3, 6, seed) * w * 0.07)
 		var slope := (Px.h2(k3, 9, seed) - 0.5) * 1.4
 		for i in ln:
 			var x3 := int(tx) + i
 			var y3 := int(ty + i * slope + (Px.h2(i, k3, seed) - 0.5) * 1.4)
-			if Px.inside(img, x3, y3) and src.get_pixel(x3, y3).a > 0.5:
+			if y3 < gear_top and Px.inside(img, x3, y3) and src.get_pixel(x3, y3).a > 0.5:
 				img.set_pixel(x3, y3, HOLE)
 				if i % 2 == 0 and Px.inside(img, x3, y3 - 1) and src.get_pixel(x3, y3 - 1).a > 0.5:
 					img.set_pixel(x3, y3 - 1, BURN[3])
 
 
-## One torn hole with depth. kind 0 a punched entry with petals of plate bent back, 1 a long gash along a slant, 2
-## a burst, ragged all round. Inside it is black behind a dark wall, whose far (lower right) side catches a little;
-## a cold hole's upper left lip is a bent petal of lit plate, its lower lip plain dark. A burning one's lower lip is
-## lit by what is inside it.
-func _hole(img: Image, src: Image, c: Vector2, r: float, kind: int, seed: int, burning: bool) -> void:
+## One torn hole with depth. kind 0 a punched entry with petals of plate bent back, 1 a long gash lying along the
+## plate, 2 a burst, ragged all round; its rim is straight cuts and hard notches, no two lobes alike. Inside it is black
+## behind a dark wall, whose far (lower right) side catches a little; a cold hole's upper left lip is a bent petal of
+## lit plate, its lower lip plain dark. Round a burning one the plate is lit in broken crumbs, thinning as the glow
+## does, all the way round: no ring and no cup. Nothing of it reaches `floor_y`.
+func _hole(img: Image, src: Image, c: Vector2, r: float, kind: int, seed: int, burning: bool, floor_y: int) -> void:
 	var dir := Vector2.from_angle(Px.h2(seed, 1, 23) * PI)
+	if kind == 1 or burning:
+		dir = Vector2.from_angle(deg_to_rad(lerpf(-GASH_TILT, GASH_TILT, Px.h2(seed, 1, 23))))
 	var stretch := 2.2 if kind == 1 else (1.2 if kind == 2 else 1.0)
-	var ragged := 0.17 if kind == 0 else (0.1 if kind == 1 else 0.24)
-	var span := ceili(r * stretch * 1.7) + 4
+	var ragged := 0.17 if kind == 0 else 0.24
+	var span := ceili(r * maxf(stretch * 1.7, 3.2)) + 4
 	var light := Vector2(-0.6, -0.8)
-	for y in range(int(c.y) - span, int(c.y) + span + 1):
+	for y in range(int(c.y) - span, mini(int(c.y) + span + 1, floor_y)):
 		for x in range(int(c.x) - span, int(c.x) + span + 1):
 			if not Px.inside(img, x, y) or src.get_pixel(x, y).a < 0.5:
 				continue
@@ -1692,9 +2003,11 @@ func _hole(img: Image, src: Image, c: Vector2, r: float, kind: int, seed: int, b
 			var a := v.dot(dir) / stretch
 			var b := v.dot(dir.orthogonal()) * (stretch * 0.6 if stretch > 1.5 else 1.0)
 			var ang := atan2(b, a)
-			# uneven all round: no two lobes alike, so no star and no bat
-			var rim := r * (1.0 + ragged * sin(ang * 2.0 + float(seed)) + ragged * 0.7 * sin(ang * 3.0 + seed * 1.9))
-			rim += r * ragged * 0.4 * sin(ang * 7.0 + seed * 0.7) + (Px.h2(x, y, seed + 2) - 0.5) * 0.5
+			var rim := r * _jag(ang, seed, ragged, 4 if kind == 1 else 0) + (Px.h2(x, y, seed + 2) - 0.5) * 0.4
+			if kind == 1:
+				# a tear's edge is saw teeth along its length, each its own size: torn plate, no capsule
+				var tooth := 4.0 + 3.0 * Px.h2(floori(a / 5.0), seed, 33)
+				rim *= 0.62 + 0.62 * absf(fposmod(a + float(seed % 7), tooth) / tooth * 2.0 - 1.0)
 			var rho := Vector2(a, b).length()
 			var toward := v.normalized().dot(light)
 			if rho < rim - 1.6:
@@ -1703,15 +2016,32 @@ func _hole(img: Image, src: Image, c: Vector2, r: float, kind: int, seed: int, b
 				# the wall inside: dark; only the side facing the light catches any
 				img.set_pixel(x, y, BURN[1] if toward < -0.45 else BURN[0])
 			elif burning:
-				if rho < rim + 1.2 and toward < -0.2:
-					img.set_pixel(x, y, BURN_LIP)
+				var out := (rho - rim) / maxf(r * 1.7, 2.5)
+				if out < 1.0 and Px.h2(x, y, seed + 4) > 0.2 + out * 0.75:
+					var hot := out < 0.3 and Px.h2(x, y, seed + 5) > 0.55
+					img.set_pixel(x, y, BURN_LIP if hot else (BURN[3] if out < 0.65 else BURN[2]))
 			elif toward > 0.1:
-				# the petals: tabs of bent plate on the lit side, of unequal length, their tips ash
-				var petal := 1.0 + 2.2 * maxf(sin(ang * 3.0 + seed * 1.3), 0.0)
-				if rho < rim + petal:
-					img.set_pixel(x, y, ASH if rho > rim + petal - 0.9 and petal > 2.2 else BURN[3])
+				# the petals: tabs of bent plate on the lit side, of unequal length, the odd tip ash
+				var petal := 1.0 + (1.1 if kind == 1 else 2.2) * maxf(sin(ang * 3.0 + seed * 1.3), 0.0)
+				if rho < rim + petal and (kind != 1 or Px.h2(x / 2, y, seed + 7) > 0.35):
+					var tip := rho > rim + petal - 0.9 and petal > 2.4 and Px.h2(x, y, seed + 6) > 0.5
+					img.set_pixel(x, y, ASH if tip else BURN[3])
 			elif rho < rim + 0.9:
 				img.set_pixel(x, y, HOLE)
+
+
+## A torn rim's radius (1 about the circle) at angle `ang`: straight cuts between a hole's own 7-11 corners, some of
+## them notched hard inward. No lobes, no two alike.
+func _jag(ang: float, seed: int, ragged: float, more: int) -> float:
+	var n := 7 + more + floori(Px.h2(seed, 3, 27) * 5.0)
+	var t := fposmod(ang, TAU) / TAU * float(n)
+	var i := floori(t)
+	return lerpf(_jag_corner(i % n, seed, ragged), _jag_corner((i + 1) % n, seed, ragged), t - float(i))
+
+
+func _jag_corner(i: int, seed: int, ragged: float) -> float:
+	var q := 1.0 + ragged * (Px.h2(i, seed, 29) * 2.0 - 1.0)
+	return q - 0.55 if Px.h2(i, seed, 31) > 0.7 else q
 
 
 ## The glow's sprite: white, its alpha falling smoothly from the centre to nothing at the edge.

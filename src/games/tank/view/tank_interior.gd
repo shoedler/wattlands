@@ -70,6 +70,11 @@ const RP_CHAIN: Array[Color] = [Color("#3f281b"), Color("#85593a"), Color("#bd8d
 const RP_PLATE: Array[Color] = [Color("#3c1e13"), Color("#7a4326"), Color("#ad6c40")]
 ## The room's edges: dark copper, as its neighbours' falloff, never a black outline.
 const RP_EDGE := Color("#2e1d18")
+## The wall's fall from the lamp: it gives up this share of its value this far out, so a corner is as dark as the
+## rooms' on the same deck and the lamp's pool is a pool. The lamp's reach on the wall, in px.
+const RP_WALL_FALL := 0.42
+const RP_WALL_FALL_R := 30.0
+const RP_LAMP_REACH := 30.0
 ## The flywheel: its centre from the room's left and from its floor row, its radius.
 const RP_FLYWHEEL := Vector2(31.5, -8.5)
 const RP_FLY_R := 7.5
@@ -399,16 +404,12 @@ func repair_bay(rr: Rect2, revs: float, slot: int, on: bool, press_t: float, pat
 	var cc := seat(x0 + 1, fy, ang, slot)
 	var lift := TankMech.hammer_lift(rv)
 	var lamp := Vector2(x0 + 40.5, y0 + 3.5)
-	# the helve's pillar, behind everything
-	pr(Rect2i(x0 + 18, y0 + 6, 4, fy - y0 - 6), RP_IRON[1])
-	pr(Rect2i(x0 + 21, y0 + 6, 1, fy - y0 - 6), RP_IRON[3])
-	pr(Rect2i(x0 + 18, y0 + 6, 1, fy - y0 - 6), RP_IRON[0])
-	pr(Rect2i(x0 + 16, fy - 2, 8, 2), RP_IRON[2])
-	pr(Rect2i(x0 + 16, fy - 2, 8, 1), RP_IRON[3])
+	# the helve's pillar, behind everything: a rough casting on a broad foot
+	_rp_casting(Rect2i(x0 + 17, y0 + 6, 5, fy - y0 - 8), RP_IRON[1], RP_IRON[2], RP_IRON[0], 3)
+	_rp_casting(Rect2i(x0 + 15, fy - 3, 9, 3), RP_IRON[2], RP_IRON[3], RP_IRON[1], 5)
 	# the flywheel on its pedestal, its one chain, 1:1 with the crank
 	var fw := Vector2(x0, fy) + RP_FLYWHEEL
-	pr(Rect2i(floori(fw.x) - 4, fy - 2, 9, 2), RP_IRON[2])
-	pr(Rect2i(floori(fw.x) - 4, fy - 2, 9, 1), RP_IRON[3])
+	_rp_casting(Rect2i(floori(fw.x) - 5, fy - 3, 11, 3), RP_IRON[2], RP_IRON[3], RP_IRON[1], 7)
 	_rp_chain(cc, fw, 2.5, 2.0, rv * 8.0)
 	_rp_flywheel(fw, RP_FLY_R, ang, lamp)
 	# the cam on its shaft: a lobe that lifts the tappet; the tappet to the helve
@@ -467,11 +468,13 @@ func repair_bay(rr: Rect2, revs: float, slot: int, on: bool, press_t: float, pat
 		glow(Vector2(head_x, fy - 8.0), 12.0, REPAIR_HOT, 0.7 * k)
 	# the screw press on the right: it closes at press_t; the plates lie by its foot
 	var px := x0 + 60
-	pr(Rect2i(px - 1, y0 + 1, 1, fy - y0 - 1), RP_IRON[3])
-	pr(Rect2i(px + 5, y0 + 1, 1, fy - y0 - 1), RP_IRON[1])
-	pr(Rect2i(px - 1, y0 + 1, 7, 2), RP_IRON[3])
-	var ty := y0 + 5 + roundi(clampf(press_t, 0.0, 1.0) * float(fy - y0 - 11))
-	pl(Vector2(px + 2.5, y0 + 3), Vector2(px + 2.5, ty), RP_IRON[4])
+	_rp_casting(Rect2i(px - 2, y0 + 5, 2, fy - y0 - 5), RP_IRON[1], RP_IRON[2], RP_IRON[0], 9)
+	_rp_casting(Rect2i(px + 5, y0 + 5, 2, fy - y0 - 5), RP_IRON[0], RP_IRON[1], RP_IRON[0], 11)
+	_rp_casting(Rect2i(px - 3, y0 + 3, 10, 3), RP_IRON[1], RP_IRON[2], RP_IRON[0], 13)
+	var ty := y0 + 6 + roundi(clampf(press_t, 0.0, 1.0) * float(fy - y0 - 12))
+	# the screw: a thick thread, turning dark and lit, that its nut rides
+	for sy2 in range(y0 + 6, ty):
+		pr(Rect2i(px + 2, sy2, 2, 1), RP_IRON[3] if sy2 % 2 == 0 else RP_IRON[1])
 	_rp_box(Rect2i(px, ty, 5, 3), RP_IRON[2], RP_IRON[4], RP_IRON[1])
 	var stack := posmod(patches, PATCH_STACK)
 	for s2 in stack:
@@ -484,6 +487,24 @@ func repair_bay(rr: Rect2, revs: float, slot: int, on: bool, press_t: float, pat
 		glow(Vector2(x0 + 40.5, y0 + 3.5), 8.0, REPAIR_LAMP, 0.5)
 	else:
 		p(x0 + 40, y0 + 3, RP_IRON[2])
+
+
+## A rough casting: chunky iron with a lit top and left, pitted, its edge crumbled so the wall shows through. No
+## straight 1 px rod and no ruled frame.
+func _rp_casting(r: Rect2i, c: Color, hi: Color, lo: Color, seed: int) -> void:
+	for y in range(r.position.y, r.end.y):
+		for x in range(r.position.x, r.end.x):
+			var on_edge := (
+				x == r.position.x or x == r.end.x - 1 or y == r.position.y or y == r.end.y - 1
+			)
+			if on_edge and r.size.x > 2 and TankPx.h2(x, y, seed) < 0.26:
+				continue
+			var col := c
+			if y == r.position.y or (x == r.position.x and TankPx.h2(x, y, seed + 1) > 0.3):
+				col = hi
+			elif x == r.end.x - 1 or y == r.end.y - 1 or TankPx.h2(x, y, seed + 2) > 0.84:
+				col = lo
+			p(x, y, col)
 
 
 ## A box in the room's light: dark copper round it, a lit top, no black line.
@@ -597,7 +618,7 @@ func _repair_wall(r: Rect2i, on: bool) -> Image:
 	for y2 in r.size.y:
 		for x2 in r.size.x:
 			var c2 := w.get_pixel(x2, y2)
-			var k := maxf(1.0 - Vector2(x2, y2).distance_to(lamp) / 36.0, 0.0)
+			var k := maxf(1.0 - Vector2(x2, y2).distance_to(lamp) / RP_LAMP_REACH, 0.0)
 			k = k * k * (0.3 if on else 0.07)
 			c2.r = minf(c2.r + REPAIR_LAMP.r * k, 1.0)
 			c2.g = minf(c2.g + REPAIR_LAMP.g * k, 1.0)
@@ -619,39 +640,49 @@ func _rp_wall_at(x: int, y: int, size: Vector2i) -> Color:
 		col = col.darkened(0.55)
 	elif (x + 3) % 19 == 1 or y % 12 == 1:
 		col = col.lightened(0.1)
-	return col
+	# away from the lamp the plate falls off, as its neighbours' walls do
+	var d := Vector2(x, y).distance_to(Vector2(40.5, 4.0))
+	return col.darkened(RP_WALL_FALL * smoothstep(7.0, RP_WALL_FALL_R, d))
 
 
 ## What a repair shop keeps on its wall, all in the lamp's iron: a pipe along the ceiling running out through
 ## both walls, a shelf of tins and a box, tools on nails, patches leaning in the corner.
 func _rp_clutter(w: Image, size: Vector2i) -> void:
-	# the pipe
+	# the pipe: dark iron in the ceiling's shade, broken by its brackets
 	for x in size.x:
-		w.set_pixel(x, 1, RP_IRON[2])
-		w.set_pixel(x, 2, RP_IRON[1])
-		if x % 17 == 8:
+		var at_bracket := posmod(x - 8, 17)
+		if at_bracket == 1 or at_bracket == 16:
+			continue
+		w.set_pixel(x, 1, RP_IRON[1])
+		w.set_pixel(x, 2, RP_IRON[0])
+		if at_bracket == 0:
 			for y in range(0, 4):
-				w.set_pixel(x, y, RP_IRON[3] if y == 0 else RP_IRON[2])
+				w.set_pixel(x, y, RP_IRON[1])
 	# a drop off the pipe, to a valve
 	for y2 in range(3, 6):
-		w.set_pixel(27, y2, RP_IRON[2])
-	w.set_pixel(26, 5, RP_IRON[3])
-	w.set_pixel(28, 5, RP_IRON[3])
+		w.set_pixel(27, y2, RP_IRON[1])
+	w.set_pixel(26, 5, RP_IRON[2])
+	w.set_pixel(28, 5, RP_IRON[2])
 	# the shelf, its brackets and what is on it
 	for x2 in range(31, 45):
-		w.set_pixel(x2, 11, RP_HAFT[1])
+		w.set_pixel(x2, 11, RP_IRON[2])
 		w.set_pixel(x2, 12, RP_IRON[0])
 	for x3: int in [33, 42]:
 		w.set_pixel(x3, 13, RP_IRON[2])
 		w.set_pixel(x3, 14, RP_IRON[1])
-	_rp_block(w, Rect2i(32, 8, 3, 3), RP_IRON[3], RP_IRON[1])
-	_rp_block(w, Rect2i(36, 9, 2, 2), RP_PLATE[2], RP_PLATE[0])
-	_rp_block(w, Rect2i(39, 7, 5, 4), RP_HAFT[2], RP_HAFT[1])
-	# tools on nails, between the anvil and the press
-	for y3 in range(5, 13):
-		w.set_pixel(56, y3, RP_IRON[3])
-	w.set_pixel(55, 12, RP_IRON[3])
-	w.set_pixel(57, 12, RP_IRON[3])
+	# the box stands at the shelf's dark end, out of the lamp's pool; a tin and a plate under the lamp
+	_rp_block(w, Rect2i(31, 7, 5, 4), RP_HAFT[0], RP_IRON[0])
+	_rp_block(w, Rect2i(37, 9, 2, 2), RP_IRON[1], RP_IRON[0])
+	_rp_block(w, Rect2i(41, 9, 2, 2), RP_PLATE[0], RP_IRON[0])
+	# tools on nails, between the anvil and the press: a heavy spanner, dark in the room's corner
+	for y3 in range(5, 12):
+		w.set_pixel(56, y3, RP_IRON[1])
+		if y3 % 3 != 1:
+			w.set_pixel(57, y3, RP_IRON[0])
+	for x4: int in [55, 56, 57, 58]:
+		w.set_pixel(x4, 12, RP_IRON[1])
+	w.set_pixel(55, 11, RP_IRON[1])
+	w.set_pixel(58, 11, RP_IRON[0])
 	for y4 in range(5, 11):
 		w.set_pixel(53, y4, RP_HAFT[1])
 	_rp_block(w, Rect2i(52, 3, 3, 2), RP_IRON[3], RP_IRON[1])

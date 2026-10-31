@@ -16,6 +16,8 @@ const RIV_LIT := Color("#656f63")
 const RIV_DIM := Color("#454e44")
 ## The moon's rim (enemy_bake.gd COLD 18, 19).
 const MOON: Array[Color] = [Color("#46555a"), Color("#5c6e75")]
+## A torn hole's mouth (enemy_bake.gd HOLE).
+const HOLE := Color("#050403")
 ## The hero's armour: tank_base.png at its rear plates, its roof and its nose (mean L, 0..255).
 const HERO_ARMOUR_L := 30.0
 ## Every kind's fewest heads on hull and skirts, and on the turret (SPEC_TANK 5.2: "low riveted box", ...).
@@ -404,6 +406,164 @@ func test_the_wear_shows_at_the_scale_of_the_plates() -> void:
 	for k: String in ["light", "medium", "heavy", "destroyer", "behemoth"]:
 		var std := _hull_block_std(k)
 		assert_gte(std, 5.0, "%s: plates and patches apart in value (block std %.1f)" % [k, std])
+
+
+## The hull and skirts above the wheels as one picture: L per px, -1 where nothing is. [w, h, values].
+func _hull_l(k: String, whole: bool = false) -> Array:
+	var row := _kit.kind(k)
+	var base := Rect2i(row["base"])
+	var front := Rect2i(row["front"]) if row.has("front") else Rect2i()
+	var wheels: Array[Vector3] = row["gear"]["wheels"]
+	var h := base.size.y if whole else int(wheels[0].y - wheels[0].z) - 1
+	var ls := PackedFloat32Array()
+	ls.resize(base.size.x * h)
+	for y in h:
+		for x in base.size.x:
+			var c := _atlas.get_pixel(base.position.x + x, base.position.y + y)
+			if front.has_area():
+				var f := _atlas.get_pixel(front.position.x + x, front.position.y + y)
+				if f.a > 0.5:
+					c = f
+			ls[y * base.size.x + x] = _luma(c) if c.a > 0.5 else -1.0
+	return [base.size.x, h, ls]
+
+
+## Wear is hard-edged crumbs, not a filter: neighbours differ as much as on the hero's armour (tank_base.png's stern,
+## deck and bow: mean |dL| 9.3 to 14.8, 57 to 66 % of the pairs within 8). The Behemoth is the softest surface.
+func test_the_wear_is_crumbs_not_a_filter() -> void:
+	for k: String in ["light", "medium", "heavy", "destroyer", "behemoth"]:
+		var hull := _hull_l(k)
+		var w: int = hull[0]
+		var ls: PackedFloat32Array = hull[2]
+		var total := 0.0
+		var close := 0
+		var n := 0
+		for i in ls.size():
+			if ls[i] < 0.0:
+				continue
+			for j: int in [i + 1, i + w]:
+				if j >= ls.size() or ls[j] < 0.0 or (j == i + 1 and j % w == 0):
+					continue
+				var d := absf(ls[i] - ls[j])
+				total += d
+				close += int(d <= 8.0)
+				n += 1
+		assert_gte(total / n, 10.3, "%s: mean |dL| between neighbours" % k)
+		assert_lte(float(close) / n, 0.66, "%s: the share of pairs within 8" % k)
+
+
+## One row's single-pixel peaks, as x: brighter than both neighbours by a step of the ramp.
+func _peaks_of(r: Rect2i, y: int) -> Array[int]:
+	var out: Array[int] = []
+	for x in range(r.position.x + 1, r.end.x - 1):
+		var c := _atlas.get_pixel(x, r.position.y + y)
+		var a := _atlas.get_pixel(x - 1, r.position.y + y)
+		var b := _atlas.get_pixel(x + 1, r.position.y + y)
+		if c.a < 0.5 or a.a < 0.5 or b.a < 0.5:
+			continue
+		var l := _luma(c)
+		if l >= _luma(a) + 4.0 and l >= _luma(b) + 4.0:
+			out.append(x)
+	return out
+
+
+## No row is a comb: the densest regular detail on a hull is a rivet row, a peak every 7-9 px. A zipper of peaks 2 px
+## apart along a skirt's top reads as crenellation at frame scale.
+func test_no_row_is_a_comb() -> void:
+	for k: String in TankEnemyKit.SIZES:
+		var row := _kit.kind(k)
+		var rects: Array[Rect2i] = [Rect2i(row["base"])]
+		if row.has("front"):
+			rects.append(Rect2i(row["front"]))
+		for r in rects:
+			for y in r.size.y:
+				var peaks := _peaks_of(r, y)
+				if peaks.size() < 8:
+					continue
+				var gaps: Array[int] = []
+				for i in range(1, peaks.size()):
+					gaps.append(peaks[i] - peaks[i - 1])
+				gaps.sort()
+				var med: int = gaps[gaps.size() / 2]
+				assert_gte(med, 4, "%s row %d: %d peaks, median gap %d" % [k, y, peaks.size(), med])
+
+
+## No stamp: a worn corner is crumbs along the plate's edge. A corner cut from a solid wedge comes out as one pale tent,
+## plate after plate, among the brightest shapes on them: a solid block of pale paint in the corner's 7 x 4 window.
+func test_the_worn_corners_are_crumbs_not_wedges() -> void:
+	var layouts: Variant = load(DIR + "tools_src/enemy_layouts.gd")
+	var hull_gd: Variant = load("res://assets/tank/v3/tools_src/hull.gd")
+	var px_gd: Variant = load("res://assets/tank/v3/tools_src/px.gd")
+	for k: String in ["medium", "heavy", "behemoth"]:
+		var lay: Dictionary = layouts.all()[k]
+		var parts: Array = []
+		parts.append_array(lay["parts"])
+		parts.append_array(lay.get("front_parts", []))
+		var hull := _hull_l(k, true)
+		var corners := 0
+		var wedges := 0
+		for pi in parts.size():
+			var part: Dictionary = parts[pi]
+			if bool(part.get("cast", false)):
+				continue
+			var bb: Rect2i = px_gd.poly_bounds(part["poly"])
+			var split := bool(part.get("split", true))
+			var plates: Array = hull_gd._plates(
+				bb,
+				part.get("seams_x", []),
+				part.get("seams_y", []),
+				int(part.get("seed", 0)),
+				split
+			)
+			# a corner under a later part or a detail is not this plate's corner
+			var over: Array[Rect2i] = []
+			for later in range(pi + 1, parts.size()):
+				over.append(px_gd.poly_bounds(parts[later]["poly"]))
+			for d: Dictionary in lay["details"] + lay.get("front_details", []):
+				if d.has("rect"):
+					over.append(d["rect"])
+			for pr: Rect2i in plates:
+				if pr.size.x < 9 or pr.size.y < 6:
+					continue
+				for ci in 4:
+					var x0 := pr.position.x + 1 if ci % 2 == 0 else pr.end.x - 8
+					var y0 := pr.position.y + 1 if ci < 2 else pr.end.y - 5
+					var hidden := false
+					for o in over:
+						hidden = hidden or o.intersects(Rect2i(x0, y0, 7, 4))
+					if hidden:
+						continue
+					var shape := _corner_is_wedge(hull[2], hull[0], hull[1], pr, ci)
+					if shape >= 0:
+						corners += 1
+						wedges += shape
+		assert_gt(corners, 8, "%s has plates to look at" % k)
+		var share := float(wedges) / float(corners)
+		assert_lte(share, 0.08, "%s: %d of %d corners hold a pale wedge" % [k, wedges, corners])
+
+
+## 1 when a plate corner's window holds a solid 3 x 2 of what stands 12 over the window's median, 0 when not, -1 when
+## the window is not all there.
+func _corner_is_wedge(ls: PackedFloat32Array, w: int, h: int, pr: Rect2i, ci: int) -> int:
+	var vals: Array[float] = []
+	for j in 4:
+		for i in 7:
+			var x := pr.position.x + 1 + i if ci % 2 == 0 else pr.end.x - 2 - i
+			var y := pr.position.y + 1 + j if ci < 2 else pr.end.y - 2 - j
+			if x < 0 or y < 0 or x >= w or y >= h or ls[y * w + x] < 0.0:
+				return -1
+			vals.append(ls[y * w + x])
+	var sorted := vals.duplicate()
+	sorted.sort()
+	var pale: float = sorted[sorted.size() / 2] + 12.0
+	for j2 in 3:
+		for i2 in 5:
+			var solid := true
+			for q in 6:
+				solid = solid and vals[(j2 + q / 3) * 7 + i2 + q % 3] > pale
+			if solid:
+				return 1
+	return 0
 
 
 # --- The table's lights -----------------------------------------------------------------------------------
@@ -837,6 +997,102 @@ func test_a_wrecks_holes_are_not_stamped() -> void:
 					runs[run] = true
 				run = 0
 	assert_gte(runs.size(), 4, "mouths of several widths")
+
+
+## The rows of the running gear start here: a hole on them reads as part of the belt.
+func _gear_top(row: Dictionary) -> int:
+	var wheels: Array[Vector3] = row["gear"]["wheels"]
+	var top := int(row["ground"])
+	for w in wheels:
+		top = mini(top, int(w.y - w.z) - 1)
+	for b: Dictionary in row.get("bogies", []):
+		top = mini(top, int((b["at"] as Vector2).y))
+	return top
+
+
+## The torn mouths (near-black) stay on the armour, off the gear line.
+func test_no_hole_is_torn_on_the_gear() -> void:
+	for k: String in TankEnemyKit.SIZES:
+		var row := _kit.kind(k)
+		var r := Rect2i(row["wreck"])
+		var low := 0
+		for y in range(_gear_top(row), r.size.y):
+			for x in r.size.x:
+				low += int(
+					_atlas.get_pixel(r.position.x + x, r.position.y + y).is_equal_approx(HOLE)
+				)
+		assert_eq(low, 0, "%s: %d px of hole on the gear" % [k, low])
+
+
+## The wreck's mouths as boxes: every 4-connected run of the hole's colour of at least `least` px.
+func _hole_boxes(r: Rect2i, least: int) -> Array[Rect2i]:
+	var seen := {}
+	var out: Array[Rect2i] = []
+	for y in r.size.y:
+		for x in r.size.x:
+			var start := Vector2i(x, y)
+			if seen.has(start) or not _atlas.get_pixelv(r.position + start).is_equal_approx(HOLE):
+				continue
+			var stack: Array[Vector2i] = [start]
+			var box := Rect2i(start, Vector2i.ONE)
+			var n := 0
+			seen[start] = true
+			while not stack.is_empty():
+				var q: Vector2i = stack.pop_back()
+				n += 1
+				box = box.expand(q).expand(q + Vector2i.ONE)
+				for o: Vector2i in [
+					Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)
+				]:
+					var q2 := q + o
+					if seen.has(q2) or not Rect2i(Vector2i.ZERO, r.size).has_point(q2):
+						continue
+					if _atlas.get_pixelv(r.position + q2).is_equal_approx(HOLE):
+						seen[q2] = true
+						stack.append(q2)
+			if n >= least:
+				out.append(box)
+	return out
+
+
+## A gash lies along the plate: no mouth stands up as a tall capsule, a beetle on the hull.
+func test_a_gash_lies_along_the_plate() -> void:
+	for k: String in TankEnemyKit.SIZES:
+		for box in _hole_boxes(Rect2i(_kit.kind(k)["wreck"]), 12):
+			assert_gte(
+				float(box.size.x), float(box.size.y) * 0.6, "%s: a mouth %s stands up" % [k, box]
+			)
+
+
+## A smashed bogie reads on a live hull: wheel rings left to recognise, no ash heap, none of a live fire's lit lip.
+func test_a_smashed_bogie_keeps_its_wheels_and_stays_quiet() -> void:
+	for b: Dictionary in _kit.kind("behemoth")["bogies"]:
+		var r: Rect2i = Rect2i(b["wrecked"])
+		var at := Vector2i(b["wrecked_at"] as Vector2)
+		var ash := 0
+		var lip := 0
+		for y in r.size.y:
+			for x in r.size.x:
+				var c := _atlas.get_pixel(r.position.x + x, r.position.y + y)
+				ash += int(c.is_equal_approx(Color("#57504a")))
+				lip += int(c.is_equal_approx(Color("#6a4628")))
+		assert_eq(ash, 0, "no ash on a bogie")
+		assert_eq(lip, 0, "no lit lip below the deck")
+		var rings := 0
+		var wheels: Array[Vector3] = b["wheels"]
+		for w in wheels:
+			# the rim's round: most of it there, a step over the dark of the belly behind
+			var on := 0
+			for a in 24:
+				var q := Vector2(w.x, w.y + 1.0) + Vector2.from_angle(TAU * a / 24.0) * (w.z - 2.0)
+				var p := Vector2i(q) - at
+				if Rect2i(Vector2i.ZERO, r.size).has_point(p):
+					var c2 := _atlas.get_pixelv(r.position + p)
+					on += int(c2.a > 0.5 and _luma(c2) > 28.0)
+			rings += int(on >= 12)
+		assert_between(
+			rings, 2, 3, "2-3 wheel rings stand on their arms or lie by them: %d" % rings
+		)
 
 
 ## Soot spreads from the fire: the plates round a fire are darker than those far from one.
