@@ -8,7 +8,7 @@ import path from 'node:path';
 import { allFiles, bankWavBytes, loadBank } from './bank.mjs';
 import { bandShareDb, fft, gainToDb, powerSpectrum } from './dsp.mjs';
 import { integratedLufs, loudnessRange, momentaryMaxLufs, truePeakDb } from './lufs.mjs';
-import { BankAudio, MIX_RATE, mixdown, segmentsLength, simulate } from './offline_mix.mjs';
+import { BankAudio, MIX_RATE, PROMPT_VOICE_DB, mixdown, segmentsLength, simulate } from './offline_mix.mjs';
 import { curvePasses } from './pattern.mjs';
 
 /** Repo WAV caps in MB (SPEC 3.4). */
@@ -17,7 +17,7 @@ export const WAV_TOTAL_CAP_MB = 20.5;
 const UNWAIVABLE = new Set(['A1', 'A9', 'A11', 'A15']);
 /** UI-bus built-ins held to the UI loudness row. A tick under 100 ms reads nothing on a 400 ms meter. */
 export const UI_METERED = ['ui_confirm', 'ui_back', 'toast', 'phase', 'countdown', 'lap', 'results'];
-/** The safety prompts. D5 needs them 6 LU over a -18 mix, ducks counted, which -17 cannot reach: see the ADR. */
+/** The safety prompts, metered as HudLayer plays them. D5 needs them 6 LU over a -18 mix, ducks counted, which -17 cannot reach: see the ADR. */
 export const ALERTS = ['warning', 'rescue'];
 const SOLO_REVS = 10;
 const LEVELS = { mix: [-20, -16], lra: [4, 14], tp: -1, machines: [-24, -20], other: [8, 12], ambience: [-35, -29], sfx: [-17, -11], ui: [-23, -17], alert: [-23, -15] };
@@ -491,12 +491,12 @@ export function scoreBank(doc, dir, { shared, root = null, rpms = null, stems = 
     if (lo < LEVELS.ui[0] || hi > LEVELS.ui[1]) a2Pass = false;
     for (const name of ALERTS) {
       const f = shared.file(name, 0);
-      const v = momentaryMaxLufs([f.data[0], f.data[0]], f.rate);
+      const v = momentaryMaxLufs([f.data[0], f.data[0]], f.rate) + PROMPT_VOICE_DB;
       a2.push(`${name} ${round(v)}`);
       if (v < LEVELS.alert[0] || v > LEVELS.alert[1]) a2Pass = false;
     }
   }
-  rows.push({ id: 'A2', pass: a2Pass, value: a2.join(', '), target: 'Machines -22 +-2, other -8..-12 LU, Ambience -32 +-3, Sfx -14 +-3, UI -20 +-3' });
+  rows.push({ id: 'A2', pass: a2Pass, value: a2.join(', '), target: 'Machines -22 +-2, other -8..-12 LU, Ambience -32 +-3, Sfx -14 +-3, UI -20 +-3, prompts as played -23..-15' });
   rows.push({ id: 'A3', pass: a3 >= 0.35, value: round(a3), target: 'spectral flux stdev/mean >= 0.35' });
   rows.push({ id: 'A4', pass: a4 >= 8, value: round(a4), target: 'crest factor >= 8 dB' });
   rows.push({ id: 'A5', pass: a5Lo >= 0.6 && a5Hi <= 0.97, value: `${round(a5Lo)}..${round(a5Hi)}`, target: 'successive-revolution correlation 0.60..0.97' });

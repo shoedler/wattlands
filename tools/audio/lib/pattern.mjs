@@ -182,13 +182,24 @@ export class LayeredLoop {
         (l.min_rpm === undefined || Number(params.rpm ?? 0) >= l.min_rpm) &&
         curvePasses(l.when, params);
       const target = wants ? Math.max(OFF_DB, (l.db ?? 0) + curveSumDb(l.db_by, params) + trimDb) : OFF_DB;
-      const pitchTarget = curveProduct(l.pitch_by, params);
-      if (this.on[i] === 0) this.pitch[i] = pitchTarget;
-      else this.pitch[i] += (pitchTarget - this.pitch[i]) * (1 - Math.exp(-dt / (l.slew_s ?? DEFAULT_SLEW_S)));
-      if (target > this.db[i]) this.db[i] += (target - this.db[i]) * (1 - Math.exp(-dt / OPEN_TAU_S));
-      else this.db[i] = Math.max(target, this.db[i] - CLOSE_DB_PER_S * dt);
-      this.on[i] = this.db[i] > OFF_DB ? 1 : 0;
+      if (target > OFF_DB) {
+        const pitchTarget = curveProduct(l.pitch_by, params);
+        if (this.on[i] === 0) this.pitch[i] = pitchTarget;
+        else this.pitch[i] += (pitchTarget - this.pitch[i]) * (1 - Math.exp(-dt / (l.slew_s ?? DEFAULT_SLEW_S)));
+      }
+      this._moveDb(i, target, dt);
     }
+  }
+
+  /** Every layer closes, whatever the params say: a stopped machine, a named loop no longer asked for. */
+  close(dt) {
+    for (let i = 0; i < this.count; i++) this._moveDb(i, OFF_DB, dt);
+  }
+
+  _moveDb(i, target, dt) {
+    if (target > this.db[i]) this.db[i] += (target - this.db[i]) * (1 - Math.exp(-dt / OPEN_TAU_S));
+    else this.db[i] = Math.max(target, this.db[i] - CLOSE_DB_PER_S * dt);
+    this.on[i] = this.db[i] > OFF_DB ? 1 : 0;
   }
 }
 

@@ -7,6 +7,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { allFiles, manifestPathOf } from '../lib/bank.mjs';
 import { momentaryMaxLufs } from '../lib/lufs.mjs';
+import { PROMPT_VOICE_DB } from '../lib/offline_mix.mjs';
 import { ALERTS, UI_METERED } from '../lib/score.mjs';
 import { decodeWav, deinterleave } from '../lib/wav.mjs';
 import { REPO, SHARED_BANK, readJson } from './helpers.mjs';
@@ -109,7 +110,7 @@ test('UI momentary max is -20 LUFS +-3 on both channels (ticks under 100 ms exce
   }
 });
 
-test('the safety prompts: louder than any other UI sound, up to -15 LUFS so D5 holds over a -18 mix', () => {
+test('the safety prompts, as HudLayer plays them: louder than any other UI sound, up to -15 LUFS so D5 holds over a -18 mix', () => {
   let loudestUi = -Infinity;
   for (const name of UI_METERED) {
     const { x } = loaded(name);
@@ -117,7 +118,7 @@ test('the safety prompts: louder than any other UI sound, up to -15 LUFS so D5 h
   }
   for (const name of ALERTS) {
     const { x } = loaded(name);
-    const v = momentaryMaxLufs([x, x], 22050);
+    const v = momentaryMaxLufs([x, x], 22050) + PROMPT_VOICE_DB;
     assert.ok(v > loudestUi, `${name}: ${v} over ${loudestUi}`);
     assert.ok(v >= -17 && v <= -15, `${name}: ${v}`);
   }

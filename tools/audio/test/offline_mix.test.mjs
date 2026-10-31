@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { test } from 'node:test';
-import { BankAudio, MIX_RATE, limit, mixdown, simulate, toInt16 } from '../lib/offline_mix.mjs';
-import { FIXTURE_BANK, bankOf, readJson } from './helpers.mjs';
+import { BankAudio, MIX_RATE, PROMPT_VOICE_DB, limit, mixdown, simulate, toInt16 } from '../lib/offline_mix.mjs';
+import { FIXTURE_BANK, REPO, bankOf, readJson } from './helpers.mjs';
 
 const TICK = { dur: 0.04, seed: 1, locked: true, norm: { peak: -6 }, layers: [{ src: 'noise', env: { a: 0.0003, d: 0.03 } }] };
 const LOOP = { dur: 1, seed: 2, loop: true, compress: 'pcm', layers: [{ src: 'sine', f: 441 }] };
@@ -136,6 +138,67 @@ test('a safety prompt plays on Master and ducks Machines, Ambience, Sfx', () => 
   assert.deepEqual(sim.ducks.map((d) => [d.bus, d.db]), [['Machines', -6], ['Ambience', -6], ['Sfx', -4]]);
   const mix = mixdown(b, sim, { shared });
   assert.ok(firstLoud(mix.stems.Master[0]) > 0);
+});
+
+test('a safety prompt plays at the level HudLayer asks for', () => {
+  const src = fs.readFileSync(path.join(REPO, 'addons', 'wattlands', 'ui', 'hud', 'hud_layer.gd'), 'utf8');
+  const body = src.slice(src.indexOf('func _play(sound: String)'));
+  const asked = body.match(/sfx\.play\(sound, (-?[\d.]+)\)/);
+  assert.ok(asked, 'HudLayer._play plays through WlSfx with a level');
+  assert.equal(PROMPT_VOICE_DB, Number(asked[1]));
+  const shared = new BankAudio(readJson(path.join(REPO, 'assets', '_shared', 'audio', 'audio.json')), null);
+  const sim = simulate(bank({}), { segments: [{ rpm: 0, s: 1, params: {} }], machines: [], prompts: [{ t: 0.5, name: 'rescue' }], shared });
+  assert.deepEqual(sim.voices.map((v) => [v.sound, v.bus, v.db]), [['rescue', 'Master', PROMPT_VOICE_DB]]);
+});
+
+// Parity with GameAudioKit (SPEC risk 6): each of these is a place the preview once played what the game does not.
+
+test('parity: a machine at or under STOP_RPM closes every loop, whatever its layers say', () => {
+  const b = bank({ machines: { m: { loops: [{ sound: 'hum', db: -6 }, { sound: 'hum', db: -6, when: { param: 'rpm', max: 10 } }] } } });
+  for (const stop of [0, 1]) {
+    const sim = simulate(b, { segments: [{ rpm: 90, s: 2, params: {} }, { rpm: stop, s: 2, params: {} }], machines: [{ id: 'a', machine: 'm', lead: true }] });
+    const at = (s) => Math.round(s * 60);
+    assert.ok(sim.tracks[0].db[at(1.9)] > -7, 'open while it turns');
+    for (const t of sim.tracks) assert.equal(t.db[at(2.12)], -60, `rpm ${stop}: closed in 120 ms`);
+    const x = mixdown(b, sim, { tail: 0 }).stems.Machines[0];
+    let tail = 0;
+    for (let i = Math.round(2.4 * MIX_RATE); i < x.length; i++) tail = Math.max(tail, Math.abs(x[i]));
+    assert.equal(tail, 0, `rpm ${stop}: silence 400 ms after the stop`);
+  }
+  const justOver = simulate(b, { segments: [{ rpm: 2, s: 1, params: {} }], machines: [{ id: 'a', machine: 'm', lead: true }] });
+  assert.ok(justOver.tracks[0].db[50] > -7, 'just over STOP_RPM it still plays');
+});
+
+test('parity: a closing layer holds its pitch, as the kit does', () => {
+  const b = bank({ machines: { m: { loops: [{ sound: 'hum', db: -6, pitch_by: [{ param: 'x', points: [[0, 1], [1, 2]] }], when: { param: 'x', max: 0.5 } }] } } });
+  const sim = simulate(b, { segments: [{ rpm: 60, s: 1, params: { x: 0 } }, { rpm: 60, s: 1, params: { x: 1 } }], machines: [{ id: 'a', machine: 'm', lead: true }] });
+  const t = sim.tracks[0];
+  assert.equal(t.pitch[59], 1);
+  assert.equal(t.pitch[63], 1, 'closing at the old pitch');
+});
+
+test('parity: only a lead cue ducks; a non-lead cue still plays, at its trim', () => {
+  const b = bank({ cues: { c: { hits: [{ sound: 'tick', db: 0 }], duck: [{ bus: 'Machines', db: -4, attack_s: 0.01, release_s: 0.35 }] } } });
+  const seg = [{ rpm: 0, s: 1, params: {} }];
+  const lead = simulate(b, { segments: seg, machines: [], cues: [{ t: 0.5, cue: 'c' }] });
+  assert.equal(lead.ducks.length, 1);
+  const other = simulate(b, { segments: seg, machines: [], cues: [{ t: 0.5, cue: 'c', lead: false }] });
+  assert.equal(other.ducks.length, 0);
+  assert.equal(other.voices.length, 1);
+  assert.equal(other.voices[0].db, -10);
+});
+
+test('parity: a named loop with lead false plays only its `other` layers, at mix.other_db', () => {
+  const b = bank({ loops: { line: { bus: 'Sfx', layers: [{ sound: 'hum', db: -6, other: true }, { sound: 'hum', db: -6 }] } }, mix: { other_db: -12 } });
+  const seg = [{ rpm: 0, s: 3, params: {} }];
+  const at = Math.round(1.5 * 60);
+  const other = simulate(b, { segments: seg, machines: [], loops: [{ id: 'line', t0: 0.5, t1: 2, params: {}, lead: false }] });
+  assert.ok(Math.abs(other.tracks[0].db[at] - -18) < 0.01, `${other.tracks[0].db[at]}`);
+  assert.equal(other.tracks[1].db[at], -60);
+  assert.equal(other.tracks[0].db[Math.round(2.2 * 60)], -60, 'it closes when its span ends');
+  const lead = simulate(b, { segments: seg, machines: [], loops: [{ id: 'line', t0: 0.5, t1: 2, params: {} }] });
+  assert.ok(Math.abs(lead.tracks[0].db[at] - -6) < 0.01);
+  assert.ok(Math.abs(lead.tracks[1].db[at] - -6) < 0.01);
 });
 
 test('a looping track: pitch follows, no click at the wrap', () => {

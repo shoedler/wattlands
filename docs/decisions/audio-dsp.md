@@ -20,11 +20,11 @@ Short ADRs for the audio pipeline (`tools/audio`, `assets/_shared/audio`). "SPEC
 - Alternatives: equal power (measured: +2.5 dB across the seam of a tone in phase); linear (a dip on noise); a recipe flag that each builder has to get right.
 - Reason: constant power for any r, with nothing to choose.
 
-## 2026-10-31 `warning` and `rescue` run at -16 LUFS momentary, past the UI row's -17
+## 2026-10-31 `warning` and `rescue` play at -16 LUFS momentary, past the UI row's -17
 
-- Decision: both prompts read -16 (peaks -12 and -14.6 dBFS), still quieter than the old synth (about -13). The scorecard's A2 holds them to -23..-15, and every other UI sound to -23..-17.
-- Alternatives: -17 and under, the SPEC's row. Measured on the fixture, D5 reads +6.1 LU at -19.2 LUFS, so a game at the SPEC's own -18 target would read under +6.
-- Reason: D5 is the safety row and cannot be waived; BRIEF 4.6 outranks a loudness target. A sound here is louder only by 1 dB, and only for the two prompts.
+- Decision: as played, both prompts read -16. `HudLayer._play`, the only path they have to `WlSfx`, plays at -4 dB and `hud_layer.gd` is frozen, so the files carry it: file peaks -8 and -10.6 dBFS, file momentary -12. `simulate()` plays a prompt at -4 dB too (`PROMPT_VOICE_DB`, pinned to `hud_layer.gd` by a test), D5 reads that, and A2 holds the prompts as played to -23..-15 and every other UI sound's file to -23..-17.
+- Alternatives: -17 and under, the SPEC's row. Measured as played on the fixture, -16 reads D5 +7.83 LU over a -19.31 LUFS mix, +6.53 over -18.13 and +6.03 over -17.67, so -17 would read about +5.5 at the SPEC's own -18 target. Raising the prompts further to cover A1's whole window (-16 LUFS needs about -14 as played) was also rejected: a louder alarm for a mix no bank should aim at.
+- Reason: D5 is the safety row and cannot be waived; BRIEF 4.6 outranks a loudness target. A sound here is over the row only by 1 dB, and only for the two prompts. The cost: D5 caps a game's mix at about -17.6 LUFS, inside A1's window, and the scorecard says so to the builder.
 
 ## 2026-10-31 Ticks under 100 ms and the metronome are outside the UI loudness row
 

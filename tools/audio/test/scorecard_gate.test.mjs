@@ -76,6 +76,23 @@ test('D5 needs the _shared bank, and fails a mix that buries the prompts', () =>
   assert.equal(row(card(doc), 'D5').pass, false);
 });
 
+test('D4: a machine layer with no min_rpm still stops dead, as the kit stops it', () => {
+  const doc = structuredClone(fixture);
+  for (const l of doc.machines.engine.loops) delete l.min_rpm;
+  assert.equal(row(card(doc), 'D4').pass, true);
+});
+
+test('D5 reads the prompts as HudLayer plays them, 4 dB under the file', () => {
+  const sharedDoc = readJson(SHARED_BANK);
+  const quiet = structuredClone(sharedDoc);
+  for (const name of ['warning', 'rescue']) quiet.sounds[name].norm.peak -= 4;
+  const asFiled = row(scoreBank(fixture, null, { shared: new BankAudio(sharedDoc, null) }), 'D5');
+  const down = row(scoreBank(fixture, null, { shared: new BankAudio(quiet, null) }), 'D5');
+  assert.ok(asFiled.pass && asFiled.value >= 6, `${asFiled.value}`);
+  assert.ok(Math.abs(asFiled.value - down.value - 4) < 0.1, `${asFiled.value} vs ${down.value}`);
+  assert.equal(down.pass, false, 'files 4 dB down, the levels from before the voice was counted, fail');
+});
+
 test('A rows see a monotone drone: flux, crest and level', () => {
   const doc = structuredClone(fixture);
   doc.sounds.body.layers = [{ src: 'sine', f: 110, gain: 0.7 }];

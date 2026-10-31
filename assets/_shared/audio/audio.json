@@ -35,14 +35,14 @@
       ]
     },
     "warning": {
-      "dur": 0.3, "rate": 22050, "ch": 1, "seed": 1105, "norm": {"peak": -12.0},
+      "dur": 0.3, "rate": 22050, "ch": 1, "seed": 1105, "norm": {"peak": -8.0},
       "layers": [
         {"src": "square", "f": 440, "at": 0.0, "dur": 0.12, "env": {"a": 0.004, "r": 0.03}},
         {"src": "square", "f": 440, "at": 0.18, "dur": 0.12, "env": {"a": 0.004, "r": 0.03}}
       ]
     },
     "rescue": {
-      "dur": 0.5, "rate": 22050, "ch": 1, "seed": 1106, "norm": {"peak": -14.6},
+      "dur": 0.5, "rate": 22050, "ch": 1, "seed": 1106, "norm": {"peak": -10.6},
       "layers": [
         {"src": "square", "f": [620, 300], "glide": "lin", "env": {"a": 0.01, "r": 0.15}}
       ]

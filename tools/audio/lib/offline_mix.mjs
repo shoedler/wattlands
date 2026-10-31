@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { dbToGain } from './dsp.mjs';
-import { OFF_DB, AmbienceBed, CadenceVoice, CrankClock, LayeredLoop, curveEval } from './pattern.mjs';
+import { OFF_DB, STOP_RPM, AmbienceBed, CadenceVoice, CrankClock, LayeredLoop, curveEval } from './pattern.mjs';
 import { renderSound } from './recipe.mjs';
 import { soundFiles } from './bank.mjs';
 import { decodeWav, deinterleave } from './wav.mjs';
@@ -16,6 +16,8 @@ export const FRAME_DT = 1 / 60;
 const LIMITER_CEILING = dbToGain(-1.25);
 const LIMITER_LOOKAHEAD = 66;
 const LIMITER_RELEASE_S = 0.1;
+// HudLayer._play is the only way a safety prompt reaches WlSfx, and it plays every sound at this level (hud_layer.gd). A test pins the two together.
+export const PROMPT_VOICE_DB = -4;
 const SAFETY_DUCK = [
   { bus: 'Machines', db: -6, attack_s: 0.02, release_s: 1.2 },
   { bus: 'Ambience', db: -6, attack_s: 0.02, release_s: 1.2 },
@@ -142,7 +144,7 @@ export function simulate(bank, scenario) {
       voices.push(v);
       events.push({ t: v.t, sound: v.sound, variant: v.variant, db, kind: 'cue', cue: c.cue, thinned: false });
     }
-    for (const d of def.duck ?? []) ducks.push({ ...d, t });
+    if (lead) for (const d of def.duck ?? []) ducks.push({ ...d, t });
   };
   for (let f = 0; f < frames; f++) {
     const t = (f + 1) * FRAME_DT;
@@ -155,7 +157,8 @@ export function simulate(bank, scenario) {
       rig.clock.advance(rpm, FRAME_DT);
       for (const ev of rig.voice.plan(rig.clock.revs, rpm, horizon, params, rig.m.lead)) planned.push({ ev, rig, at: t + ev.at_s });
       const trim = rig.m.lead ? 0 : otherDb + spectatorDb;
-      rig.loops.update(params, trim, rig.m.lead, FRAME_DT);
+      if (rpm <= STOP_RPM) rig.loops.close(FRAME_DT);
+      else rig.loops.update(params, trim, rig.m.lead, FRAME_DT);
       for (let i = 0; i < rig.loops.count; i++) {
         rig.tracks[i].pitch[f + 1] = rig.loops.pitch[i];
         rig.tracks[i].db[f + 1] = rig.loops.db[i];
@@ -180,13 +183,13 @@ export function simulate(bank, scenario) {
     while (cueQueue.length > 0 && cueQueue[0].t <= t) playCue(cueQueue.shift(), t);
     while (promptQueue.length > 0 && promptQueue[0].t <= t) {
       const p = promptQueue.shift();
-      voices.push({ shared: true, sound: p.name, variant: 0, t, db: 0, pitch: 1, bus: 'Master', priority: 10, lead: true });
+      voices.push({ shared: true, sound: p.name, variant: 0, t, db: PROMPT_VOICE_DB, pitch: 1, bus: 'Master', priority: 10, lead: true });
       for (const d of SAFETY_DUCK) ducks.push({ ...d, t });
     }
     for (const nl of namedLoops) {
-      const active = t >= nl.nl.t0 && t < nl.nl.t1;
-      if (active) nl.loops.update({ ...nl.nl.params }, 0, nl.nl.lead !== false, FRAME_DT);
-      else nl.loops.update({}, -200, false, FRAME_DT);
+      const lead = nl.nl.lead !== false;
+      if (t >= nl.nl.t0 && t < nl.nl.t1) nl.loops.update({ ...nl.nl.params }, lead ? 0 : (mix.other_db ?? -10), lead, FRAME_DT);
+      else nl.loops.close(FRAME_DT);
       for (let i = 0; i < nl.loops.count; i++) {
         nl.tracks[i].pitch[f + 1] = nl.loops.pitch[i];
         nl.tracks[i].db[f + 1] = nl.loops.db[i];
