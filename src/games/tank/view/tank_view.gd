@@ -463,7 +463,8 @@ func advance(delta: float) -> void:
 			delta,
 			game.ctx.local_peer if game.ctx != null else 0,
 			audio_feed(state),
-			travel / (TankConst.PX_PER_M * S)
+			travel / (TankConst.PX_PER_M * S),
+			not far.rects.is_empty() or far.boss_box.has_area()
 		)
 
 

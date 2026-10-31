@@ -576,12 +576,12 @@ func test_the_curves_of_the_far_sounds() -> void:
 	assert_almost_eq(TankAudio.boom_delay(1360.0), 2.0, 1e-6)
 	assert_almost_eq(TankAudio.boom_delay(100.0), 0.6, 1e-5, "clamped")
 	assert_almost_eq(TankAudio.boom_delay(9000.0), 3.5, 1e-5, "clamped")
-	assert_eq(TankAudio.range_db(800.0), -6.0)
-	assert_eq(TankAudio.range_db(2400.0), -16.0)
-	assert_eq(TankAudio.range_db(5000.0), -16.0)
+	assert_eq(TankAudio.range_db(800.0), -5.0)
+	assert_eq(TankAudio.range_db(2400.0), -12.0)
+	assert_eq(TankAudio.range_db(5000.0), -12.0)
 	assert_eq(TankAudio.whistle_rate(2.5), 1.0)
 	assert_almost_eq(TankAudio.whistle_rate(1.5), 1.6667, 1e-3)
-	assert_almost_eq(TankAudio.whistle_rate(0.2), 1.67, 1e-5, "clamped")
+	assert_almost_eq(TankAudio.whistle_rate(0.2), 1.8, 1e-5, "clamped")
 	assert_almost_eq(TankAudio.whistle_rate(4.0), 0.63, 1e-5, "clamped")
 
 
@@ -595,7 +595,7 @@ func test_an_enemy_shot_whistles_at_once_and_thumps_after_its_range() -> void:
 	assert_does_not_have(_audio.played, "enemy_thump")
 	_idle(0.2)
 	assert_has(_audio.played, "enemy_thump", "1360 m: 2 s")
-	assert_almost_eq(_level("enemy_thump"), TankAudio.range_db(1360.0), 0.001)
+	assert_almost_eq(_level("enemy_thump"), 3.0 + TankAudio.range_db(1360.0), 0.001)
 
 
 func test_the_incoming_whistle_is_prominent_and_ducks_the_wind_for_everyone() -> void:
@@ -630,7 +630,7 @@ func test_our_far_hit_booms_after_its_range_with_metal_on_it() -> void:
 	_idle(3.1)
 	assert_has(_audio.played, "far_boom", "2040 m: 3 s")
 	assert_has(_audio.played, "far_hit_metal")
-	assert_almost_eq(_level("far_boom"), TankAudio.range_db(2040.0), 0.001)
+	assert_almost_eq(_level("far_boom"), 3.0 + TankAudio.range_db(2040.0), 0.001)
 
 
 func test_a_far_boom_is_quieter_the_further_it_lands() -> void:

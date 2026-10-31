@@ -26,10 +26,14 @@ const BOOM_DELAY_S := Vector2(0.6, 3.5)
 ## Metres -> dB of a far sound.
 const RANGE_NEAR_M := 800.0
 const RANGE_FAR_M := 2400.0
-const RANGE_DB := Vector2(-6.0, -16.0)
-## incoming_whistle's file ends at impact: its rate fits the flight.
+const RANGE_DB := Vector2(-5.0, -12.0)
+## incoming_whistle's file ends at impact: its rate fits the flight, and a flight too long for it waits (a far shell's
+## arc takes 1.4 s at 800 m and 4.7 s at 2500 m). It stays faint until its last second: the shell is far until then.
 const WHISTLE_FILE_S := 2.5
-const WHISTLE_RATE := Vector2(0.63, 1.67)
+const WHISTLE_RATE := Vector2(0.63, 1.8)
+## The Behemoth's main gun, over a far tank's.
+const BOSS_THUMP_DB := 3.0
+const BOSS_THUMP_PITCH := 0.8
 ## A far shell whose event has no flight time or range (SPEC_AUDIO 4.1).
 const FALLBACK_FLIGHT_S := 2.5
 const FALLBACK_RANGE_M := 1400.0
@@ -52,9 +56,17 @@ const SPIT_POWER := Vector2(1.05, 1.3)
 const SPIT_LEVEL := 0.5
 ## The bed's gust, two slow sines (rad/s): 33 s and 88 s.
 const GUST_RAD_S := Vector2(0.19, 0.071)
-## A near engine's distance is measured from the hull's middle (rules px).
+## A near engine's distance is measured from the hull's front (rules px), as the rules place it.
 const NEAR_LOOPS := {TankIds.ENEMY_RECON: "recon_engine", TankIds.ENEMY_TANKETTE: "tankette_engine"}
-## Events that make no sound of their own. An escape is the engine's loop ending.
+## One that got away has left the near panel, not the night: it drives on at about its flee speed until the bank's
+## distance curve has taken it down.
+const NEAR_FLEE_PX_S := 120.0
+const NEAR_GONE_PX := 620.0
+## A round from a near gun on the hull: the event's damage, rounded (a far tank's is at least 2, solo). Not an impact.
+const SMALL_ROUND_DMG := 1
+## Events that make no sound of their own, each for a reason that holds. RAM: reserved, nothing emits it. OVERRUN: the
+## segment's horn follows at once, and any kill it causes rolls in BY_BARRAGE. ESCAPED: the sound is the engine driving
+## off, which _near_engines carries on after the event; a toast says so too.
 const SILENT_EVENTS: Array[String] = [TankEvents.RAM, TankEvents.OVERRUN, TankEvents.ESCAPED]
 ## Event -> the cues it can play (the bank has each one; tests hold this to on_cue).
 const EVENT_CUES := {
@@ -65,7 +77,7 @@ const EVENT_CUES := {
 	TankEvents.SEAT: ["lever"],
 	TankEvents.TURN: ["lever"],
 	TankEvents.SHOT: ["shot_main", "shot_bow", "shot_near_mg", "enemy_thump", "incoming_whistle"],
-	TankEvents.HIT: ["hit_tank", "hit_far", "hit_near"],
+	TankEvents.HIT: ["hit_tank", "hit_small", "hit_far", "hit_near"],
 	TankEvents.KILL: ["kill_near", "kill_far", "kill_boss"],
 	TankEvents.BREAKDOWN: ["breakdown"],
 	TankEvents.REPAIRED: ["repaired"],
@@ -112,6 +124,12 @@ var _impacts: int = 0
 ## Near threats killed since the last update(). The rules erase one before they send the HIT that killed it, so the
 ## HIT can only know its target was near from here.
 var _near_killed: Dictionary = {}
+## Each near engine's distance last frame, and those driving off after an escape (loop id -> px).
+var _near_last: Dictionary = {}
+var _near_gone: Dictionary = {}
+## The tread's metres as drawn, always forward: a tow runs it backwards, and it still clanks.
+var _tread_m: float = 0.0
+var _tread_was: float = NAN
 var _t: float = 0.0
 
 
@@ -147,6 +165,11 @@ static func range_db(range_m: float) -> float:
 ## The whistle's rate, so that its file ends at the shell's impact.
 static func whistle_rate(flight_s: float) -> float:
 	return clampf(WHISTLE_FILE_S / maxf(flight_s, 0.01), WHISTLE_RATE.x, WHISTLE_RATE.y)
+
+
+## How long the whistle waits, so that it still ends at impact on a flight longer than its slowest playing.
+static func whistle_delay(flight_s: float) -> float:
+	return maxf(flight_s - WHISTLE_FILE_S / whistle_rate(flight_s), 0.0)
 
 
 ## The hit's weight: 0 damage -6 dB, 24 or more 0 dB.
@@ -210,6 +233,8 @@ func on_cue(kind: String, data: Dictionary) -> void:
 			kit.cue("tank_lost")
 		TankEvents.AMBUSH:
 			kit.cue("ambush")
+		TankEvents.ESCAPED:
+			_near_escaped(int(data.get("e", 0)))
 
 
 func _shot(data: Dictionary, own: bool) -> void:
@@ -231,13 +256,27 @@ func _enemy_shot(data: Dictionary) -> void:
 	var range_m := float(data.get("rng_m", 0.0))
 	if range_m <= 0.0:
 		range_m = FALLBACK_RANGE_M
-	kit.cue("enemy_thump", {"delay": boom_delay(range_m), "range_db": range_db(range_m)})
-	kit.cue("incoming_whistle", {"rate": whistle_rate(flight)})
+	var boss := int(data.get("sh", 0)) == TankIds.SHELL_BOSS_MAIN
+	(
+		kit
+		. cue(
+			"enemy_thump",
+			{
+				"delay": boom_delay(range_m),
+				"range_db": range_db(range_m) + (BOSS_THUMP_DB if boss else 0.0),
+				"thump_pitch": BOSS_THUMP_PITCH if boss else 1.0,
+			}
+		)
+	)
+	kit.cue("incoming_whistle", {"rate": whistle_rate(flight), "delay": whistle_delay(flight)})
 
 
 func _hit(data: Dictionary) -> void:
 	var on := int(data.get("on", -1))
 	if on == TankEvents.ON_TANK:
+		if _is_small_round(data):
+			kit.cue("hit_small")
+			return
 		var dmg := dmg_db(float(data.get("dmg", 0)))
 		kit.cue("hit_tank", {"dmg_db": dmg, "impact_pitch": _next_impact()})
 	elif (
@@ -250,6 +289,13 @@ func _hit(data: Dictionary) -> void:
 		var x := float(data.get("x", 0))
 		_last_far_m = x if x > 0.0 else FALLBACK_RANGE_M
 		kit.cue("hit_far", _far_vars(_last_far_m))
+
+
+## A near gun's round rings on the plate. A breakdown or a tow also reports any shell as 0 damage: that one still lands.
+func _is_small_round(data: Dictionary) -> bool:
+	if int(data.get("sh", 0)) != TankIds.SHELL_ENEMY or int(data.get("dmg", 0)) > SMALL_ROUND_DMG:
+		return false
+	return game == null or game.state == null or not game.state.hull.out_of_action()
 
 
 ## A near shell's HIT sends world px in `x`, not metres, so it must not read as a far boom: its target says which.
@@ -278,6 +324,7 @@ func _kill(data: Dictionary) -> void:
 		kit.cue("kill_boss")
 	elif TankIds.is_near_code(code) or int(data.get("by", 0)) == TankEvents.BY_BOW:
 		kit.cue("kill_near", {"small_pitch": SMALL_PITCHES[_small_kills % SMALL_PITCHES.size()]})
+		_near_last.erase(NEAR_LOOPS.get(TankIds.enemy_of(code), ""))
 		_small_kills += 1
 		_near_killed[int(data.get("id", 0))] = true
 	elif int(data.get("by", 0)) == TankEvents.BY_BARRAGE:
@@ -331,8 +378,14 @@ func _is_own_slot(slot: int) -> bool:
 
 
 ## `feed` is TankView.audio_feed(state): seat -> {revs, rpm, power, lead}. `travel_m`: the track's metres, as drawn.
+## `far_fight`: the far panel shows an enemy.
 func update(
-	state: TankState, dt: float, p_local_peer: int, feed: Dictionary, travel_m: float
+	state: TankState,
+	dt: float,
+	p_local_peer: int,
+	feed: Dictionary,
+	travel_m: float,
+	far_fight: bool = false
 ) -> void:
 	local_peer = p_local_peer
 	_t += dt
@@ -341,9 +394,9 @@ func update(
 	for seat: String in MACHINE_OF_SEAT:
 		_drive_seat(state, seat, feed.get(seat, {}), dt)
 	_drive_track(state, travel_m, _has_seat(feed))
-	_near_engines(state)
+	_near_engines(state, dt)
 	_patches(state, feed.get("repair", {}))
-	bed_now = _bed_params(state)
+	bed_now = _bed_params(state, far_fight)
 	kit.bed_params(bed_now)
 	kit.commit(dt)
 
@@ -402,14 +455,23 @@ func _machine_params(state: TankState, seat: String, power: float, lift: float) 
 
 
 ## The track is locked to the distance on screen, as a crank to its cadence. Every rider hears it at full level; a
-## spectator hears it with the machines, or its lead would cost them the kit's lift for a room with no lead.
+## spectator hears it with the machines, or its lead would cost them the kit's lift for a room with no lead. Under tow
+## the rules' hull stands still and the view creeps it back with the tread reversed: the links follow the tread.
 func _drive_track(state: TankState, travel_m: float, lead: bool) -> void:
-	var speed := state.hull.speed_mps
+	if is_nan(_tread_was):
+		_tread_was = travel_m
+	_tread_m += absf(travel_m - _tread_was)
+	_tread_was = travel_m
+	var speed := (
+		TankView.TOW_PX_S / (TankConst.PX_PER_M * TankView.S)
+		if state.hull.tow_s > 0.0
+		else state.hull.speed_mps
+	)
 	var rpm := speed / TRACK_M_PER_REV * 60.0
 	if rpm <= CrankClock.STOP_RPM:
 		kit.stop_machine(TRACK)
 		return
-	kit.drive(TRACK, TRACK, travel_m / TRACK_M_PER_REV, rpm, {"speed": speed}, lead)
+	kit.drive(TRACK, TRACK, _tread_m / TRACK_M_PER_REV, rpm, {"speed": speed}, lead)
 
 
 func _has_seat(feed: Dictionary) -> bool:
@@ -419,19 +481,38 @@ func _has_seat(feed: Dictionary) -> bool:
 	return false
 
 
-## Each near kind's engine runs while one of them lives, at the nearest one's distance.
-func _near_engines(state: TankState) -> void:
-	var middle := state.hull.x_px + float(state.hull.hull_w) * 0.5
+## Each near kind's engine runs while one of them lives, at the nearest one's distance, revving as it drives and
+## idling down when it stops to fire. One that got away drives on and fades; a kill just ends it.
+func _near_engines(state: TankState, dt: float) -> void:
+	var front := state.hull.x_px + float(state.hull.hull_w)
 	var nearest := {}
+	var rev := {}
 	for e: TankEnemyState in state.enemies:
 		if not e.is_near() or e.mode == TankIds.EM_DEAD:
 			continue
 		var loop_id: String = NEAR_LOOPS.get(TankIds.enemy_of(e.code), "")
-		var dist := absf(e.x_px - middle)
+		var dist := maxf(e.x_px - front, 0.0)
 		if loop_id != "" and dist < float(nearest.get(loop_id, INF)):
 			nearest[loop_id] = dist
+			rev[loop_id] = 0.0 if e.mode == TankIds.EM_PAUSE else 1.0
 	for loop_id: String in nearest:
-		kit.set_loop(loop_id, {"dist": nearest[loop_id]})
+		_near_last[loop_id] = nearest[loop_id]
+		kit.set_loop(loop_id, {"dist": nearest[loop_id], "rev": rev[loop_id]})
+	for loop_id: String in _near_gone.keys():
+		var dist: float = float(_near_gone[loop_id]) + NEAR_FLEE_PX_S * dt
+		if nearest.has(loop_id) or dist >= NEAR_GONE_PX or state.hull.tow_s > 0.0:
+			_near_gone.erase(loop_id)
+			continue
+		_near_gone[loop_id] = dist
+		kit.set_loop(loop_id, {"dist": dist, "rev": 1.0})
+
+
+## The rules erase it as they send this, so the distance is the last one heard. No engine heard, nothing to carry on.
+func _near_escaped(code: int) -> void:
+	var loop_id: String = NEAR_LOOPS.get(TankIds.enemy_of(code), "")
+	if _near_last.has(loop_id):
+		_near_gone[loop_id] = _near_last[loop_id]
+		_near_last.erase(loop_id)
 
 
 ## The press closes when a patch is done: it follows the hull rebuilt, not the crank.
@@ -445,9 +526,10 @@ func _patches(state: TankState, f: Dictionary) -> void:
 
 
 ## gust: two slow sines that never quite repeat, and keep off the high wind's own 13 and 26 s.
-## combat: the depot and the cool-down hear no far battle.
-func _bed_params(state: TankState) -> Dictionary:
-	var quiet := state.seg.seg == TankIds.SEG_DEPOT or state.in_cooldown()
+## combat: the depot and the cool-down hear no far battle, and neither does a real fight in the far panel: a far thump
+## there is a shot at this tank, and must never be just the night.
+func _bed_params(state: TankState, far_fight: bool) -> Dictionary:
+	var quiet := state.seg.seg == TankIds.SEG_DEPOT or state.in_cooldown() or far_fight
 	return {
 		"gust": 0.5 + 0.3 * sin(_t * GUST_RAD_S.x) + 0.2 * sin(_t * GUST_RAD_S.y + 1.3),
 		"speed": state.hull.speed_mps,
