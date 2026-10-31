@@ -1,10 +1,11 @@
 extends GutTest
 ## Tank's card art as game.json names it: every file loads, and the folder ships no PNG the game doesn't use. The paths
-## come from game.json, so moving the cards changes nothing here. What the v2 kit's tests held on to, now that TankKit
-## and kit.json are gone.
+## come from game.json, so moving the cards changes nothing here. What the v2 kit's tests held on to, now that the kit's
+## class and kit.json are gone.
 
 const MANIFEST := "res://src/games/tank/game.json"
 const V2 := "res://assets/tank/v2/"
+const KIT_CLASS := "res://src/games/tank/view/tank_kit.gd"
 ## Subfolders of the card folder that hold other things than cards.
 const NOT_CARDS: Array[String] = ["hud/", "source/", "tools_src/"]
 
@@ -38,8 +39,7 @@ func test_the_card_folder_holds_only_what_game_json_names() -> void:
 func test_the_v2_enemy_art_and_kit_are_gone() -> void:
 	assert_false(DirAccess.dir_exists_absolute(V2 + "enemies"), "the v2 enemies are gone")
 	assert_false(FileAccess.file_exists(V2 + "kit.json"), "the v2 manifest is gone")
-	for cls: Dictionary in ProjectSettings.get_global_class_list():
-		assert_ne(str(cls["class"]), "TankKit", "the v2 kit's class is gone")
+	assert_false(ResourceLoader.exists(KIT_CLASS), "the v2 kit's class is gone")
 
 
 func _manifest() -> Dictionary:
