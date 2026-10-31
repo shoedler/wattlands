@@ -242,11 +242,11 @@ Nobody has heard this audio: every number behind it was measured offline. A mach
 | 103 | Stop pedalling on any seat with others riding | Your machine stops dead, and the others' machines do **not** get louder | |
 | 104 | Fire and watch a far hit | The flash first, the boom later (0.6 to 3.5 s by range; twice real sound speed on purpose). Say whether the delay feels right or detached | |
 | 105 | A far kill | The wreck goes up with its own boom, not before it | |
-| 106 | An incoming shell, then Surge | The whistle starts as the enemy fires and ends at the impact; it cuts through the machines, and you can react to it without looking at the screen | |
-| 107 | A near threat | A burst from the bushes, a small engine that fades as it flees, a small gun; no whistle | |
+| 106 | An incoming shell, then Surge | The shot is a low thump after its range. The shell in the air is faint and comes close only in its last second, ending at the impact; say whether it reads as far until then, and whether its end still cuts through the machines. The Surge prompt, not this, is the time to start a sprint | |
+| 107 | A near threat | Before you look: a burst from the bushes, a small high engine over your machine that revs as it dashes and idles down to fire, a sharp small gun whose rounds ring on the plate; no whistle. It fades over about 3 s as it flees, and stops dead if you kill it. Say whether a recon and a tankette sound different, and whether they get tiring in a long fight | |
 | 108 | The track at speed | Links and a squeak that follow the tread on screen and stop with the hull. On a client, say whether they lurch when the network does (they follow the drawn tread, ADR 2026-10-31) | |
-| 109 | The depot, a fight, the cool-down | Wind, crickets and now and then a frog, an owl or a branch; a far battle in the fight only. Crickets stay crickets for 30 minutes, not a pattern | |
-| 110 | Lose the tank on Hard, then the restart | A heavy hit, the klaxon, everything else ducked, the chain of the tow, the engine catching at the restart | |
+| 109 | The depot, a fight, the cool-down | Wind, crickets and now and then a frog, an owl or a branch; a far battle on the road, gone once an enemy stands in the far panel. Crickets stay crickets for 30 minutes, not a pattern | |
+| 110 | Lose the tank on Hard, then the restart. Also a segment and a boss banner: a horn and a groan of iron, never the safety warning | A heavy hit, the klaxon, everything else ducked, the chain of the tow and the tread's links as it runs backwards, the engine catching at the restart | |
 | 111 | Pause and resume, with the crank still turning | Machines close, the night drops, a pending boom waits; nothing bursts on resume | |
 | 112 | A crew of 4 with bots at 90 rpm, as the driver | Your diesel in front; the others a texture behind it, no machine-gun | |
 | 113 | Half an hour on your speakers or headphones | Note what tires you, and set the levels in Settings > Audio (Machines holds the seats and track, Ambience the night, Effects the guns and hits) | |

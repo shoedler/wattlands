@@ -118,3 +118,48 @@ Short ADRs for Diesel Domestiques' sound on the audio kit. "SPEC" is the run's S
 
 - On 8a7faf06, for the record. Cricket trains hold pitch and pan. `night_forest` has no bed loop: under the adapter's real gust the highest envelope autocorrelation is 0.38 at 26 s, LRA 4.1. `turbo_whistle` is 7.7 dB over its neighbours in the mix at power 1. Limiter load is low: 7.6 % of the time at most at power 1.3, 110 rpm with the gun, gain reduction at most 2.3 dB. Family: mix -19.31 to -19.89 LUFS across the four games, A10 7.32-8.94 dB, above 4 kHz 2.1-3.3 %, Ambience -29.8 to -33.4.
 - With every machine scored as lead on that head: D2 at most 0.32 ms, D3 at most 0.19 %, D4 digital silence at 400 ms, D5 6.34..8.14, D6 at most 8/0/13, D7 at most 11.4. Its one exception, repair at 110 rpm (`rivet_ring@0.03`: 9 onsets, 9 planned, 10 in the pattern), is the offline harness's first frame priming past that fraction, not the game: `test_tank_audio_patterns.gd` counts every seat exact past the first revolution, at its fraction.
+
+## 2026-10-31 v4: a near threat is near, a far one stays far
+
+- Decision: `recon_engine` (266 Hz) and `tankette_engine` (360 Hz) are rebuilt with their fundamental filtered down and formants at 1.15 and 2.4 kHz, 1.5 and 3.1 kHz, on Sfx at -4.5 and -4 dB against -20 before. The distance is from the hull's front, as the rules place them, with a `rev` param from `e.mode`: they rev as they dash and idle down, -1 dB and about a quarter lower, when they stop to fire. On `escaped` the adapter drives the loop on at 120 px/s to 620 px, about 3 s, because the rules erase the enemy at 220 px; a kill and a tow cut it. `ambush` ducks Machines -4 and Ambience -6 for 0.8 s. `small_mg` -15 to -2, its cracks moved from 1.7 to 2.6 kHz, where the chuffs and the zaps leave room. A near round on the hull (`dmg` 1 or less with the hull in action, a new cue `hit_small`) is `hull_hit` at 1.55 pitch and -11, not `incoming_impact_near`, which it shared with a far shell. `enemy_thump` has more sine and +3; the Behemoth's is +3 more and 0.8 lower. `incoming_whistle` keeps its 2.5 s and its end, and its first 1.9 s drop to under -9 dB of the end. It now also ends at impact on a 4.7 s flight (`whistle_delay`) and a 1.4 s one (rate up to 1.8).
+- Alternatives: a near engine with no ghost, which the rules' 0.3 s from 185 to 220 px would turn into a cut; a duck under every near engine, which would pump for 7 s in the middle of a fight; dropping the whistle from the first part of the flight, as v4's stub did, which loses the warning that a shell is in the air; a low engine, which the diesel's bands would hide however loud.
+- Reason: the critic's blocker. Over a hard ride, best third-octave band (`tests/games/tank/audio/read_over.mjs`, held by `cue_reads.test.mjs`). Before, the diesel leading: recon -19.2 and tankette -17.9 at 185 px from the hull's middle, which is its close range, and its gun -5.3. Now, worst seat: recon at close range +5.9 at 1260 Hz, tankette +4.7 at 1587 Hz; stopped to fire at 160 px +0.9 and +2.3; leaving at 185 px +1.9 and +0.7; fleeing, 320 px at most -3.5, 560 px at most -23.4. Its gun +3.4. The burst and engine in their first 200 ms +11.3. Far: the thump at 2200 m -3.3, now +4.0 and best at 63 Hz. The whistle's first second at most +6.7 and under the room on 4 of 6 seats, its last half second at least +17.7.
+- Bytes: none. Same durations.
+
+## 2026-10-31 RANGE_DB -5 to -12, from -6 to -16
+
+- Decision: the far sounds lose 7 dB over the range, not 10.
+- Alternatives: raising each cue by the 4 dB the far end needs, which pushes a light tank's boom at 800 m over the gun's tail.
+- Reason: at 2200 m, the furthest a far tank holds, the cues' levels below on the old table would put a far hit's boom and a kill -2.4 under a diesel at a hard ride (computed from the -0.4 they measured at 1400 m at their old levels), so the rider's own reward was lost at range. It still reads as distance: the delay does most of that work.
+
+## 2026-10-31 What the old shallow duck held back, and what the deep one allows
+
+- Decision: with D5 now measuring the -14/-14/-20 duck and the loudest moment, Sfx came up: `far_boom` +3 on a hit and +2 on a splash, `far_hit_metal` +3, `explode_big` +3, `explode_small` +2, `near_miss_thud` +2, `far_hit_metal` on a near threat +4, `shell_eject` +4, `shell_load` and `breech_close` +1. `preview.hud` lists the real UI: the toasts at a latch, the Surge prompt, the ambush, the escape and the evade, and the phase chime at the segment.
+- Numbers, before then now: D5 7.62 to 8.88, at 58 s, a toast on an evade. A2 Sfx -13.38 to -13.34 (-14 +-3). The bank's one waiver, A13, stays: its numbers are the same, 31 of 465, each from a thinned variant at 14 dB under the lead.
+- A cue reads when its best third-octave band beats the room at the same moment (`cue_reads.test.mjs`, every seat at 100 rpm, 1.1 of target, a full crew): every threat and reward above 0 dB. Worst now, each with the diesel leading, the 2200 m ones at the furthest a far tank holds: `splash_far` +0.4, `explode_big` +1.2, `far_hit_metal` +1.2, `far_boom` +1.4, `hull_hit` on a small round +3.0, `near_miss_thud` +3.5.
+
+## 2026-10-31 Which sounds the owner named, and what moved them
+
+- Decision: `diesel_valve_ex` +6, `diesel_valve_in` +3, `turbo_whistle` +3 to +4, `track_squeak` +6, `track_link` +3, the crackle's lower end +2, and `diesel_body_lo`, `_hi` -0.6, so the lead stays in A2's window against the other riders (A2 other -11.95, floor -12: that is the row that stopped a higher `track_link`).
+- Reason: measured against the room, not solo, several sat under it: squeak -2.6, valve -4.2, turbo -2.3, eject -0.7. Now all above 0 at a hard ride with the diesel leading: squeak +1.7 at 1260 Hz, shell eject +3.4, shell load +4.1, breech +1.7, exhaust valve +1.6, inlet valve +1.5, turbo +1.4 at 4 kHz, crackle over band +1.5, on a lift-off +9.1. Margins of 1 to 2 dB in one band: findable, not prominent, which is what an hour of them needs. Nobody has listened to say whether they are enough.
+
+## 2026-10-31 The third site: what the far panel shows
+
+- Decision: `audio.update(` takes one more argument, `not far.rects.is_empty() or far.boss_box.has_area()`, and `combat` goes to 0 while it is true, so `far_battle` stands down.
+- Alternatives: reading `state.enemies` in the adapter, which is a second opinion on what is drawn; leaving the battle in.
+- Reason: a far shot is now a low thump, and so is a far battle. A thump in a fight must always be a real shot.
+
+## 2026-10-31 A tow runs the tread backwards, and the links follow it
+
+- Decision: the adapter keeps its own odometer, the sum of how far the view's `travel` moved either way, and under `hull.tow_s` the track runs at the view's tow speed, 1.3 m/s.
+- Alternatives: leaving the track silent, as the rules' hull speed is 0 then; reading the tow as negative revs, which the kit's plan treats as a reset.
+- Reason: the picture's tread turns for 8 s and `tow_chain` lasts 2.4 s. S1 is one number for picture and sound, as for every crank. Measured through the real view: planned revolutions equal the tread's within 0.1, and a standing tank after it plays none.
+
+## 2026-10-31 A banner is not a safety prompt
+
+- Decision: `hs.banner_sound = ""`. Segment and boss banners have `segment` and `boss_phase`; `ctx.hud.banner` was also playing `warning` and ducking the mix -14/-14/-20 for 2 s at each.
+- Reason: Tank's rider heard the safety sound at every segment. It must mean a real one (BRIEF 4.6). A trainer notice or safety banner ignores this field and always warns.
+
+## 2026-10-31 What is measured here and what is not
+
+- Measured offline: the numbers above, the scorecard, the wiring by GUT on the real rules and the real view. Not measured: how any of it sounds. Whether a recon reads as a small car, whether the near engine tires over a long fight, whether a fading engine past the panel's edge feels right, whether a far whistle reads as far. A third-octave win says a sound can be picked out by level in one band, not that a person will: real masking on real speakers over a real fan is the hardware test's section 16. Near threats are measured with one engine at a time and a static distance per case, with the rider's own bow guns not firing.
