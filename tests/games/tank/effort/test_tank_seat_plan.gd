@@ -12,6 +12,7 @@ const ADVANCE := 1
 const GUN_LINE := 2
 const CHECKPOINT := 3
 const BOSS := 10
+const SessionKit := preload("res://tests/sdk/helpers/session_kit.gd")
 
 
 func _content(mission: String = "ashfall_road") -> TankContent:
@@ -138,6 +139,55 @@ func _depot_split(
 		elapsed + Wl.SIM_DT + rest.phase(0).duration_s >= depot - 1e-6,
 		"not short of the warm-up in real time " + where
 	)
+
+
+## The same split through the platform's own PhaseTracker and DirectiveRouter, not a model of them: every
+## seat is accepted, the rest's end stays in the depot's phase, and the next segment (the first that can
+## ask more than the warm-up's limit) starts at 300 s or later (BRIEF 4.6.8).
+func test_the_real_router_takes_a_depot_split_and_the_warm_up_holds() -> void:
+	var c := _content()
+	var plan := _plan(c, 0)
+	var from := str(plan.phase(0).meta["engine"])
+	for seat: String in TankIds.SEATS:
+		if seat != from:
+			_real_depot_split(c, plan, seat, 150.0)
+			_real_depot_split(c, plan, seat, 299.0)
+
+
+func _real_depot_split(c: TankContent, plan: EffortPlan, seat: String, at_s: float) -> void:
+	var root: Node = autofree(Node.new())
+	var clock := SimClock.create()
+	var tracker := PhaseTracker.new()
+	tracker.add_rider(1, PlanValidator.finalize(plan))
+	var router := DirectiveRouter.new()
+	router.role = Wl.HOST
+	router.tracker = tracker
+	router.clock = clock
+	router.slots = {1: SessionKit.human(1, 0, 200.0)}
+	router.bind_riders({})
+	router.bus = SessionKit.new_bus(root, "Bus")
+	router.remote_send = func(_peer: int, _payload: Dictionary) -> void: pass
+	router.telemetry_of = func(_peer: int) -> Variant: return null
+	tracker.start()
+	var advance := func(seconds: float) -> void:
+		for _i in PhaseTracker.ticks(seconds):
+			tracker.advance(clock.game_tick)
+			router.flush(clock.game_tick + 1)
+			tracker.update_modes(clock.game_tick + 1)
+			clock.step()
+	advance.call(at_s)
+	var elapsed := tracker.elapsed_s(1)
+	var ri := _ri(plan, 0, elapsed)
+	ri.plan_elapsed_s = elapsed
+	var f := TankSeatPlan.follow(c, ri, seat, -1000.0, elapsed, false)
+	var where := "%s at %.0f s" % [seat, at_s]
+	assert_eq(int(f["action"]), TankSeatPlan.FOLLOW_SPLIT, where)
+	assert_true(router.split(1, f["plan"]), "the router takes it: " + where)
+	advance.call(c.segment(0)["duration_s"] - elapsed + 1.0)
+	assert_eq(tracker.index_of(1), 2, "the rest, then the next segment: " + where)
+	var rest_row: Dictionary = tracker.history(1)[1]
+	assert_gte(float(rest_row["end"]), 300.0, "the next segment starts past the warm-up: " + where)
+	assert_lte(float(rest_row["end"]), 300.0 + 2.0 * Wl.SIM_DT, "and on time: " + where)
 
 
 ## Past the warm-up a split keeps the segment's real length to the tick.
