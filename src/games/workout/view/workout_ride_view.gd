@@ -34,8 +34,6 @@ const STRIP_MAX_H := 40.0
 ## riding (a FreeRide longer than a sprint, W4r2 R15) sits low and hatched.
 const SPRINT_STRIP_PCT := 130.0
 const FREE_STRIP_PCT := 55.0
-## Pennants are drawn at this scale of WorkoutArt's base geometry.
-const PENNANT_SCALE := 1.5
 ## Off-screen riders sit this far inside the left and right edges (a rider sprite is 88 wide).
 const EDGE_MARGIN_LEFT := 44.0
 const EDGE_MARGIN_RIGHT := 44.0
@@ -76,6 +74,9 @@ const BREATH_MAX := 8
 const DUST_EVERY_M := 2.0
 const DUST_MPS := 11.0
 const DUST_PUFFS := 4
+## When two riders pass each other the group's spread changes sides: each glides there at this rate
+## instead of jumping.
+const GROUP_GLIDE_PX_S := 40.0
 ## Pennant flutter: cycles per metre (wind by speed, not cadence).
 const FLUTTER_PER_M := 0.8
 ## Grey of a rider's sprite by state: a plain tint, the pose and the bubble do the telling.
@@ -141,6 +142,12 @@ var _poses: Dictionary = {}
 var _breath_seen: Dictionary = {}
 var _breath: Dictionary = {}
 var _spots_for_s: float = -1.0
+## peer -> how far the group's spread has moved this rider from its wanted x (art px).
+var _push: Dictionary = {}
+## The frame time the spread may glide by at the next refresh.
+var _glide_dt: float = 0.0
+## Pennants already built, by look and state: they change rarely and refresh runs every frame.
+var _pennants: Dictionary = {}
 
 
 func bind(p_game: WorkoutGame) -> void:
@@ -169,6 +176,7 @@ func advance(delta: float) -> void:
 		_advance_clock(delta)
 		_advance_local(delta)
 	_breath_step(delta)
+	_glide_dt = delta
 	refresh()
 	audio.update(delta)
 
@@ -293,8 +301,7 @@ func _build() -> void:
 	riders = WorkoutRiderLayer.new().prepare(kit)
 	verge_near = WorkoutRoadLayer.new().prepare(kit, true)
 	verge_near.material = _material
-	bank = WorkoutBankLayer.new()
-	bank.seed_value = seed_value
+	bank = WorkoutBankLayer.new().prepare(seed_value)
 	foreground = _plane("foreground")
 	track = WorkoutTrackLayer.new()
 	for layer: CanvasItem in _layers():
@@ -426,13 +433,14 @@ func refresh() -> void:
 		"draw_order": draw_order_of(markers),
 		"row": row,
 		"puffs": _puffs(markers),
+		"canvas_w": _canvas.x,
 	}
 	_set_foreground_y(markers)
 	var grass := floori(_grass_frames)
 	road_layer.set_view(runs, scroll, grass % 4)
 	verge_near.set_view(runs, scroll, grass % 4)
 	_set_foreground_frame(floori(_grass_frames / 2.0) % 2)
-	bank.set_view(runs, scroll, kit.tod_color(row, "bank"), kit.tod_color(row, "bank_hi"))
+	bank.set_view(runs, scroll)
 	if state.total_s() != _spots_for_s:
 		_spots_for_s = state.total_s()
 		var seed_value := game.ctx.seed if game.ctx != null else 0
@@ -473,8 +481,10 @@ func _apply_row(row: int) -> void:
 	_material.set_shader_parameter("row", row)
 	sky_fill.color = kit.tod_color(row, "sky_top")
 	var tint := kit.tod_color(row, "rider_tint")
-	for layer: CanvasItem in [riders, crowd_layer, mid_props, near_props]:
+	for layer: CanvasItem in [riders, crowd_layer, mid_props, near_props, track]:
 		layer.modulate = tint
+	bank.set_light(kit.tod_color(row, "bank"), kit.tod_color(row, "bank_hi"), tint)
+	track.ground = kit.tod_color(row, "bank")
 	sun.position = Vector2(WorkoutKit.vec(kit.tod_row(row)["sun"]))
 
 
@@ -600,7 +610,7 @@ static func _strip_h(pct: float) -> float:
 
 ## One marker per rider at its drawn distance from the local rider's (`cam_d`); the local rider
 ## is last in the list. `x` and `edge` are the map position, off-screen riders sit at the edge with
-## an arrow; `draw_x` adds the group's formation (view only) and each rider's slow wander.
+## an arrow; `draw_x` adds the group's formation and spread (view only) and each rider's slow wander.
 func _markers(state: WorkoutState, cam_d: float, road: PackedFloat64Array) -> Array:
 	var out: Array = []
 	var local_peer := game.view_peer()
@@ -632,7 +642,6 @@ func _markers(state: WorkoutState, cam_d: float, road: PackedFloat64Array) -> Ar
 			edge = 1
 		var opts := {
 			"bot": r.is_bot,
-			"local": peer == local_peer,
 			"in_band": r.in_band,
 			"rescue": r.rescue,
 			"afk": r.afk or not r.connected,
@@ -643,11 +652,55 @@ func _markers(state: WorkoutState, cam_d: float, road: PackedFloat64Array) -> Ar
 			"x": x,
 			"y": road[_col(x, road)],
 			"edge": edge,
-			"shapes": _scaled(WorkoutArt.pennant_shapes(look, r.slot_index, opts), PENNANT_SCALE),
+			"local": peer == local_peer,
+			"shapes": _pennant_of(look, r.slot_index, opts),
+			"shown": shown,
 		}
-		_place(m, state, r, shown, road)
 		out.append(m)
+	_spread_group(out, state)
+	_glide_dt = 0.0
+	for m: Dictionary in out:
+		_place(m, state, state.rider(int(m["peer"])), float(m["shown"]), road)
 	return out
+
+
+## The pennant for a look and a state, built once.
+func _pennant_of(look: Dictionary, slot_index: int, opts: Dictionary) -> Array:
+	var key := [look, slot_index, opts].hash()
+	if not _pennants.has(key):
+		_pennants[key] = WorkoutArt.pennant_shapes(look, slot_index, opts)
+	return _pennants[key]
+
+
+## Where the group stands: each rider's map position plus its spot in the formation, spread so that
+## nobody stands on anybody, at most GROUP_GLIDE_PX_S from where it stood last frame. Marker x stays
+## the map position, so the spread never touches a distance.
+func _spread_group(markers: Array, state: WorkoutState) -> void:
+	var local_ord := maxi(state.order.find(game.view_peer()), 0)
+	var count := state.order.size()
+	var riding: Array[Dictionary] = []
+	var spots: Array[Vector2] = []
+	var pinned := 0
+	for m: Dictionary in markers:
+		var peer := int(m["peer"])
+		if int(m["edge"]) != 0:
+			_push.erase(peer)
+			continue
+		var ord := state.order.find(peer)
+		var wanted := float(m["x"]) + float(WorkoutRig.formation_dx(ord, local_ord, count))
+		if bool(m["local"]):
+			pinned = riding.size()
+		riding.append(m)
+		spots.append(Vector2(wanted, WorkoutRig.lane_dy(ord)))
+	var at := WorkoutRig.spread(spots, pinned, EDGE_MARGIN_LEFT, _canvas.x - EDGE_MARGIN_RIGHT)
+	for i in riding.size():
+		var m := riding[i]
+		var peer := int(m["peer"])
+		var push := at[i] - spots[i].x
+		if _push.has(peer):
+			push = move_toward(float(_push[peer]), push, GROUP_GLIDE_PX_S * _glide_dt)
+		_push[peer] = push
+		m["group_x"] = spots[i].x + push
 
 
 func _col(x: float, road: PackedFloat64Array) -> int:
@@ -659,9 +712,8 @@ func _place(
 	m: Dictionary, state: WorkoutState, r: WorkoutRiderState, shown: float, road: PackedFloat64Array
 ) -> void:
 	var ordinal := state.order.find(r.peer_id)
-	var is_local := r.peer_id == game.view_peer()
 	var lane := WorkoutRig.lane_dy(ordinal)
-	var px := roundi(_draw_x(m, ordinal, maxi(state.order.find(game.view_peer()), 0), is_local))
+	var px := roundi(_draw_x(m, ordinal))
 	var rear_y := roundi(road[_col(float(px - 20), road)]) + lane
 	var front_y := roundi(road[_col(float(px + 20), road)]) + lane
 	var pose := WorkoutRig.pose_of(
@@ -680,21 +732,20 @@ func _place(
 	m["grey"] = grey_of(r)
 	m["bubble"] = bubble_of(r)
 	m["blink"] = floori(env_t * BLINK_HZ * 2.0) % 2
-	m["flutter"] = floori(shown * FLUTTER_PER_M * 2.0) % 2
+	# A flag at rest hangs still, whatever the bike does.
+	var limp := r.rescue or r.afk or not r.connected
+	m["flutter"] = 0 if limp else floori(shown * FLUTTER_PER_M * 2.0) % 2
 	m["dust"] = _dust(m, r, state, shown)
 
 
-## Where a rider is drawn: its map position, plus its place in the group and its slow wander.
-func _draw_x(m: Dictionary, ordinal: int, local_ord: int, is_local: bool) -> float:
-	var x := float(m["x"])
+## Where a rider is drawn: its place in the group and its slow wander, never past the screen's edge.
+## A wander is too small to bring two riders back together.
+func _draw_x(m: Dictionary, ordinal: int) -> float:
 	if int(m["edge"]) != 0:
-		return x
-	var wander := 0.0 if is_local else roundf(3.0 * sin(env_t / 7.0 + float(ordinal) * 1.7))
-	return clampf(
-		x + float(WorkoutRig.formation_dx(ordinal, local_ord)) + wander,
-		EDGE_MARGIN_LEFT,
-		_canvas.x - EDGE_MARGIN_RIGHT
-	)
+		return float(m["x"])
+	var wander := 0.0 if m.get("local", false) else roundf(3.0 * sin(env_t / 7.0 + ordinal * 1.7))
+	var at := float(m.get("group_x", m["x"]))
+	return clampf(at + wander, EDGE_MARGIN_LEFT, _canvas.x - EDGE_MARGIN_RIGHT)
 
 
 ## How far a rider's sprite is dimmed and cooled.
@@ -788,15 +839,6 @@ static func draw_order_of(markers: Array) -> Array:
 	for k in keys:
 		out.append(k % 100)
 	return out
-
-
-static func _scaled(shapes: Array[Dictionary], k: float) -> Array[Dictionary]:
-	for s in shapes:
-		var pts := PackedVector2Array()
-		for p in s["points"] as PackedVector2Array:
-			pts.append(p * k)
-		s["points"] = pts
-	return shapes
 
 
 ## The marker for `peer` in the latest model ({} if none).

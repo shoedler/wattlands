@@ -17,6 +17,55 @@ const GLOW := Color("#fff3a8")
 const GREY := Color("#8a8a8a")
 const WHITE := Color("#ffffff")
 const GOLD := Color("#e8b923")
+const CLOTH_LIGHT := Color("#fff4d6")
+const FLAG_LEN := 8
+## A flag as columns: Vector3i(x, y from the flag's top, height).
+const PLAIN_FLAG: Array[Vector3i] = [
+	Vector3i(1, 0, 6),
+	Vector3i(2, 0, 6),
+	Vector3i(3, 0, 5),
+	Vector3i(4, 1, 4),
+	Vector3i(5, 1, 3),
+	Vector3i(6, 2, 2),
+	Vector3i(7, 2, 2),
+	Vector3i(8, 2, 1),
+]
+const SWALLOWTAIL_FLAG: Array[Vector3i] = [
+	Vector3i(1, 0, 6),
+	Vector3i(2, 0, 6),
+	Vector3i(3, 0, 6),
+	Vector3i(4, 0, 6),
+	Vector3i(5, 0, 6),
+	Vector3i(6, 0, 2),
+	Vector3i(6, 4, 2),
+	Vector3i(7, 0, 2),
+	Vector3i(7, 4, 2),
+	Vector3i(8, 0, 1),
+	Vector3i(8, 5, 1),
+]
+const BOT_FLAG: Array[Vector3i] = [
+	Vector3i(1, 0, 6),
+	Vector3i(2, 0, 6),
+	Vector3i(3, 0, 6),
+	Vector3i(4, 0, 6),
+	Vector3i(5, 0, 6),
+	Vector3i(6, 0, 6),
+	Vector3i(7, 0, 6),
+]
+## A flag at rest: limp cloth down the pole, far longer than it is wide, with an uneven hem.
+const HANGING_FLAG: Array[Vector3i] = [
+	Vector3i(1, 0, 14),
+	Vector3i(2, 0, 16),
+	Vector3i(3, 0, 15),
+	Vector3i(4, 1, 11),
+]
+const SECOND_FLAG: Array[Vector3i] = [
+	Vector3i(1, 0, 4),
+	Vector3i(2, 0, 4),
+	Vector3i(3, 0, 3),
+	Vector3i(4, 1, 2),
+	Vector3i(5, 1, 1),
+]
 
 ## Interval block colors by planned % FTP.
 const ZONE_RECOVERY := Color("#8fa3b8")
@@ -57,181 +106,169 @@ static func phase_color(p: PlanPhase) -> Color:
 # --- pennants ----------------------------------------------------------------------
 
 
-## Pole height (art px) for a slot, staggered so pennants at one spot stay readable.
-static func pole_height(slot_index: int) -> float:
-	return 16.0 + 5.0 * float(posmod(slot_index, 4)) + (2.0 if posmod(slot_index, 8) >= 4 else 0.0)
+## Pole height (art px) for a slot, staggered so pennants at one spot stay readable. The whip rises
+## from the rear axle to about head height, so its small flag flies clear of the rider's own back.
+static func pole_height(slot_index: int) -> int:
+	return 28 + 4 * posmod(slot_index, 4) + (2 if posmod(slot_index, 8) >= 4 else 0)
 
 
-## The pennant marker as filled polygons in paint order, relative to the pole foot (y up
-## is negative). `look`: Wl.slot_look() keys (color, shape, pattern, hollow). `opts`:
-## {style: "" or a WorkoutProgress pennant id, bot, local, in_band, rescue, afk}.
+## The pennant as whole-pixel rects in paint order, relative to the pole foot (up is negative, x runs
+## along the flag), so the view draws it on the art grid. `look`: Wl.slot_look() keys (color, shape,
+## pattern, hollow). `opts`: {style: "" or a WorkoutProgress pennant id, bot, in_band, rescue, afk}.
 static func pennant_shapes(
 	look: Dictionary, slot_index: int, opts: Dictionary = {}
 ) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var h := pole_height(slot_index)
 	var color: Color = look.get("color", WHITE)
+	var hanging := bool(opts.get("rescue", false)) or bool(opts.get("afk", false))
 	if bool(opts.get("afk", false)):
 		color = GREY
 	elif bool(opts.get("rescue", false)):
 		color = color.lerp(GREY, 0.55)
-	var top := -h
-	var flag: PackedVector2Array
 	var style := str(opts.get("style", ""))
-	if bool(opts.get("rescue", false)) or bool(opts.get("afk", false)):
-		# Drooping flag hanging along the pole.
-		flag = PackedVector2Array([Vector2(1, top), Vector2(5, top), Vector2(2, top + 12)])
-	elif bool(opts.get("bot", false)):
-		flag = PackedVector2Array(
-			[Vector2(1, top), Vector2(11, top), Vector2(11, top + 7), Vector2(1, top + 7)]
-		)
-	elif style == "pennant_swallowtail":
-		flag = PackedVector2Array(
-			[
-				Vector2(1, top),
-				Vector2(14, top),
-				Vector2(10, top + 4),
-				Vector2(14, top + 8),
-				Vector2(1, top + 8)
-			]
-		)
-	else:
-		flag = PackedVector2Array([Vector2(1, top), Vector2(14, top + 4), Vector2(1, top + 8)])
-	if (
-		bool(opts.get("in_band", false))
-		and not bool(opts.get("rescue", false))
-		and not bool(opts.get("afk", false))
-	):
-		out.append({"points": _grow(flag, 1.5), "color": GLOW})
-	out.append(
-		{
-			"points":
-			PackedVector2Array(
-				[Vector2(0, top - 1), Vector2(1, top - 1), Vector2(1, 0), Vector2(0, 0)]
-			),
-			"color": POLE
-		}
-	)
-	out.append({"points": _grow(flag, 0.8), "color": GOLD if style == "pennant_gold" else OUTLINE})
-	out.append({"points": flag, "color": color})
+	var top := -h
+	_add(out, 0, top - 1, 1, h + 1, POLE)
+	var edge := GOLD if style == "pennant_gold" else OUTLINE
+	if bool(opts.get("in_band", false)) and not hanging:
+		_add(out, 1, top - 1, FLAG_LEN - 3, 1, GLOW)
 	var dark := color.darkened(0.45)
-	match str(look.get("pattern", "solid")):
-		"dashed":
-			out.append({"points": _rect(4, top + 2, 1, 4), "color": dark})
-			out.append({"points": _rect(8, top + 3, 1, 2), "color": dark})
-		"dotted":
-			out.append({"points": _rect(3, top + 3, 2, 2), "color": dark})
-			out.append({"points": _rect(7, top + 3, 2, 2), "color": dark})
-		"double":
-			var second := PackedVector2Array(
-				[Vector2(1, top + 10), Vector2(10, top + 13), Vector2(1, top + 16)]
-			)
-			out.append({"points": _grow(second, 0.8), "color": OUTLINE})
-			out.append({"points": second, "color": color})
-	if style == "pennant_chevron":
-		out.append(
-			{
-				"points":
-				PackedVector2Array(
-					[
-						Vector2(3, top + 2),
-						Vector2(6, top + 4),
-						Vector2(3, top + 6),
-						Vector2(4, top + 4)
-					]
-				),
-				"color": WHITE
-			}
-		)
-	elif style == "pennant_star":
-		out.append({"points": _star(Vector2(5, top + 4), 2.6, 1.1), "color": WHITE})
-	elif style == "pennant_bolt":
-		out.append(
-			{
-				"points":
-				PackedVector2Array(
-					[
-						Vector2(6, top + 1),
-						Vector2(4, top + 4),
-						Vector2(6, top + 4),
-						Vector2(4, top + 7),
-						Vector2(8, top + 3),
-						Vector2(6, top + 3)
-					]
-				),
-				"color": GOLD
-			}
-		)
-	# Shape badge at the pole top.
-	var c := Vector2(0.5, top - 4.0)
-	var badge := shape_points(str(look.get("shape", "circle")), c, 3.0)
-	out.append(
-		{
-			"points": shape_points(str(look.get("shape", "circle")), c, 4.2),
-			"color": OUTLINE if not bool(look.get("hollow", false)) else color
-		}
+	var pattern := str(look.get("pattern", "solid"))
+	if hanging:
+		_limp_cloth(out, top, color, edge)
+		_limp_pattern(out, pattern, top, dark)
+	else:
+		_cloth(out, _flag_columns(bool(opts.get("bot", false)), style), top, color, edge)
+		match pattern:
+			"dashed":
+				_add(out, 3, top + 2, 1, 2, dark)
+				_add(out, 5, top + 2, 1, 2, dark)
+			"dotted":
+				_add(out, 2, top + 2, 1, 1, dark)
+				_add(out, 4, top + 3, 1, 1, dark)
+			"double":
+				_cloth(out, SECOND_FLAG, top + 7, color, edge)
+	_emblem(out, style, top)
+	var fill := color.lerp(HOLLOW_FILL, 0.3) if hanging else HOLLOW_FILL
+	_badge(
+		out, str(look.get("shape", "circle")), top - 6, color, bool(look.get("hollow", false)), fill
 	)
-	out.append(
-		{"points": badge, "color": HOLLOW_FILL if bool(look.get("hollow", false)) else color}
-	)
-	if bool(opts.get("local", false)):
-		out.append(
-			{
-				"points":
-				PackedVector2Array(
-					[Vector2(-2.5, top - 12), Vector2(3.5, top - 12), Vector2(0.5, top - 9)]
-				),
-				"color": WHITE
-			}
-		)
 	return out
 
 
-## A filled shape for the badge: circle, triangle, square or diamond.
-static func shape_points(shape: String, c: Vector2, r: float) -> PackedVector2Array:
+## The flag's columns: Vector3i(x, y from the flag's top, height).
+static func _flag_columns(bot: bool, style: String) -> Array[Vector3i]:
+	if bot:
+		return BOT_FLAG
+	return SWALLOWTAIL_FLAG if style == "pennant_swallowtail" else PLAIN_FLAG
+
+
+## A cloth in three tones: lit from above with a warm top pixel, a cooler shadow on the underside, and
+## a dark line under it only, so it holds against the fields without an outline around it.
+static func _cloth(
+	out: Array[Dictionary], cols: Array[Vector3i], top: int, color: Color, edge: Color
+) -> void:
+	var hi := color.lerp(CLOTH_LIGHT, 0.34)
+	var shade := Color(color.r * 0.62, color.g * 0.64, color.b * 0.74)
+	for c in cols:
+		var y := top + c.y
+		_add(out, c.x, y, 1, c.z, color)
+		if c.z >= 2:
+			_add(out, c.x, y, 1, 1, hi)
+		if c.z >= 4:
+			_add(out, c.x, y + c.z - 2, 1, 2, shade)
+		elif c.z >= 3:
+			_add(out, c.x, y + c.z - 1, 1, 1, shade)
+		_add(out, c.x, y + c.z, 1, 1, edge)
+
+
+## Limp cloth, folds running down it: a lit column, a fold, a body and a shaded outer edge, a warm pixel
+## where it is tied to the pole and a dark hem under each column.
+static func _limp_cloth(out: Array[Dictionary], top: int, color: Color, edge: Color) -> void:
+	var hi := color.lerp(CLOTH_LIGHT, 0.34)
+	var shade := Color(color.r * 0.62, color.g * 0.64, color.b * 0.74)
+	var tones: Array[Color] = [color, shade, color, shade]
+	for i in HANGING_FLAG.size():
+		var c := HANGING_FLAG[i]
+		var y := top + c.y
+		_add(out, c.x, y, 1, c.z, tones[i])
+		_add(out, c.x, y, 1, 1, hi)
+		_add(out, c.x, y + c.z, 1, 1, edge)
+
+
+## The slot's pattern across the limp cloth, always on the cloth.
+static func _limp_pattern(out: Array[Dictionary], pattern: String, top: int, dark: Color) -> void:
+	match pattern:
+		"dashed":
+			_add(out, 1, top + 4, 3, 1, dark)
+			_add(out, 1, top + 9, 3, 1, dark)
+		"dotted":
+			_add(out, 2, top + 3, 1, 1, dark)
+			_add(out, 3, top + 7, 1, 1, dark)
+			_add(out, 2, top + 11, 1, 1, dark)
+		"double":
+			_add(out, 1, top + 6, 4, 1, dark)
+			_add(out, 1, top + 8, 4, 1, dark)
+
+
+## A progression emblem, a few pixels on the flag.
+static func _emblem(out: Array[Dictionary], style: String, top: int) -> void:
+	match style:
+		"pennant_chevron":
+			_add(out, 2, top + 1, 1, 1, WHITE)
+			_add(out, 3, top + 2, 1, 1, WHITE)
+			_add(out, 2, top + 3, 1, 1, WHITE)
+		"pennant_star":
+			_add(out, 3, top + 1, 1, 3, WHITE)
+			_add(out, 2, top + 2, 3, 1, WHITE)
+		"pennant_bolt":
+			_add(out, 3, top + 1, 1, 2, GOLD)
+			_add(out, 2, top + 2, 1, 2, GOLD)
+
+
+## The slot's shape at the pole's top, 5 px across; a hollow slot is its ring around a pale centre.
+static func _badge(
+	out: Array[Dictionary], shape: String, y: int, color: Color, hollow: bool, fill: Color
+) -> void:
+	var rows := badge_rows(shape)
+	for r in rows.size():
+		var half := rows[r]
+		_add(out, -half, y + r, half * 2 + 1, 1, color)
+	if hollow:
+		for r in range(1, rows.size() - 1):
+			if rows[r] >= 2:
+				_add(out, 1 - rows[r], y + r, rows[r] * 2 - 1, 1, fill)
+	var last := rows.size() - 1
+	_add(out, -rows[last], y + last + 1, rows[last] * 2 + 1, 1, OUTLINE)
+
+
+## A shape's half-widths, row by row: circle, triangle, square or diamond.
+static func badge_rows(shape: String) -> Array[int]:
 	match shape:
 		"triangle":
-			return PackedVector2Array(
-				[c + Vector2(0, -r), c + Vector2(r, r * 0.8), c + Vector2(-r, r * 0.8)]
-			)
+			return [0, 1, 1, 2, 2]
 		"square":
-			var s := r * 0.85
-			return PackedVector2Array(
-				[c + Vector2(-s, -s), c + Vector2(s, -s), c + Vector2(s, s), c + Vector2(-s, s)]
-			)
+			return [2, 2, 2, 2]
 		"diamond":
-			return PackedVector2Array(
-				[c + Vector2(0, -r), c + Vector2(r, 0), c + Vector2(0, r), c + Vector2(-r, 0)]
-			)
-	var pts := PackedVector2Array()
-	for i in 8:
-		var a := TAU * (float(i) + 0.5) / 8.0
-		pts.append(c + Vector2(cos(a), sin(a)) * r)
-	return pts
+			return [0, 1, 2, 1, 0]
+	return [1, 2, 2, 2, 1]
 
 
-static func _grow(pts: PackedVector2Array, by: float) -> PackedVector2Array:
-	var c := Vector2.ZERO
-	for p in pts:
-		c += p
-	c /= float(pts.size())
-	var out := PackedVector2Array()
-	for p in pts:
-		var d := p - c
-		out.append(p + d.normalized() * by if d.length() > 0.0 else p)
-	return out
-
-
-static func _rect(x: float, y: float, w: float, h: float) -> PackedVector2Array:
-	return PackedVector2Array(
-		[Vector2(x, y), Vector2(x + w, y), Vector2(x + w, y + h), Vector2(x, y + h)]
+static func _add(out: Array[Dictionary], x: int, y: int, w: int, h: int, color: Color) -> void:
+	(
+		out
+		. append(
+			{
+				"points":
+				PackedVector2Array(
+					[
+						Vector2(x, y),
+						Vector2(x + w, y),
+						Vector2(x + w, y + h),
+						Vector2(x, y + h),
+					]
+				),
+				"color": color,
+			}
+		)
 	)
-
-
-static func _star(c: Vector2, r_out: float, r_in: float) -> PackedVector2Array:
-	var pts := PackedVector2Array()
-	for i in 10:
-		var a := -PI / 2.0 + TAU * float(i) / 10.0
-		var r := r_out if i % 2 == 0 else r_in
-		pts.append(c + Vector2(cos(a), sin(a)) * r)
-	return pts

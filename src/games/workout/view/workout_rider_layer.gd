@@ -1,14 +1,22 @@
 class_name WorkoutRiderLayer
 extends Node2D
 ## The riders: wheels on the road at their own contact, the baked rider frame over them, sheared
-## column by column on a slope (never rotated, so every pixel stays on the art grid), the whip
-## pennant and the state bubble. Riders off screen are the pennant and an arrow only. It draws the
-## model the WorkoutRideView computed and nothing else; the time of day's tint is this node's
-## modulate.
+## column by column on a slope (never rotated, so every pixel stays on the art grid), and the state
+## bubble. One cue says "you", and it needs no colour: a caret paints last, over the local rider's own
+## helmet. Nothing marks the road. Every whip pennant paints before the bodies, so a pole or a flag
+## never crosses anybody's body. Riders off screen are the pennant and an arrow only. It draws the
+## model the WorkoutRideView computed and nothing else; the time of day's tint is this node's modulate.
 
 const GREY_TINT := Color(0.55, 0.57, 0.62)
-## Flag vertices past this x (art px from the pole) flutter.
-const FLUTTER_X := 10.0
+## Flag columns past this x (art px from the pole) flutter.
+const FLUTTER_X := 3.5
+## The caret's rows, top down: half-width of its white. Its tip stands CARET_GAP px over the helmet.
+const CARET_HALF: Array[int] = [7, 6, 5, 4, 3, 2, 1, 0]
+const CARET_GAP := 2
+const CARET_DARK := Color("#1e1e24")
+## From the mouth (kit.rider.mouth_by_pose) to the head's centre and from there to the helmet's top.
+const HEAD_FROM_MOUTH := Vector2i(-4, -2)
+const HELMET_ABOVE_HEAD := 6
 
 var kit: WorkoutKit = null
 var _model: Dictionary = {}
@@ -29,14 +37,55 @@ func _draw() -> void:
 	if kit == null or _model.is_empty():
 		return
 	var markers: Array = _model.get("markers", [])
-	for i: int in _model.get("draw_order", []):
-		var m: Dictionary = markers[i]
-		if int(m["edge"]) != 0:
-			_edge_rider(m)
-		else:
-			_rider(m)
+	for step: Array in paint_steps(_model):
+		var m: Dictionary = markers[int(step[1])]
+		match str(step[0]):
+			"edge":
+				_edge_rider(m)
+			"pennant":
+				_rider_pennant(m)
+			"rider":
+				_rider(m)
+			"caret":
+				_caret(m)
 	for puff: Dictionary in _model.get("puffs", []):
 		_fx(str(puff["fx"]), int(puff["frame"]), puff["at"])
+
+
+## What the layer paints, in order, [kind, marker index]: riders off screen and every pennant, then the
+## bikes and bodies by the model's draw order, then the local rider's caret.
+static func paint_steps(model: Dictionary) -> Array:
+	var markers: Array = model.get("markers", [])
+	var order: Array = model.get("draw_order", [])
+	var out: Array = []
+	for i: int in order:
+		out.append(["edge" if int(markers[i]["edge"]) != 0 else "pennant", i])
+	for i: int in order:
+		if int(markers[i]["edge"]) == 0:
+			out.append(["rider", i])
+	for i: int in order:
+		if _is_local_on_screen(markers[i]):
+			out.append(["caret", i])
+	return out
+
+
+static func _is_local_on_screen(m: Dictionary) -> bool:
+	return int(m["edge"]) == 0 and bool(m.get("local", false))
+
+
+## The point over this rider's helmet where the caret's tip goes (art px): over the head of the pose
+## it is in, on its own column of a sheared frame, and over its state bubble if it has one.
+static func caret_tip(m: Dictionary, rider: Dictionary) -> Vector2i:
+	var origin := WorkoutKit.vec(rider["origin"])
+	var pose: String = WorkoutRig.POSE_NAMES[int(m["pose"])]
+	var head := WorkoutKit.vec(rider["mouth_by_pose"][pose]) + HEAD_FROM_MOUTH
+	var shear := WorkoutRig.shear_at(
+		head.x, int(m["pitch"]), int(rider["rear_hub"][0]), int(rider["front_hub"][0])
+	)
+	var top := int(m["rear_y"]) - origin.y + head.y - HELMET_ABOVE_HEAD + shear - CARET_GAP
+	if str(m.get("bubble", "")) != "":
+		top = mini(top, int(m["rear_y"]) - origin.y + int(rider["bubble"][1]) - 8)
+	return Vector2i(int(m["draw_x"]) - origin.x + head.x, top)
 
 
 func _rider(m: Dictionary) -> void:
@@ -50,7 +99,6 @@ func _rider(m: Dictionary) -> void:
 	_wheel(left + int(r["rear_hub"][0]), int(m["rear_y"]), int(m["wheel_frame"]), tint)
 	_wheel(left + int(r["front_hub"][0]), int(m["front_y"]), int(m["wheel_frame"]), tint)
 	_frame(m, left, top, tint)
-	_pennant(m, Vector2(Vector2i(left, top) + WorkoutKit.vec(r["pennant_foot"])), int(m["flutter"]))
 	var bubble := str(m["bubble"])
 	if bubble != "":
 		var at := WorkoutKit.vec(r["bubble"])
@@ -95,32 +143,50 @@ func _slices_for(pitch: int) -> Array:
 	return _slices[pitch]
 
 
+## A whip pennant on its bike, from the rear axle.
+func _rider_pennant(m: Dictionary) -> void:
+	var origin := WorkoutKit.vec(kit.rider["origin"])
+	var at := Vector2i(int(m["draw_x"]) - origin.x, int(m["rear_y"]) - origin.y)
+	_pennant(m, at + WorkoutKit.vec(kit.rider["pennant_foot"]), int(m["flutter"]))
+
+
 ## `trail`: a whip flag on a moving bike streams back, off the rider's own torso. The edge pennant
-## keeps pointing right, its arrow past the flag.
-func _pennant(m: Dictionary, foot: Vector2, flutter: int, trail: bool = true) -> void:
+## keeps pointing right, its arrow past the flag. Every shape is a whole-pixel rect.
+func _pennant(m: Dictionary, foot: Vector2i, flutter: int, trail: bool = true) -> void:
 	for s: Dictionary in m["shapes"]:
-		var moved := PackedVector2Array()
-		for p: Vector2 in s["points"] as PackedVector2Array:
-			var q := Vector2(foot.x - p.x if trail else foot.x + p.x, foot.y + p.y)
-			if flutter != 0 and p.x > FLUTTER_X:
-				q.y += float(flutter)
-			moved.append(q)
-		draw_colored_polygon(moved, s["color"])
+		var pts: PackedVector2Array = s["points"]
+		var box := Rect2(pts[0], pts[2] - pts[0])
+		if flutter != 0 and box.position.x > FLUTTER_X:
+			box.position.y += float(flutter)
+		if trail:
+			box.position.x = 1.0 - box.position.x - box.size.x
+		box.position += Vector2(foot)
+		draw_rect(box, s["color"])
 
 
 ## A rider off screen: its pennant at the edge and an arrow on the road pointing at it.
 func _edge_rider(m: Dictionary) -> void:
-	var foot := Vector2(float(m["x"]), float(m["y"]) - 2.0)
+	var foot := Vector2i(roundi(float(m["x"])), roundi(float(m["y"])) - 2)
 	_pennant(m, foot, 0, false)
 	var edge := int(m["edge"])
-	var ax := foot.x + (24.0 if edge > 0 else -5.0)
-	var ay := foot.y - 5.0
-	draw_colored_polygon(
-		PackedVector2Array(
-			[Vector2(ax, ay - 3.0), Vector2(ax + 4.0 * float(edge), ay), Vector2(ax, ay + 3.0)]
-		),
-		WorkoutArt.WHITE
-	)
+	var ax := foot.x + (12 if edge > 0 else -5)
+	for k in 3:
+		var half := 2 - k
+		draw_rect(Rect2(ax + k * edge, foot.y - 5 - half, 1, half * 2 + 1), WorkoutArt.WHITE)
+
+
+## The caret over the local rider: white, a dark line around it so it holds on any sky.
+func _caret(m: Dictionary) -> void:
+	var tip := caret_tip(m, kit.rider)
+	var rows := CARET_HALF.size()
+	var top_half := CARET_HALF[0]
+	draw_rect(Rect2(tip.x - top_half - 1, tip.y - rows - 1, top_half * 2 + 3, 1), CARET_DARK)
+	for r in rows:
+		var half := CARET_HALF[r]
+		var y := tip.y - rows + r
+		draw_rect(Rect2(tip.x - half - 1, y, half * 2 + 3, 1), CARET_DARK)
+		draw_rect(Rect2(tip.x - half, y, half * 2 + 1, 1), WorkoutArt.WHITE)
+	draw_rect(Rect2(tip.x, tip.y, 1, 1), CARET_DARK)
 
 
 func _fx(fx_name: String, frame: int, at: Vector2i) -> void:

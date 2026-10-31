@@ -115,8 +115,8 @@ const KEYS = [
     star: 1.0,
     pane: '#ffc56a',
     glow: '#8a7458',
-    mist: ['#565a84', 1.0],
-    mistGround: ['#6e7296', '#8a8cae'],
+    mist: ['#4c5078', 1.0],
+    mistGround: ['#3c4860', '#4c5670'],
     cloud: ['#232850', '#5c5a82'],
     ridgeFar: ['#45446e', '#5c5480'],
     ridgeNear: ['#2e3158', '#454668'],
@@ -129,7 +129,7 @@ const KEYS = [
     wall: ['#353850', '#5a5c74'],
     roof: ['#20223a', '#3c3c56'],
     wood: ['#191a26', '#36364c'],
-    wire: '#101220',
+    wire: '#2c2e46',
     insulator: '#7c7e94',
     asphalt: ['#1c1e2a', '#363848'],
     paint: ['#62647a', '#8c8e9e'],
@@ -146,8 +146,8 @@ const KEYS = [
     star: 0.4,
     pane: '#ffc56a',
     glow: '#b08a70',
-    mist: ['#a88ca8', 1.0],
-    mistGround: ['#a88c9c', '#c8a8b0'],
+    mist: ['#8e7c9c', 1.0],
+    mistGround: ['#7c7486', '#94858f'],
     cloud: ['#54467a', '#e0a4a0'],
     ridgeFar: ['#7a6490', '#a47f9c'],
     ridgeNear: ['#4e4874', '#6e5c84'],
@@ -160,7 +160,7 @@ const KEYS = [
     wall: ['#56505f', '#96808a'],
     roof: ['#34303f', '#5a4c5c'],
     wood: ['#262430', '#4c4450'],
-    wire: '#1c1a28',
+    wire: '#4a4458',
     insulator: '#a8a0a8',
     asphalt: ['#282835', '#4c4c5a'],
     paint: ['#88848e', '#b0a8a8'],
@@ -177,8 +177,8 @@ const KEYS = [
     star: 0.0,
     pane: '#c89a62',
     glow: '#b88a68',
-    mist: ['#e4b898', 0.7],
-    mistGround: ['#d0a884', '#eec498'],
+    mist: ['#c4a08e', 0.7],
+    mistGround: ['#8c8a58', '#a89a68'],
     cloud: ['#a07a80', '#ffd8a8'],
     ridgeFar: ['#a88a90', '#d0a48c'],
     ridgeNear: ['#7a6f80', '#9c8484'],
@@ -191,7 +191,7 @@ const KEYS = [
     wall: ['#7c6258', '#f0c08c'],
     roof: ['#503c3c', '#9c6448'],
     wood: ['#38302c', '#7a5c44'],
-    wire: '#2a2428',
+    wire: '#74645e',
     insulator: '#e0c8a8',
     asphalt: ['#38363c', '#66605f'],
     paint: ['#b0a490', '#e8d0a4'],
@@ -208,7 +208,7 @@ const KEYS = [
     star: 0.0,
     pane: '#4c4c50',
     glow: '#c8b088',
-    mist: ['#f6e6c8', 0.3],
+    mist: ['#e4d6bc', 0.3],
     mistGround: ['#54762f', '#7c9a44'],
     cloud: ['#c4b8b0', '#fff4dc'],
     ridgeFar: ['#a0b4c4', '#c4cac4'],
@@ -222,7 +222,7 @@ const KEYS = [
     wall: ['#8c7860', '#f4dcac'],
     roof: ['#64483e', '#b0704c'],
     wood: ['#44382c', '#80684c'],
-    wire: '#342e2c',
+    wire: '#7c7a78',
     insulator: '#f0e8d0',
     asphalt: ['#3e3e46', '#6e6c72'],
     paint: ['#c8c0a8', '#f4ecc8'],
@@ -253,7 +253,7 @@ const KEYS = [
     wall: ['#8c887c', '#f0ead8'],
     roof: ['#60443c', '#a4644c'],
     wood: ['#40382e', '#786850'],
-    wire: '#2c2c2e',
+    wire: '#7a8088',
     insulator: '#eef0e8',
     asphalt: ['#40424a', '#70727a'],
     paint: ['#cccac0', '#f6f4ea'],
@@ -284,7 +284,7 @@ const KEYS = [
     wall: ['#8e8c82', '#f4f0e2'],
     roof: ['#624640', '#a4644e'],
     wood: ['#40382e', '#78684e'],
-    wire: '#2c2c30',
+    wire: '#7c848e',
     insulator: '#f0f2ea',
     asphalt: ['#42444c', '#72747c'],
     paint: ['#d0cec6', '#f8f6ee'],
@@ -322,7 +322,7 @@ function keyColors(k) {
   add(ramp(k.roof, 4));
   add([hex(k.pane)]);
   add([hex(k.glow)]);
-  add([hex(k.mist[0]), mix(hex(k.mist[0]), [255, 255, 255], 0.12)], Math.round(k.mist[1] * 255));
+  add([hex(k.mist[0]), mix(hex(k.mist[0]), [255, 255, 255], 0.2)], Math.round(k.mist[1] * 255));
   add(k.mistGround.map(hex));
   add(ramp(k.wood, 4));
   add([hex(k.wire)]);
@@ -367,13 +367,14 @@ export function buildLut() {
 const round3 = (u) => Math.round(u * 1000) / 1000;
 const floats = (c) => c.map((u) => round3(u / 255));
 
-// Where the sun stands on the sky plane: behind the hills at blue hour, on the ridge at sunrise.
+// Where the sun stands on the sky plane: behind the hills at blue hour, on the ridge at sunrise. Late in the
+// day its halo still clears the timeline plate, whose bottom edge is at y 72.
 const SUN_X = [700, 540];
 const SUN_Y = [
   [0.0, 345],
   [0.22, 240],
   [0.4, 170],
-  [1.0, 70],
+  [1.0, 106],
 ];
 
 function sunAt(p) {

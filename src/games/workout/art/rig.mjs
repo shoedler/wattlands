@@ -14,24 +14,28 @@ export const WHEEL_R = 13;
 export const TYRE_ROW = 79;
 export const BB = [38, 69];
 export const CRANK = 7;
-export const CHAINRING_R = 5;
+// The ring's teeth end at this radius, so the crank arm and its pedal always stand 3 px clear of it.
+export const CHAINRING_R = 4;
 export const COG_R = 2;
-export const SADDLE = [29, 42];
+export const SADDLE = [29, 44];
 export const BARS = [54, 43];
 export const HOODS = [59, 42];
 export const THIGH = 17;
 export const SHIN = 17;
-export const ANKLE_TO_PEDAL = 4;
+export const ANKLE_TO_PEDAL = 5;
 export const UPPER_ARM = 13;
 export const FOREARM = 13;
 export const HEAD_R = 4;
 export const PENNANT_FOOT = [15, 54];
-export const BUBBLE = [44, 2];
+// Over the sat-up head (the pose a bubble comes with), clear of the next rider's pennant pole.
+export const BUBBLE = [38, 2];
 export const REAR_CONTACT = [20, 79];
 
 /** Chain pattern: 2 dark, 2 light, moving exactly this many px per crank revolution. */
 export const CHAIN_PERIOD = 4;
 export const CHAIN_PX_PER_REV = 32;
+/** A brass link comes round every this many px, so the eye can follow the chain. */
+export const CHAIN_LINK_PERIOD = 16;
 /** The rear cog turns this many times per crank revolution. */
 export const COG_TURNS = 4;
 
@@ -53,9 +57,14 @@ export const nearPedalTable = () =>
 /** Chain pattern offset at frame k, whole px. Frame CRANK_FRAMES gives 0 modulo the period. */
 export const chainOffset = (k) => Math.round((k * CHAIN_PX_PER_REV) / CRANK_FRAMES) % CHAIN_PERIOD;
 
+/** Chain travel at frame k, whole px: frame CRANK_FRAMES closes on 0 modulo CHAIN_LINK_PERIOD. */
+export const chainTravel = (k) => Math.round((k * CHAIN_PX_PER_REV) / CRANK_FRAMES) % CHAIN_PX_PER_REV;
+
 const POSES = {
   seat: { hip: [30, 40], shoulder: [45, 23], hands: [59, 42], head: [49, 17] },
-  stand: { hip: [39, 39], shoulder: [58, 24], hands: [61, 41], head: [63, 18] },
+  // Out of the saddle: hips well clear of it and over the cranks, a steep back, shoulders over the bars, the
+  // arms all but straight, the head up. The hips rock 3 px either way (pose()).
+  stand: { hip: [38, 35], shoulder: [57, 18], hands: [61, 41], head: [61, 11] },
   situp: { hip: [28, 40], shoulder: [36, 19], hands: [52, 40], head: [37, 12] },
   stop: { hip: [36, 44], shoulder: [47, 24], hands: [59, 42], head: [51, 18] },
 };
@@ -88,9 +97,10 @@ export function ik(a, b, l0, l1, bendSign) {
   return [a[0] + ux * along + uy * out * bendSign, a[1] + uy * along - ux * out * bendSign];
 }
 
-// The ankle stands up and slightly behind the pedal; it swings 12 degrees over the stroke ("ankling").
+// The ball of the foot is on the pedal, so the ankle stands behind and above it, clear of the crank arm's
+// line through most of the stroke; it swings 12 degrees over the stroke ("ankling").
 function ankleOver(pedal, theta) {
-  const a = (-103 + 12 * Math.sin(theta + 30 * RAD)) * RAD;
+  const a = (-128 + 12 * Math.sin(theta + 30 * RAD)) * RAD;
   return [pedal[0] + ANKLE_TO_PEDAL * Math.cos(a), pedal[1] + ANKLE_TO_PEDAL * Math.sin(a)];
 }
 
@@ -117,8 +127,10 @@ export function pose(name, k0) {
     hipDy = Math.sin(2 * theta) > 0 ? 1 : 0;
     shoulderDy = Math.sin(2 * crankTheta(k - 2)) > 0 ? 1 : 0;
   } else if (name === 'stand') {
-    hipDy = Math.round(2 * Math.sin(2 * theta));
-    shoulderDy = Math.round(Math.sin(2 * crankTheta(k - 2)));
+    // Standing, the hips drop onto each leg as it reaches the bottom and rise between: lowest at the dead
+    // centres (frames 0 and 12), when one leg is straight.
+    hipDy = Math.round(-3 * Math.cos(2 * theta));
+    shoulderDy = Math.round(-1.4 * Math.cos(2 * crankTheta(k - 2)));
   }
   const hip = [base.hip[0], base.hip[1] + hipDy];
   const shoulder = [base.shoulder[0], base.shoulder[1] + shoulderDy];

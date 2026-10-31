@@ -166,14 +166,14 @@ function buildKit(parts) {
     },
     props: {
       windpump: prop('windpump', { plane: 'near_trees', tower: [0, 0, 30, 70], rotor: [30, 0, 26, 26, 8], hub: [15, 8], base_y: 345 }),
-      cattle: prop('cattle', { plane: 'mid_hills', cell: [12, 9], frames: 2, colors: 3, base_y: 320 }),
-      tractor: prop('tractor', { cell: [36, 22], frames: 4, base_y: 310 }),
+      cattle: prop('cattle', { plane: 'mid_hills', cell: [12, 9], frames: 2, colors: 3, base_y: 333 }),
+      tractor: prop('tractor', { cell: Props.TRACTOR_CELL, frames: 4, base_y: 310 }),
       smoke: prop('smoke', { plane: 'near_trees', cell: [10, 16], frames: 6, origin: Props.SMOKE_ORIGIN, chimneys: parts.planes.near_trees.chimneys }),
       flock: prop('flock', { cell: [5, 3], frames: 2 }),
       balloon: prop('balloon', { cell: [18, 26], frames: 1, tod_min_row: 16 }),
-      crowd: prop('crowd', { cell: [16, 30], count: 8, foot_above_contact: 16, hand_up: Props.CROWD_HAND_UP }),
+      crowd: prop('crowd', { cell: Props.CROWD_CELL, count: 8, foot_above_contact: 15, hand_up: Props.CROWD_HAND_UP }),
       flag: prop('flag', { cell: [12, 16], frames: 4, grip: Props.FLAG_GRIP }),
-      gantry: prop('gantry', { size: [200, 90], foot_above_contact: 12 }),
+      gantry: prop('gantry', { size: [200, Props.GANTRY_H], foot_above_contact: 15 }),
     },
   };
 }

@@ -172,6 +172,65 @@ func test_the_foreground_stays_under_the_lowest_wheel() -> void:
 # --- props and spots -----------------------------------------------------------------
 
 
+func test_the_bank_tile_is_the_same_every_time_and_painted() -> void:
+	var px := WorkoutBankTile.indices()
+	assert_eq(px, WorkoutBankTile.indices(), "deterministic")
+	assert_eq(px.size(), WorkoutBankTile.W * WorkoutBankTile.H)
+	var tones := {}
+	for y in WorkoutBankTile.GROUND_H:
+		for x in range(0, WorkoutBankTile.W, 3):
+			tones[px[y * WorkoutBankTile.W + x] / WorkoutBankTile.INDEX_SCALE] = true
+	assert_false(tones.has(WorkoutBankTile.NOTHING), "the ground has no holes")
+	for tone: int in [
+		WorkoutBankTile.SHADE,
+		WorkoutBankTile.BASE,
+		WorkoutBankTile.LIGHT,
+		WorkoutBankTile.EARTH,
+		WorkoutBankTile.EARTH_DARK,
+		WorkoutBankTile.STONE,
+	]:
+		assert_true(tones.has(tone), "tone %d is on the ground" % tone)
+
+
+func test_the_bank_tile_covers_the_highest_road_and_its_stamps_fit() -> void:
+	var top := roundi(WorkoutRideView.ROAD_MIN_Y) + WorkoutBankLayer.TOP_BELOW_CONTACT
+	assert_true(WorkoutBankLayer.BOTTOM - top <= WorkoutBankTile.GROUND_H)
+	var cell := WorkoutBankTile.STAMP_CELL
+	assert_true(WorkoutBankTile.stamp_count() * cell.x <= WorkoutBankTile.W)
+	for rows: Array in WorkoutBankTile.STAMPS:
+		assert_true(rows.size() <= cell.y)
+		for row: String in rows:
+			assert_true(row.length() <= cell.x, row)
+
+
+func test_the_bank_ramp_follows_the_morning() -> void:
+	var view := _view("easy_30")
+	var kit := view.kit
+	var dawn := WorkoutBankTile.ramp(
+		kit.tod_color(0, "bank"), kit.tod_color(0, "bank_hi"), kit.tod_color(0, "rider_tint")
+	)
+	var day := WorkoutBankTile.ramp(
+		kit.tod_color(31, "bank"), kit.tod_color(31, "bank_hi"), kit.tod_color(31, "rider_tint")
+	)
+	assert_eq(dawn.size(), WorkoutBankTile.NOTHING, "one entry per index")
+	var bank := kit.tod_color(31, "bank")
+	assert_almost_eq(day[WorkoutBankTile.BASE].y, bank.g, 0.001, "base is the row's bank")
+	assert_true(day[WorkoutBankTile.DEEP].y < day[WorkoutBankTile.BASE].y)
+	assert_true(day[WorkoutBankTile.PALE].y > day[WorkoutBankTile.BASE].y)
+	assert_true(dawn[WorkoutBankTile.EARTH].x < day[WorkoutBankTile.EARTH].x, "earth dims at dawn")
+
+
+func test_interval_blocks_are_muted_toward_the_ground_and_keep_their_zone_colour() -> void:
+	var view := _view("threshold")
+	view.refresh()
+	var block: Dictionary = (view.model["blocks"] as Array)[0]
+	assert_true(WorkoutArt.ZONE_THRESHOLD != Color.BLACK)
+	var zone: Color = block["color"]
+	var fill := WorkoutTrackLayer.muted(zone, view.track.ground)
+	assert_true(fill.a < 1.0, "the ground shows through")
+	assert_true(fill.s < zone.s or fill.v < zone.v, "quieter than the zone's colour")
+
+
 func test_a_bucket_hash_has_no_visible_repeat() -> void:
 	var picks: Array = []
 	for k in 256:
@@ -295,18 +354,67 @@ func test_nobody_pops_in_on_screen() -> void:
 	assert_eq(seen, [], "none on screen at activation")
 
 
-func test_spectators_stand_14_to_22_px_apart_inside_their_window() -> void:
-	var people := WorkoutCrowd.spectators(1000.0, 3000.0, 7, 0.0, 10000.0)
-	assert_gt(people.size(), 90)
+func test_spectators_stand_in_clumps_with_open_verge_between_them() -> void:
+	var people := WorkoutCrowd.spectators(1000.0, 5000.0, 7, 0.0, 10000.0)
+	assert_gt(people.size(), 80, "still a crowd")
+	var gaps := 0
+	var close := 0
 	var prev := -1.0
 	for p: Dictionary in people:
 		var x := float(p["x"])
-		assert_between(x, 1000.0, 3000.0, "inside the window")
-		if prev >= 0.0:
-			assert_between(x - prev, 10.0, 26.0, "bucket 18, 4 px either way")
-		prev = x
+		assert_between(x, 1000.0, 5000.0, "inside the window")
 		assert_between(int(p["kind"]), 0, 7, "one of 8 spectators")
-	assert_eq(people, WorkoutCrowd.spectators(1000.0, 3000.0, 7, 0.0, 10000.0), "peers agree")
+		if prev >= 0.0:
+			assert_gt(x, prev, "left to right")
+			if x - prev >= float(WorkoutCrowd.SPRITE_PX + WorkoutCrowd.CLEAR_PX):
+				gaps += 1
+			if x - prev < float(WorkoutCrowd.SPRITE_PX):
+				close += 1
+		prev = x
+	assert_gt(gaps, 15, "the fields show through between clumps")
+	assert_gt(close, people.size() / 2, "inside a clump they overlap")
+	assert_eq(people, WorkoutCrowd.spectators(1000.0, 5000.0, 7, 0.0, 10000.0), "peers agree")
+
+
+func test_a_clump_stays_in_its_bucket_and_varies_in_size_depth_sprite_and_beat() -> void:
+	var sizes := {}
+	var depths := {}
+	var beats := {}
+	var kinds := {}
+	for k in 400:
+		var people := WorkoutCrowd.clump(k, 7)
+		sizes[people.size()] = true
+		var prev_kind := -1
+		for p: Dictionary in people:
+			var x := int(p["x"])
+			assert_gte(x, k * WorkoutCrowd.CLUMP_PX)
+			assert_lte(
+				x + WorkoutCrowd.SPRITE_PX + WorkoutCrowd.CLEAR_PX,
+				(k + 1) * WorkoutCrowd.CLUMP_PX,
+				"the next bucket starts on open verge"
+			)
+			assert_ne(int(p["kind"]), prev_kind, "neighbours are not the same sprite")
+			prev_kind = int(p["kind"])
+			depths[int(p["depth"])] = true
+			beats[bool(p["off_beat"])] = true
+			kinds[int(p["kind"])] = true
+	assert_true(sizes.has(0), "some buckets stand empty")
+	assert_gte(sizes.size(), 6, "clumps of every size")
+	assert_eq(depths.size(), WorkoutCrowd.DEPTH_PX + 1, "every depth")
+	assert_eq(beats.size(), 2, "the crowd is not a drill")
+	assert_eq(kinds.size(), 8, "all 8 sprites")
+
+
+func test_a_window_shows_the_same_people_however_it_is_cut() -> void:
+	var whole := WorkoutCrowd.spectators(1000.0, 3000.0, 7, 0.0, 10000.0)
+	var seen := WorkoutCrowd.spectators(1000.0, 3000.0, 7, 1500.0, 2460.0)
+	assert_gt(seen.size(), 0)
+	for p: Dictionary in seen:
+		assert_true(whole.has(p), "one world")
+	for p: Dictionary in whole:
+		var x := float(p["x"])
+		if x + float(WorkoutCrowd.SPRITE_PX) > 1500.0 and x < 2460.0:
+			assert_true(seen.has(p), "nobody at the view's edge drops out while still on screen")
 
 
 func test_the_crowd_goes_when_it_has_scrolled_off() -> void:

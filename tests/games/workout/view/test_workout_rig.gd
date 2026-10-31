@@ -132,6 +132,171 @@ func test_no_two_riders_in_a_lane_overlap_and_all_stay_on_screen() -> void:
 					assert_true(gap >= 88, "riders %d and %d stand %d px apart" % [a, b, gap])
 
 
+func test_neighbours_in_the_formation_stagger_their_wheels() -> void:
+	var wheels: Array[int] = [-20, 20]
+	for count in range(2, 9):
+		for local in count:
+			for a in count:
+				for b in range(a + 1, count):
+					var dx := (
+						WorkoutRig.formation_dx(a, local, count)
+						- WorkoutRig.formation_dx(b, local, count)
+					)
+					assert_ne(dx, 0, "%d riders, %d and %d share a spot" % [count, a, b])
+					for wa in wheels:
+						for wb in wheels:
+							var apart := absi(dx + wa - wb)
+							assert_true(apart >= 20, "wheels %d px apart" % apart)
+
+
+func test_the_spread_never_moves_the_viewer_or_a_rider_with_room() -> void:
+	var spots: Array[Vector2] = [Vector2(300, 0), Vector2(360, 9), Vector2(240, -9)]
+	var at := WorkoutRig.spread(spots, 0, 44.0, 916.0)
+	assert_eq(at[0], 300.0)
+	assert_eq(at[1], 360.0)
+	assert_eq(at[2], 240.0)
+
+
+func test_the_spread_keeps_every_gap_when_real_gaps_cancel_the_formation() -> void:
+	# day_8_gaps' heap: gaps that bring four riders onto 30 px.
+	var spots: Array[Vector2] = [
+		Vector2(300, 0), Vector2(271, 9), Vector2(222, -9), Vector2(218, 0), Vector2(204, 9)
+	]
+	var at := WorkoutRig.spread(spots, 0, 44.0, 916.0)
+	assert_eq(at[0], 300.0, "the viewer stays")
+	for a in spots.size():
+		for b in range(a + 1, spots.size()):
+			var same := spots[a].y == spots[b].y
+			var need := WorkoutRig.MIN_SAME_LANE_PX if same else WorkoutRig.MIN_CROSS_LANE_PX
+			assert_true(absf(at[a] - at[b]) >= float(need), "%d and %d" % [a, b])
+		assert_true(at[a] >= 44.0, "on screen")
+
+
+func test_the_spread_closes_up_evenly_when_the_room_runs_out() -> void:
+	var spots: Array[Vector2] = [Vector2(300, 0)]
+	for i in 7:
+		spots.append(Vector2(60.0 - float(i), WorkoutRig.lane_dy(i + 1)))
+	var at := WorkoutRig.spread(spots, 0, 44.0, 916.0)
+	var sorted := at.duplicate()
+	sorted.sort()
+	assert_true(sorted[0] >= 44.0 - 0.001, "inside the edge")
+	for i in range(1, sorted.size()):
+		assert_true(sorted[i] - sorted[i - 1] >= 20.0, "no pile against the edge")
+
+
+func test_the_group_stands_apart_whatever_the_gaps_and_x_stays_the_map() -> void:
+	var view := _view(8)
+	var state := view.game.state
+	var gaps: Array[float] = [0.0, 10.0, -20.0, 40.0, 80.0, 150.0, -60.0, 30.0]
+	var d0 := state.rider(1).distance_m()
+	for i in 8:
+		state.rider(state.order[i]).speed.distance_m = d0 + gaps[i]
+	for i in 600:
+		view.advance(FRAME)
+	for i in 8:
+		var a := view.marker(state.order[i])
+		var want := WorkoutRideView.RIDER_X + gaps[i] / WorkoutRideView.MAP_M_PER_PX
+		assert_almost_eq(float(a["x"]), want, 0.001, "x is the map position")
+		for j in range(i + 1, 8):
+			var b := view.marker(state.order[j])
+			var apart := absi(int(a["draw_x"]) - int(b["draw_x"]))
+			var same := int(a["lane"]) == int(b["lane"])
+			var need := WorkoutRig.MIN_SAME_LANE_PX if same else WorkoutRig.MIN_CROSS_LANE_PX
+			assert_true(apart >= need - 6, "%d and %d stand %d px apart" % [i, j, apart])
+
+
+func test_riders_passing_glide_to_their_new_places() -> void:
+	var view := _view(2)
+	var state := view.game.state
+	view.advance(FRAME)
+	var other := state.order[1]
+	var before := int(view.marker(other)["draw_x"])
+	state.rider(other).speed.distance_m = state.rider(1).distance_m() - 120.0
+	view.advance(FRAME)
+	var next := int(view.marker(other)["draw_x"])
+	assert_true(absi(next - (before - 60)) <= 4, "the map's move is its own, the spread's is slow")
+	for i in 240:
+		view.advance(FRAME)
+	assert_true(
+		absi(int(view.marker(1)["draw_x"]) - int(view.marker(other)["draw_x"])) >= 54,
+		"apart in the end"
+	)
+
+
+func test_every_pennant_paints_behind_every_body_and_the_caret_last() -> void:
+	var view := _view(8, 0, 4)
+	var steps := WorkoutRiderLayer.paint_steps(view.model)
+	var first_body := -1
+	var last_pennant := -1
+	for i in steps.size():
+		var kind := str(steps[i][0])
+		if kind == "rider" and first_body < 0:
+			first_body = i
+		if kind == "pennant" or kind == "edge":
+			last_pennant = i
+	assert_true(last_pennant < first_body, "poles and flags under every rider's body")
+	assert_eq(str(steps.back()[0]), "caret")
+	var markers: Array = view.model["markers"]
+	assert_eq(int(markers[int(steps.back()[1])]["peer"]), 4, "over the local rider")
+	assert_eq(steps.filter(func(s: Array) -> bool: return s[0] == "caret").size(), 1)
+
+
+func test_the_caret_sits_over_the_local_riders_own_helmet() -> void:
+	var view := _view(4)
+	var kit := view.kit
+	var me := view.marker(1)
+	var origin := WorkoutKit.vec(kit.rider["origin"])
+	for pose in WorkoutRig.POSE_NAMES.size():
+		var m := me.duplicate()
+		m["pose"] = pose
+		m["pitch"] = 0
+		m["bubble"] = ""
+		var tip := WorkoutRiderLayer.caret_tip(m, kit.rider)
+		var mouth := WorkoutKit.vec(kit.rider["mouth_by_pose"][WorkoutRig.POSE_NAMES[pose]])
+		var mouth_x := int(m["draw_x"]) - origin.x + mouth.x
+		assert_true(absi(tip.x - mouth_x) <= 5, "over the head, pose %d" % pose)
+		var mouth_y := int(m["rear_y"]) - origin.y + mouth.y
+		assert_true(mouth_y - tip.y >= 8 and mouth_y - tip.y <= 14, "just over it, pose %d" % pose)
+	var foot_x := int(me["draw_x"]) - origin.x + int(kit.rider["pennant_foot"][0])
+	assert_true(WorkoutRiderLayer.caret_tip(me, kit.rider).x - foot_x > 20, "not on the whip")
+	var nodding := me.duplicate()
+	nodding["pitch"] = 6
+	assert_gt(
+		WorkoutRiderLayer.caret_tip(nodding, kit.rider).y,
+		WorkoutRiderLayer.caret_tip(me, kit.rider).y,
+		"it follows the sheared frame"
+	)
+	var bubbled := me.duplicate()
+	bubbled["bubble"] = "rescue"
+	assert_true(
+		WorkoutRiderLayer.caret_tip(bubbled, kit.rider).y < int(me["rear_y"]) - origin.y,
+		"over a state bubble"
+	)
+
+
+func test_the_caret_is_big_enough_to_find_from_the_saddle() -> void:
+	var rows := WorkoutRiderLayer.CARET_HALF
+	assert_gte(rows.size(), 8, "at least 8 art px tall, 16 on screen before its dark line")
+	assert_gte(rows[0] * 2 + 1, 15, "at least 15 art px wide, 30 on screen before its dark line")
+	assert_eq(rows.back(), 0, "it comes to a point")
+	for r in range(1, rows.size()):
+		assert_eq(rows[r], rows[r - 1] - 1, "an even slope on the art grid")
+
+
+func test_only_the_caret_says_you_and_nothing_marks_the_road() -> void:
+	var view := _view(8, 0, 4)
+	var steps := WorkoutRiderLayer.paint_steps(view.model)
+	var kinds := {}
+	for s: Array in steps:
+		kinds[str(s[0])] = true
+	assert_eq(kinds.keys().size(), 3, "pennants, riders and one caret, nothing on the road")
+	assert_true(kinds.has("pennant") and kinds.has("rider") and kinds.has("caret"))
+	assert_eq(
+		str(steps[0][0]), "pennant", "the first paint is a pennant, no road mark under the group"
+	)
+	assert_eq(steps.size(), 8 + 8 + 1, "one pennant and one rider each, the caret once")
+
+
 func test_the_local_rider_is_on_its_spot_and_last_for_every_ordinal() -> void:
 	for local in 8:
 		var peer := local + 1
