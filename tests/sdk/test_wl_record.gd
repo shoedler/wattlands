@@ -158,6 +158,16 @@ func test_a_short_array_gives_a_zero_vector3() -> void:
 	assert_eq(r.spot, Vector3.ZERO)
 
 
+func test_a_short_array_gives_a_zero_vector2() -> void:
+	var r := Rec.new()
+	r.at = Vector2.ONE
+	r.load_dict({"at": [1.0]})
+	assert_eq(r.at, Vector2.ZERO, "one element")
+	r.at = Vector2.ONE
+	r.load_dict({"at": []})
+	assert_eq(r.at, Vector2.ZERO, "no element")
+
+
 func test_load_dict_returns_the_record() -> void:
 	var r := Rec.new()
 	assert_same(r.load_dict({}), r)

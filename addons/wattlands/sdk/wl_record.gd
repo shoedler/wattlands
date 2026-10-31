@@ -42,7 +42,8 @@ func load_dict(d: Dictionary) -> WlRecord:
 			TYPE_STRING:
 				set(p["name"], str(v))
 			TYPE_VECTOR2:
-				set(p["name"], Vector2(float(v[0]), float(v[1])) if v is Array else Vector2.ZERO)
+				var ok2: bool = v is Array and (v as Array).size() >= 2
+				set(p["name"], Vector2(float(v[0]), float(v[1])) if ok2 else Vector2.ZERO)
 			TYPE_VECTOR3:
 				var ok3: bool = v is Array and (v as Array).size() >= 3
 				set(
