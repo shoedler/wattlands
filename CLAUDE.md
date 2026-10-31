@@ -74,7 +74,7 @@ Only the lead lands on main: merge, never rebase, one branch at a time, through 
 - Static typing everywhere except GDExtension classes (GDBLE objects are created with `ClassDB.instantiate()` and held as `Object`/`Node`/`RefCounted`, only inside `addons/wattlands/trainer/ble/gdble_transport.gd`).
 - Game rules are pure classes with `step(state, inputs, dt)`. The sim always advances in fixed 0.05 s steps on the platform's sim clock. RNG is seeded (`ctx.rng`); rules never read wall-clock time (`Time.*`, `OS.get_ticks*`), global `randi`/`randf` or `RandomNumberGenerator.new()`.
 - Content is JSON, validated at load. No editor-only APIs at runtime. Cross-module communication uses `EventBus` signals, never node paths into another module.
-- Unique `class_name`s. Game classes carry their game's prefix (`SiegeTower`, `TankShell`, `FishingLaneState`, `WorkoutRideView`). Platform classes never use a game prefix.
+- Unique `class_name`s. Game classes carry their game's prefix (`SiegeHud`, `TankShellState`, `FishingBoat`, `WorkoutRideView`). Platform classes never use a game prefix.
 - User-facing strings: `content/strings/<module>.csv` for the platform, `content/<id>/strings.csv` for games. Game keys start with the upper-case game id and an underscore (`WORKOUT_`, `SIEGE_`, `TANK_`, `FISHING_`); platform keys never do.
 - Every persisted file goes through `Paths.user_dir()` (honours `--profile-dir=<abs path>`). Tests use a fresh temp dir.
 - System nodes (trainer stack, governor, MockTrainer, NetSession and transports, GameHost, input router, gesture recognizer) run with `process_mode = PROCESS_MODE_ALWAYS`. Pause never uses `SceneTree.paused` for them.
