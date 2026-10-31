@@ -2,13 +2,13 @@
 
 importer="wav"
 type="AudioStreamWAV"
-uid="uid://47w7vjsg7cjf"
-path="res://.godot/imported/arc_hum.wav-789d8ceb1ee9d7ec897b089476cd4f75.sample"
+uid="uid://cbna46w8ftcpb"
+path="res://.godot/imported/arc_lamp.wav-5878780018e13ca1749e38500e02f8a4.sample"
 
 [deps]
 
-source_file="res://assets/tank/audio/arc_hum.wav"
-dest_files=["res://.godot/imported/arc_hum.wav-789d8ceb1ee9d7ec897b089476cd4f75.sample"]
+source_file="res://assets/tank/audio/arc_lamp.wav"
+dest_files=["res://.godot/imported/arc_lamp.wav-5878780018e13ca1749e38500e02f8a4.sample"]
 
 [params]
 
