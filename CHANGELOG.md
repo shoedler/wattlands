@@ -2,6 +2,10 @@
 
 Releases, newest first. Modules and games write fragments in `docs/changelog.d/<module or game id>.md`; the lead merges them here at each release and empties them.
 
+## v1.0.0-rc.1 (2026-10-31)
+
+The release candidate for v1: the build v0.9.3 prepared, with the full test suite run by hand. Nothing changes for riders since v0.9.3. No one has ridden this on a real trainer or heard the audio yet; each game's `HARDWARE_TEST.md` has the checklist and a Listen step.
+
 ## v0.9.3 (2026-10-31)
 
 The cleanup release: much less code, shared parts for every game, and the sound now keeps even time with your cadence. No one has ridden this on a real trainer or heard the audio yet.
