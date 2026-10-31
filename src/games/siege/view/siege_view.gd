@@ -9,7 +9,8 @@ extends Node2D
 ##
 ## What it shows (SiegeViewMath has the formulas):
 ##   - each rota turning at rim speed 1.2 m/s x P_eff / 250 W (at most 3 m/s) in its slot's hue
-##     (timber for an empty slot), with 1 to 3 walkers by P_eff (150 / 300 W, 20 W hysteresis);
+##     (timber for an empty slot), with 1 to 3 walkers by P_eff (150 / 300 W, 20 W hysteresis),
+##     their stride 1:1 with the rider's cadence;
 ##   - each rider's powered path to the station they target, lit through the 2 s reconnect, the
 ##     mine in breaks;
 ##   - the stations at their yaw and animation phase, the mine and the pump cycling with m, the
@@ -45,6 +46,11 @@ var clock_s: float = 0.0
 var wheel_deg := PackedFloat32Array([0, 0, 0, 0])
 var walker_count := PackedInt32Array([0, 0, 0, 0])
 var walk_phase := PackedFloat32Array([0, 0, 0, 0])
+## Per slot: the crank that sets the walkers' frames and the wheel's strokes (one 4-frame walk cycle
+## per crank revolution). The wheel stays by watts: the wheel is load, the walkers are legs.
+var cranks: Array[CrankClock] = [
+	CrankClock.new(), CrankClock.new(), CrankClock.new(), CrankClock.new()
+]
 ## Per slot: 1 while the rider is in rescue (the walkers stumble, brief 2.4).
 var stumbling := PackedInt32Array([0, 0, 0, 0])
 var mine_phase: float = 0.0
@@ -90,6 +96,7 @@ func _build() -> void:
 	tilt.enabled = tilt_shift_option()
 	audio = SiegeAudio.new()
 	audio.name = "Audio"
+	audio.rng_seed = SeededRng.derive(game.ctx.seed, "siege:audio") if _has_ctx() else 0
 	for n: Node in [world, machines, crowd, shots, tilt, audio]:
 		add_child(n)
 	update(0.0)
@@ -109,6 +116,10 @@ func _process(delta: float) -> void:
 	update(delta)
 
 
+func _has_ctx() -> bool:
+	return game != null and game.ctx != null
+
+
 func _is_client() -> bool:
 	return game != null and game.ctx != null and game.ctx.role == Wl.CLIENT
 
@@ -126,7 +137,7 @@ func update(delta: float) -> void:
 	_update_crowd(delta)
 	shots.set_time(clock_s)
 	if audio != null:
-		audio.update(state, delta, game.ctx.local_peer if game != null and game.ctx != null else 0)
+		audio.update(state, delta, game.ctx.local_peer if _has_ctx() else 0, self)
 
 
 func _advance_clock(delta: float) -> void:
@@ -151,13 +162,13 @@ func _update_wheels(delta: float) -> void:
 		var dip := SiegeViewMath.stumble_dip(clock_s + slot * 0.23) if stag else 0.0
 		# a stumble checks the wheel for a moment
 		var check := 1.0 - 0.7 * dip
-		var v := SiegeViewMath.rim_speed(p) * check
 		var turn := SiegeViewMath.wheel_deg_per_s(p, r_m) * check
 		wheel_deg[slot] = fposmod(wheel_deg[slot] + turn * delta, 360.0)
 		machines.stumble[slot] = stag
 		machines.stumble_dip[slot] = dip
 		walker_count[slot] = SiegeViewMath.walkers_for(p, walker_count[slot]) if r != null else 0
-		walk_phase[slot] += v * delta / SiegeViewMath.STRIDE_M
+		cranks[slot].advance(r.cadence_rpm if r != null else 0.0, delta)
+		walk_phase[slot] = cranks[slot].revs
 		machines.set_wheel(slot, wheel_deg[slot], r != null, walker_count[slot], walk_phase[slot])
 
 
