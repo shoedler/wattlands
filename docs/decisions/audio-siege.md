@@ -16,42 +16,42 @@ Short ADRs for Castellum Rotae's audio (`assets/siege/audio/audio.json`, `SiegeA
 
 ## 2026-10-31 A safety prompt clears the horns and the volley, and the mix pays for it
 
-- Decision: bring every routine Sfx sound down until `warning` and `rescue` read at least +6 LU over the mix at the mix's loudest moments, not only in D5's own window. The horns and `overdrive_on` drop 8 to 11 dB, the whistles 11 dB. To stay heard, the horns are recut as far horns (a high-pass at 330 Hz, a 1050 Hz peak, the 98 Hz layer gone, tails that fall) and each ducks Machines -8 and Ambience -4 for as long as it blows. `horn_rush`'s stabs move from A3 to G3: its 2nd harmonic sat on `warning`'s 440 Hz square. The preview keeps a whistling volley at 30.0 s, on a stroke, and a ram at 30.4 s, inside D5's window.
+- Decision, under the old duck (Machines -6, Ambience -6, Sfx -4): bring every routine Sfx sound down until `warning` and `rescue` read at least +6 LU over the mix at the mix's loudest moments, not only in D5's own window. The horns and `overdrive_on` dropped 8 to 11 dB, the whistles 11 dB. To stay heard, the horns were recut as far horns (a high-pass at 330 Hz, a 1050 Hz peak, the 98 Hz layer gone, tails that fall) and each ducks Machines -8 and Ambience -4 for as long as it blows. `horn_rush`'s stabs moved from A3 to G3: its 2nd harmonic sat on `warning`'s 440 Hz square. The preview keeps a whistling volley at 30.0 s, on a stroke, and a ram at 30.4 s, inside D5's window. The gains have since come back up: see "The duck landed" below. The recut and the horns' own ducks stay.
 - Alternatives: the old "one-off events" argument (false: at m = 1 the organ fires every 1.5 s, and a rush at 110 rpm read -0.06 LU); a louder prompt or a lower threshold (never).
-- Reason: BRIEF 4.6 outranks a horn. Measured with the prompt 50 ms after each of the 40 preview events: all 40 clear +6, minimum +6.00 (`wave_end`). With the prompt 0.05, 0.2 and 0.4 s into each at 110 rpm, all held by `tests/games/siege/audio/bank.test.mjs`. D5 itself reads +6.08.
+- Reason: BRIEF 4.6 outranks a horn. Today, measured with the prompt 50 ms after each of the 40 preview events: all 40 clear +6, minimum +10.70 (`shot_stone` at 26.8 s). `bank.test.mjs` holds +6 with the prompt 0.05, 0.2 and 0.4 s into each horn, a volley and a dock at 110 rpm. D5 itself reads +10.58 (+6.08 under the old duck and mix).
 - D5 reads one window, so what holds elsewhere, all at the worst of 8 quarter-revolution prompt times (`bank.test.mjs` holds the four marked `*` at +6):
 
-| Riding, nothing landing | Now | With the duck below |
+| Riding, nothing landing | Old duck, old mix | Duck -14/-14/-20, final mix |
 | --- | --- | --- |
-| 60 rpm 220 W, the preview's segment `*` | +6.03 | +8.28 |
-| 90 rpm 260 W, the preview's segment | +7.14 | +9.19 |
-| 110 rpm 340 W, the preview's segment `*` | +6.05 | +8.45 |
-| 75 rpm 280 W, 3 others `*` | +6.13 | +8.65 |
-| `rescue` at 44 rpm 250 W `*` | +6.78 | +9.13 |
-| `rescue` at 44 rpm 300 W | +5.71 | +8.09 |
-| 60 rpm 250 W | +5.39 | +7.59 |
-| 60 rpm 300 W | +4.25 | +6.51 |
-| 60 rpm 350 W | +4.01 | +6.27 |
-| 60 rpm 500 W | +3.96 | +6.22 |
-| 75 rpm 350 W | +5.77 | +8.37 |
-| 110 rpm 420 W, 500 W | +6.17, +6.15 | +8.43, +8.41 |
+| 60 rpm 220 W, the preview's segment `*` | +6.03 | +11.32 |
+| 90 rpm 260 W, the preview's segment | +7.14 | +12.55 |
+| 110 rpm 340 W, the preview's segment `*` | +6.05 | +12.24 |
+| 75 rpm 280 W, 3 others `*` | +6.13 | +11.21 |
+| `rescue` at 44 rpm 250 W `*` | +6.78 | +13.38 |
+| `rescue` at 44 rpm 300 W | +5.71 | +12.26 |
+| 60 rpm 250 W | +5.39 | +11.15 |
+| 60 rpm 300 W | +4.25 | +10.23 |
+| 60 rpm 350 W | +4.01 | +9.82 |
+| 60 rpm 500 W | +3.96 | +9.95 |
+| 75 rpm 350 W | +5.77 | +11.02 |
+| 110 rpm 420 W, 500 W | +6.17, +6.15 | +13.24, +13.24 |
 
-- Still open, plainly, and only the lead can close it: (1) A rules-driven wave (`run_game_sim`'s events, `vo2`, 112 %, 280 W, 3 others, the adapter's thinning, no ram or hooves, so this favours the mix), 40 random moments: at 90 rpm 8 under +6, minimum +4.21, median +6.79; at 75 rpm 24 under, minimum +3.64, median +5.95, and the brief tolerates 70-79 rpm with only a small arrow. (2) Low cadence under high power: the table's 60 rpm rows, about 1 LU per 50 W from 220 W, as the groan and strokes rise with effort below 340 W. (3) A long horn's tail, the prompt 0.8 s in at 110 rpm: `wave_start` +5.90. (4) Hooves at 10 chariots (`count_db` 10): +5.65 at 90 rpm, after this pass's +3 dB. These sit under +6 by the shots' transients and by the wheel: the prompts duck Machines and Ambience only -6 dB, Sfx only -4. (5) A1 and D5 press on each other: A1 -19.96 against a -20 floor, D5 +6.08 against +6. There is under 0.1 dB of level left in this mix.
-- Trade: the horn is now about level with the mix in its best octave (1.28-2.56 kHz, +0.6 dB under its own duck, -7 dB one octave up), where before it stood well over. It may read as far off. It is unheard: Listen step, HARDWARE_TEST 14.
-- Request to the lead, one change in `sfx.gd` and `SAFETY_DUCK` (`offline_mix.mjs`): a prompt ducks Machines -10, Ambience -6, Sfx -8 (now -6, -6, -4). It strengthens 4.6. It is what "With the duck" reads above, from a patched copy of the offline mix: the wave at 90 rpm 0 of 40 under, minimum +6.73, median +9.24; at 75 rpm 0 of 40, minimum +6.24, median +8.51; every row of the table over +6; the 40 events clear. A Sfx duck alone, which this ADR asked for before, does not do it: Sfx -8 by itself leaves that wave at 4 of 40 under at 90 rpm, minimum +5.42, and 19 of 40 under at 75 rpm, minimum +4.69. Machines is what dominates these moments. With that duck in, the wheel's strokes can have back what they lost below, and the horns can come up.
+- What was open under the old duck, today: (1) The rules-driven wave (`run_game_sim`'s events) read 8 of 40 under +6 at 90 rpm and 24 of 40 at 75 rpm. It has not been re-run. In its place, a denser hand-made wave at 280 W with 3 others (seeded random racks, volleys, bolts, Scorpions, stones, kills, hooves at `count_db` 4, rams and gate hits, 40 random moments): 90 rpm 0 of 40 under, minimum +7.05, median +12.39; 75 rpm 0 of 40, minimum +7.64, median +11.70. (2) Low cadence under high power: the table's 60 rpm rows, now +9.82 at the worst. (3) A long horn's tail, the prompt 0.8 s in at 110 rpm 340 W: +12.52 at the worst of the four horns. (4) Hooves at `HOOVES_MAX_DB` (10 horses or more), worst of 16 prompt moments at 90 rpm 260 W: +6.36. This is now the thinnest margin found. (5) A1 and D5 no longer press on each other: A1 -19.45, D5 +10.58.
+- Trade, now mostly undone: under the old mix the horn was about level with the mix in its best octave. Today it reads +14.6, +12.2 and +13.5 dB (`wave_start`, `push`, `rush`) in its best third octave, median of 8 onsets, its own duck counted, over the wheel at 90 rpm 240 W. It is unheard: Listen step, HARDWARE_TEST 14.
+- The request to the lead (a deeper duck) landed deeper than asked: Machines -14, Ambience -14, Sfx -20, release 2 s.
 
-## 2026-10-31 A2 is waived for Sfx, at -22.5 LUFS
+## 2026-10-31 A2 passes, with no waiver
 
-- Decision: `preview.waive.A2`. Sfx peaks at -22.49 LUFS momentary against A2's -17..-11. Machines -20.80, one other rider -11.55 LU, Ambience -29.74, UI and the prompts are all in their windows.
-- Alternatives: leave one rare sound (the Breach) at -17. A prompt on it would read about +1 LU, which is exactly what the blocker above forbids.
-- Reason: with Sfx ducked -4 dB, D5 at +6 and A2's Sfx window cannot both hold: an Sfx moment at -17 is louder than -22.3 under the prompt. The deeper duck requested above would close this too.
+- Decision: `preview.waive` is gone. Sfx peaks at -16.54 LUFS momentary against A2's -17..-11 (it was -22.49 under the waiver). Machines -20.83, one other rider -11.41 LU, Ambience -29.74, UI and the prompts are all in their windows.
+- Alternatives: keep the waiver (its reason, the -4 dB duck, is no longer true); a battle sound as the peak, which would take `stone_impact` over -3 dB and past the Breach by a wider margin than it already is.
+- Reason: with Sfx ducked -20 dB, an Sfx moment at -17 is about -37 under a prompt, so D5 and the window no longer conflict. Only the bell reaches the window: `wave_end` at 57.5 s is the -16.54, and the loudest battle moment is a stone's landing, -18.39 at 28.5 s. The pass has 0.46 LU to spare, on that one cue.
 
-## 2026-10-31 Keeping A1 with the events down: an even wheel
+## 2026-10-31 The duck landed: the strokes and the cues come back
 
-- Decision: the wheel's level follows `db_by` curves on rpm, chosen so a prompt has the same margin at each cadence the preview rides: pawl +1.9 at 60 rpm and below, +0.3 at 75, +0.1 at 90, -0.5 at 110; creak +1.9, 0, -1.4, -3; groan +2.2, +1.4, +1.7, +1.7. Nothing rises under 60 rpm, where the rescue fires, and every `p_eff` curve of the wheel is flat above 340 W, about 136 % FTP under the default FAIR_FTP, so a sprint adds no level. The preview rides 220 / 260 / 340 W. The bed comes up 1 dB, the footfall is -9, the groan -7, pawl -4.0, creak -3.9.
-- Alternatives: the critic's "more on the strokes" curves (pawl and creak +3.6 at 60 rpm, 0 at 90 and 110; groan +1.8, 0, 0), which read A1 -19.97 and D5 +6.10 but a prompt at +5.01 at 60 rpm 220 W, +5.40 at 110 rpm 340 W and +5.39 at 75 rpm 280 W with 3 others: they stand strokes up where 4.6.3 fires. An even raise of the wheel (110 rpm has nothing left); raising Sfx in the preview (Sfx ducks less than Machines, so it costs D5 more per dB of A1).
-- Reason: a steady wheel gives the most integrated level per LU of momentary peak, and the creak has the worst ratio: it is what a prompt's window reads hardest. Lowering it 0.6 dB gives a prompt about +0.25 LU for 0.17 LU of A1; raising the groan 0.5 dB costs -0.12 LU for +0.22 LU of A1. At this bank's curves all four of `bank.test.mjs`'s prompt cases clear +6 by the mix alone. The earlier "about +6.1 and +6.4" in this ADR was wrong: at quarter-revolution steps, that bank read +5.64 at 110 rpm, +7.32 at 90, +5.63 at 60, and it had not been measured below 60 rpm or above 340 W.
-- Cost, measured with `strokes` and `loops` solo at 250 W: the groan is 61 % of the lead's power at 60 rpm (was 69 %), 60 % at 75, 62 % at 90, 63 % at 110 (was 48-50 % at 90 and 110, and 67 % at 110 rpm 340 W). That moves toward the round 1 fault at the fast end. The 20 ms level p95 over p50 is 7.0 dB at 60 rpm (was about 6), 6.8 at 75, 5.8 at 90, 5.0 at 110. In the full mix it is 5.9 / 5.7 / 4.7 / 3.8 dB at the preview's pairings, and 10.5 / 10.8 / 8.7 / 7.4 dB in 500-2000 Hz, where the pawl's weight is; the critic's curves read 12.0 / 12.2 / 10.4 / 10.2 there. The strokes carry the cadence, the owner's first request, so this is the price of 4.6 and the first thing to give back: once the lead's deeper duck is in, the critic's curves above fit, and A1 moves level off the groan again. A5 reads 0.61..0.70 against a 0.60 floor, A3 0.47; the mix's 80-500 Hz share is 52.1 %. The slow wheel may still read as a drone: Listen step.
+- Decision: the wheel's level follows the critic's stroke-heavy `db_by` curves on rpm: pawl and creak +3.6 at 60 rpm and below, +1.8 at 75, 0 at 90 and 110, -1 at 140; groan +1.8, +0.9, 0, 0, -1. The 75 and 140 rpm points are this pass's, since the critic gave 60, 90 and 110. Nothing rises under 60 rpm or above 340 W. The cues rise with it, all gain, no new bytes: bolt -8 and -13, Scorpion -9.5, onager -4.5, its whoosh -14, its landing -3, volley release -16, whistles -22/-23/-24 (the critic's ask), patter -15.5, rack -13 and -12.5, horns -9, `overdrive_on` -9, bell -4, Breach 0, gate hit -12, gate restored -9, hooves -10, ram -8, dock -4, reach -10, leak -12, kill -9.5, gold -18.
+- Alternatives: the even wheel this replaces (pawl +1.9, +0.3, +0.1, -0.5; creak +1.9, 0, -1.4, -3; groan +2.2, +1.4, +1.7, +1.7), chosen to protect D5 under the old duck: the critic's curves read a prompt at +5.01 at 60 rpm 220 W under that duck, and read +11.32 under this one. A further cut of the groan at 60 rpm: not tried, since this reached the goal and the other rider's level has only 0.59 LU left in A2.
+- Reason: the strokes carry the cadence, the owner's first request, and the groan took their place under the old duck. The new duck pays for it: D5 reads +10.58, against +10.65 with the even wheel and the old cues, and every row of the first ADR's table clears +9.82. A1 rises to -19.45 from -19.96, nearly all of it from the cues.
+- Measured, before and after, in the same render, at 60 / 75 / 90 / 110 rpm. The groan's share of the lead's power at 250 W, solo: 61.8 / 59.4 / 60.7 / 61.5 % became 51.3 / 48.7 / 47.1 / 42.4 %. The 20 ms level p95 over p50, solo: 7.0 / 6.9 / 6.1 / 5.1 dB became 8.4 / 8.4 / 7.6 / 7.6. In a mix of wheel, one other rider, bed, mine, pump and running loops at 220 / 280 / 260 / 340 W: 6.4 / 5.8 / 4.8 / 4.0 became 7.6 / 7.1 / 6.2 / 6.1, and in 500-2000 Hz 12.2 / 12.2 / 9.8 / 8.3 became 13.8 / 13.8 / 11.5 / 11.1. A5 0.61..0.70 became 0.76..0.78 (floor 0.60), A3 0.47 became 0.56, A6 +29.51 % became +36.27 %. The mix's 80-500 Hz share fell from 52.1 % to 45.1 %. A8's top band reads 2.1 % against a floor of 2: raising the low cues takes share from it, so a further raise must watch it. Nobody has heard any of this: whether a stone at -3 or a swarm's kills at -9.5 tire the ear is for the Listen step.
 
 ## 2026-10-31 Effort has a timbre: timber_strain
 
@@ -61,9 +61,9 @@ Short ADRs for Castellum Rotae's audio (`assets/siege/audio/audio.json`, `SiegeA
 
 ## 2026-10-31 The arrow organ whistles once in three
 
-- Decision: a volley within the current gap of `WHISTLE_GAPS_S` (3.5, 5.5, 3.5, 7.5 s, cycling) of the last whistling one plays `shot_arrow_rack`: release and patter, at -16 and -15.5 dB, 3 dB over the same parts of `shot_arrow`, so the two racks between whistles are heard (+4.7 dB in their best band, was +0.8). At m = 1 the whistles are 4.5, 6, 4.5 and 9 s apart. Whistles sit at -27/-28/-29 dB (the critic asked -22/-23/-24; D5 asked for 5 more) with Ambience ducked -3 under them. The preview plays 10 s of racks at 1.5 s.
+- Decision: a volley within the current gap of `WHISTLE_GAPS_S` (3.5, 5.5, 3.5, 7.5 s, cycling) of the last whistling one plays `shot_arrow_rack`: release and patter, at -13 and -12.5 dB, 3 dB over the same parts of `shot_arrow`, so the two racks between whistles are heard (+4.7 dB in their best band under the old mix; not re-measured). At m = 1 the whistles are 4.5, 6, 4.5 and 9 s apart. Whistles sit at -22/-23/-24 dB, the critic's ask, with Ambience ducked -3 under them. The preview plays 10 s of racks at 1.5 s.
 - Alternatives: a whistle on every rack (1800 in a short session, in the ear's most sensitive band); no whistle at all (the owner named arrows whistling); a fixed gap (it came to exactly 4.5 s, about 400 in 30 minutes, a beat of its own).
-- Reason: a whistle every 1.5 s for 5 minutes grates, and a human must still confirm these gaps don't. The louder racks cost little: 7 of 40 moments under +6 in the wave of the ADR above become 8.
+- Reason: a whistle every 1.5 s for 5 minutes grates, and a human must still confirm these gaps don't. These louder whistles (+5 dB since D5 stopped limiting them) make that question sharper.
 
 ## 2026-10-31 Gate hits answer what the gate lost, once a ram stroke
 
@@ -98,16 +98,16 @@ Short ADRs for Castellum Rotae's audio (`assets/siege/audio/audio.json`, `SiegeA
 
 ## 2026-10-31 Levels, and how the mix is shaped
 
-- Machines -20.80 LUFS, one other rider -11.55 LU, Ambience -29.74, Sfx -22.49 (waived, above), mix -19.96 LUFS, LRA 12.76, true peak -3.52 dBTP: otherwise inside SPEC 3.6. The LRA comes from the rider stopping and the calm at the end of the preview: with those left out it is about 2 LU. A rules-driven wave reads louder than the preview: -20.15 LUFS at 90 rpm 250 W, -19.07 at 75 rpm 280 W, -18.59 at 110 rpm 340 W, with an LRA under 1 LU.
+- Machines -20.83 LUFS, one other rider -11.41 LU, Ambience -29.74, Sfx -16.54, mix -19.45 LUFS, LRA 13.03, true peak -2.10 dBTP: inside SPEC 3.6. The LRA comes from the rider stopping and the calm at the end of the preview. Before the cues came up, a rules-driven wave read louder than the preview: -20.15 LUFS at 90 rpm 250 W, -19.07 at 75 rpm 280 W, -18.59 at 110 rpm 340 W, with an LRA under 1 LU. Those three are not re-measured.
 - A8's bands forced the design. A timber wheel is all 80-500 Hz, so the saw under the groan wanders in pitch and sits through a high-pass, the pawl's weight is in its 640 and 1370 Hz modes, and the wind has a grass layer above 3.8 kHz. The top of the mix comes from the wind and from impacts' grit, not from the strokes: every locked sound stays at least 16 dB under the main stroke above 2 kHz (SPEC 5, `tests/games/siege/audio/bank.test.mjs`).
 - The groan's chirp and a wandering saw replace the fixed saw of the first draft, whose stationary harmonics showed as flat lines in the spectrogram: the monotone rumble the owner asked not to get.
 - The creak is a tonal squeak with a hard first transient, not a stick-slip pulse train: a pulse train reads as dozens of onsets (D1 counted 44 for 10). This may read as less woody than a true stick-slip. Nobody has heard it: it stays open for the Listen step.
 
-## 2026-10-31 A kill, a Scorpion and hooves come up to the wheel
+## 2026-10-31 A kill, a Scorpion and hooves stand over the wheel
 
-- Decision: `kill` -14, `shot_scorpion` -13.5, `hooves` -20 (were -17, -15, -23), and a rack's parts as above.
+- Decision: `kill` -9.5, `shot_scorpion` -9.5, `hooves` -10 (were -14, -13.5, -20).
 - Alternatives: a higher slap layer on the kill (the file's peak normalisation cancels it: it stayed at -1.4 dB in its best band).
-- Reason: they all sit in the 125-640 Hz the groan and strokes own, and a kill read -1.9 dB in its best third-octave band, 100 ms mean, against the wheel and bed: not a reward. In the critic's render they read +1.2, +0.6, -1.0 at one horse and +0.5 at four. A short transient is underrated by this measure. Cost to a prompt in the wave of the first ADR: 7 under +6 of 40 become 8, the minimum holds at +4.21.
+- Reason: a rider's reward and threat must read over the wheel. Measured over wheel, one other rider, bed and running loops at 90 rpm 240 W, 25 enemies, in the cue's best third octave, the 100 ms from its onset against the same 100 ms without it, 16 onsets at eighth-revolution steps, as worst / median: kill +1.61 / +5.22 (was -3.38 / +0.28), Scorpion +1.37 / +3.70 (was -3.16 / -0.85), hooves at one horse +0.80 / +2.42 (was -10.02 / -8.45), at `count_db` 4 +4.80 / +6.42. The critic's earlier +1.2, +0.6, -1.0 came from another render, so they don't compare directly. A short transient is underrated by this measure. Cost to a prompt: see the first ADR's open list, item (4).
 
 ## 2026-10-31 A leak's alarm answers once in 3 s
 
