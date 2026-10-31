@@ -6,7 +6,7 @@
 			"code": 5,
 			"crew": [1, 4],
 			"hull_px": [296, 65],
-			"engines": ["diesel", "steam", "dynamo", "arc", "feed"],
+			"engines": ["diesel", "steam", "dynamo", "arc", "repair", "feed"],
 			"turrets": ["main"],
 			"enemy_scale": 1.0,
 			"label": "TANK_TANK_LANDSHIP",
@@ -38,7 +38,8 @@
 					"steam": [111.3333, 27, 46, 20.6667],
 					"dynamo": [157.3333, 27, 28.6667, 20.6667],
 					"arc": [186, 27, 28.6667, 20.6667],
-					"feed": [231.3333, 29.6667, 20, 18]
+					"feed": [231.3333, 29.6667, 20, 18],
+					"repair": [169.3333, 7.6667, 44.6667, 18]
 				}
 			}
 		}
@@ -113,7 +114,8 @@
 		"gravity_px_s2": 300,
 		"aim_tol_deg": 0.5,
 		"manual_pause_s": 5,
-		"nudge_deg": 1
+		"nudge_deg": 1,
+		"far": {"v0_mps": 560, "g_mps2": 70, "max_range_m": 2500, "nudge_deg": 0.25, "aim_tol_deg": 0.1, "dispersion_deg": [0.2, 0.6], "splash_m": 60}
 	},
 	"damage": {
 		"light": 14,
@@ -136,7 +138,13 @@
 	"arc": {
 		"_doc": "v3: the Lights seat (arc generator). While its rider is in band the searchlights are lit: the main gun reaches its full range with its normal dispersion. Empty or not lit, the gun reaches only the headlight: targets whose near edge is at most dark_range_px off the hull's front (off its rear for a target behind), with its dispersion x dark_dispersion_mult.",
 		"dark_range_px": 260,
+		"dark_range_m": 2300,
 		"dark_dispersion_mult": 2
+	},
+	"repair": {
+		"_doc": "v4: the Repairs seat rebuilds hp_per_kj hull HP per kJ of P_eff in band (x difficulty.repair), one patch per patch_hp.",
+		"hp_per_kj": 3.0,
+		"patch_hp": 4
 	},
 	"caps": {
 		"enemies": 16,

@@ -332,7 +332,10 @@ func advance(delta: float) -> void:
 	travel += state.hull.speed_mps * TankConst.PX_PER_M * S * render_dt
 	_relief(state)
 	var feed := rider_feed(state, rt)
-	_seats(state, feed, render_dt)
+	# render_t stalls at the newest snapshot then catches up (tank_render_clock.gd): on a client that
+	# would make the strokes lurch, so a client's machines run on the frame's dt.
+	var phase_dt := dt if game.ctx != null and game.ctx.role == Wl.CLIENT else render_dt
+	_seats(state, feed, phase_dt)
 	_turret(state)
 	_search(state, dt)
 	_process_cues(state)
@@ -635,6 +638,22 @@ func _seats(state: TankState, feed: Dictionary, render_dt: float) -> void:
 		cadences[seat] = rpm
 		phases[seat] = float(phases.get(seat, 0.0)) + rpm / 60.0 * render_dt
 		powers[seat] = power_ratio(r)
+
+
+## What the audio reads per seat (SPEC_AUDIO 2.2): its crank revolutions, rpm (0 when the picture
+## stops the machine, as `on` in _paint), power and whether the local rider leads it.
+func audio_feed(state: TankState) -> Dictionary:
+	var out := {}
+	var me := game.ctx.local_peer if game.ctx != null else 0
+	for seat: String in TankRig.SEATS:
+		var r := rider_on(seat)
+		out[seat] = {
+			"revs": machine_phase(seat),
+			"rpm": 0.0 if state.hull.breakdown else float(cadences.get(seat, 0.0)),
+			"power": machine_power(seat),
+			"lead": r != null and r.peer == me,
+		}
+	return out
 
 
 ## The rider on a seat, or null (an empty seat).

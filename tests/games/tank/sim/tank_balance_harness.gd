@@ -124,6 +124,8 @@ func execute(config: Dictionary) -> Dictionary:
 		for peer: int in plans:
 			with_cd[peer] = TankFakes.with_cooldown(plans[peer])
 		clock = TankFakes.PhaseClock.new(with_cd, dirs)
+	if cfg.has("difficulty"):
+		state.difficulty = str(cfg["difficulty"])
 	riders = TankSyntheticRiders.new(ctx, clock, float(cfg.get("compliance", 1.0)))
 	if not content.ok():
 		return {"error": "; ".join(content.errors)}

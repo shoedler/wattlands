@@ -27,8 +27,8 @@ function drillEvents() {
   return [
     { type: 'segment', i: 0, sg: 1, st: 0 },
     { type: 'segment', i: 1, sg: 6, st: 1 },
-    { type: 'shot', s: -1, sh: 5, id: 31, src: 20, e: 1 },
-    { type: 'shot', s: 0, sh: 1, id: 32, src: 0, e: 0 },
+    { type: 'shot', s: -1, sh: 5, id: 31, src: 20, e: 1, rng_m: 0 },
+    { type: 'shot', s: 0, sh: 1, id: 32, src: 0, e: 0, rng_m: 1400, flight_s: 2.53 },
     { type: 'hit', on: 1, id: 20, dmg: 20, sh: 1, b: 0, x: 3400 },
     { type: 'kill', id: 20, e: 1, by: 0, s: 0 },
     { type: 'hit', on: 0, id: 0, dmg: 4, sh: 5, b: 0, x: 120 },
@@ -95,7 +95,7 @@ test('a clean drill report passes', () => {
 });
 
 test('the fixture snapshot is a valid crew-3 snapshot of the landship', () => {
-  assert.deepEqual(ec.snapshotErrors(SNAPSHOT, { crew: { tank: 5, riders: 3, rooms: 5 } }), []);
+  assert.deepEqual(ec.snapshotErrors(SNAPSHOT, { crew: { tank: 5, riders: 3, rooms: 6 } }), []);
 });
 
 test('events_by_peer is read when the peers carry no events', () => {
@@ -136,7 +136,7 @@ test('fields that are floats, strings or missing fail the schema', () => {
   rot[2] = { type: 'rotation', r: [[0, 2], [1]] };
   assert.match(errs(report({ host: rot, client1: rot })), /rotation: r is not rows of two ints/);
   const whole = drillEvents();
-  whole[2] = { type: 'shot', s: -1.0, sh: 5, id: 31, src: 20, e: 1 };
+  whole[2] = { type: 'shot', s: -1.0, sh: 5, id: 31, src: 20, e: 1, rng_m: 0.0 };
   assert.equal(ec.eventErrors(whole[2]).length, 0, 'a whole float (JSON) is an int');
 });
 
@@ -144,7 +144,8 @@ test('ranges: a kill of the wrong enemy code, a hit on nothing, a reserved lever
   assert.match(ec.eventErrors({ type: 'kill', id: 4, e: 9, by: 0, s: 0 }).join(), /e 9 outside 1\.\.6/);
   assert.match(ec.eventErrors({ type: 'hit', on: 7, id: 0, dmg: 1, sh: 1, b: 0, x: 0 }).join(), /on 7 outside 0\.\.3/);
   assert.match(ec.eventErrors({ type: 'lever', s: 0, lv: 5 }).join(), /lv 5 outside 0\.\.2/);
-  assert.match(ec.eventErrors({ type: 'seat', s: 0, from: 1, to: 7 }).join(), /to 7 outside 1\.\.6/);
+  assert.match(ec.eventErrors({ type: 'seat', s: 0, from: 1, to: 8 }).join(), /to 8 outside 1\.\.7/);
+  assert.deepEqual(ec.eventErrors({ type: 'seat', s: 0, from: 1, to: 7 }), [], 'Repairs is seat code 7');
   assert.deepEqual(ec.eventErrors({ type: 'seat', s: 3, from: 5, to: 6 }), []);
   assert.match(ec.eventErrors({ type: 'ram', s: 0, ok: 2, id: 1 }).join(), /ok 2 outside 0\.\.1/);
   assert.match(ec.eventErrors({ type: 'segment', i: 1, sg: 0, st: 1 }).join(), /sg 0 outside 1\.\.7/);

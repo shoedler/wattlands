@@ -68,13 +68,25 @@ static func encode(state: TankState) -> Dictionary:
 				en.mode,
 				en.side,
 				S.ms(en.telegraph_s),
-				en.lane
+				en.lane,
+				roundi(en.range_m)
 			]
 		)
 	var sh: Array = []
 	for s in state.shells:
 		sh.append(
-			[s.id, s.type, roundi(s.x), roundi(s.y), roundi(s.vx), roundi(s.vy), int(s.friendly)]
+			[
+				s.id,
+				s.type,
+				roundi(s.x),
+				roundi(s.y),
+				roundi(s.vx),
+				roundi(s.vy),
+				int(s.friendly),
+				int(s.far),
+				S.ms(s.left_s),
+				int(s.evadable)
+			]
 		)
 	var o: Array = []
 	for ob in state.obstacles:
@@ -87,10 +99,11 @@ static func encode(state: TankState) -> Dictionary:
 		S.hp(bs.bogie_hp[1]),
 		S.hp(bs.bogie_hp[2]),
 		S.hp(bs.turret_hp),
-		S.ms(bs.telegraph_s)
+		S.ms(bs.telegraph_s),
+		roundi(bs.range_m)
 	]
 	if bs.phase == TankIds.BOSS_NONE:
-		b = [0, 0, 0, 0, 0, 0, 0]
+		b = [0, 0, 0, 0, 0, 0, 0, 0]
 	var out := {
 		"v": S.VERSION,
 		"tick": state.tick,
@@ -113,7 +126,8 @@ static func encode(state: TankState) -> Dictionary:
 			S.ms(hl.breech_s),
 			hl.target_id,
 			tk_flags,
-			hl.dir
+			hl.dir,
+			S.ms(hl.tow_s)
 		],
 		"r": r,
 		"st": st,
@@ -133,7 +147,8 @@ static func encode(state: TankState) -> Dictionary:
 			state.score.breakdowns,
 			state.score.overruns,
 			int(state.score.behemoth_killed),
-			state.score.crew_kills
+			state.score.crew_kills,
+			state.score.losses
 		],
 	}
 	if state.roam.active:
@@ -220,6 +235,10 @@ static func _station_row(s: TankStationState) -> Array:
 	elif s is TankFeedState:
 		var fd := s as TankFeedState
 		v = [fd.rounds, S.x10(fd.rpm), fd.fire_tick, 0, 0, 0]
+	elif s is TankRepairState:
+		var rp := s as TankRepairState
+		f |= S.STF_WORKING if rp.working else 0
+		v = [rp.patches, S.pml(rp.press_t), S.pml(rp.duty), 0, 0, 0]
 	return [TankIds.engine_code(s.engine), s.slot, f] + v
 
 
@@ -280,12 +299,14 @@ static func apply(state: TankState, snap: Dictionary) -> void:
 			state.boss.bogie_hp[i] = float(int(b[S.B_BOGIE_0 + i]))
 		state.boss.turret_hp = float(int(b[S.B_TURRET]))
 		state.boss.telegraph_s = int(b[S.B_TELEGRAPH_MS]) / 1000.0
+		state.boss.range_m = float(int(b[S.B_RANGE_M]))
 	var sc: Array = snap.get("sc", [])
 	if sc.size() == S.SC_LEN:
 		state.score.breakdowns = int(sc[S.SC_BREAKDOWNS])
 		state.score.overruns = int(sc[S.SC_OVERRUNS])
 		state.score.behemoth_killed = int(sc[S.SC_BEHEMOTH]) != 0
 		state.score.crew_kills = int(sc[S.SC_CREW_KILLS])
+		state.score.losses = int(sc[S.SC_LOSSES])
 	var rm: Array = snap.get(S.RM_KEY, [])
 	if rm.size() == S.RM_LEN:
 		_apply_roam(state, rm)
@@ -347,8 +368,9 @@ static func _outcome(state: TankState, c: TankContent) -> String:
 static func _derive_maxima(state: TankState, c: TankContent) -> void:
 	var scale := c.enemy_scale(state.hull.tank)
 	var boss := c.boss_def()
-	state.boss.bogie_max = float(boss.get("bogie_hp", state.boss.bogie_max)) * scale
-	state.boss.turret_max = float(boss.get("turret_hp", state.boss.turret_max)) * scale
+	var hp_mult := TankDifficulty.mult(state, "hp")
+	state.boss.bogie_max = float(boss.get("bogie_hp", state.boss.bogie_max)) * scale * hp_mult
+	state.boss.turret_max = float(boss.get("turret_hp", state.boss.turret_max)) * scale * hp_mult
 	for en in state.enemies:
 		if en.hp_max < en.hp:
 			en.hp_max = en.hp
@@ -393,6 +415,7 @@ static func _apply_hull(hl: TankHullState, tk: Array) -> void:
 	hl.breech_s = int(tk[S.TK_BREECH_MS]) / 1000.0
 	hl.target_id = int(tk[S.TK_TARGET])
 	hl.dir = int(tk[S.TK_DIR])
+	hl.tow_s = int(tk[S.TK_TOW_MS]) / 1000.0
 	var f := int(tk[S.TK_FLAGS])
 	hl.holding = (f & S.TKF_HOLDING) != 0
 	hl.evasive = (f & S.TKF_EVASIVE) != 0
@@ -445,6 +468,12 @@ static func _apply_station(s: TankStationState, row: Array) -> void:
 		fd.rounds = a
 		fd.rpm = b / 10.0
 		fd.fire_tick = c
+	elif s is TankRepairState:
+		var rp := s as TankRepairState
+		rp.working = (f & S.STF_WORKING) != 0
+		rp.patches = a
+		rp.press_t = b / 1000.0
+		rp.duty = c / 1000.0
 
 
 static func _apply_enemies(state: TankState, rows: Array) -> void:
@@ -462,13 +491,18 @@ static func _apply_enemies(state: TankState, rows: Array) -> void:
 		en.side = int(row[S.E_SIDE])
 		en.telegraph_s = int(row[S.E_TELEGRAPH_MS]) / 1000.0
 		en.lane = int(row[S.E_LANE])
+		en.range_m = float(int(row[S.E_RANGE_M]))
 		if state.content != null and en.w == 0:
 			var def := state.content.enemy_def(TankIds.enemy_of(en.code))
 			var size: Array = def.get("size_px", [0, 0])
 			en.w = int(size[0])
 			en.h = int(size[1])
 			en.hp_max = ceilf(
-				float(def.get("hp", 0.0)) * state.content.enemy_scale(state.hull.tank)
+				(
+					float(def.get("hp", 0.0))
+					* state.content.enemy_scale(state.hull.tank)
+					* TankDifficulty.mult(state, "hp")
+				)
 			)
 		out.append(en)
 	state.enemies = out
@@ -485,6 +519,9 @@ static func _apply_shells(state: TankState, rows: Array) -> void:
 		sh.vx = int(row[S.S_VX])
 		sh.vy = int(row[S.S_VY])
 		sh.friendly = int(row[S.S_FRIENDLY]) != 0
+		sh.far = int(row[S.S_FAR]) != 0
+		sh.left_s = int(row[S.S_LEFT_MS]) / 1000.0
+		sh.evadable = int(row[S.S_EVADABLE]) != 0
 		out.append(sh)
 	state.shells = out
 

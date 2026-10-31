@@ -52,6 +52,9 @@ static func segment_rect(p0: Vector2, p1: Vector2, r: Rect2) -> float:
 
 ## Whether a friendly shell can still hit `t` (it stands).
 static func collidable(t: TankTarget) -> bool:
+	# v4: near shells fly past far targets; far impacts do not call this.
+	if t.far:
+		return false
 	match t.kind:
 		TankTarget.KIND_ENEMY:
 			return t.enemy.hp > 0.0

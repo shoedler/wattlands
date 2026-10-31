@@ -35,6 +35,7 @@ const TARGETS := {
 	TankIds.ENGINE_STEAM: 90.0,
 	TankIds.ENGINE_DYNAMO: 71.2,
 	TankIds.ENGINE_ARC: 70.3,
+	TankIds.ENGINE_REPAIR: 55.0,
 }
 
 static var _contents: Dictionary = {}

@@ -20,11 +20,14 @@ extends RefCounted
 ## mode_wait_ms (TankRiderState.mode_wait_s in ms, -1000 waiting for the segment's end) and mode_to
 ## (0 none, 1 ERG, 2 SIM): the trainer's pending ERG <-> SIM switch for the rider's seat.
 ##
-## {"v": 4, "tick": n,
+## v4 (VERSION 5): tk tow_ms; e range_m (rounded; 0 for near kinds); s far 0/1, left_ms, evadable 0/1;
+## b range_m; sc losses; the repair room's row (a patches, b press_pml, c duty_pml, STF_WORKING).
+##
+## {"v": 5, "tick": n,
 ##  "sg": [seg code, stage, phase index, elapsed_ms, flags SG_*],
 ##  "tk": [tank code, x_dpx, speed_cms, grade_x10, hp, hp_max, berm, 0 (reserved), repair_hj,
 ##         facing, elev_x10, traverse_ms, loaded shell, breech_ms, target id, flags TK_*,
-##         dir (TankIds.DIR_*: 1 right, -1 left)],
+##         dir (TankIds.DIR_*: 1 right, -1 left), tow_ms],
 ##  "r":  [[slot, engine code, raw_w, cadence_rpm, ftp_pct, flags R_*, target_x10, mode_wait_ms,
 ##          mode_to (0 none, 1 ERG, 2 SIM)], ...]  slot order
 ##  "st": [[engine code, slot (-1 empty), flags ST_* (+ engine bits), a, b, c, d, e, f], ...]
@@ -35,18 +38,22 @@ extends RefCounted
 ##                 f chamber_ms; STF_CHAMBER when a round is chambered
 ##        arc:     a duty_pml (duty x 1000), b 0, c 0, d 0, e 0, f 0
 ##        feed:    a rounds, b rpm_x10, c fire_tick (-1 before the first round), d 0, e 0, f 0
+##        repair:  a patches, b press_pml (press_t x 1000), c duty_pml (duty x 1000), d 0, e 0, f 0;
+##                 STF_WORKING while it works
 ##        (code 4, v2's bulwark gearbox row, is retired: never sent)
-##  "e":  [[id, enemy code, x_dpx, hp, mode EM_*, side, telegraph_ms, lane], ...]  live enemies, spawn order
-##  "s":  [[id, shell type, x, y, vx, vy, friendly 0/1], ...]   shells in flight (px, px/s)
+##  "e":  [[id, enemy code, x_dpx, hp, mode EM_*, side, telegraph_ms, lane, range_m], ...]  live
+##        enemies, spawn order
+##  "s":  [[id, shell type, x, y, vx, vy, friendly 0/1, far 0/1, left_ms, evadable 0/1], ...]  shells
+##        in flight (near: px, px/s; far: m, m/s, TankShellState)
 ##  "o":  [[id, obstacle code, x_px, light_hits, cleared 0/1], ...]
 ##  "gl": [active 0/1, guns_total, guns_left, barrage 0/1],
-##  "b":  [boss phase, x_dpx, bogie hp x3, turret hp, telegraph_ms]   (all 0 without a boss)
-##  "sc": [breakdowns, overruns, behemoth killed 0/1, crew kills],
+##  "b":  [boss phase, x_dpx, bogie hp x3, turret hp, telegraph_ms, range_m]   (all 0 without a boss)
+##  "sc": [breakdowns, overruns, behemoth killed 0/1, crew kills, losses],
 ##  "rm": [map seed, map_dm (hull centre on the valley road, 0.1 m), turn_ms, turn_cd_ms, end_ms,
 ##         flags RMF_*, points, strongpoints down (bit i = spot i), odo_m, work_m]}
 ##        (free roam only, brief 2.10: optional, sent only while TankRoamState.active; additive in v2)
 
-const VERSION := 4
+const VERSION := 5
 const MAX_BYTES := TankConst.SNAPSHOT_MAX_BYTES
 const KEYS: Array[String] = ["v", "tick", "sg", "tk", "r", "st", "e", "s", "o", "gl", "b", "sc"]
 
@@ -81,7 +88,9 @@ const TK_TARGET := 14
 const TK_FLAGS := 15
 ## v2: TankHullState.dir.
 const TK_DIR := 16
-const TK_LEN := 17
+## v4: TankHullState.tow_s in ms.
+const TK_TOW_MS := 17
+const TK_LEN := 18
 const TKF_HOLDING := 1
 const TKF_EVASIVE := 2
 const TKF_TRAPS_CLEARED := 4
@@ -146,6 +155,8 @@ const STF_CHAMBER := 128
 ## arc (v2)
 const STF_LIT := 8
 const STF_ARC_STALLED := 16
+## repair (v4): TankRepairState.working.
+const STF_WORKING := 8
 
 # e columns
 const E_ID := 0
@@ -157,7 +168,9 @@ const E_SIDE := 5
 const E_TELEGRAPH_MS := 6
 ## v2: TankEnemyState.lane.
 const E_LANE := 7
-const E_LEN := 8
+## v4: roundi(TankEnemyState.range_m); 0 for near kinds.
+const E_RANGE_M := 8
+const E_LEN := 9
 
 # s columns
 const S_ID := 0
@@ -167,7 +180,11 @@ const S_Y := 3
 const S_VX := 4
 const S_VY := 5
 const S_FRIENDLY := 6
-const S_LEN := 7
+## v4: TankShellState.far, left_s in ms, evadable.
+const S_FAR := 7
+const S_LEFT_MS := 8
+const S_EVADABLE := 9
+const S_LEN := 10
 
 # o columns
 const O_ID := 0
@@ -190,14 +207,18 @@ const B_X_DPX := 1
 const B_BOGIE_0 := 2
 const B_TURRET := 5
 const B_TELEGRAPH_MS := 6
-const B_LEN := 7
+## v4: roundi(TankBossState.range_m).
+const B_RANGE_M := 7
+const B_LEN := 8
 
 # sc columns
 const SC_BREAKDOWNS := 0
 const SC_OVERRUNS := 1
 const SC_BEHEMOTH := 2
 const SC_CREW_KILLS := 3
-const SC_LEN := 4
+## v4: TankScoreState.losses.
+const SC_LOSSES := 4
+const SC_LEN := 5
 
 # rm columns and flags (free roam, optional key)
 const RM_KEY := "rm"

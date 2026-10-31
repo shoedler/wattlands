@@ -79,3 +79,36 @@ static func range_px(v0: float, elev_deg: float, gravity: float, drop: float) ->
 static func dispersion_deg(c: TankContent, bank: float) -> float:
 	var d: Array = c.value("tanks", "dynamo.dispersion_deg", [0.5, 1.5])
 	return float(d[0]) if bank >= c.num("tanks", "dynamo.low_bank", 20.0) else float(d[1])
+
+
+# --- v4: the far frame (metres, m/s; flat ground; y up) -----------------------------------------
+
+
+## The lower-arc elevation in degrees that lands `range_m` away, NAN out of range.
+static func far_elevation(range_m: float, v0: float, g: float) -> float:
+	var s := g * range_m / (v0 * v0)
+	if range_m <= 0.0 or s > 1.0:
+		return NAN
+	return rad_to_deg(0.5 * asin(s))
+
+
+static func far_range(elev_deg: float, v0: float, g: float) -> float:
+	return v0 * v0 / g * sin(2.0 * deg_to_rad(maxf(elev_deg, 0.0)))
+
+
+static func far_flight(elev_deg: float, v0: float, g: float) -> float:
+	return 2.0 * v0 * sin(deg_to_rad(maxf(elev_deg, 0.0))) / g
+
+
+static func far_height(t: float, elev_deg: float, v0: float, g: float) -> float:
+	return v0 * sin(deg_to_rad(elev_deg)) * t - 0.5 * g * t * t
+
+
+## far_elevation() with lead: a target at `range_m` whose range changes at `rate_mps`.
+static func far_lead(range_m: float, rate_mps: float, v0: float, g: float) -> float:
+	var e := far_elevation(range_m, v0, g)
+	for _i in 6:
+		if is_nan(e):
+			return NAN
+		e = far_elevation(range_m + rate_mps * far_flight(e, v0, g), v0, g)
+	return e

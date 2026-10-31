@@ -2,9 +2,10 @@ class_name TankStationState
 extends TankRecord
 ## One engine room, v3: one seat (G0 contract): what every station has in common. Subclasses add
 ## each engine's own model: TankDieselState (Drive), TankDynamoState (Gun), TankSteamState
-## (Loader), TankArcState (Lights) and TankFeedState (v3, Secondaries). TankState.stations lists
-## the tank's rooms rear to front (tanks.json engines: diesel, steam, dynamo, arc, feed).
-## v3: the tank has five seats and at most four riders, so at least one seat is always empty
+## (Loader), TankArcState (Lights), TankFeedState (v3, Secondaries) and TankRepairState (v4, Repairs).
+## TankState.stations lists the tank's rooms rear to front (tanks.json engines: diesel, steam, dynamo,
+## arc, repair, feed).
+## v4: the tank has six seats and at most four riders, so at least two seats are always empty
 ## (`slot` -1, is_empty()); a rider moves seats with the seat intent (TankRiderState.engine; 0.3.1:
 ## at once, no seat lock). A manned room whose rider is dropped or AFK runs on reserve (brief
 ## 2.2).
@@ -40,6 +41,8 @@ static func make(p_engine: String) -> TankStationState:
 			s = TankArcState.new()
 		TankIds.ENGINE_FEED:
 			s = TankFeedState.new()
+		TankIds.ENGINE_REPAIR:
+			s = TankRepairState.new()
 		_:
 			s = TankStationState.new()
 	s.engine = p_engine

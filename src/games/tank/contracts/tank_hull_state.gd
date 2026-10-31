@@ -73,11 +73,20 @@ var aim_pause_s: float = 0.0
 ## seat fires rounds by pedal revolutions, TankFeedState); always 0.
 var bow_cd_s: float = 0.0
 
+# --- Tow (v4) ----------------------------------------------------------------------------------------
+## [snap] v4: seconds of the tow left after TANK LOST (the crew pedals on; no movement or fire).
+var tow_s: float = 0.0
+
 ## Host only (never serialized): the drive's SpeedModel (BRIEF 3.11), created on first use with
 ## tanks.json drive.cda_m2 and drive.mass_offset_kg; the rules set its rider_mass_kg each tick to
 ## the mass of the rider on the diesel (Drive) station (TankRiderInput.rider_mass_kg) and keep
 ## speed_mps == its v_mps.
 var _speed: SpeedModel = null
+
+
+## v4: no movement or fire now: a breakdown (Easy) or the tow.
+func out_of_action() -> bool:
+	return breakdown or tow_s > 0.0
 
 
 func speed_model(cda_m2: float, mass_offset_kg: float) -> SpeedModel:

@@ -525,8 +525,12 @@ func test_every_non_light_gun_reaches_the_hit_haptic_threshold() -> void:
 	for id: String in types:
 		# Events carry the damage rounded to a whole number (TankEvents.hit).
 		var dmg := float(roundi(float((types[id] as Dictionary).get("gun", {}).get("damage", 0.0))))
-		if id == "light":
-			assert_lt(dmg, min_damage, "a light tank's shell is no haptic")
+		if id == "light" or TankIds.NEAR_KINDS.has(id):
+			assert_lt(
+				dmg,
+				min_damage,
+				"%s: a light tank's shell or a near threat's round is no haptic" % id
+			)
 		else:
 			assert_gte(dmg, min_damage, "%s: a hit by its gun must fire the hit haptic" % id)
 	var sec := float(c.value("enemies", "boss.secondary.damage", 0.0))

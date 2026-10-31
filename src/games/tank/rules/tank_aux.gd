@@ -77,6 +77,9 @@ var rack_types: Array[int] = []
 var carry_pct: float = 0.0
 ## The bow guns' elevation now (degrees, up positive; TankBow slews it to the target).
 var bow_deg: float = 0.0
+## v4: peer -> {"seat": engine}: the human a bot covers while on reserve (TankBots.cover), and the
+## seat it lands back on.
+var cover: Dictionary = {}
 
 
 ## The state's aux, created on first use.

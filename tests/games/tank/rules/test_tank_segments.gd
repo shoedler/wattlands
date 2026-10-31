@@ -212,7 +212,7 @@ func test_a_gun_line_overrun_falls_to_a_support_barrage_with_no_kill_credit() ->
 		assert_eq(k["by"], TankEvents.BY_BARRAGE)
 		assert_eq(k["s"], -1)
 	assert_eq(rig.state.score.crew_kills, 0, "a barrage kills nothing for the score")
-	assert_eq(rig.state.score.kills, [0, 0, 0, 0, 0, 0, 0] as Array[int])
+	assert_eq(rig.state.score.kills, [0, 0, 0, 0, 0, 0, 0, 0, 0] as Array[int])
 	assert_true(rig.state.gun_line.barrage)
 	assert_eq(rig.state.enemies.size(), 0)
 	assert_false(rig.state.gun_line.active)

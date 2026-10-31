@@ -217,7 +217,7 @@ func test_the_solo_ashfall_road_keeps_its_snapshots_small_and_its_segments_in_or
 
 
 ## Four riders (brief 2.2, 2.5): a crew of 4 plays the drill as a host with three loopback clients
-## to the results, every peer's last snapshot carries 4 riders and 5 rooms within 4 KB, and the
+## to the results, every peer's last snapshot carries 4 riders and 6 rooms within 4 KB, and the
 ## drill stays inside the warm-up limits (no ERG above 65%, nothing refused).
 func test_a_host_drill_with_four_humans_completes() -> void:
 	var r := _run(["--content=drill", "--players=4", "--rider=erg", "--seed=4"])

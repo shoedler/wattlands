@@ -51,6 +51,7 @@ const MECH := {
 	TankIds.ENGINE_STEAM: "steam",
 	TankIds.ENGINE_ARC: "arc",
 	TankIds.ENGINE_FEED: "feed",
+	TankIds.ENGINE_REPAIR: "repair",
 }
 ## Each seat's trainer mode in its work (the v3 seat table): the seat cards' ERG / SIM tags.
 const SEAT_MODE := {
@@ -59,6 +60,7 @@ const SEAT_MODE := {
 	TankIds.ENGINE_STEAM: Wl.SIM,
 	TankIds.ENGINE_ARC: Wl.ERG,
 	TankIds.ENGINE_FEED: Wl.SIM,
+	TankIds.ENGINE_REPAIR: Wl.ERG,
 }
 
 

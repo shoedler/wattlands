@@ -146,6 +146,20 @@ static func is_free(state: TankState, engine: String) -> bool:
 	return st != null and st.is_empty()
 
 
+## v4: true when rider `r` may land on `engine`: the seat is free, or `r` is human and a bot holds it
+## (a human's seat move always wins; TankBots moves the bot first).
+static func is_free_for(state: TankState, r: TankRiderState, engine: String) -> bool:
+	if is_free(state, engine):
+		return true
+	if r == null or r.is_bot:
+		return false
+	var st := state.station(engine)
+	if st == null:
+		return false
+	var holder := state.rider_at(st.slot)
+	return holder != null and holder.is_bot
+
+
 ## The next seat from rider `r`'s in TankIds.SEATS order (`step` +1 next, -1 previous, wrapping)
 ## that is free; its own seat when none is.
 static func next_free(state: TankState, r: TankRiderState, step: int) -> String:
