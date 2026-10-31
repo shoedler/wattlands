@@ -377,7 +377,7 @@ func test_a_pause_makes_no_strokes_and_resumes_without_a_burst() -> void:
 # --- the group ------------------------------------------------------------------------
 
 
-func test_others_get_the_tick_and_a_quiet_whirr_and_nothing_else() -> void:
+func test_others_get_a_tick_of_their_own_and_nothing_else() -> void:
 	var view := _view("easy_30", U.players(2))
 	var g := view.game
 	g.state.rider(1).cadence_rpm = 0.0
@@ -385,12 +385,13 @@ func test_others_get_the_tick_and_a_quiet_whirr_and_nothing_else() -> void:
 	g.state.rider(2).power_w = g.state.rider(2).ftp * 1.3
 	g.state.rider(1).power_w = 0.0
 	_frames(view, 6.0)
-	assert_gt(_count(view, "chain_tick"), 6)
+	assert_gt(_count(view, "peer_tick"), 6)
+	assert_eq(_count(view, "chain_tick"), 0, "the group's tick is not yours")
 	assert_eq(_count(view, "pedal_press"), 0, "no press from another rider")
 	assert_eq(_count(view, "bb_creak"), 0)
 	var kit := view.audio.kit
-	assert_eq(kit.machine_loop("bike2").on[0], 1, "the whirr")
-	assert_eq(kit.machine_loop("bike2").on[1], 0, "the rattle is the rider's own")
+	assert_eq(kit.machine_loop("bike2").count, 0, "no loop to lock in phase with the others'")
+	assert_eq(kit.machine_loop("bike1").count, 2, "the whirr and rattle are the rider's own")
 
 
 func test_the_local_rider_leads() -> void:
@@ -404,12 +405,10 @@ func test_the_local_rider_leads() -> void:
 		g.state.rider(2).power_w = 200.0
 		_frames(view, 3.0)
 		var kit := view.audio.kit
-		dbs.append(kit.played_db[kit.played.find("chain_tick")])
-		var hum := kit.machine_loop("bike%d" % moving).db[0]
-		dbs.append(hum)
+		var tick := "chain_tick" if moving == 1 else "peer_tick"
+		dbs.append(kit.played_db[kit.played.find(tick)])
 		view.free()
-	assert_gt(dbs[0], dbs[2] + 5.0, "lead's tick over another's, the same power")
-	assert_gt(dbs[1], dbs[3] + 5.0, "lead's whirr over another's")
+	assert_gt(dbs[0], dbs[1] + 5.0, "lead's tick over another's, the same power")
 
 
 func test_eight_riders_at_speed_with_a_crowd_stay_in_every_pool_with_real_players() -> void:
@@ -460,7 +459,8 @@ func test_eight_riders_at_speed_with_a_crowd_stay_in_every_pool_with_real_player
 		)
 	)
 	assert_lte(peak_loops, 24, "loop players")
-	assert_gt(peak_loops, 12, "the whole group, road and bed run")
+	assert_gt(peak_loops, 8, "your chain, the road, the crowd and the bed run")
+	assert_lte(peak_loops, 12, "and no loop for each other rider")
 	assert_lte(peak[AudioBuses.MACHINES], 16, "Machines voices")
 	assert_lte(peak[AudioBuses.SFX], 16, "Sfx voices")
 	assert_gt(peak[AudioBuses.MACHINES], 2, "strokes ring on real players")
@@ -483,7 +483,9 @@ func test_eight_riders_stay_in_their_pools() -> void:
 		view.advance(1.0 / 60.0)
 		peak = maxi(peak, kit.loops_in_use())
 	assert_lte(peak, 24, "loop players")
-	assert_gt(peak, 8, "the group's whirr does run")
+	assert_gt(peak, 2, "your chain and the bed run")
+	assert_lte(peak, 12, "and no loop for each other rider")
+	assert_gt(_count(view, "peer_tick"), 7 * 20, "the group ticks instead")
 	var to := kit.machine_voice("bike1").planned_to()
 	var lead := _in_range([0.0, 0.25, 0.75], to)
 	var others := kit.played.size() - lead
@@ -499,7 +501,7 @@ func test_a_spectator_has_no_lead_and_no_rider_of_its_own() -> void:
 	assert_null(kit.machine_voice("wheel"))
 	assert_null(kit.machine_voice("crowd"))
 	assert_not_null(kit.machine_voice("bike1"))
-	assert_gt(_count(view, "chain_tick"), 0)
+	assert_gt(_count(view, "peer_tick"), 0)
 	assert_eq(_count(view, "pedal_press"), 0)
 
 
@@ -616,15 +618,15 @@ func test_a_steady_block_is_not_frozen_the_road_and_the_gusts_move_the_loops() -
 	assert_gt(
 		kit.entry_loop("tyre_hum").db[0], smooth + 3.0, "rough tarmac over smooth, same speed"
 	)
-	# The view's own gust: its strongest and its slackest moment in the first two minutes.
+	# The air: its strongest and its slackest moment in the first five minutes.
 	var strong_t := 0.0
 	var slack_t := 0.0
-	for t in 120:
-		if WorkoutAudio.gust_at(float(t)) > WorkoutAudio.gust_at(strong_t):
+	for t in 300:
+		if WorkoutAudio.air_at(float(t)) > WorkoutAudio.air_at(strong_t):
 			strong_t = float(t)
-		if WorkoutAudio.gust_at(float(t)) < WorkoutAudio.gust_at(slack_t):
+		if WorkoutAudio.air_at(float(t)) < WorkoutAudio.air_at(slack_t):
 			slack_t = float(t)
-	assert_gt(WorkoutAudio.gust_at(strong_t), WorkoutAudio.gust_at(slack_t) + 0.5)
+	assert_gt(WorkoutAudio.air_at(strong_t), WorkoutAudio.air_at(slack_t) + 0.5)
 	view.env_t = strong_t
 	_ride(view, 90.0, 1.0)
 	var strong_db := kit.entry_loop("wind_rush").db[0]
@@ -936,7 +938,16 @@ func test_the_bed_runs_and_its_birds_follow_the_morning() -> void:
 	assert_gt(loops.db[day], -40.0)
 
 
-func test_the_breeze_you_hear_is_the_breeze_that_moves_the_grass() -> void:
+func test_road_and_air_are_the_table_the_offline_render_is_held_to() -> void:
+	var text := FileAccess.get_file_as_string("res://tests/games/workout/audio/road_and_air.json")
+	var table: Dictionary = JSON.parse_string(text)
+	for row: Array in table["road"]:
+		assert_almost_eq(WorkoutAudio.road_at(float(row[0])), float(row[1]), 1e-6, "road")
+	for row: Array in table["air"]:
+		assert_almost_eq(WorkoutAudio.air_at(float(row[0])), float(row[1]), 1e-6, "air")
+
+
+func test_the_breeze_you_hear_is_half_the_breeze_that_moves_the_grass() -> void:
 	var view := _view()
 	for f in 40:
 		var was := view._grass_frames
@@ -945,6 +956,8 @@ func test_the_breeze_you_hear_is_the_breeze_that_moves_the_grass() -> void:
 		var rate := (view._grass_frames - was) / 0.5
 		var gust := WorkoutAudio.gust_at(view.env_t)
 		assert_almost_eq(rate, 2.0 + 4.0 * gust, 1e-6, "the view's own formula")
+		var swell := 2.0 * WorkoutAudio.air_at(view.env_t) - gust
+		assert_between(swell, 0.0, 1.0, "the rest of what you hear moves on its own")
 
 
 func test_a_tractor_is_heard_only_while_one_crosses_the_screen() -> void:
@@ -1023,7 +1036,9 @@ func test_a_rider_leaving_the_session_closes_its_machine() -> void:
 	var g := view.game
 	_ride(view, 90.0, 2.0)
 	var kit := view.audio.kit
-	assert_eq(kit.machine_loop("bike2").on[0], 1)
+	var ticks := _count(view, "peer_tick")
+	assert_gt(ticks, 0)
 	g.state.rider(2).connected = false
-	_ride(view, 90.0, 0.2)
-	assert_eq(kit.machine_loop("bike2").on[0], 0, "a dropped rider's legs stop")
+	_ride(view, 90.0, 2.0)
+	assert_lte(_count(view, "peer_tick") - ticks, 1, "a dropped rider's legs stop")
+	assert_eq(kit.machine_loop("bike1").on[0], 1, "yours do not")

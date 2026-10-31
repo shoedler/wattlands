@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "game": "workout",
-  "mix": {"other_db": -9.4, "other_doubling_db": -3, "other_min_gap_s": 0.06, "machine_voices": 16, "sfx_voices": 16, "spot_voices": 6, "max_loop_players": 24},
+  "mix": {"other_db": -4, "other_doubling_db": -3, "other_min_gap_s": 0.06, "machine_voices": 16, "sfx_voices": 16, "spot_voices": 6, "max_loop_players": 24},
   "sounds": {
     "chain_tick": {
       "dur": 0.09, "rate": 22050, "ch": 1, "seed": 2101, "variants": 5, "locked": true,
@@ -12,9 +12,18 @@
         {"src": "modal", "f": [610, 1130], "t60": [0.035, 0.022], "g": [1, 0.5], "gain": 0.34}
       ]
     },
+    "peer_tick": {
+      "dur": 0.1, "rate": 22050, "ch": 1, "seed": 2131, "variants": 3, "locked": true,
+      "per_variant": [{"pitch": 1.0, "norm": {"peak": -6}}, {"pitch": 0.96, "norm": {"peak": -6.6}}, {"pitch": 1.05, "norm": {"peak": -6.3}}],
+      "layers": [
+        {"src": "noise", "color": "white", "gain": 0.5, "env": {"a": 0.0003, "d": 0.006}, "fx": [{"bp": {"f": 3400, "q": 0.8}}]},
+        {"src": "modal", "f": [2240, 3560, 5120], "t60": [0.05, 0.03, 0.016], "g": [1, 0.6, 0.3], "gain": 0.42},
+        {"src": "noise", "color": "pink", "gain": 1.2, "env": {"a": 0.002, "d": 0.05}, "fx": [{"bp": {"f": 1800, "q": 0.9}}, {"lp": {"f": 2600}}]}
+      ]
+    },
     "pedal_press": {
-      "dur": 0.17, "rate": 22050, "ch": 1, "seed": 2102, "variants": 3, "locked": true,
-      "per_variant": [{"pitch": 1.0, "norm": {"peak": -6}}, {"pitch": 0.93, "norm": {"peak": -7.2}}, {"pitch": 1.05, "norm": {"peak": -6.6}}],
+      "dur": 0.17, "rate": 22050, "ch": 1, "seed": 2102, "variants": 5, "locked": true,
+      "per_variant": [{"pitch": 1.0, "norm": {"peak": -6}}, {"pitch": 0.975, "norm": {"peak": -6.6}}, {"pitch": 1.02, "norm": {"peak": -6.2}}, {"pitch": 0.985, "norm": {"peak": -6.9}}, {"pitch": 1.01, "norm": {"peak": -6.4}}],
       "layers": [
         {"src": "sine", "f": [112, 82], "glide": "exp", "gain": 0.5, "env": {"a": 0.001, "d": 0.08}},
         {"src": "noise", "color": "brown", "gain": 1.7, "env": {"a": 0.001, "d": 0.05}, "fx": [{"lp": {"f": 420}}]},
@@ -31,7 +40,7 @@
       ]
     },
     "breath": {
-      "dur": 0.38, "rate": 22050, "ch": 1, "seed": 2104, "variants": 3, "locked": true, "band": [90, 1700],
+      "dur": 0.38, "rate": 22050, "ch": 1, "seed": 2104, "variants": 3, "locked": true, "band": [90, 1400],
       "per_variant": [{"pitch": 1.0}, {"pitch": 0.96}, {"pitch": 1.04}],
       "layers": [
         {"src": "noise", "color": "pink", "gain": 1.0, "env": {"points": [[0, 0], [0.05, 1], [0.16, 0.65], [0.3, 0.12], [0.38, 0]]}, "fx": [{"bp": {"f": [1050, 600], "q": 1.1, "glide": "exp"}}, {"lp": {"f": 1500, "q": 0.6}}, {"lp": {"f": 1700, "q": 0.6}}]}
@@ -109,8 +118,8 @@
     "crowd_loop": {
       "dur": 2.8, "rate": 22050, "ch": 1, "seed": 2113, "loop": true, "xfade_s": 0.7, "band": [120, 9000],
       "layers": [
-        {"src": "noise", "color": "pink", "gain": 1.0, "fx": [{"bp": {"f": [[0, 620], [1.2, 880], [2.2, 540], [3.5, 620]], "q": 0.9}}, {"trem": {"hz": 2.5, "depth": 0.3}}]},
-        {"src": "noise", "color": "pink", "gain": 0.8, "fx": [{"bp": {"f": [[0, 1750], [0.9, 2300], [2.6, 1500], [3.5, 1750]], "q": 1.1}}, {"trem": {"hz": 5, "depth": 0.45}}]},
+        {"src": "noise", "color": "pink", "gain": 1.0, "fx": [{"bp": {"f": [[0, 620], [1.2, 880], [2.2, 540], [3.5, 620]], "q": 0.9}}, {"gain_env": {"points": [[0, 0.86], [0.37, 1], [0.81, 0.8], [1.13, 0.94], [1.72, 0.84], [2.05, 1], [2.48, 0.82], [2.8, 0.86], [3.5, 0.85]]}}]},
+        {"src": "noise", "color": "pink", "gain": 0.8, "fx": [{"bp": {"f": [[0, 1750], [0.9, 2300], [2.6, 1500], [3.5, 1750]], "q": 1.1}}, {"gain_env": {"points": [[0, 0.8], [0.23, 0.95], [0.64, 0.82], [0.97, 1], [1.41, 0.78], [1.66, 0.92], [2.26, 0.8], [2.54, 0.97], [2.8, 0.8], [3.5, 0.85]]}}]},
         {"src": "grains", "kind": "noise", "rate_hz": 22, "f": [700, 2600], "dur_s": [0.04, 0.2], "g": [0.1, 0.7], "gain": 0.26, "fx": [{"bp": {"f": 1500, "q": 0.5}}]},
         {"src": "grains", "rate_hz": 2.5, "f": [2300, 3300], "dur_s": [0.15, 0.4], "g": [0.3, 0.8], "sweep": 1.2, "gain": 0.09}
       ]
@@ -170,8 +179,8 @@
     "wind_grass_hi": {
       "dur": 7, "rate": 22050, "ch": 2, "seed": 2120, "loop": true,
       "layers": [
-        {"src": "noise", "color": "white", "gain": 0.6, "env": {"points": [[0, 0.6], [0.9, 0.8], [1.5, 0.45], [3.1, 1], [3.8, 0.7], [4.4, 0.22], [5.7, 0.7], [6.3, 0.55], [7, 0.6], [7.5, 0.71]]}, "fx": [{"bp": {"f": [[0, 2300], [2.2, 4300], [4.1, 1900], [5.6, 3300], [8.75, 2300]], "q": 0.7}}]},
-        {"src": "grains", "kind": "noise", "rate_hz": 26, "f": [3000, 6500], "dur_s": [0.01, 0.05], "g": [0.1, 0.5], "gain": 0.2, "env": {"points": [[0, 0.3], [1.1, 0.9], [2.0, 0.2], [3.3, 1], [4.9, 0.25], [5.8, 0.8], [7, 0.3], [7.5, 0.5]]}, "fx": [{"hp": {"f": 2600}}]}
+        {"src": "noise", "color": "white", "gain": 0.6, "env": {"points": [[0, 0.6], [0.9, 0.8], [1.5, 0.5], [3.1, 1], [3.8, 0.75], [4.4, 0.5], [5.7, 0.7], [6.3, 0.55], [7, 0.6], [7.5, 0.71]]}, "fx": [{"bp": {"f": [[0, 2300], [2.2, 4300], [4.1, 1900], [5.6, 3300], [8.75, 2300]], "q": 0.7}}]},
+        {"src": "grains", "kind": "noise", "rate_hz": 26, "f": [3000, 6500], "dur_s": [0.01, 0.05], "g": [0.1, 0.5], "gain": 0.2, "env": {"points": [[0, 0.3], [1.1, 0.9], [2.0, 0.35], [3.3, 1], [4.9, 0.45], [5.8, 0.8], [7, 0.3], [7.5, 0.5]]}, "fx": [{"hp": {"f": 2600}}]}
       ]
     },
     "birds_dawn": {
@@ -200,16 +209,23 @@
       "layers": []
     },
     "wood_call": {
-      "dur": 0.34, "rate": 22050, "ch": 2, "seed": 2129, "variants": 2,
+      "dur": 0.34, "rate": 22050, "ch": 2, "seed": 2129, "variants": 3,
       "per_variant": [
         {"pan": -0.4, "layers": [{"src": "chirp", "points": [[0, 1700], [0.1, 2100], [0.19, 1900], [0.32, 2400]], "env": {"a": 0.01, "h": 0.16, "d": 0.15, "curve": "lin"}, "wave": "sine"}]},
-        {"pan": 0.35, "layers": [{"src": "chirp", "points": [[0, 2500], [0.12, 2050], [0.2, 2300], [0.32, 1800]], "env": {"a": 0.01, "h": 0.14, "d": 0.17, "curve": "lin"}, "wave": "sine"}]}
+        {"pan": 0.35, "layers": [{"src": "chirp", "points": [[0, 2500], [0.12, 2050], [0.2, 2300], [0.32, 1800]], "env": {"a": 0.01, "h": 0.14, "d": 0.17, "curve": "lin"}, "wave": "sine"}]},
+        {"pan": 0.05, "layers": [{"src": "chirp", "points": [[0, 1950], [0.07, 2550], [0.15, 2200], [0.23, 2650], [0.32, 2050]], "env": {"a": 0.008, "h": 0.12, "d": 0.2, "curve": "lin"}, "wave": "sine"}]}
       ],
       "layers": []
     },
     "lark": {
       "dur": 1.1, "rate": 22050, "ch": 2, "seed": 2124, "variants": 2,
-      "per_variant": [{"pan": -0.35, "pitch": 1.0}, {"pan": 0.45, "pitch": 1.09}],
+      "per_variant": [
+        {"pan": -0.35, "pitch": 1.0},
+        {"pan": 0.45, "layers": [
+          {"src": "chirp", "points": [[0, 4300], [0.2, 3300], [0.45, 4700], [0.7, 3700], [1.1, 4200]], "vibrato": {"hz": 26, "cents": 220}, "env": {"points": [[0, 0], [0.02, 0.8], [0.2, 0.75], [0.24, 0.05], [0.29, 0.05], [0.33, 1], [0.6, 0.85], [0.64, 0.05], [0.68, 0.05], [0.72, 0.8], [0.95, 0.75], [1.1, 0]]}},
+          {"src": "chirp", "points": [[0, 7000], [0.45, 6400], [1.1, 6800]], "vibrato": {"hz": 26, "cents": 80}, "gain": 0.05, "env": {"points": [[0, 0], [0.02, 1], [0.2, 0.75], [0.24, 0], [0.29, 0], [0.33, 1], [0.6, 0.85], [0.64, 0], [0.68, 0], [0.72, 1], [1.1, 0]]}}
+        ]}
+      ],
       "layers": [
         {"src": "chirp", "points": [[0, 3100], [0.25, 4200], [0.4, 3500], [0.7, 4800], [0.85, 4100], [1.1, 5200]], "vibrato": {"hz": 23, "cents": 260}, "env": {"points": [[0, 0], [0.03, 0.9], [0.27, 0.7], [0.31, 0.05], [0.37, 0.05], [0.41, 1], [0.66, 0.8], [0.7, 0.05], [0.75, 0.05], [0.79, 0.9], [1.0, 0.7], [1.1, 0]]}},
         {"src": "chirp", "points": [[0, 6100], [0.4, 6700], [1.1, 7200]], "vibrato": {"hz": 23, "cents": 90}, "gain": 0.05, "env": {"points": [[0, 0], [0.03, 1], [0.27, 0.7], [0.31, 0], [0.37, 0], [0.41, 1], [0.66, 0.8], [0.7, 0], [0.75, 0], [0.79, 1], [1.1, 0]]}}
@@ -240,8 +256,8 @@
     "church_bell_far": {
       "dur": 3.2, "rate": 22050, "ch": 1, "seed": 2128, "band": [150, 3000], "norm": {"peak": -6},
       "layers": [
-        {"src": "modal", "f": [523.25, 1046.5, 1318.5, 1568, 2093], "t60": [2.0, 1.7, 1.3, 1.0, 0.6], "g": [0.45, 1, 0.42, 0.55, 0.22], "gain": 0.7, "dur": 1.3},
-        {"src": "modal", "f": [523.25, 1046.5, 1318.5, 1568, 2093], "t60": [2.0, 1.7, 1.3, 1.0, 0.6], "g": [0.45, 1, 0.42, 0.55, 0.22], "gain": 0.6, "at": 1.3}
+        {"src": "modal", "f": [440, 880, 1174.66, 1760, 2349.3], "t60": [2.0, 1.7, 1.3, 1.0, 0.6], "g": [0.45, 1, 0.42, 0.55, 0.22], "gain": 0.7, "dur": 1.3},
+        {"src": "modal", "f": [440, 880, 1174.66, 1760, 2349.3], "t60": [2.0, 1.7, 1.3, 1.0, 0.6], "g": [0.45, 1, 0.42, 0.55, 0.22], "gain": 0.6, "at": 1.3}
       ]
     }
   },
@@ -249,21 +265,28 @@
     "bike": {
       "bus": "Machines", "priority": 5,
       "events": [
-        {"at": [0.0], "sound": "chain_tick", "db": 0.5, "priority": 5,
+        {"at": [0.0], "sound": "chain_tick", "db": 1.5, "priority": 5,
          "db_by": [{"param": "power", "points": [[0, -7], [1.3, 0]]}], "pitch_table": [0, 0.012, -0.018, 0.006, -0.009, 0.015, -0.004]},
-        {"at": [0.25, 0.75], "sound": "pedal_press", "db": 1, "lead_only": true, "priority": 5,
-         "db_by": [{"param": "power", "points": [[0, -10], [1.3, 0]]}], "pitch_table": [0, -0.02, 0.008, -0.012, 0.004]},
-        {"at": [0.31, 0.81], "sound": "bb_creak", "db": -8, "lead_only": true, "priority": 4,
+        {"at": [0.25, 0.75], "sound": "pedal_press", "db": 2, "lead_only": true, "priority": 5,
+         "db_by": [{"param": "power", "points": [[0, -8], [1.3, 0]]}], "pitch_table": [0, -0.012, 0.008, -0.005]},
+        {"at": [0.31, 0.81], "sound": "bb_creak", "db": -2, "lead_only": true, "priority": 4,
          "when": {"param": "power", "min": 1.05},
          "db_by": [{"param": "power", "points": [[1.05, -8], [1.5, 0]]}]}
       ],
       "loops": [
-        {"sound": "chain_hum", "db": -6.5, "min_rpm": 8, "other": true, "slew_s": 0.25,
+        {"sound": "chain_hum", "db": -7, "min_rpm": 8, "slew_s": 0.25,
          "pitch_by": [{"param": "rpm", "ratio": 90}],
-         "db_by": [{"param": "power", "points": [[0, -7], [1.2, 0]]}]},
+         "db_by": [{"param": "power", "points": [[0, -9], [1.2, 0]]}]},
         {"sound": "chain_rattle", "db": -10, "min_rpm": 8, "slew_s": 0.25,
          "pitch_by": [{"param": "rpm", "ratio": 90}],
          "db_by": [{"param": "power", "points": [[0.35, -20], [0.7, -11], [1.05, -3], [1.3, 0]]}]}
+      ]
+    },
+    "peer_bike": {
+      "bus": "Machines", "priority": 3,
+      "events": [
+        {"at": [0.0], "sound": "peer_tick", "db": 0, "priority": 3,
+         "db_by": [{"param": "power", "points": [[0, -7], [1.3, 0]]}], "pitch_table": [0, 0.02, -0.015, 0.01, -0.025]}
       ]
     },
     "wheel": {
@@ -277,7 +300,7 @@
     "breath": {
       "bus": "Machines", "priority": 3,
       "events": [
-        {"at": [0.0], "sound": "breath", "db": -11, "lead_only": true, "priority": 3,
+        {"at": [0.0], "sound": "breath", "db": -5, "lead_only": true, "priority": 3,
          "when": {"param": "power", "min": 1.0},
          "db_by": [{"param": "power", "points": [[1.0, -8], [1.45, 0]]}]}
       ]
@@ -296,17 +319,17 @@
   },
   "loops": {
     "tyre_hum": {"bus": "Sfx", "layers": [
-      {"sound": "tyre_hum", "db": -6, "slew_s": 0.4,
+      {"sound": "tyre_hum", "db": -7.5, "slew_s": 0.4,
        "when": {"param": "speed", "min": 0.5},
        "pitch_by": [{"param": "speed", "ratio": 9}],
        "db_by": [{"param": "speed", "points": [[0.5, -30], [5, -9], [9, -3], [14, 0]]}, {"param": "road", "points": [[0, -3], [1, 3]]}]},
-      {"sound": "tyre_grit", "db": -8, "slew_s": 0.4,
+      {"sound": "tyre_grit", "db": -9.5, "slew_s": 0.4,
        "when": {"param": "speed", "min": 0.5},
        "pitch_by": [{"param": "speed", "ratio": 9}],
        "db_by": [{"param": "speed", "points": [[0.5, -30], [5, -9], [9, -3], [14, 0]]}, {"param": "road", "points": [[0.3, -34], [0.7, -10], [1, 0]]}]}
     ]},
     "wind_rush": {"bus": "Sfx", "layers": [
-      {"sound": "wind_rush", "db": -3, "slew_s": 0.5,
+      {"sound": "wind_rush", "db": -4.5, "slew_s": 0.5,
        "when": {"param": "speed", "min": 2},
        "pitch_by": [{"param": "speed", "ratio": 12}, {"param": "gust", "points": [[0, 0.9], [1, 1.12]]}],
        "db_by": [{"param": "speed", "points": [[2, -40], [6, -16], [10, -6], [15, 0]]}, {"param": "gust", "points": [[0, -8], [1, 2]]}]}
@@ -324,19 +347,19 @@
          "db_by": [{"param": "gust", "points": [[0, -5], [1, 0]]}, {"param": "speed", "points": [[0, -4], [12, 0]]}]},
         {"sound": "wind_grass_hi", "db": -15,
          "db_by": [{"param": "gust", "points": [[0, -10], [1, 0]]}, {"param": "speed", "points": [[0, -8], [12, 0]]}]},
-        {"sound": "birds_dawn", "db": -18,
-         "db_by": [{"param": "day", "points": [[0, 0], [0.3, -2], [0.45, -8], [0.62, -60]]}]},
+        {"sound": "birds_dawn", "db": -25,
+         "db_by": [{"param": "day", "points": [[0, 0], [0.3, -1], [0.45, -6], [0.62, -60]]}]},
         {"sound": "birds_day", "db": -22,
          "db_by": [{"param": "day", "points": [[0.15, -60], [0.3, -14], [0.45, -4], [0.55, 0], [1, 0]]}]}
       ],
       "spots": [
         {"sound": "chirrup", "gap_s": [1.6, 12], "db": [-34, -27], "pitch": [0.88, 1.14], "burst": [1, 3], "burst_gap_s": 0.27},
-        {"sound": "wood_call", "gap_s": [1.9, 16], "db": [-31, -25], "pitch": [0.92, 1.1], "burst": [1, 2], "burst_gap_s": 0.5},
+        {"sound": "wood_call", "gap_s": [1.9, 30], "db": [-31, -25], "pitch": [0.92, 1.1], "burst": [1, 2], "burst_gap_s": 0.5},
         {"sound": "lark", "gap_s": [13, 29], "db": [-29, -24], "pitch": [0.95, 1.05], "when": {"param": "day", "min": 0.04, "max": 0.85}},
         {"sound": "rooster", "gap_s": [30, 120], "db": [-29, -25], "pitch": [0.96, 1.03], "when": {"param": "day", "max": 0.12}},
-        {"sound": "dog_far", "gap_s": [24, 70], "db": [-20, -15], "pitch": [0.94, 1.06], "burst": [1, 2], "burst_gap_s": 0.7},
+        {"sound": "dog_far", "gap_s": [24, 70], "db": [-13, -9], "pitch": [0.94, 1.06], "burst": [1, 2], "burst_gap_s": 0.7},
         {"sound": "tractor_far", "gap_s": [19, 41], "db": [-24, -19], "pitch": [0.94, 1.06], "when": {"param": "tractor", "min": 0.5}},
-        {"sound": "church_bell_far", "gap_s": [90, 200], "db": [-21, -16], "pitch": 1.0}
+        {"sound": "church_bell_far", "gap_s": [90, 200], "db": [-18, -14], "pitch": 1.0}
       ]
     }
   },
@@ -359,7 +382,7 @@
   "preview": {
     "lead": "bike",
     "others": [
-      {"machine": "bike", "rpm_scale": 0.97, "params": {"power": 0.9}},
+      {"machine": "peer_bike", "rpm_scale": 0.97, "params": {"power": 0.9}},
       {"machine": "wheel", "lead": true, "rpm_by": {"param": "speed", "ratio": 0.0058333}},
       {"machine": "breath", "lead": true, "rpm_scale": 0.5},
       {"machine": "crowd", "lead": true}

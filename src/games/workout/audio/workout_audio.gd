@@ -5,8 +5,8 @@ extends Node
 ##
 ## Three clocks, the ride view's own. On cadence, from game.cranks, so sound and legs read one number:
 ## the chain, the pedals, the breath, the crowd's hands. On speed, from shown_distance: the freewheel,
-## tyres and wind. On the view's env_t: the breeze in the grass and the wind's gusts. It never
-## integrates cadence, reads no wall clock and never consumes ctx.rng.
+## tyres and wind. On the view's env_t: the air, which is the view's gust and a slower swell of its own.
+## It never integrates cadence, reads no wall clock and never consumes ctx.rng.
 ##
 ## FTMS reports cadence about once a second, not crank angle: the sound locks to the crank on screen
 ## exactly and to the rider's feet in rate only.
@@ -88,10 +88,19 @@ static func gust_at(env_t: float) -> float:
 	return 0.5 + 0.5 * sin(env_t / 11.0) * sin(env_t / 3.7)
 
 
+## The air you hear, 0..1: half the view's gust, half a swell of minutes. The gust alone is one wave
+## repeated every 35 s (3.7 and 11 are close to 1:3), which half an hour of a steady block would give away.
+static func air_at(env_t: float) -> float:
+	var swell := 0.5 + 0.3 * sin(env_t / 23.0) + 0.2 * sin(env_t / 61.0)
+	return 0.5 * gust_at(env_t) + 0.5 * swell
+
+
 ## The road surface under the tyres, 0..1, by the metre: patches of rougher tarmac that come and go
-## over a few hundred metres. The same stretch of road sounds the same each time you ride it.
+## over a few hundred metres, on three lengths that do not line up. The same stretch of road sounds the
+## same each time you ride it.
 static func road_at(distance_m: float) -> float:
-	return 0.5 + 0.5 * sin(distance_m / 97.0) * sin(distance_m / 31.0)
+	var long_wave := 0.15 * sin(distance_m / 157.0 + 1.0) + 0.1 * sin(distance_m / 367.0 + 2.0)
+	return 0.5 + 0.25 * sin(distance_m / 59.0) + long_wave
 
 
 ## How near the viewer the roadside crowd is, 0..1: 1 among them, 0 from the screen's edge on, so
@@ -123,7 +132,7 @@ func _drive_bikes(game: WorkoutGame) -> void:
 	for peer: int in game.state.order:
 		kit.drive(
 			"bike%d" % peer,
-			"bike",
+			"bike" if peer == me else "peer_bike",
 			game.cranks.revs(peer),
 			game.cadence_of(peer),
 			{"power": _power_of(game, peer)},
@@ -188,9 +197,9 @@ func _shift_gears(game: WorkoutGame, revs: float, rpm: float) -> void:
 func _drive_road(game: WorkoutGame, near: float) -> void:
 	var peer := game.view_peer()
 	var speed := _speed_of(game, peer)
-	var gust := gust_at(view.env_t)
+	var air := air_at(view.env_t)
 	kit.set_loop("tyre_hum", {"speed": speed, "road": road_at(view.shown_distance(peer))})
-	kit.set_loop("wind_rush", {"speed": speed, "gust": gust})
+	kit.set_loop("wind_rush", {"speed": speed, "gust": air})
 	kit.set_loop("crowd_loop", {"crowd": near})
 	(
 		kit
@@ -198,7 +207,7 @@ func _drive_road(game: WorkoutGame, near: float) -> void:
 			{
 				"speed": speed,
 				"day": WorkoutTod.progress(game.state),
-				"gust": gust,
+				"gust": air,
 				"tractor": 1.0 if _tractor_crossing(game) else 0.0,
 			}
 		)
