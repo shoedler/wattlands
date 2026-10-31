@@ -53,6 +53,10 @@ const DEFAULTS: Dictionary = {
 	"recent_rooms": [],
 	"locale": "en",
 	"master_volume_db": 0.0,
+	"bus_machines_db": 0.0,
+	"bus_ambience_db": 0.0,
+	"bus_sfx_db": 0.0,
+	"bus_ui_db": 0.0,
 	"fullscreen": false,
 	"mock_keyboard": false,
 }

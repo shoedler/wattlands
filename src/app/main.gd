@@ -66,6 +66,7 @@ func boot() -> void:
 	if services.settings != null:
 		services.settings.load_all()
 		AppSettingsScreen.apply_volume(float(services.settings.get_value("master_volume_db", 0.0)))
+		AudioBuses.apply_settings(services.settings)
 		WlWindowMode.apply(WlWindowMode.stored(services.settings))
 	if (
 		services.trainer != null
