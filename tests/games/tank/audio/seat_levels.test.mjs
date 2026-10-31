@@ -93,6 +93,11 @@ for (const seat of SEATS) {
   });
 }
 
+test("A8's waiver is the arc-led crew's alone: never in the bank, never another seat's", () => {
+  assert.equal(doc.preview.waive?.A8, undefined);
+  for (const seat of SEATS) assert.equal(withLead(seat).preview.waive?.A8 !== undefined, seat === 'arc', seat);
+});
+
 test('every seat sits within 3 LU of the others, solo at power 1 and 90 rpm', () => {
   const solos = {
     diesel: solo('diesel', { power: 1, speed: 4 }),
