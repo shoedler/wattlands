@@ -40,7 +40,7 @@ const DIGIT_CHARS := "0123456789:.-"
 const DIGIT_CELL := Vector2i(14, 24)
 const DIGIT_ADVANCE := {":": 9, ".": 7}
 const DIGIT_ADVANCE_DEFAULT := 16
-const CRANK_CELL := 13
+const CRANK_CELL := 27
 const ELLIPSIS := "…"
 
 ## The slot shapes (Wl.SLOT_SHAPES order), 5 x 5, so a rider's colour always pairs with a shape.

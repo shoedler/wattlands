@@ -13,6 +13,10 @@ const ARROW_DOWN := ["#####", ".###.", "..#.."]
 const HEART_ROWS: Array[String] = [".##.##.", "#######", "#######", ".#####.", "..###..", "...#..."]
 const HEART := Color("#d0635a")
 const HR_RIGHT := 202.0
+## The cadence column's left edge and the crank icon's top-left: under the header rule (y 16), over the
+## gauge's needle (y 45), against the plate's right margin, past "RPM" after a 3-digit cadence.
+const CADENCE_X := 117
+const CRANK_AT := Vector2(W - 6 - WorkoutHudDraw.CRANK_CELL, 18)
 
 var numbers: HudRiderNumbers = HudRiderNumbers.new()
 
@@ -105,12 +109,12 @@ func _watts() -> void:
 func _cadence() -> void:
 	var dim := bool(m["cadence_dim"])
 	var col := D.DIM if dim else D.NUM
-	var cw := D.big(self, 117, 19, str(m["cadence"]), col)
-	D.tall(self, 117 + cw + 3, 32, tx("WORKOUT_HUD_RPM"), D.DIM)
-	D.crank(self, int(m["crank_frame"]), Vector2(W - 6 - D.CRANK_CELL, 30), col)
+	var cw := D.big(self, CADENCE_X, 19, str(m["cadence"]), col)
+	D.tall(self, CADENCE_X + cw + 3, 32, tx("WORKOUT_HUD_RPM"), D.DIM)
+	D.crank(self, int(m["crank_frame"]), CRANK_AT, col)
 	D.gauge(
 		self,
-		Rect2(117, 47, W - 6 - 117, 5),
+		Rect2(CADENCE_X, 47, W - 6 - CADENCE_X, 5),
 		float(m["cadence_lo"]),
 		float(m["cadence_hi"]),
 		float(m["cadence_v"]),
