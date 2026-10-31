@@ -212,6 +212,8 @@ export class AmbienceBed {
     this._next = xorshift32(seed);
     this._variantsOf = variantsOf;
     this._spots = (spec.spots ?? []).map((s) => ({ s, wait: this._range(s.gap_s, 1), rr: 0 }));
+    this._minGap = spec.spot_min_gap_s ?? 0;
+    this._sinceDetail = Infinity;
   }
 
   _u() {
@@ -228,11 +230,21 @@ export class AmbienceBed {
     return r[0] + (r[1] - r[0]) * this._u();
   }
 
+  _isDetail(s) {
+    return this._minGap > 0 && [s.gap_s ?? 1].flat()[0] >= this._minGap;
+  }
+
   update(params, dt) {
     const out = [];
+    this._sinceDetail += dt;
     for (const e of this._spots) {
       e.wait -= dt;
       if (e.wait > 0) continue;
+      const detail = this._isDetail(e.s);
+      if (detail && this._sinceDetail < this._minGap) {
+        e.wait = this._minGap * (1 + this._u()) - this._sinceDetail;
+        continue;
+      }
       e.wait = this._gap(e.s);
       if (!curvePasses(e.s.when, params)) continue;
       const burst = e.s.burst ? Math.round(this._range(e.s.burst, 1)) : 1;
@@ -248,6 +260,7 @@ export class AmbienceBed {
         });
         e.rr += 1;
       }
+      if (detail) this._sinceDetail = -out[out.length - 1].at_s;
     }
     return out;
   }
