@@ -177,19 +177,28 @@ static func pick(
 	state: SiegeState, tb: SiegeCombatTable, id: int, def: Dictionary
 ) -> SiegeEnemyState:
 	var pref: Dictionary = def.get("prefer", {})
+	var by_type: Array[float] = []
+	for type in SiegeIds.ENEMY_NAMES.size():
+		by_type.append(_pref(pref, type) * 1000.0)
 	var splash := float(def.get("splash_m", 0.0)) if id == SiegeIds.STATION_ONAGER else 0.0
 	var skip := state.station(id).skip_id
+	var band := state.range_band(id)
+	var lo2 := band.x * band.x
+	var hi2 := band.y * band.y
+	var at := state.path.station_pos[id] if state.path != null else Vector3.ZERO
 	var best: SiegeEnemyState = null
 	var best_score := -INF
 	for e in state.enemies:
-		if not e.alive() or e.id == skip or not state.in_band(id, e.pos):
+		if not e.alive() or e.id == skip or state.path == null or band.y <= 0.0:
 			continue
-		var score := _pref(pref, e.type) * 1000.0
+		var dx := e.pos.x - at.x
+		var dy := e.pos.y - at.y
+		var d2 := dx * dx + dy * dy
+		if d2 < lo2 or d2 > hi2:
+			continue
+		var score: float = by_type[e.type]
 		if splash > 0.0:
-			var cluster := 0.0
-			for o in tb.near(state.enemies, e.pos.x, e.pos.y, splash):
-				cluster += o.hp
-			score += minf(cluster, 999.0)
+			score += minf(tb.hp_near(state.enemies, e.pos.x, e.pos.y, splash, 999.0), 999.0)
 		else:
 			score += e.prog_m
 		if score > best_score:
