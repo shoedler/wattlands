@@ -4,8 +4,8 @@ extends SnapHistory
 ## hull's x (the camera), the boss's range, every enemy's x, every shell's position and every rider's
 ## watts and cadence. TankView pushes one entry per snapshot a client applies (TankGame.
 ## snapshot_applied) and one per sim tick it sees on the host or SOLO, then draws the world at
-## TankRenderClock.render_t, a little behind the newest entry (brief 2.6: 100 ms interpolation).
-## The view only reads this; times come from ticks, never from a clock. Like WorkoutSnapHistory.
+## a SnapRenderClock's render_t, a little behind the newest entry (brief 2.6: 100 ms interpolation).
+## The view only reads this; times come from ticks, never from a clock.
 
 ## Rows, oldest first: {"t", "tick", "hull": float, "br": the boss's range_m, "e": {id: x},
 ## "er": {id: range_m}, "s": {id: Vector2}, "sl": {id: left_s},

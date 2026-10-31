@@ -29,7 +29,7 @@ static func add(i: Image, x: int, y: int, c: Color, a: float) -> void:
 	)
 
 
-## Smoothstep ease (tank.gd _ease).
+## Smoothstep ease.
 static func ease_k(k: float) -> float:
 	var t := clampf(k, 0.0, 1.0)
 	return t * t * (3.0 - 2.0 * t)

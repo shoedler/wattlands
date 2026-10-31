@@ -60,7 +60,7 @@ static func normalize(raw: Variant) -> Dictionary:
 		via = TankIds.VIA_ACTION
 	if not TankIds.VIAS.has(via):
 		return {}
-	var auto := via == TankIds.VIA_AUTO or IntentRateLimiter.truthy(d.get("auto", 0))
+	var auto := via == TankIds.VIA_AUTO or IntentValue.truthy(d.get("auto", 0))
 	if auto:
 		via = TankIds.VIA_AUTO
 	var out := {"k": k, "to": -1, "d": 0, "auto": auto, "via": via}
@@ -77,7 +77,7 @@ static func normalize(raw: Variant) -> Dictionary:
 				return {}
 		TankIds.INTENT_AIM, TankIds.INTENT_TARGET:
 			var dir: Variant = d.get("d")
-			if not _whole(dir) or absi(int(dir)) != 1:
+			if not IntentValue.whole(dir) or absi(int(dir)) != 1:
 				return {}
 			out["d"] = int(dir)
 	return out
@@ -136,7 +136,3 @@ static func filter_owned(list: Array, engine: String) -> Array[Dictionary]:
 		if not n.is_empty() and owned(str(n["k"]), engine):
 			out.append(n)
 	return out
-
-
-static func _whole(v: Variant) -> bool:
-	return (v is int) or (v is float and is_finite(v) and float(v) == floorf(v))

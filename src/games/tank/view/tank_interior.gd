@@ -14,7 +14,7 @@ extends RefCounted
 ##            window (the tray, the chain rammer, the breech block, recoiling with the gun)
 ##   bow      both bow-gun receivers (belts feeding, cocking slides kicking, a glow per round)
 ##   repair   v4, on the upper deck: the rider, the chain to the flywheel and its tappet, the rivet hammer
-##            (one stroke per crank revolution, TankMech.hammer_lift), the patch press, the plate stack
+##            (one stroke per crank revolution, TankMechRepair.hammer_lift), the patch press, the plate stack
 ## A manned seat shows its rider (slot colour cap) and turns with the rider's crank revolutions; an
 ## empty seat (station slot -1) shows a bare saddle and a still crank, its machine stopped.
 ##
@@ -287,7 +287,7 @@ static func _on(st: Dictionary) -> bool:
 	return int(st.get("slot", -1)) >= 0 and bool(st.get("on", false))
 
 
-# --- Pixel primitives (mach.gd), clipped to the unit being painted --------------------------------------
+# --- Pixel primitives, clipped to the unit being painted --------------------------------------
 
 
 func p(x: int, y: int, c: Color) -> void:
@@ -390,7 +390,7 @@ func wheel(c: Vector2, r: float, ang: float, rim: Color, spokes: int = 4, teeth:
 
 ## v4: the Repairs machine in room `rr`, facing right from the saddle: one chain from the crank to the flywheel,
 ## a cam on the flywheel's own shaft, a tappet from the cam to the helve, and the helve's forged head falling on
-## the patch on its anvil once per crank revolution (a pure function of `revs`: TankMech.hammer_lift), with
+## the patch on its anvil once per crank revolution (a pure function of `revs`: TankMechRepair.hammer_lift), with
 ## sparks. The screw press to the right closes at `press_t`, and `patches` mod PATCH_STACK plates lie stacked by
 ## it.
 func repair_bay(rr: Rect2, revs: float, slot: int, on: bool, press_t: float, patches: int) -> void:
@@ -402,7 +402,7 @@ func repair_bay(rr: Rect2, revs: float, slot: int, on: bool, press_t: float, pat
 	var rv := revs if on else 0.0
 	var ang := rv * TAU
 	var cc := seat(x0 + 1, fy, ang, slot)
-	var lift := TankMech.hammer_lift(rv)
+	var lift := TankMechRepair.hammer_lift(rv)
 	var lamp := Vector2(x0 + 40.5, y0 + 3.5)
 	# the helve's pillar, behind everything: a rough casting on a broad foot
 	_rp_casting(Rect2i(x0 + 17, y0 + 6, 5, fy - y0 - 8), RP_IRON[1], RP_IRON[2], RP_IRON[0], 3)
@@ -424,7 +424,7 @@ func repair_bay(rr: Rect2, revs: float, slot: int, on: bool, press_t: float, pat
 	for a2 in 16:
 		var th := TAU * float(a2) / 16.0
 		var along := fposmod(th / TAU + 0.25 - fposmod(rv, 1.0), 1.0)
-		var rad := 1.4 + 1.6 * TankMech.hammer_lift(fposmod(rv, 1.0) - along)
+		var rad := 1.4 + 1.6 * TankMechRepair.hammer_lift(fposmod(rv, 1.0) - along)
 		for k3 in 3:
 			var q2 := fw + Vector2(cos(th), sin(th)) * rad * (1.0 - float(k3) * 0.35)
 			p(floori(q2.x), floori(q2.y), RP_IRON[4] if k3 == 0 and sin(th) < 0.2 else RP_IRON[2])
@@ -453,16 +453,16 @@ func repair_bay(rr: Rect2, revs: float, slot: int, on: bool, press_t: float, pat
 	pr(Rect2i(x0 + 39, fy - 7, 20, 1), RP_PLATE[1])
 	pr(Rect2i(x0 + 39, fy - 7, 7, 1), RP_PLATE[2])
 	# the strike's sparks, on the whole revolution
-	var since := TankMech.since_strike(rv)
-	if on and since < TankMech.R_SPARK:
-		var k := 1.0 - since / TankMech.R_SPARK
+	var since := TankMechRepair.since_strike(rv)
+	if on and since < TankMechRepair.R_SPARK:
+		var k := 1.0 - since / TankMechRepair.R_SPARK
 		var st := floorf(rv)
 		for i in 9:
 			var a := -PI * (0.05 + 0.9 * TankPx.h2(int(st), i, 11))
 			var spd := 6.0 + 11.0 * TankPx.h2(int(st), i, 12)
 			var q := (
 				Vector2(head_x, fy - 8.0)
-				+ Vector2(cos(a), sin(a)) * spd * (since / TankMech.R_SPARK)
+				+ Vector2(cos(a), sin(a)) * spd * (since / TankMechRepair.R_SPARK)
 			)
 			p(floori(q.x), floori(q.y), REPAIR_HOT)
 		glow(Vector2(head_x, fy - 8.0), 12.0, REPAIR_HOT, 0.7 * k)
@@ -945,7 +945,7 @@ func beltfeed(rr: Rect2, revs_in: float, slot: int, on: bool) -> void:
 # --- The loader and the turret windows ------------------------------------------------------------
 
 
-## A round lying along `ang` with its middle at `c` (tank.gd shell).
+## A round lying along `ang` with its middle at `c`.
 func shell(c: Vector2, ang: float) -> void:
 	(
 		TankPx

@@ -90,8 +90,8 @@ func test_capacity_and_mean_spacing() -> void:
 
 func test_render_clock_runs_behind_the_newest_by_the_mean_spacing() -> void:
 	var h := TankSnapHistory.new()
-	var c := TankRenderClock.new()
-	c.min_delay_s = TankRenderClock.CLIENT_DELAY_S
+	var c := SnapRenderClock.new()
+	c.min_delay_s = SnapRenderClock.CLIENT_DELAY_S
 	c.advance(0.016, h)
 	assert_false(c.is_set(), "nothing to draw yet")
 	h.push(10, _state(0.0))
@@ -104,23 +104,23 @@ func test_render_clock_runs_behind_the_newest_by_the_mean_spacing() -> void:
 
 func test_render_clock_delay_grows_with_slow_snapshots_and_is_clamped() -> void:
 	var h := TankSnapHistory.new()
-	var c := TankRenderClock.new()
-	c.min_delay_s = TankRenderClock.CLIENT_DELAY_S
+	var c := SnapRenderClock.new()
+	c.min_delay_s = SnapRenderClock.CLIENT_DELAY_S
 	for i in 4:
 		h.push(i * 20, _state(float(i)))
 	assert_almost_eq(c.delay(h), 1.0, 1e-6, "snapshots a second apart: a second behind")
 	var slow := TankSnapHistory.new()
 	slow.push(0, _state(0.0))
 	slow.push(28, _state(1.0))
-	assert_almost_eq(c.delay(slow), TankRenderClock.MAX_DELAY_S, 1e-6)
-	var host := TankRenderClock.new()
+	assert_almost_eq(c.delay(slow), SnapRenderClock.MAX_DELAY_S, 1e-6)
+	var host := SnapRenderClock.new(SnapRenderClock.HOST_DELAY_S)
 	assert_almost_eq(host.delay(null), Wl.SIM_DT, 1e-6, "the host sees every 50 ms tick")
 
 
 func test_render_clock_never_passes_the_newest_and_resyncs_after_a_jump() -> void:
 	var h := TankSnapHistory.new()
-	var c := TankRenderClock.new()
-	c.min_delay_s = TankRenderClock.CLIENT_DELAY_S
+	var c := SnapRenderClock.new()
+	c.min_delay_s = SnapRenderClock.CLIENT_DELAY_S
 	h.push(10, _state(0.0))
 	h.push(12, _state(1.0))
 	for _i in 100:
@@ -134,8 +134,8 @@ func test_render_clock_never_passes_the_newest_and_resyncs_after_a_jump() -> voi
 
 func test_render_clock_catches_up_softly_when_it_falls_behind() -> void:
 	var h := TankSnapHistory.new()
-	var c := TankRenderClock.new()
-	c.min_delay_s = TankRenderClock.CLIENT_DELAY_S
+	var c := SnapRenderClock.new()
+	c.min_delay_s = SnapRenderClock.CLIENT_DELAY_S
 	h.push(0, _state(0.0))
 	h.push(2, _state(1.0))
 	c.advance(0.016, h)
@@ -155,7 +155,7 @@ func test_a_client_view_draws_the_hull_between_two_snapshots() -> void:
 	var g := U.make_game(client_state, Wl.CLIENT, 2)
 	autofree(g)
 	var v := U.make_view(self, g)
-	assert_eq(v.clock.min_delay_s, TankRenderClock.CLIENT_DELAY_S)
+	assert_eq(v.clock.min_delay_s, SnapRenderClock.CLIENT_DELAY_S)
 	host.hull.x_px = 3200.0
 	g.apply_snapshot(TankSnapshot.encode(host))
 	host.tick += 2
@@ -176,7 +176,7 @@ func test_a_client_view_draws_the_hull_between_two_snapshots() -> void:
 func test_the_host_view_records_every_sim_tick_it_sees() -> void:
 	var s := TankFixtures.state(1)
 	var v := U.view_of(self, s)
-	assert_eq(v.clock.min_delay_s, TankRenderClock.HOST_DELAY_S)
+	assert_eq(v.clock.min_delay_s, SnapRenderClock.HOST_DELAY_S)
 	for _i in 5:
 		s.tick += 1
 		s.hull.x_px += 3.0

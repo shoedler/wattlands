@@ -18,17 +18,9 @@ extends TankMechKit
 ## lamp; it depends on power only) is a cached shade overlay per power step, blended natively; the
 ## glowing parts (hot metal, fire, arcs, sparks, jars) are added last.
 ##
-## This class is the one name outsiders use: it holds paint and the caches. TankMechKit holds what all the machines
+## This class is the name outsiders paint through: it holds paint and the caches. The repair machine's
+## hammer, which TankInterior draws too, is read from TankMechRepair. TankMechKit holds what all the machines
 ## share (and this class inherits it); TankMechDiesel, Dynamo, Steam, Arc, Feed and Repair hold one machine each.
-
-## The repair machine's hammer, which TankInterior draws too: outsiders read it here, as they do the rest.
-const R_CAM := TankMechRepair.R_CAM
-const R_CAM_R := TankMechRepair.R_CAM_R
-const R_HEAD_X := TankMechRepair.R_HEAD_X
-const R_REST_Y := TankMechRepair.R_REST_Y
-const R_HEAD_LIFT := TankMechRepair.R_HEAD_LIFT
-const R_LIFT := TankMechRepair.R_LIFT
-const R_SPARK := TankMechRepair.R_SPARK
 
 static var _seen: Dictionary = {}
 static var _static_cache: Dictionary = {}
@@ -127,13 +119,3 @@ static func _rate_of(kind: String, slot: Color, phase: float, t: float) -> float
 		rate = lerpf(rate, r, clampf(dt * 5.0, 0.0, 1.0))
 	_seen[key] = [phase, t, rate]
 	return rate
-
-
-## See TankMechRepair.hammer_lift.
-static func hammer_lift(revs: float) -> float:
-	return TankMechRepair.hammer_lift(revs)
-
-
-## See TankMechRepair.since_strike.
-static func since_strike(revs: float) -> float:
-	return TankMechRepair.since_strike(revs)

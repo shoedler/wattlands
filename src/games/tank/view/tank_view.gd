@@ -40,7 +40,7 @@ extends TankViewHud
 ## and the ground ahead onto the near panel's road (near_k); a wider canvas (pixel_flex) stretches that
 ## up to the art's own scale and shows more road past it, a narrower one squeezes it.
 ##
-## Time: positions come from a snapshot history (TankSnapHistory) drawn at TankRenderClock.render_t.
+## Time: positions come from a snapshot history (TankSnapHistory) drawn at a SnapRenderClock's render_t.
 ## Machines turn by their rider's cadence integrated over render time; cosmetic randomness comes
 ## from TankFx.rng and TankGround's phases, seeded from ctx.seed.
 ##
@@ -88,9 +88,9 @@ func _build() -> void:
 	ground.base_y = GROUND
 	if ctx != null:
 		clock.min_delay_s = (
-			TankRenderClock.CLIENT_DELAY_S
+			SnapRenderClock.CLIENT_DELAY_S
 			if ctx.role == Wl.CLIENT
-			else TankRenderClock.HOST_DELAY_S
+			else SnapRenderClock.HOST_DELAY_S
 		)
 	interior = TankInterior.new(rig)
 	body = TankBody.new(rig)
@@ -219,7 +219,7 @@ func advance(delta: float) -> void:
 	_tow_frame(state, dt)
 	_relief(state)
 	var feed := rider_feed(state, rt)
-	# render_t stalls at the newest snapshot then catches up (tank_render_clock.gd): on a client that
+	# render_t stalls at the newest snapshot then catches up (SnapRenderClock): on a client that
 	# would make the strokes lurch, so a client's machines run on the frame's dt.
 	var phase_dt := dt if game.ctx != null and game.ctx.role == Wl.CLIENT else render_dt
 	_seats(state, feed, phase_dt)

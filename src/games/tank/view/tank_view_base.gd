@@ -123,7 +123,8 @@ var interior: TankInterior = null
 var ground: TankGround = null
 var firing: TankFiring = TankFiring.new()
 var history: TankSnapHistory = TankSnapHistory.new()
-var clock: TankRenderClock = TankRenderClock.new()
+## The host and SOLO see every 0.05 s tick; _build sets the client's delay on a client.
+var clock: SnapRenderClock = SnapRenderClock.new(SnapRenderClock.HOST_DELAY_S)
 var stage: Node2D = null
 ## Fixed canvas size (tests); zero = the viewport's (the PixelViewport's art size).
 var canvas_override: Vector2 = Vector2.ZERO

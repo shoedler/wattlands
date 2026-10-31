@@ -89,13 +89,16 @@ func test_the_repair_machine_has_its_own_slight_colour() -> void:
 
 func test_the_hammer_is_a_pure_function_of_the_crank() -> void:
 	for revs: float in [0.0, 0.2, 0.5, 0.87, 0.99, 3.4, 117.72]:
-		assert_eq(TankMech.hammer_lift(revs), TankMech.hammer_lift(revs), "pure")
+		assert_eq(TankMechRepair.hammer_lift(revs), TankMechRepair.hammer_lift(revs), "pure")
 		assert_almost_eq(
-			TankMech.hammer_lift(revs), TankMech.hammer_lift(revs + 5.0), 0.0001, "periodic"
+			TankMechRepair.hammer_lift(revs),
+			TankMechRepair.hammer_lift(revs + 5.0),
+			0.0001,
+			"periodic"
 		)
-		assert_between(TankMech.hammer_lift(revs), 0.0, 1.0)
-	assert_eq(TankMech.hammer_lift(4.0), 0.0, "down on the plate at the whole revolution")
-	assert_gt(TankMech.hammer_lift(4.85), 0.9, "at the top before the fall")
+		assert_between(TankMechRepair.hammer_lift(revs), 0.0, 1.0)
+	assert_eq(TankMechRepair.hammer_lift(4.0), 0.0, "down on the plate at the whole revolution")
+	assert_gt(TankMechRepair.hammer_lift(4.85), 0.9, "at the top before the fall")
 
 
 ## One stroke per crank revolution, at every cadence: a strike is the head passing from high to low.
@@ -104,11 +107,11 @@ func test_one_stroke_per_revolution_across_the_cadences() -> void:
 		var revs := 0.0
 		var dt := 1.0 / 240.0
 		var strokes := 0
-		var was := TankMech.hammer_lift(revs)
+		var was := TankMechRepair.hammer_lift(revs)
 		var going_down := false
 		for _i in int(20.0 / dt):
 			revs += rpm / 60.0 * dt
-			var now := TankMech.hammer_lift(revs)
+			var now := TankMechRepair.hammer_lift(revs)
 			if now < was - 0.0001:
 				going_down = true
 			elif going_down and now > was:
@@ -144,14 +147,19 @@ func test_the_action_is_in_the_cards_middle() -> void:
 ## The hammer is the hero: the head is the card's lit mass and the cam stays small beside it (the critic's
 ## "boulder" was a cam of 13 px radius).
 func test_the_hammer_is_the_cards_hero_and_the_cam_stays_small() -> void:
-	assert_lte(TankMech.R_CAM_R + TankMech.R_LIFT, 9.0, "a small drawn cam on its shaft")
-	assert_gte(TankMech.R_HEAD_LIFT, 12.0, "a stroke you can see at 72 x 41")
+	assert_lte(
+		TankMechRepair.R_CAM_R + TankMechRepair.R_LIFT, 9.0, "a small drawn cam on its shaft"
+	)
+	assert_gte(TankMechRepair.R_HEAD_LIFT, 12.0, "a stroke you can see at 72 x 41")
 	var top := _paint("repair", 3.85, 1.0)
 	var low := _paint("repair", 3.3, 1.0)
 	var head := Rect2i(
-		int(TankMech.R_HEAD_X) - 8, roundi(TankMech.R_REST_Y - TankMech.R_HEAD_LIFT), 17, 8
+		int(TankMechRepair.R_HEAD_X) - 8,
+		roundi(TankMechRepair.R_REST_Y - TankMechRepair.R_HEAD_LIFT),
+		17,
+		8
 	)
-	var cam := Rect2i(int(TankMech.R_CAM.x) - 6, int(TankMech.R_CAM.y) - 6, 12, 12)
+	var cam := Rect2i(int(TankMechRepair.R_CAM.x) - 6, int(TankMechRepair.R_CAM.y) - 6, 12, 12)
 	assert_gt(_mean_v(top, head), _mean_v(top, cam) + 0.1, "the head outshines the cam")
 	assert_ne(_mean_v(top, head), _mean_v(low, head), "and it moves")
 

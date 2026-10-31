@@ -207,22 +207,24 @@ func test_the_feed_fires_when_its_bolts_come_home() -> void:
 
 
 func test_the_rivet_hammer_strikes_where_it_comes_down_on_the_plate() -> void:
-	# The fraction read from the art itself: TankMech.hammer_lift is 0 on the plate, at the top just before the fall.
+	# The fraction read from the art itself: TankMechRepair.hammer_lift is 0 on the plate, at the top just before the fall.
 	assert_eq(_fractions("repair", "rivet_hit"), [0.0])
-	assert_almost_eq(TankMech.hammer_lift(0.0), 0.0, 1e-6, "down at the strike")
-	assert_almost_eq(TankMech.hammer_lift(1.0), 0.0, 1e-6, "every whole revolution")
-	assert_almost_eq(TankMech.hammer_lift(0.9999), 0.0, 0.01, "the fall ends just there")
-	assert_gt(TankMech.hammer_lift(0.8), 0.9, "up before the fall")
+	assert_almost_eq(TankMechRepair.hammer_lift(0.0), 0.0, 1e-6, "down at the strike")
+	assert_almost_eq(TankMechRepair.hammer_lift(1.0), 0.0, 1e-6, "every whole revolution")
+	assert_almost_eq(TankMechRepair.hammer_lift(0.9999), 0.0, 0.01, "the fall ends just there")
+	assert_gt(TankMechRepair.hammer_lift(0.8), 0.9, "up before the fall")
 	var lowest := INF
 	var lowest_at := -1.0
 	for i in 720:
 		var f := float(i) / 720.0
-		if TankMech.hammer_lift(f) < lowest:
-			lowest = TankMech.hammer_lift(f)
+		if TankMechRepair.hammer_lift(f) < lowest:
+			lowest = TankMechRepair.hammer_lift(f)
 			lowest_at = f
 	assert_almost_eq(lowest_at, float(_fractions("repair", "rivet_hit")[0]), 1.0 / 720.0)
 	assert_lt(
-		float(_fractions("repair", "rivet_ring")[0]), TankMech.R_SPARK, "rings under the sparks"
+		float(_fractions("repair", "rivet_ring")[0]),
+		TankMechRepair.R_SPARK,
+		"rings under the sparks"
 	)
 
 
