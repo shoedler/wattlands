@@ -156,7 +156,7 @@ Patrols come every 90-110 s of WORK time, drawn by weight: far kinds in the far 
 
 ## The look
 
-**Art.** Everything is baked by scripts in this repository; no sprite is generated and the game makes no fal call. The tank and its forest are `assets/tank/v3/` (`kit.json`, read by `TankRig`). The enemies, bushes and far ground are `assets/tank/v4/` (`enemies.json`, read by `TankEnemyKit`), baked by `assets/tank/v4/tools_src/enemy_bake.sh` on the tank's own generator: same rivets, weathering and moonlight, a cold grey-green faction with cyan vision slits and no insignia.
+**Art.** Everything is baked by scripts in this repository, and the game makes no fal call. The tank and its forest are `assets/tank/v3/` (`kit.json`, read by `TankRig`), rebuilt as pixel art from Simon's reference image (`docs/credits.d/tank.md`). The enemies, bushes and far ground are `assets/tank/v4/` (`enemies.json`, read by `TankEnemyKit`), baked by `assets/tank/v4/tools_src/enemy_bake.sh` on the tank's own generator: same rivets, weathering and moonlight, a cold grey-green faction with cyan vision slits and no insignia.
 
 **Split screen** (`TankFarMap`, on every canvas): near panel, an 8 px riveted seam with the range plate (`TankSeam`), far panel (`TankFarPanel`, a SubViewport that never runs the depth of field, with its own parallax, light and haze), and the shell screen (`TankPip`) in the far panel's top. 960 x 540: 622 + 8 + 330. The tank's scale and place are unchanged and it stays whole.
 
