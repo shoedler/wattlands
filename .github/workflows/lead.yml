@@ -5,8 +5,7 @@
 # tools/run_game_sim over every registered game's contents plus tools/fit_check on the FIT
 # files, every Node suite (wrappers and lock, relay, mock Strava, art pipeline and its pixelate
 # end-to-end, fit_check, the e2e harness's own tests) and the 3-peer end-to-end test
-# (node tools/e2e/run.mjs --games=<every registered game>). The module workflows run their
-# own narrower suites on every push.
+# (node tools/e2e/run.mjs --games=<every registered game>).
 name: lead
 
 on:
@@ -38,6 +37,8 @@ jobs:
           pipx install uv==0.13.1
       - name: All gates (tools/run_tests)
         run: tools/run_tests
+      - name: fit_check on the FIT the GUT suite wrote, with its lap count
+        run: node tools/fit_check/check.mjs build/rides_test --expect-laps=5
       - name: Keep the logs
         if: always()
         uses: actions/upload-artifact@v4
