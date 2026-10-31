@@ -4,7 +4,7 @@ extends GutTest
 ## class and kit.json are gone.
 
 const MANIFEST := "res://src/games/tank/game.json"
-const V2 := "res://assets/tank/v2/"
+const TANK_ART := "res://assets/tank/"
 const KIT_CLASS := "res://src/games/tank/view/tank_kit.gd"
 ## Subfolders of the card folder that hold other things than cards.
 const NOT_CARDS: Array[String] = ["hud/", "source/", "tools_src/"]
@@ -37,8 +37,8 @@ func test_the_card_folder_holds_only_what_game_json_names() -> void:
 
 
 func test_the_v2_enemy_art_and_kit_are_gone() -> void:
-	assert_false(DirAccess.dir_exists_absolute(V2 + "enemies"), "the v2 enemies are gone")
-	assert_false(FileAccess.file_exists(V2 + "kit.json"), "the v2 manifest is gone")
+	assert_false(DirAccess.dir_exists_absolute(TANK_ART + "v2/enemies"), "the v2 enemies are gone")
+	assert_false(FileAccess.file_exists(TANK_ART + "v2/kit.json"), "the v2 manifest is gone")
 	assert_false(ResourceLoader.exists(KIT_CLASS), "the v2 kit's class is gone")
 
 
