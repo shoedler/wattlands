@@ -16,7 +16,7 @@
 
 - **Decision:** `src/games/siege/art/png.mjs` calls `encodePng` from `tools/art/lib/png.mjs` with `{ level: 9 }`, as Workout's wrapper does, and keeps `toRgba8`.
 - **Alternatives:** take the codec's default level 6.
-- **Reason:** level 6 would change the bytes of committed art. A bake with the old writer and one with the new are byte-identical, and both match `assets/siege/bake`.
+- **Reason:** another level can change the bytes of committed art. A bake with the old writer and one with the new are byte-identical, and both match `assets/siege/bake`.
 
 ## 2026-10-31: `siege/view/v2` and `SiegeV2*` keep their names
 
