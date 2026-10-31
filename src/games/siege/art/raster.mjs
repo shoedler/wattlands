@@ -44,6 +44,8 @@ export class Raster {
     this.partMode = null;
     this.shadowExtra = [];
     this.key = new Uint8Array(w * h);
+    // What the AO height map covers (metres); a bigger bake widens it on the same cell boundaries.
+    this.hmBox = { x0: -140, y0: -160, W: 760, H: 740 };
   }
 
   project(p) {
@@ -230,7 +232,7 @@ export class Raster {
   }
 
   buildHeightMap() {
-    const x0 = -140, y0 = -160, W = 760, H = 740;
+    const { x0, y0, W, H } = this.hmBox;
     const hm = new Float32Array(W * H).fill(-1e9);
     for (const t of this.tris) {
       if (t.o <= 3 || t.o === 71) continue;
@@ -458,8 +460,9 @@ export class Raster {
 
   // Sky, depth-edge outline, glow, tilt-shift blur by row, grade and vignette. Returns Float32 RGB.
   // The bake turns off the screen-space parts (vignette, haze) and the blur: the game's tilt-shift
-  // screen shader applies them over the baked world and the sprites together.
-  finish({ skyTop, skyBottom, focusTop = 110, focusBottom = 460, rampTop = 70, rampBottom = 70, blurTop = 3, blurBottom = 2, maxBlur = 1, outline = true, grade = {}, vignette = true, haze = true }) {
+  // screen shader applies them over the baked world and the sprites together. bandAt(x, y), when given,
+  // replaces the grade's in-band test by a 0..1 value.
+  finish({ skyTop, skyBottom, focusTop = 110, focusBottom = 460, rampTop = 70, rampBottom = 70, blurTop = 3, blurBottom = 2, maxBlur = 1, outline = true, grade = {}, vignette = true, haze = true, bandAt = null }) {
     const { w, h, dep } = this;
     const base = new Float32Array(this.col);
     for (let y = 0; y < h; y++) {
@@ -510,7 +513,7 @@ export class Raster {
           }
           c[k] = v + glow[i + k] * 1.4 + this.glow[i + k] * 0.4;
         }
-        gradeRgb(c, this.keep[y * w + x], inBand, hz, vig, g, o);
+        gradeRgb(c, this.keep[y * w + x], bandAt ? bandAt(x, y) : inBand, hz, vig, g, o);
         out[i] = o[0];
         out[i + 1] = o[1];
         out[i + 2] = o[2];

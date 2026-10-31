@@ -105,6 +105,30 @@ export class Life {
     this.cat = null;
   }
 
+  // Palms outside the design frame (bake.mjs WORLD_MARGIN), from their own numbers, so the frame's
+  // draws stay where they are: groves round the margin's pools, along the camp and over the sand.
+  marginPalms() {
+    const rnd = rng(23);
+    const pools = W.MARGIN_POOLS.map(([sx, sy]) => W.fromScreen(sx, sy));
+    const groves = [...pools, ...[[-140, 110], [-380, 90], [-200, 300], [-60, 480], [-430, 560], [-180, 680], [300, 620], [520, 780], [860, 700], [1040, 480], [1400, 620], [1110, 760], [-300, -90], [-40, -170], [-470, -220]].map(([sx, sy]) => W.fromScreen(sx, sy))];
+    let n = 0;
+    this.cat = 'palms';
+    for (const g of groves) {
+      const count = rnd.int(4, 7);
+      for (let k = 0; k < count; k++) {
+        const p = { x: g.x + rnd.range(-7, 7), y: g.y + rnd.range(-7, 7) };
+        if (!W.offFrame(p.x, p.y, 46) || W.roadAt(p.x, p.y) > 0.2 || W.height(p.x, p.y) < -0.6) continue;
+        if (pools.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < 3.8)) continue;
+        const s = sprite(`palm${n % 7}`);
+        const base = this.ground(p);
+        this.r.stamp(s, base, 13, s.h - 1, 95, true, rnd.f() < 0.5);
+        this.r.groundShadow(base, 1.2, 6, 0.8);
+        n++;
+      }
+    }
+    this.cat = null;
+  }
+
   ground(p) {
     return v3(p.x, p.y, W.height(p.x, p.y));
   }
