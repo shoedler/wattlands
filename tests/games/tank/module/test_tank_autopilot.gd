@@ -297,3 +297,16 @@ func test_a_crew_may_move_inside_the_opening_while_a_near_threat_is_alive() -> v
 	rc.hp = 10.0
 	s.seg.seg = TankIds.SEG_CHECKPOINT
 	assert_false(TankAutopilot._crew_may_move(s, false), "never in a checkpoint")
+
+
+## A rider who left Drive in the hold is not stuck off it: an Advance with nobody on Drive opens the crew's
+## moves at once, or the tank stands until min_s and the Advance overruns.
+func test_an_advance_with_nobody_on_drive_opens_the_crews_moves() -> void:
+	var s := TankFixturesV4.make("advance_far", 3)
+	s.seg.elapsed_s = 1.0
+	s.seg.objective_done = false
+	assert_false(TankAutopilot._crew_may_move(s, false), "Drive manned: the opening stay holds")
+	s.station(TankIds.ENGINE_DIESEL).slot = -1
+	assert_true(TankAutopilot._crew_may_move(s, false), "nobody on Drive")
+	s.seg.seg = TankIds.SEG_CHECKPOINT
+	assert_false(TankAutopilot._crew_may_move(s, false), "never in a checkpoint")

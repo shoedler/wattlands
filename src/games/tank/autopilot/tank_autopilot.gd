@@ -248,12 +248,17 @@ static func _switches_in_warmup(state: TankState, ri: TankRiderInput, engine: St
 ## not before the segment's own min_s (`at_end`: planning the next segment once the objective is
 ## done). v4: open while a near threat is alive: it lives 8-20 s, and stage 1's recon comes at about
 ## 40 s, so otherwise no Autopilot crew could ever man the Secondaries (the 1 s ask, the stay and the
-## follows_now gate still hold).
+## follows_now gate still hold). Also open while an Advance has nobody on Drive: a rider who left it in
+## the hold would otherwise keep the tank standing until min_s.
 static func _crew_may_move(state: TankState, at_end: bool) -> bool:
 	if state.seg.seg == TankIds.SEG_CHECKPOINT:
 		return false
 	if near_threat_alive(state):
 		return true
+	if state.seg.seg == TankIds.SEG_ADVANCE and not state.seg.objective_done:
+		var drive := state.station(TankIds.ENGINE_DIESEL)
+		if drive != null and drive.is_empty():
+			return true
 	if state.seg.elapsed_s < TankConst.AUTO_STAY_S - 1e-6:
 		return false
 	return at_end or (state.seg.open_ended and state.seg.elapsed_s >= state.seg.min_s - 1e-6)
