@@ -415,4 +415,5 @@ Short ADRs for the siege game: date, decision, alternatives, reason. Game sessio
 
 - Decision: the rules step was over its 1 ms budget on the CI runners (1.3 ms at the cap). A walker's place() looks in its last path segment first, segment directions are computed once, `SiegeState.enemy` searches by id, and the onager's pick sums hit points through the grid without building lists (about 6 x cheaper per pick). The test now times `SiegeRules.step` alone (building the rig's inputs was inside the clock) and takes the best of three measurements, because identical code measured 775 and 1035 us on two CI runs and contention only adds time.
 - Alternatives: raising the budget (the brief's number stays), a median like tank's rules test (it would hide the once-a-second pick).
+- Note: the v1 run's lead separately allowed 2500 us when `CI` is set (`docs/decisions/lead.md`) and keeps that for now; 1000 us stays the local budget, and CI measured 851 us with these speedups.
 - Reason: the budget is what lets a long shift simulate quickly, and CI runs at about 1.7 x this machine's times.

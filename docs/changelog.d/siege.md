@@ -3,7 +3,7 @@
 ### Fixed (Castellum Rotae) v0.3.1
 
 - A rules step at the enemy cap now fits its 1 ms budget on the GitHub runners (851 us against 1293-1394 us). Enemies remember their path segment, station targeting no longer builds lists, and enemy lookup by id is a binary search. Scores are unchanged.
-- The perf test times `SiegeRules.step` alone and takes the best of three measurements. The budget is unchanged.
+- The perf test times `SiegeRules.step` alone and takes the best of three measurements. The budget stays 1000 us locally; CI allows 2500 us by the lead's ruling (`docs/decisions/lead.md`).
 - `game-siege` CI checks T1 over seeds 1-3, as the target is defined, instead of seed 1 alone.
 
 ### Changed (Castellum Rotae) v0.3.0
