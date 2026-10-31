@@ -3,7 +3,7 @@
 ## 2026-10-31: a stricter walk decides what the tank generator keeps, and the bakes prove it
 
 - **Decision:** delete the generator code a walk with strings and comments stripped cannot reach from `bake.gd`, `r6_base.gd`, `env/` and `assets/tank/v4/tools_src/`. That goes beyond SPEC_CLEANUP 2.2's table: `tank.gd` and `mach.gd` go whole, `tank_r5.gd` and `tank_r6.gd` fold into `tank_gen.gd` with `layout`, `build`, `roof` and `puff` only, and `gear.gd` and `px.gd` lose more than `tools/qa/scan/toolsrc_reach.mjs` lists. That scan counts a name inside a string or a comment as a call (`"loader"`, `Tank6.blast()`), so it reports what stays as all live and can't see the rest.
-- **Alternatives:** delete only what `toolsrc_reach.mjs` calls dead, which keeps about 1300 lines nothing runs.
+- **Alternatives:** delete only what `toolsrc_reach.mjs` calls dead, which keeps about 1200 lines nothing runs.
 - **Reason:** the proof doesn't depend on the walk. `bake.sh` and `enemy_bake.sh` rewrite `assets/tank/v3` and `assets/tank/v4` byte for byte after each cut, the same as on the untouched tree, and a missing function is a parse error on a preloaded script. No dynamic call names a deleted function: the only `.call("...")` uses were lambdas in the deleted `interior` functions.
 
 ## 2026-10-31: r6_hitbox.json is checked-in data
