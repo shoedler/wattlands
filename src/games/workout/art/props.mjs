@@ -4,6 +4,11 @@ import { Canvas, hex } from './raster.mjs';
 
 const OUTLINE = hex('#1c1e24');
 
+/** Cell pixels the view lines sprites up by; kit.json publishes them. */
+export const SMOKE_ORIGIN = [5, 15]; // goes on a chimney's top pixel
+export const CROWD_HAND_UP = [15, 3]; // the raised near hand in row 1
+export const FLAG_GRIP = [1, 15]; // goes on a raised hand
+
 /** Tower 30 x 70 at (0, 0), then the rotor's 8 frames of 26 x 26 from x 30. */
 export function windpump() {
   const c = new Canvas(30 + 26 * 8, 70);
@@ -111,7 +116,7 @@ export function crowd() {
         c.line(x + 5, y + 12, x + 6, y + 20, skin);
       } else {
         c.line(x - 4, y + 12, x - 6, y + 3, skin);
-        c.line(x + 5, y + 12, x + 7, y + 3, skin);
+        c.line(x + 5, y + 12, x - 8 + CROWD_HAND_UP[0], y + CROWD_HAND_UP[1], skin);
       }
     }
   }
@@ -124,7 +129,7 @@ export function flag() {
   const stripes = [hex('#f0f0e8'), hex('#3870b0')];
   for (let f = 0; f < 4; f++) {
     const x = f * 12;
-    c.rect(x + 1, 1, 1, 15, OUTLINE);
+    c.rect(x + FLAG_GRIP[0], 1, 1, FLAG_GRIP[1], OUTLINE);
     for (let i = 0; i < 9; i++) {
       const wave = Math.round(Math.sin(((i + f * 2) * Math.PI) / 4));
       for (let j = 0; j < 7; j++) c.px(x + 2 + i, 1 + j + wave, stripes[j < 3 ? 0 : 1]);

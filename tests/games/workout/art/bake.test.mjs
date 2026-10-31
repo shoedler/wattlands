@@ -1,5 +1,6 @@
 // The art contract S0 freezes: the bake reproduces the committed files, every path in kit.json exists,
-// the indexed planes hold only indices, and png.mjs stays a wrapper over the repo's one codec.
+// the indexed planes hold only indices, the view's anchors land on real pixels, and png.mjs stays a wrapper
+// over the repo's one codec.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
@@ -8,6 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readPng } from '../../../../src/games/workout/art/png.mjs';
 import { CRANK_FRAMES, crankTheta, chainOffset, nearPedalTable } from '../../../../src/games/workout/art/rig.mjs';
+import { WALL, WINDOW } from '../../../../src/games/workout/art/palette.mjs';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const assets = join(repo, 'assets/workout');
@@ -102,4 +104,72 @@ test('assets/workout stays small, audio apart', () => {
     if (!path.startsWith(audio)) bytes += statSync(path).size;
   }
   assert.ok(bytes < 6e6, `${bytes} bytes`);
+});
+
+/** One pixel of a decoded PNG: alpha and the palette index an indexed plane stores. */
+function pixel(png, x, y) {
+  const i = (y * png.width + x) * 4;
+  return { index: png.data[i] / 2, alpha: png.data[i + 3] };
+}
+
+test('smoke rises from chimneys the near_trees plane really draws', () => {
+  const smoke = kit.props.smoke;
+  assert.equal(smoke.plane, 'near_trees');
+  const plane = kit.planes.find((p) => p.name === smoke.plane);
+  assert.ok(plane, 'the plane exists');
+  const png = readPng(fromRes(plane.path));
+  assert.ok(smoke.chimneys.length >= 2, 'more than one house in a 1600 px strip');
+  for (const [x, y] of smoke.chimneys) {
+    assert.ok(x >= 0 && x < png.width && y >= 0 && y < png.height, `${x}, ${y} is on the strip`);
+    for (const dy of [0, 1, 4, 8]) {
+      const p = pixel(png, x, y + dy);
+      assert.equal(p.alpha, 255, `chimney at ${x}, ${y + dy}`);
+      assert.ok(p.index >= WALL && p.index < WINDOW, `chimney at ${x}, ${y + dy} is wall or roof, got ${p.index}`);
+    }
+  }
+  const sprite = readPng(fromRes(smoke.path));
+  assert.equal(pixel(sprite, smoke.origin[0], smoke.origin[1]).alpha, 255, 'a puff starts on the origin');
+});
+
+test('each pose has a mouth beside its own head, and mouth stays the seat one', () => {
+  const { mouth, mouth_by_pose: byPose, pose_rows: rows, cell, cols, frames, slots } = kit.rider;
+  assert.deepEqual(Object.keys(byPose).sort(), Object.keys(rows).sort());
+  assert.deepEqual(mouth, byPose.seat);
+  const sheet = readPng(fromRes(slots[0]));
+  /** The distance from a cell point to the nearest opaque pixel of that sprite frame. */
+  const nearest = (frame, row, [mx, my]) => {
+    let best = Infinity;
+    for (let y = 0; y < cell[1]; y++) {
+      for (let x = 0; x < cell[0]; x++) {
+        if (pixel(sheet, (frame % cols) * cell[0] + x, row * cell[1] + y).alpha > 0) {
+          best = Math.min(best, Math.hypot(x - mx, y - my));
+        }
+      }
+    }
+    return best;
+  };
+  for (const [name, at] of Object.entries(byPose)) {
+    const count = name === 'stop' ? 1 : frames;
+    for (let k = 0; k < count; k++) {
+      const row = rows[name] + Math.floor(k / cols);
+      assert.ok(nearest(k, row, at) <= 2.5, `${name} frame ${k}: ${at} is ${nearest(k, row, at)} px off the rider`);
+    }
+  }
+  // The single seat point floats free of the other two riding poses, which is why the key exists.
+  assert.ok(nearest(0, rows.stand, mouth) > 2.5);
+  assert.ok(nearest(0, rows.situp, mouth) > 2.5);
+});
+
+test('crowd flags have a hand to go in: hand_up is a raised hand in row 1 and empty in row 0', () => {
+  const { path, cell, count, hand_up: hand } = kit.props.crowd;
+  const sheet = readPng(fromRes(path));
+  for (let s = 0; s < count; s++) {
+    assert.ok(pixel(sheet, s * cell[0] + hand[0], cell[1] + hand[1]).alpha > 0, `spectator ${s}, hands up`);
+    assert.equal(pixel(sheet, s * cell[0] + hand[0], hand[1]).alpha, 0, `spectator ${s}, hands down`);
+  }
+  const flag = kit.props.flag;
+  const flags = readPng(fromRes(flag.path));
+  for (let f = 0; f < flag.frames; f++) {
+    assert.ok(pixel(flags, f * flag.cell[0] + flag.grip[0], flag.grip[1]).alpha > 0, `flag frame ${f} has its pole there`);
+  }
 });

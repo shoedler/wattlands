@@ -96,7 +96,7 @@ function renderParts() {
 const vergePaths = (name) => Array.from({ length: VERGE_FRAMES }, (_, f) => res(`world/${name}_${f}.png`));
 
 /** kit.json. S0 froze the keys; the values may be tuned. */
-function buildKit() {
+function buildKit(parts) {
   const prop = (key, rest) => ({ path: res(PROP_FILES[key]), ...rest });
   return {
     version: 1,
@@ -112,6 +112,7 @@ function buildKit() {
       front_hub: R.FRONT_HUB,
       pennant_foot: R.PENNANT_FOOT,
       mouth: R.MOUTH,
+      mouth_by_pose: R.MOUTH_BY_POSE,
       bubble: R.BUBBLE,
       rear_contact: R.REAR_CONTACT,
       pose_rows: R.POSE_ROWS,
@@ -163,11 +164,11 @@ function buildKit() {
       windpump: prop('windpump', { plane: 'near_trees', tower: [0, 0, 30, 70], rotor: [30, 0, 26, 26, 8], hub: [15, 8], base_y: 345 }),
       cattle: prop('cattle', { plane: 'mid_hills', cell: [12, 9], frames: 2, colors: 3, base_y: 320 }),
       tractor: prop('tractor', { cell: [36, 22], frames: 4, base_y: 310 }),
-      smoke: prop('smoke', { cell: [10, 16], frames: 6 }),
+      smoke: prop('smoke', { plane: 'near_trees', cell: [10, 16], frames: 6, origin: Props.SMOKE_ORIGIN, chimneys: parts.planes.near_trees.chimneys }),
       flock: prop('flock', { cell: [5, 3], frames: 2 }),
       balloon: prop('balloon', { cell: [18, 26], frames: 1, tod_min_row: 16 }),
-      crowd: prop('crowd', { cell: [16, 30], count: 8, foot_above_contact: 16 }),
-      flag: prop('flag', { cell: [12, 16], frames: 4 }),
+      crowd: prop('crowd', { cell: [16, 30], count: 8, foot_above_contact: 16, hand_up: Props.CROWD_HAND_UP }),
+      flag: prop('flag', { cell: [12, 16], frames: 4, grip: Props.FLAG_GRIP }),
       gantry: prop('gantry', { size: [200, 90], foot_above_contact: 12 }),
     },
   };
@@ -176,7 +177,7 @@ function buildKit() {
 /** Everything the bake owns: Map of path under assets/workout -> Canvas, plus the kit's JSON text. */
 export function render() {
   const parts = renderParts();
-  const kit = buildKit();
+  const kit = buildKit(parts);
   const files = new Map();
   files.set('world/tod_lut.png', parts.lut);
   files.set('world/sun.png', parts.sun);

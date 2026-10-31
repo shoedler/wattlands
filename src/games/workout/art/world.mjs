@@ -124,7 +124,10 @@ function poplar(c, x, base, h) {
   c.line(x + 2, base - h + 3, x + 4, base - h * 0.4, ix(P.TREE + 11));
 }
 
+/** A farmhouse with a chimney. Returns the chimney's top centre pixel: where kit.props.smoke rises from. */
 function house(c, x, base) {
+  c.rect(x + 19, base - 28, 3, 8, ix(P.WALL + 1));
+  c.rect(x + 18, base - 29, 5, 1, ix(P.ROOF));
   c.rect(x, base - 16, 26, 16, ix(P.WALL + 2));
   c.polyFill(
     [
@@ -138,8 +141,10 @@ function house(c, x, base) {
   c.rect(x + 18, base - 11, 3, 4, ix(P.WINDOW));
   c.rect(x + 3, base - 12, 5, 1, ix(P.WINDOW + 1));
   c.rect(x + 17, base - 12, 5, 1, ix(P.WINDOW + 1));
+  return [x + 20, base - 29];
 }
 
+/** The plane's Canvas also carries `chimneys`, [[x, y], ...] in strip px, which the bake writes to kit.json. */
 export function nearTreesPlane(seed) {
   const c = new Canvas(1600, 150, { wrapX: true });
   const f = waves(c.w, seed ^ 0x55, [3, 8]);
@@ -148,10 +153,11 @@ export function nearTreesPlane(seed) {
     for (let y = top; y < c.h; y++) c.px(x, y, ix(P.TREE + (y - top < 3 ? 6 : 1)));
   }
   const rnd = mulberry32(seed ^ 0x56);
+  c.chimneys = [];
   let x = 6;
   while (x < c.w - 40) {
     if (rnd() < 0.12) {
-      house(c, x, 128);
+      c.chimneys.push(house(c, x, 128));
       x += 40;
     } else {
       poplar(c, x, 124, 40 + rnd() * 50);

@@ -26,7 +26,6 @@ export const UPPER_ARM = 13;
 export const FOREARM = 13;
 export const HEAD_R = 4;
 export const PENNANT_FOOT = [15, 54];
-export const MOUTH = [53, 19];
 export const BUBBLE = [44, 2];
 export const REAR_CONTACT = [20, 79];
 
@@ -60,6 +59,13 @@ const POSES = {
   situp: { hip: [28, 40], shoulder: [36, 19], hands: [52, 40], head: [37, 12] },
   stop: { hip: [36, 44], shoulder: [47, 24], hands: [59, 42], head: [51, 18] },
 };
+
+/** Where a breath puff starts, per pose: just in front of the face, so it follows the head. */
+const MOUTH_FROM_HEAD = [4, 2];
+export const MOUTH_BY_POSE = Object.fromEntries(
+  Object.entries(POSES).map(([name, p]) => [name, [p.head[0] + MOUTH_FROM_HEAD[0], p.head[1] + MOUTH_FROM_HEAD[1]]]),
+);
+export const MOUTH = MOUTH_BY_POSE.seat;
 
 /** The stop pose's cranks: the far pedal forward, so the far foot rests level on it. */
 export const STOP_FRAME = 18;

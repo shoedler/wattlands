@@ -902,6 +902,24 @@
    53,
    19
   ],
+  "mouth_by_pose": {
+   "seat": [
+    53,
+    19
+   ],
+   "stand": [
+    67,
+    20
+   ],
+   "situp": [
+    41,
+    14
+   ],
+   "stop": [
+    55,
+    20
+   ]
+  },
   "bubble": [
    44,
    2
@@ -1236,11 +1254,30 @@
   },
   "smoke": {
    "path": "res://assets/workout/props/smoke.png",
+   "plane": "near_trees",
    "cell": [
     10,
     16
    ],
-   "frames": 6
+   "frames": 6,
+   "origin": [
+    5,
+    15
+   ],
+   "chimneys": [
+    [
+     247,
+     99
+    ],
+    [
+     722,
+     99
+    ],
+    [
+     1142,
+     99
+    ]
+   ]
   },
   "flock": {
    "path": "res://assets/workout/props/flock.png",
@@ -1266,7 +1303,11 @@
     30
    ],
    "count": 8,
-   "foot_above_contact": 16
+   "foot_above_contact": 16,
+   "hand_up": [
+    15,
+    3
+   ]
   },
   "flag": {
    "path": "res://assets/workout/props/flag.png",
@@ -1274,7 +1315,11 @@
     12,
     16
    ],
-   "frames": 4
+   "frames": 4,
+   "grip": [
+    1,
+    15
+   ]
   },
   "gantry": {
    "path": "res://assets/workout/props/gantry.png",
