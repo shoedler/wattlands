@@ -10,11 +10,15 @@
 //   node tools/lib/godot_lock.mjs run [--lease=<n>] [--lock-timeout=<s>] [--timeout=<s>] [--label=<text>] -- <exe> <args...>
 //   node tools/lib/godot_lock.mjs status [--json]
 //   node tools/lib/godot_lock.mjs cap
+//   node tools/lib/godot_lock.mjs set-cap <n>     (0 deletes the cap file)
 //
 // Lock directory: $WATTLANDS_GODOT_LOCK_DIR, else os.tmpdir()/wattlands-godot.
-// Cap: $WATTLANDS_GODOT_LOCK_CAP, else 4 slots with >= 8 CPUs and >= 16 GiB free RAM, else 2.
+// Cap: $WATTLANDS_GODOT_LOCK_CAP, else the cap file in the lock directory, else 4 slots with >= 8 CPUs
+// and >= 16 GiB free RAM, else 2. The cap file holds for every shell on the machine, whichever
+// checkout it runs from, and waiters re-read it on every poll, so a change applies at once.
 //
 // Files in the lock directory:
+//   cap             optional machine-wide cap: one positive integer (set-cap writes it; anything else is ignored)
 //   seq             the last ticket number handed out (written only under seq.mutex)
 //   seq.mutex       short exclusive-create mutex around ticket numbering (stale ones are broken)
 //   t-<seq>.json    one ticket per request: {seq, pid, lease, created, label}; its mtime is a heartbeat
@@ -61,15 +65,68 @@ export function lockDir() {
   return env ? path.resolve(env) : path.join(os.tmpdir(), 'wattlands-godot');
 }
 
-/** The slot cap: WATTLANDS_GODOT_LOCK_CAP if set, else 4 with >= 8 CPUs and >= 16 GiB free RAM, else 2. */
-export function machineCap() {
+export function capFile(dir = lockDir()) {
+  return path.join(dir, 'cap');
+}
+
+// Waiters read the cap file every poll, so a bad file is noted once per process and content.
+const capFileNotes = new Set();
+
+function noteBadCapFile(file, what) {
+  const key = `${file}\0${what}`;
+  if (capFileNotes.has(key)) return;
+  capFileNotes.add(key);
+  process.stderr.write(`godot_lock: ignoring cap file ${file}: ${what} (it must hold one positive integer)\n`);
+}
+
+/** The cap the file in `dir` asks for, or null with no file or a bad one. */
+function readCapFile(dir) {
+  const file = capFile(dir);
+  let text;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    if (err.code !== 'ENOENT') noteBadCapFile(file, err.code ?? err.message);
+    return null;
+  }
+  const trimmed = text.trim();
+  const n = Number(trimmed);
+  if (/^[1-9]\d*$/.test(trimmed) && Number.isSafeInteger(n)) return n;
+  noteBadCapFile(file, JSON.stringify(trimmed.slice(0, 40)));
+  return null;
+}
+
+/**
+ * The slot cap: WATTLANDS_GODOT_LOCK_CAP if set, else the cap file in `dir`, else 4 with >= 8 CPUs and
+ * >= 16 GiB free RAM, else 2.
+ */
+export function machineCap(dir = lockDir()) {
   const env = process.env.WATTLANDS_GODOT_LOCK_CAP;
   if (env !== undefined && env !== '') {
     const n = Number(env);
     if (Number.isInteger(n) && n >= 1) return n;
     throw new Error(`WATTLANDS_GODOT_LOCK_CAP must be a positive integer, got "${env}"`);
   }
-  return CPU_COUNT >= 8 && os.freemem() >= 16 * GIB ? 4 : 2;
+  return readCapFile(dir) ?? (CPU_COUNT >= 8 && os.freemem() >= 16 * GIB ? 4 : 2);
+}
+
+/** Writes the cap file, or deletes it for n = 0. The write is atomic: a waiter never reads half a number. */
+export function setCapFile(n, dir = lockDir()) {
+  if (!Number.isSafeInteger(n) || n < 0) throw new TypeError(`cap must be an integer >= 0, got ${n}`);
+  const file = capFile(dir);
+  if (n === 0) {
+    fs.rmSync(file, { force: true, maxRetries: 5, retryDelay: 50 });
+    return;
+  }
+  ensureDir(dir);
+  const tmp = `${file}.tmp-${process.pid}`;
+  fs.writeFileSync(tmp, `${n}\n`);
+  try {
+    fs.renameSync(tmp, file);
+  } catch (err) {
+    unlinkQuiet(tmp);
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------- small helpers
@@ -321,7 +378,7 @@ function lockTimeoutError() {
  * @param {number} [opts.lease=1] slots to take at once
  * @param {number} [opts.lockTimeoutS=2700] how long to wait for the grant
  * @param {string} [opts.dir] lock directory (default lockDir())
- * @param {number} [opts.cap] slot cap (default machineCap(), re-read on every poll)
+ * @param {number} [opts.cap] slot cap (default machineCap(dir), re-read on every poll)
  * @param {string} [opts.label] shown by `status`
  * @param {(line: string) => void} [opts.log] progress lines (default: silent)
  * @param {number} [opts.pollMs=200]
@@ -341,7 +398,7 @@ export async function acquire(opts = {}) {
   const pollMs = opts.pollMs ?? POLL_MS;
   const staleMs = opts.staleMs ?? STALE_MS;
   const staleConfirmMs = opts.staleConfirmMs ?? 2 * HEARTBEAT_MS;
-  const capOf = () => opts.cap ?? machineCap();
+  const capOf = () => opts.cap ?? machineCap(dir);
   capOf(); // validate the env override before taking a ticket
   ensureDir(dir);
   installExitHook();
@@ -526,7 +583,8 @@ export function killTree(pid) {
 const USAGE = `usage:
   node tools/lib/godot_lock.mjs run [--lease=<n>] [--lock-timeout=<s>] [--timeout=<s>] [--label=<text>] -- <exe> <args...>
   node tools/lib/godot_lock.mjs status [--json]
-  node tools/lib/godot_lock.mjs cap`;
+  node tools/lib/godot_lock.mjs cap
+  node tools/lib/godot_lock.mjs set-cap <n>     (0 deletes the cap file)`;
 
 function usage(msg) {
   if (msg) process.stderr.write(`godot_lock: ${msg}\n`);
@@ -686,6 +744,19 @@ function cmdStatus(argv) {
   }
 }
 
+function cmdSetCap(argv) {
+  if (argv.length !== 1 || !/^\d+$/.test(argv[0]) || !Number.isSafeInteger(Number(argv[0]))) {
+    usage(`set-cap needs one integer >= 0, got "${argv.join(' ')}"`);
+  }
+  const n = Number(argv[0]);
+  setCapFile(n);
+  const what = n === 0 ? 'deleted' : `set to ${n}`;
+  process.stdout.write(`cap file ${capFile()} ${what}; cap ${machineCap()}\n`);
+  if (process.env.WATTLANDS_GODOT_LOCK_CAP) {
+    process.stderr.write('godot_lock: WATTLANDS_GODOT_LOCK_CAP overrides the cap file in this shell\n');
+  }
+}
+
 function isMain() {
   if (!process.argv[1]) return false;
   const norm = (p) => {
@@ -711,6 +782,8 @@ if (isMain()) {
     cmdStatus(rest);
   } else if (command === 'cap') {
     process.stdout.write(`${machineCap()}\n`);
+  } else if (command === 'set-cap') {
+    cmdSetCap(rest);
   } else {
     usage(command ? `unknown command "${command}"` : '');
   }
