@@ -18,9 +18,9 @@ extends RefCounted
 ##                 the road (the headlight's; each searchlight's where its cone's lower edge meets
 ##                 the road, kept on screen, with a faint spill along the road out to where its
 ##                 axis lands, beam_pool(); the rooms' spill; the shot's flash), the little bases'
-##                 lamps, the halt line's and the turning places' lamps, burning wrecks and the
-##                 Behemoth, the beams' rim light on enemies and wrecks, the enemies' slits and
-##                 telegraph glows
+##                 lamps, the halt line's and the turning places' lamps, burning wrecks, the beams'
+##                 rim light on enemies and wrecks, the enemies' slits and telegraph glows; the far
+##                 panel has its own (TankFarPanel)
 
 const WARM := Color(1.0, 0.64, 0.32)
 const COLD := Color(0.66, 0.82, 1.0)
@@ -71,7 +71,7 @@ static func draw_world(ci: CanvasItem, v: TankView, state: TankState) -> void:
 	_world_lamps(ci, v, state)
 	for bx in TankForest.bases(v, state):
 		TankForest.draw_base_light(ci, v, bx)
-	_fires(ci, v, state)
+	_fires(ci, v)
 	_lit_by_beams(ci, v, state)
 	for id: int in v.enemy_rects:
 		var e := state.enemy(id)
@@ -422,7 +422,7 @@ static func _beam_rim(
 	)
 
 
-static func _fires(ci: CanvasItem, v: TankView, state: TankState) -> void:
+static func _fires(ci: CanvasItem, v: TankView) -> void:
 	for w in v.wrecks:
 		var k := v.wreck_fire(w)
 		if k <= 0.0:
@@ -440,23 +440,6 @@ static func _fires(ci: CanvasItem, v: TankView, state: TankState) -> void:
 		var fl := 0.75 + 0.25 * sin(v.time * 9.0 + r.position.x) * sin(v.time * 5.3)
 		TankDraw.glow_at(ci, c, 14.0 * k, Color(1.0, 0.42, 0.12, 0.45 * fl * k))
 		TankDraw.glow_at(ci, c, 4.0, Color(1.0, 0.75, 0.35, 0.7 * fl * k))
-	if not v.boss_visible(state):
-		return
-	var b := state.boss
-	var br := v.boss_rect(state)
-	var meta: Dictionary = v.kit.enemies.get("behemoth", {}).get("meta", {})
-	var bog: Array = meta.get("bogies_at", [])
-	for i in mini(b.bogie_hp.size(), bog.size()):
-		if b.bogie_hp[i] > 0.0 and b.phase != TankIds.BOSS_DEAD:
-			continue
-		var cpos := br.position + br.size * TankKit.vec(bog[i])
-		var fl2 := 0.7 + 0.3 * sin(v.time * 8.0 + i * 2.0) * sin(v.time * 4.7 + i)
-		TankDraw.glow_at(ci, cpos, 30.0, Color(1.0, 0.4, 0.1, 0.5 * fl2))
-		TankDraw.glow_at(ci, cpos + Vector2(0, -6), 10.0, Color(1.0, 0.75, 0.35, 0.8 * fl2))
-	if b.telegraph_s > 0.0:
-		var mz := br.position + v.boss_muzzle()
-		TankDraw.glow_at(ci, mz, 26.0, Color(1.0, 0.5, 0.2, 0.7))
-		TankDraw.glow_at(ci, mz, 7.0, Color(1.0, 0.8, 0.5, 0.8))
 
 
 static func _shells(ci: CanvasItem, v: TankView, state: TankState) -> void:

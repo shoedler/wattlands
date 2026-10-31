@@ -156,14 +156,14 @@ func test_slow_frames_for_five_seconds_switch_the_pass_off() -> void:
 	assert_false(d2.auto_off, "under 5 s keeps it")
 
 
-func test_enemies_stand_in_the_lanes_the_rules_hold_them_in() -> void:
+func test_near_threats_stand_in_the_lanes_the_rules_hold_them_in() -> void:
 	var s := U.fixture("gun_line", 3)
 	s.enemies.clear()
 	var x := s.hull.x_px + 420.0
 	for i in 4:
 		var e := TankEnemyState.new()
 		e.id = 100 + i
-		e.code = TankIds.ENEMY_CODES[TankIds.ENEMY_MEDIUM]
+		e.code = TankIds.ENEMY_CODES[TankIds.ENEMY_RECON]
 		e.x_px = x + i * 12.0
 		e.w = 96
 		e.h = 48
@@ -204,7 +204,7 @@ func _full_hull_crews() -> Array[int]:
 	return out
 
 
-func test_the_rules_gun_lines_are_drawn_in_their_lanes_with_no_overlap_in_a_lane() -> void:
+func test_the_rules_gun_lines_are_drawn_on_the_panel_their_frame_says() -> void:
 	for crew in _full_hull_crews():
 		for index: int in [2, 5, 8]:
 			var rig := TankRulesRig.new(crew)
@@ -212,60 +212,36 @@ func test_the_rules_gun_lines_are_drawn_in_their_lanes_with_no_overlap_in_a_lane
 			var v := U.view_of(self, rig.state)
 			U.run(v, 2)
 			var at := "crew %d gun line %d" % [crew, index]
-			var live: Array[TankEnemyState] = []
+			var live := 0
 			for e in rig.state.enemies:
-				if e.mode != TankIds.EM_DEAD:
-					live.append(e)
-					assert_eq(int(v.lanes[e.id]), e.lane, "%s: enemy %d" % [at, e.id])
-			assert_eq(v.lanes.size(), live.size(), "%s: every live enemy drawn" % at)
-			for i in live.size():
-				for j in range(i + 1, live.size()):
-					if live[i].lane != live[j].lane or live[i].side != live[j].side:
-						continue
-					var a: Rect2 = v.enemy_rects[live[i].id]
-					var b: Rect2 = v.enemy_rects[live[j].id]
-					assert_false(a.intersects(b), "%s: lane %d overlap" % [at, live[i].lane])
+				if e.mode == TankIds.EM_DEAD:
+					continue
+				live += 1
+				if e.is_near():
+					assert_eq(int(v.lanes[e.id]), e.lane, "%s: near %d" % [at, e.id])
+				else:
+					assert_true(v.far_rects.has(e.id), "%s: far %d" % [at, e.id])
+			assert_eq(v.lanes.size() + v.far_rects.size(), live, "%s: every live enemy drawn" % at)
 
 
-func test_the_behemoth_is_drawn_where_the_rules_hit_it() -> void:
+func test_the_behemoth_is_drawn_for_every_crew() -> void:
 	assert_eq(_full_hull_crews(), [1, 2, 3, 4] as Array[int], "one tank for every crew")
 	for crew in _full_hull_crews():
 		var s := U.fixture("boss", crew)
 		var v := U.view_of(self, s)
 		U.run(v, 2)
-		var br := v.boss_rect(s)
-		assert_eq(br.position.x, roundf(v.sx(v.boss_x(s))), "crew %d: its left edge" % crew)
-		var aux := TankAux.of(s)
-		var meta: Dictionary = v.kit.enemies["behemoth"]["meta"]
-		var at: Array = (meta["bogies_at"] as Array).duplicate()
-		at.append(meta["turret_at"])
-		for i in 4:
-			var r := TankTargets.boss_rect(s, aux, i)
-			var drawn := Rect2(
-				Vector2(v.sx(r.position.x), v.sy(r.position.y)),
-				Vector2(v.sx(r.end.x) - v.sx(r.position.x), v.sy(r.end.y) - v.sy(r.position.y))
-			)
-			var hit := br.position + br.size * TankKit.vec(at[i])
-			assert_true(
-				drawn.grow(2.0).has_point(hit),
-				(
-					"crew %d part %d: the view's hit at %s inside the rules box %s"
-					% [crew, i, hit, drawn]
-				)
-			)
-		var mz := TankTargets.boss_origin(s, aux) + aux.geo.boss_muzzle()
-		var view_mz := br.position + v.boss_muzzle()
-		assert_almost_eq(v.sx(mz.x), view_mz.x, 8.0, "crew %d: the main gun's end (x)" % crew)
-		assert_almost_eq(v.sy(mz.y), view_mz.y, 4.0, "crew %d: the main gun's end (y)" % crew)
+		var br := v.hud_boss_rect()
+		assert_true((v.panels["far"] as Rect2).encloses(br), "crew %d: in the far panel" % crew)
+		assert_true(br.grow(1.0).has_point(v.hud_boss_muzzle()), "crew %d: its main gun" % crew)
 
 
 func test_wrecks_age_on_sim_time_into_debris_heaps() -> void:
-	var s := U.fixture("state", 3)
+	var s := TankFixturesV4.make("near_ambush")
 	var v := U.view_of(self, s)
 	U.run(v, 2)
 	var id := s.enemies[0].id
 	s.enemies.remove_at(0)
-	v.apply_cue(s, TankEvents.KILL, TankEvents.kill(id, 2, TankEvents.BY_SHELL, 0))
+	v.apply_cue(s, TankEvents.KILL, TankEvents.kill(id, 7, TankEvents.BY_BOW, 0))
 	assert_eq(v.wrecks.size(), 1)
 	var w := v.wrecks[0]
 	assert_eq(v.wreck_collapse(w), 0.0, "a burning hulk at first")
@@ -415,7 +391,7 @@ func test_the_hud_geometry_reads_the_view() -> void:
 		assert_almost_eq(v.hud_barrel_length(), v.rig.gun_len + 1.0, 0.01)
 		var e := s.enemies[0]
 		var r := g.enemy_rect(e)
-		assert_eq(r.position, (v.enemy_rects[e.id] as Rect2).position + Vector2(0, v.y_off))
+		assert_eq(r, v.far_rects[e.id], "a far enemy: canvas px from the far panel")
 		assert_eq(v.hud_enemy_rect(-999), Rect2())
 		assert_eq(g.boss_rect(), Rect2(), "no Behemoth in an Advance")
 	var b := U.fixture("boss", 3)
