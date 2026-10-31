@@ -24,7 +24,7 @@ const CUE_HOOVES := "hooves"
 const CUE_RAM := "ram_thud"
 const CUE_GOLD := "gold"
 const CUE_TAR_HISS := "tar_hiss"
-const CUE_ARROW_RACK := "shot_arrow_rack"
+const CUE_KILL_ENGINE := "kill_engine"
 ## Events with no sound of their own. Every other event type maps to a cue (cue_for).
 const SILENT_EVENTS: Array[String] = []
 const HOOF_EVERY_S := 0.4
@@ -35,23 +35,26 @@ const COIN_EVERY_S := 0.3
 ## A ram's battering is one leak per whole HP: the alarm answers the first, not each.
 const LEAK_ALARM_EVERY_S := 3.0
 const MAX_SHOT_SOUNDS_PER_TICK := 3
-## A stone's or a volley's flight, as far as the delayed landing is concerned.
+## A shot's flight sound never runs longer than the host flies anything.
 const FLIGHT_MIN_S := 0.1
-const FLIGHT_MAX_S := 6.0
-const FLIGHT_DRAG := 0.0016
+const FLIGHT_MAX_S := 8.0
+## Side of the screen: art x from the middle over half the width, then the panned sends' reach.
+const PAN_SPREAD := 0.75
+## Volleys overlap: the organ fires every 1.5 s and an arrow flies about 4 s. Each volley still in the air takes this
+## off the next one's swoosh, so a full rate reads as racks passing over and not as one wall of hiss.
+const VOLLEY_TRIM_DB := -1.5
+const VOLLEY_TRIM_MAX := 2
+## A volley's patter by how many of its 12 arrows came down on nothing: this much under, per halving.
+const PATTER_HALVING_DB := -3.0
+const PATTER_MIN_DB := -11.0
+const ARROWS_PER_RACK := 12.0
 ## Gate hits answer what the gate lost since the last one, at most once a ram stroke, so the sound
 ## doesn't depend on the tick the damage came in: a host's fractions and a client's whole HP read
 ## the same. They and the hooves grow with the damage and the horses, up to these.
 const GATE_HIT_EVERY_S := 1.2
 const GATE_HIT_MIN_DROP := 0.5
 const GATE_DMG_MAX_DB := 6.0
-const HOOVES_MAX_DB := 10.0
-## The three arrows of a volley's whistle: their pitches spread by the shot's own spread seed.
-const WHISTLE_SPREAD := 0.03
-## The organ fires every 1.5 s at m = 1. Only a volley this long after the last whistling one
-## whistles: the others are the rack's release and their patter. A whistle every 1.5 s for 5 min
-## grates, and so does a whistle on the dot: at m = 1 these come to 4.5, 6, 4.5 and 9 s.
-const WHISTLE_GAPS_S: Array[float] = [3.5, 5.5, 3.5, 7.5]
+const HOOVES_MAX_DB := 4.0
 ## Every shot's own small pitch, from its spread seed: the release and flight of a single-file sound.
 const SHOT_PITCH_STEP := 0.015
 ## The hill wind's gusts: two slow sines. View-only, never in the rules.
@@ -73,8 +76,9 @@ var _paused: bool = false
 var _hoof_t: float = 0.0
 var _ram_t: float = 0.0
 var _ram_n: int = 0
-var _whistle_t: float = 0.0
-var _whistle_n: int = 0
+var last_flight_s: float = 0.0  ## the flight the last shot's sound was given (tests)
+var _shots := SiegeShotSounds.new()
+var _view: SiegeView = null
 var _coin_t: float = 0.0
 var _leak_t: float = 0.0
 var _gold_was: float = -1.0
@@ -113,6 +117,8 @@ static func cue_for(kind: String, data: Dictionary) -> String:
 	match kind:
 		SiegeIds.EV_SHOT:
 			return _shot_cue(int(data.get("kind", 0)))
+		SiegeIds.EV_KILL:
+			return CUE_KILL_ENGINE if SiegeIds.is_engine(int(data.get("et", 0))) else kind
 		SiegeIds.EV_RUSH:
 			return "rush" if int(data.get("on", 0)) != 0 else ""
 		SiegeIds.EV_BUY:
@@ -149,8 +155,11 @@ func update(state: SiegeState, dt: float, p_local_peer: int, view: SiegeView) ->
 	var me := state.rider(local_peer)
 	_local_slot = me.slot if me != null else -1
 	_leak_t = maxf(_leak_t - dt, 0.0)
-	_whistle_t = maxf(_whistle_t - dt, 0.0)
 	_kill_sounds = 0
+	_view = view
+	_shots.content = state.content
+	_shots.path = state.path
+	_landings(state, view)
 	_wheels(state, view)
 	_works(state, view)
 	_loops(state)
@@ -169,8 +178,10 @@ func _wheels(state: SiegeState, view: SiegeView) -> void:
 		var r := state.rider_at(slot)
 		if r == null:
 			continue
-		var params := {"p_eff": r.p_eff_w, "walkers": view.walker_count[slot]}
 		var lead := r.peer == local_peer
+		var params := {
+			"p_eff": r.p_eff_w, "walkers": view.walker_count[slot], "far": 0.0 if lead else 1.0
+		}
 		kit.drive(
 			"wheel%d" % slot, MACHINE_WHEEL, view.cranks[slot].revs, r.cadence_rpm, params, lead
 		)
@@ -231,8 +242,9 @@ func _bed(state: SiegeState, dt: float) -> void:
 	kit.bed_params({"gust": gust, "enemies": enemies, "in_wave": in_wave})
 
 
-## The module's cues. A shot carries its flight to its landing; events of one rider are that
-## rider's: full level for them, lower for the rest of the crew.
+## The module's cues. A shot starts its release and its flight here, and its landing comes from
+## _landings; events of one rider are that rider's: full level for them, lower for the rest of the
+## crew.
 func on_cue(kind: String, data: Dictionary) -> void:
 	var cue_name := cue_for(kind, data)
 	if cue_name == "":
@@ -243,7 +255,7 @@ func on_cue(kind: String, data: Dictionary) -> void:
 		SiegeIds.EV_KILL:
 			_kill_sounds += 1
 			if _kill_sounds <= MAX_SHOT_SOUNDS_PER_TICK:
-				kit.cue(cue_name)
+				kit.cue(cue_name, {"pan": _enemy_pan(int(data.get("id", -1)))})
 		SiegeIds.EV_LEAK:
 			if _leak_t <= 0.0:
 				_leak_t = LEAK_ALARM_EVERY_S
@@ -263,27 +275,63 @@ func _shot(cue_name: String, data: Dictionary) -> void:
 	if _shot_sounds > MAX_SHOT_SOUNDS_PER_TICK:
 		return
 	var sd := int(data.get("sd", 0))
-	var vars := {"p": 1.0 + SHOT_PITCH_STEP * float(posmod(sd, 7) - 3)}
-	var shot := int(data.get("kind", 0))
-	if shot == SiegeIds.SHOT_STONE or shot == SiegeIds.SHOT_ARROW:
-		vars["flight_s"] = flight_s(data)
-	if shot == SiegeIds.SHOT_ARROW:
-		for k in 3:
-			vars["p%d" % k] = 1.0 + WHISTLE_SPREAD * float(posmod(sd >> (k * 3), 7) - 3)
-		if _whistle_t > 0.0:
-			cue_name = CUE_ARROW_RACK
-		else:
-			_whistle_t = WHISTLE_GAPS_S[_whistle_n % WHISTLE_GAPS_S.size()]
-			_whistle_n += 1
-	kit.cue(cue_name, vars)
+	var weapon := SiegeShotSounds.weapon_of(int(data.get("kind", 0)))
+	var volleys := mini(_shots.in_air(weapon), VOLLEY_TRIM_MAX)
+	var flight := _shots.add(data, int(data.get("tk", 0)) * Wl.SIM_DT)
+	last_flight_s = clampf(float(flight["flight_s"]), FLIGHT_MIN_S, FLIGHT_MAX_S)
+	(
+		kit
+		. cue(
+			cue_name,
+			{
+				"p": 1.0 + SHOT_PITCH_STEP * float(posmod(sd, 7) - 3),
+				"flight_s": last_flight_s,
+				"pan0": _pan(flight["from"]),
+				"pan1": _pan(flight["to"]),
+				"lvl":
+				VOLLEY_TRIM_DB * float(volleys) if weapon == SiegeShotSounds.WEAPON_ARROW else 0.0,
+			}
+		)
+	)
 
 
-## How long a shot flies before it comes down to the road (about z 0).
-static func flight_s(data: Dictionary) -> float:
-	var o := SiegeEvents.shot_origin(data)
-	var v := SiegeEvents.shot_velocity(data)
-	var t := SiegeBallistics.flight_time(o, v, FLIGHT_DRAG, 0.0)
-	return clampf(t, FLIGHT_MIN_S, FLIGHT_MAX_S)
+## The flight this shot's sound is given, in seconds, as _shot works it out (tests).
+func flight_of(data: Dictionary) -> float:
+	var probe := SiegeShotSounds.new()
+	probe.content = _shots.content
+	probe.path = _shots.path
+	return clampf(float(probe.add(data, 0.0)["flight_s"]), FLIGHT_MIN_S, FLIGHT_MAX_S)
+
+
+## Every landing due on the clock the picture draws by. Paused, the shots hang in the air with it.
+func _landings(state: SiegeState, view: SiegeView) -> void:
+	if _paused or _shots.flying.is_empty():
+		return
+	for impact: Dictionary in _shots.step(view.clock_s, state.enemies):
+		var cue_name := "hit_%s_%s" % [impact["weapon"], impact["surface"]]
+		var lvl := 0.0
+		if impact["surface"] in [SiegeShotSounds.SURFACE_DIRT, SiegeShotSounds.SURFACE_WATER]:
+			lvl = patter_db(int(impact["count"])) if impact["weapon"] == "arrow" else 0.0
+		kit.cue(cue_name, {"pan": _pan(impact["at"]), "lvl": lvl})
+
+
+## A volley's patter under its level by how few of the rack's arrows it is.
+static func patter_db(misses: int) -> float:
+	var halvings := log(ARROWS_PER_RACK / maxf(float(misses), 1.0)) / log(2.0)
+	return maxf(PATTER_HALVING_DB * halvings, PATTER_MIN_DB)
+
+
+## -1 left of the screen .. 1 right, where the view draws world point `p`.
+func _pan(p: Vector3) -> float:
+	if _view == null or _view.bank == null:
+		return 0.0
+	var half := float(SiegeBakeBank.ART_SIZE.x) * 0.5
+	return clampf((_view.bank.to_art(p).x - half) / half * PAN_SPREAD, -1.0, 1.0)
+
+
+func _enemy_pan(enemy_id: int) -> float:
+	var e := _view.state.enemy(enemy_id) if _view != null and _view.state != null else null
+	return _pan(e.pos) if e != null else 0.0
 
 
 ## The mark lowers only when a hit fires and rises with a repair, so damage in any size of step adds up.

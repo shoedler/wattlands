@@ -147,7 +147,6 @@ func test_strokes_are_exact_across_the_cadence_range() -> void:
 		var to := voice.planned_to()
 		assert_almost_eq(v.cranks[0].revs, rpm / 60.0 * 8.0, 0.01, "%d rpm" % rpm)
 		assert_eq(_count(v, "pawl_click"), _pattern([0.0, 0.5], to), "pawl at %d rpm" % rpm)
-		assert_eq(_count(v, "wheel_creak"), _pattern([0.25], to), "creak at %d rpm" % rpm)
 		assert_eq(_count(v, "tread_step"), _pattern([0.0, 0.5], to), "step at %d rpm" % rpm)
 		assert_eq(_count(v, "axle_knock"), _pattern([0.75], to), "knock at %d rpm" % rpm)
 		assert_eq(voice.dropped, 0, "%d rpm" % rpm)
@@ -181,7 +180,7 @@ func test_cadence_zero_stops_the_wheel_dead_and_restarts_with_no_burst() -> void
 	var revs := v.cranks[0].revs
 	_run(v, 0.12)
 	var loop: LayeredLoop = v.audio.kit.machine_loop("wheel0")
-	assert_true(loop.db[0] <= LayeredLoop.OFF_DB, "the groan is shut within 120 ms")
+	assert_true(loop.db[0] <= LayeredLoop.OFF_DB, "the rumble is shut within 120 ms")
 	_run(v, 2.0)
 	assert_eq(_count(v, "pawl_click"), after_stop, "no stroke after the stop")
 	assert_eq(v.cranks[0].revs, revs, "the crank stands still")
@@ -206,7 +205,7 @@ func test_an_empty_slot_has_no_crank_and_no_wheel_voice() -> void:
 	assert_null(v.audio.kit.machine_voice("wheel1"))
 
 
-func test_load_raises_the_strokes_and_the_groan() -> void:
+func test_load_raises_the_strokes_and_the_rumble() -> void:
 	var low := _solo(90.0, 60.0)
 	var high := _solo(90.0, 340.0)
 	_run(low, 1.0)
@@ -217,29 +216,27 @@ func test_load_raises_the_strokes_and_the_groan() -> void:
 	assert_gt(high_loop.db[0], low_loop.db[0])
 
 
-func test_a_hard_effort_opens_two_strains_a_pitch_apart_and_recovery_none() -> void:
-	var easy := _solo(90.0, 80.0)
+func test_a_hard_effort_opens_the_timber_load_and_recovery_none() -> void:
+	var easy := _solo(90.0, 60.0)
 	var hard := _solo(90.0, 300.0)
 	_run(easy, 1.0)
 	_run(hard, 1.0)
 	var soft_loop: LayeredLoop = easy.audio.kit.machine_loop("wheel0")
 	var hard_loop: LayeredLoop = hard.audio.kit.machine_loop("wheel0")
-	assert_eq(hard_loop.layer(1).get("sound"), "timber_strain")
-	assert_eq(hard_loop.layer(2).get("sound"), "timber_strain")
-	for i in [1, 2]:
-		assert_eq(soft_loop.on[i], 0, "no strain player in recovery")
-		assert_eq(hard_loop.on[i], 1)
-	assert_almost_eq(hard_loop.pitch[2] / hard_loop.pitch[1], 1.13, 0.001)
+	assert_eq(hard_loop.layer(2).get("sound"), "wheel_load")
+	assert_gt(hard_loop.db[2], soft_loop.db[2] + 10.0)
 
 
-func test_the_groan_follows_cadence_in_pitch() -> void:
+func test_the_rumble_holds_one_pitch_at_every_cadence() -> void:
 	var slow := _solo(60.0)
 	var fast := _solo(120.0)
 	_run(slow, 1.5)
 	_run(fast, 1.5)
 	var a: LayeredLoop = slow.audio.kit.machine_loop("wheel0")
 	var b: LayeredLoop = fast.audio.kit.machine_loop("wheel0")
-	assert_gt(b.pitch[0], a.pitch[0])
+	assert_almost_eq(a.pitch[0], 1.0, 0.001, "two riders 2 rpm apart must not sweep a comb")
+	assert_almost_eq(b.pitch[0], 1.0, 0.001)
+	assert_gt(b.db[0], a.db[0], "the wheel is louder when it goes faster, never higher")
 
 
 func test_the_local_rider_leads_and_others_sit_under_with_no_footsteps() -> void:
@@ -262,6 +259,12 @@ func test_the_local_rider_leads_and_others_sit_under_with_no_footsteps() -> void
 	assert_gt(lead_voice.fired, other_voice.fired)
 	var pawls := _db_of(v, "pawl_click")
 	assert_gt(pawls.max() - pawls.min(), 8.0, "others play under the lead")
+	var other_loop: LayeredLoop = kit.machine_loop("wheel%d" % ((lead_slot + 1) % 4))
+	var lead_loop: LayeredLoop = kit.machine_loop("wheel%d" % lead_slot)
+	assert_eq(other_loop.on[0], 0, "another rider's wheel is not your rumble")
+	assert_eq(other_loop.on[1], 1, "but its far one")
+	assert_eq(lead_loop.on[1], 0)
+	assert_gt(lead_loop.db[0], other_loop.db[1])
 
 
 func test_the_mine_and_the_pump_lock_to_their_drawn_phase() -> void:
@@ -293,97 +296,117 @@ func test_an_empty_cauldron_stops_the_pump_and_the_bubbling() -> void:
 # --- Events -----------------------------------------------------------------------------------
 
 
-func test_a_bolt_twangs_then_whooshes() -> void:
+func test_a_bolt_twangs_then_its_flight_sounds() -> void:
 	var v := _solo(0.0)
 	v.audio.on_cue(SiegeIds.EV_SHOT, _shot(SiegeIds.SHOT_BOLT))
 	assert_true(v.audio.played.has("ballista_twang"))
-	assert_false(v.audio.played.has("bolt_whoosh"), "the whoosh leaves after the string")
+	assert_false(v.audio.played.has("bolt_hiss"), "the hiss leaves after the string")
 	_run(v, 0.1)
-	assert_true(v.audio.played.has("bolt_whoosh"))
+	assert_true(v.audio.played.has("bolt_hiss"))
 
 
-func test_a_stone_lands_when_its_flight_is_over() -> void:
+func test_a_scorpion_snaps_then_its_flight_sounds() -> void:
 	var v := _solo(0.0)
-	var ev := _shot(SiegeIds.SHOT_STONE)
-	var flight := SiegeAudio.flight_s(ev)
-	assert_gt(flight, SiegeAudio.FLIGHT_MIN_S)
-	v.audio.on_cue(SiegeIds.EV_SHOT, ev)
-	assert_true(v.audio.played.has("onager_release"))
-	_run(v, flight - 0.1)
-	assert_true(v.audio.played.has("stone_whoosh"))
-	assert_false(v.audio.played.has("stone_impact"))
-	_run(v, 0.2)
+	v.audio.on_cue(SiegeIds.EV_SHOT, _shot(SiegeIds.SHOT_SCORPION))
+	assert_true(v.audio.played.has("scorpion_snap"))
+	_run(v, 0.1)
+	assert_true(v.audio.played.has("bolt_hiss"), "the Scorpion had no flight at all once")
+
+
+func test_every_shot_kind_flies_for_as_long_as_it_does_and_then_lands() -> void:
+	var table := [
+		[SiegeIds.SHOT_STONE, "onager_release", "stone_tumble"],
+		[SiegeIds.SHOT_ARROW, "arrow_release", "arrow_swarm"],
+		[SiegeIds.SHOT_BOLT, "ballista_twang", "bolt_hiss"],
+		[SiegeIds.SHOT_SCORPION, "scorpion_snap", "bolt_hiss"],
+	]
+	for row: Array in table:
+		var v := _solo(0.0)
+		var ev := _shot(row[0])
+		ev["tk"] = v.state.tick
+		v.audio.on_cue(SiegeIds.EV_SHOT, ev)
+		assert_true(v.audio.played.has(row[1]), row[1])
+		var flight: float = v.audio.last_flight_s
+		assert_gt(flight, 0.1, "%s flies" % row[1])
+		_run(v, 0.1)
+		assert_true(v.audio.played.has(row[2]), row[2])
+		assert_eq(v.audio.kit.flights_live(), 1, "%s is in the air" % row[2])
+		_run(v, flight - 0.1 - 0.15)
+		assert_eq(v.audio.kit.flights_live(), 1, "%s has not ended early" % row[2])
+		_run(v, 0.5)
+		assert_eq(v.audio.kit.flights_live(), 0, "%s ends with the flight" % row[2])
+
+
+## Landings run on the clock the picture draws by: a host's clock is its ticks.
+func _land(v: SiegeView, seconds: float) -> void:
+	for _i in roundi(seconds / Wl.SIM_DT):
+		v.state.tick += 1
+		v.update(Wl.SIM_DT)
+
+
+func _shot_at(kind: int, st: SiegeState) -> Dictionary:
+	var ev := _shot(kind)
+	ev["tk"] = st.tick
+	return ev
+
+
+func test_a_shot_lands_on_the_ground_with_nothing_there() -> void:
+	var table := [
+		[SiegeIds.SHOT_ARROW, "arrow_dirt"],
+		[SiegeIds.SHOT_STONE, "stone_impact"],
+		[SiegeIds.SHOT_BOLT, "bolt_dirt"],
+		[SiegeIds.SHOT_SCORPION, "bolt_dirt"],
+	]
+	for row: Array in table:
+		var v := _solo(0.0)
+		v.audio.on_cue(SiegeIds.EV_SHOT, _shot_at(row[0], v.state))
+		assert_false(v.audio.played.has(row[1]), "still in the air")
+		_land(v, v.audio.last_flight_s + 1.0)
+		assert_true(v.audio.played.has(row[1]), "lands: %s" % row[1])
+
+
+func test_a_stone_on_a_ram_is_timber_and_on_spearmen_a_body() -> void:
+	var table := [[SiegeIds.ENEMY_RAM, "stone_wood"], [SiegeIds.ENEMY_SPEAR, "hit_flesh"]]
+	for row: Array in table:
+		var st := SiegeKit.state("short", 1, 0)
+		var v := _view(st)
+		var ev := _shot_at(SiegeIds.SHOT_STONE, st)
+		var e := SiegeKit.enemy(st, row[0], 100.0)
+		v.audio.on_cue(SiegeIds.EV_SHOT, ev)
+		e.pos = SiegeV2ShotReplay.from_event(ev, st.path, st.content).landing(0)
+		_land(v, v.audio.last_flight_s + 0.3)
+		assert_true(v.audio.played.has(row[1]), "%d: %s" % [row[0], row[1]])
+
+
+func test_a_paused_game_holds_its_shots_in_the_air() -> void:
+	var v := _solo(0.0)
+	v.audio.on_cue(SiegeIds.EV_SHOT, _shot_at(SiegeIds.SHOT_STONE, v.state))
+	_land(v, 0.5)
+	assert_eq(v.audio.kit.flights_live(), 1)
+	_bus().paused_changed.emit(true, "test")
+	_run(v, 20.0, 0.05)
+	assert_eq(v.audio.kit.flights_live(), 1, "the flight waits with the picture")
+	assert_false(v.audio.played.has("stone_impact"), "and the landing with it")
+	_bus().paused_changed.emit(false, "resume")
+	_land(v, v.audio.last_flight_s + 1.0)
+	assert_eq(v.audio.kit.flights_live(), 0)
 	assert_true(v.audio.played.has("stone_impact"))
 
 
-func test_a_rack_within_the_gap_is_a_release_and_a_patter_with_no_whistle() -> void:
-	var v := _solo(0.0)
-	var ev := _shot(SiegeIds.SHOT_ARROW, 1)
-	v.audio.on_cue(SiegeIds.EV_SHOT, ev)
-	_run(v, 0.2)
-	assert_eq(_count(v, "arrow_whistle"), 3)
-	_run(v, 1.3)
-	v.audio.on_cue(SiegeIds.EV_SHOT, _shot(SiegeIds.SHOT_ARROW, 2))
-	_run(v, 0.2)
-	assert_eq(_count(v, "arrow_whistle"), 3, "1.5 s later: no whistle")
-	assert_eq(_count(v, "arrow_release"), 2)
-	_run(v, SiegeAudio.flight_s(ev) + 0.1)
-	assert_eq(_count(v, "arrow_patter"), 2, "the second rack still lands")
-	_run(v, SiegeAudio.WHISTLE_GAPS_S[0])
-	v.audio.on_cue(SiegeIds.EV_SHOT, _shot(SiegeIds.SHOT_ARROW, 3))
-	_run(v, 0.2)
-	assert_eq(_count(v, "arrow_whistle"), 6, "the gap over: three more")
-
-
-func test_an_organ_at_full_rate_whistles_one_volley_in_three() -> void:
-	var v := _solo(0.0)
-	for k in 12:
-		v.audio.on_cue(SiegeIds.EV_SHOT, _shot(SiegeIds.SHOT_ARROW, k + 1))
-		_run(v, 1.5)
-	assert_eq(_count(v, "arrow_release"), 12)
-	assert_eq(_count(v, "arrow_whistle"), 12, "4 whistling volleys of 12, 3 whistles each")
-
-
-func test_the_whistling_volleys_keep_no_steady_beat() -> void:
-	var v := _solo(0.0)
-	for k in 30:
-		v.audio.on_cue(SiegeIds.EV_SHOT, _shot(SiegeIds.SHOT_ARROW, k + 1))
-		_run(v, 1.5)
-	var kit := v.audio.kit
-	var at: Array[float] = []
-	for i in kit.played.size():
-		# Each whistling volley's first arrow: the other two come 0.07 and 0.15 s after it.
-		if kit.played[i] == "arrow_whistle" and (at.is_empty() or kit.played_t[i] - at[-1] > 1.0):
-			at.append(kit.played_t[i])
-	var gaps: Array[float] = []
-	for i in range(1, at.size()):
-		gaps.append(snappedf(at[i] - at[i - 1], 0.5))
-	assert_eq(
-		gaps.slice(0, 4), [4.5, 6.0, 4.5, 9.0] as Array[float], "the organ's rate through the cycle"
-	)
-
-
-func test_shots_of_a_single_file_sound_carry_a_pitch_from_their_spread_seed() -> void:
-	var bank := AudioBank.load_bank(SiegeAudio.BANK_PATH)
-	for cue_name: String in ["shot_bolt", "shot_stone", "shot_arrow", "shot_arrow_rack"]:
-		var vars: Array[String] = []
-		for hit: Dictionary in bank.cues[cue_name]["hits"]:
-			vars.append(str(hit.get("pitch_var", "")))
-		assert_true(vars.has("p"), cue_name)
-	var v := _solo(0.0)
-	v.audio.on_cue(SiegeIds.EV_SHOT, _shot(SiegeIds.SHOT_BOLT))
-	assert_true(v.audio.played.has("ballista_twang"))
-
-
-func test_a_volley_whistles_three_times_then_patters() -> void:
-	var v := _solo(0.0)
+func test_a_host_and_a_client_hear_one_shot_alike() -> void:
+	var host := _solo(0.0)
+	var g := F.make_game(F.make_ctx(3, 1, "vo2", Wl.CLIENT, 2))
+	_games.append(g)
+	g.apply_snapshot(Protocol.apply_int_fields(FIX.snapshot(), g.int_fields()["snapshot"]))
+	var client := g.make_view() as SiegeView
+	add_child_autofree(client)
 	var ev := _shot(SiegeIds.SHOT_ARROW)
-	v.audio.on_cue(SiegeIds.EV_SHOT, ev)
-	assert_true(v.audio.played.has("arrow_release"))
-	_run(v, 0.2)
-	assert_eq(_count(v, "arrow_whistle"), 3)
-	_run(v, SiegeAudio.flight_s(ev))
-	assert_eq(_count(v, "arrow_patter"), 1)
+	host.audio.on_cue(SiegeIds.EV_SHOT, ev)
+	g.apply_event(ev)
+	assert_true(client.audio.played.has("arrow_release"), "the client's event reaches its kit")
+	assert_true(host.audio.played.has("arrow_release"))
+	_run(client, 0.2)
+	assert_true(client.audio.played.has("arrow_swarm"))
 
 
 func test_shot_sounds_are_capped_per_tick_and_the_next_tick_starts_over() -> void:
@@ -695,16 +718,26 @@ func test_the_junction_and_the_pour_run_only_in_a_wave() -> void:
 	assert_false(v.audio.kit.entry_loop("tar_bubble").all_off(), "the cauldron still simmers")
 
 
+func test_hooves_cannot_cover_the_battle() -> void:
+	var st := SiegeKit.state("short", 1, 0)
+	for k in 8:
+		SiegeKit.enemy(st, SiegeIds.ENEMY_CHARIOT, 100.0 + k)
+	var v := _view(st)
+	_run(v, 1.0, 0.05)
+	assert_lte(_db_of(v, "hooves").max(), -16.0, "a live wave has them 96 % of the time")
+
+
 func test_the_junction_rises_with_the_team() -> void:
 	var st := SiegeKit.state("short", 1, 0)
 	st.team_w = 200.0
 	st.rider_at(0).cadence_rpm = 90.0
 	var v := _view(st)
 	_run(v, 1.0)
-	var low: float = v.audio.kit.entry_loop("junction_clatter").pitch[0]
+	var low: float = v.audio.kit.entry_loop("junction_clatter").db[0]
 	st.team_w = 1400.0
 	_run(v, 2.0)
-	assert_gt(v.audio.kit.entry_loop("junction_clatter").pitch[0], low)
+	assert_gt(v.audio.kit.entry_loop("junction_clatter").db[0], low, "louder, not higher")
+	assert_almost_eq(v.audio.kit.entry_loop("junction_clatter").pitch[0], 1.0, 0.001)
 
 
 func test_the_hill_wind_plays_and_the_lark_only_sings_in_the_warm_up() -> void:

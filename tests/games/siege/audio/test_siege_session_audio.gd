@@ -13,6 +13,13 @@ const FLIGHT_SOUNDS := {
 	SiegeIds.SHOT_ARROW: ["arrow_whistle", "arrow_swarm"],
 	SiegeIds.SHOT_SCORPION: ["bolt_whoosh", "bolt_hiss"],
 }
+## The surfaces a real first wave lands on, by the sounds that say so. Shield bearers come in later waves: the unit
+## test below puts one under an arrow.
+const SURFACE_SOUNDS := {
+	"dirt": ["arrow_dirt", "bolt_dirt", "stone_impact"],
+	"flesh": ["hit_flesh"],
+	"wood": ["hit_wood", "bolt_wood", "stone_wood"],
+}
 
 var _game: SiegeGame = null
 var _view: SiegeView = null
@@ -82,3 +89,152 @@ func test_every_shot_of_a_real_wave_starts_a_flight_sound() -> void:
 	assert_eq(flying.call(SiegeIds.SHOT_ARROW), arrows, "one flight per volley")
 	assert_eq(flying.call(SiegeIds.SHOT_STONE), stones, "one flight per stone")
 	assert_eq(flying.call(SiegeIds.SHOT_BOLT), bolts, "one flight per bolt, the Scorpion's too")
+
+
+func test_every_flight_is_given_the_real_time_the_shot_flies() -> void:
+	var seen := {}
+	_ride(60.0, seen)
+	var bank: SiegeContent = _game.state.content
+	var path: SiegePath = _game.state.path
+	assert_gt(_shots.size(), 5)
+	for ev in _shots:
+		var r := SiegeV2ShotReplay.from_event(ev, path, bank)
+		var want := 0.0
+		for j in r.n:
+			want += r.land_t[j] / float(r.n)
+		var got: float = float(_view.audio.flight_of(ev))
+		assert_almost_eq(got, want, 0.02, "kind %d" % int(ev["kind"]))
+
+
+func test_a_real_wave_lands_on_the_ground_and_on_every_kind_of_target() -> void:
+	var seen := {}
+	_ride(FIX_SECONDS, seen)
+	for surface: String in SURFACE_SOUNDS:
+		var n := 0
+		for id: String in SURFACE_SOUNDS[surface]:
+			n += int(seen.get(id, 0))
+		assert_gt(n, 0, "%s heard in %d s of a real wave: %s" % [surface, FIX_SECONDS, seen])
+
+
+func test_a_volley_is_not_twelve_voices() -> void:
+	var seen := {}
+	_ride(FIX_SECONDS, seen)
+	var volleys := _shots_of(SiegeIds.SHOT_ARROW)
+	var impacts := int(seen.get("arrow_dirt", 0)) + int(seen.get("hit_flesh", 0))
+	impacts += int(seen.get("hit_shield", 0)) + int(seen.get("hit_wood", 0))
+	assert_lte(
+		float(impacts) / float(volleys), 7.0, "%d impacts of %d volleys" % [impacts, volleys]
+	)
+	assert_gt(float(impacts) / float(volleys), 0.8, "and each volley lands")
+
+
+func test_a_real_first_wave_gives_every_shot_a_real_player() -> void:
+	var ctx := F.make_ctx(1, 3, "short", Wl.SOLO, 1, 3)
+	_game = F.make_game(ctx)
+	var plans := _game.build_effort_plans()
+	var final := {}
+	for peer: int in plans:
+		final[peer] = PlanValidator.finalize(plans[peer])
+	_view = _game.make_view() as SiegeView
+	add_child_autofree(_view)
+	var kit := _view.audio.kit
+	kit.force_audio = true
+	kit.setup(SiegeAudio.BANK_PATH, 3)
+	assert_false(kit.silent, "real players, on the Dummy driver")
+	_game.cue.connect(_on_cue)
+	var voiced := 0
+	var was := 0
+	for tick in roundi(40.0 / Wl.SIM_DT):
+		_game.sim_step(Wl.SIM_DT, F.frame(ctx, final, tick))
+		if kit.flight_starts > was:
+			was = kit.flight_starts
+			var f: GameAudioKit.Flight = kit._flights[kit._flights.size() - 1]
+			if f.voice != null and f.voice.player.playing:
+				voiced += 1
+		_view.update(Wl.SIM_DT)
+	assert_gt(kit.flight_starts, 5, "flights started")
+	assert_eq(voiced, kit.flight_starts, "each on a player that plays")
+	kit.stop_all()
+
+
+func _sounds_of(kind: int, enemy_type: int, enemy_at_landing: bool) -> Array[Dictionary]:
+	var st := SiegeKit.state("short", 1, 0)
+	var sounds := SiegeShotSounds.new()
+	sounds.content = st.content
+	sounds.path = st.path
+	var o: Array[int] = [8000, 12000, 1500]
+	var v: Array[int] = [12000, 15000, 9000]
+	var src := SiegeIds.SRC_PAD + 1 if kind == SiegeIds.SHOT_SCORPION else 1
+	if kind == SiegeIds.SHOT_ARROW:
+		src = SiegeIds.STATION_ARROWS
+	elif kind == SiegeIds.SHOT_STONE:
+		src = SiegeIds.STATION_ONAGER
+	var n := 12 if kind == SiegeIds.SHOT_ARROW else 1
+	var ev := SiegeEvents.shot(0, src, kind, o, v, n, 77)
+	sounds.add(ev, 0.0)
+	var r := sounds.flying[0].replay
+	var e := SiegeKit.enemy(st, enemy_type, 100.0)
+	e.pos = r.landing(0) if enemy_at_landing else Vector3(-500.0, -500.0, 0.0)
+	var out: Array[Dictionary] = []
+	for i in 300:
+		out.append_array(sounds.step(i * Wl.SIM_DT, st.enemies))
+	return out
+
+
+func _surfaces(list: Array[Dictionary]) -> Array[String]:
+	var out: Array[String] = []
+	for imp in list:
+		out.append(str(imp["surface"]))
+	return out
+
+
+func test_each_weapon_lands_on_each_surface_by_what_stands_there() -> void:
+	var table := [
+		[SiegeIds.SHOT_STONE, SiegeIds.ENEMY_SPEAR, "flesh"],
+		[SiegeIds.SHOT_STONE, SiegeIds.ENEMY_RAM, "wood"],
+		[SiegeIds.SHOT_STONE, SiegeIds.ENEMY_TOWER, "wood"],
+		[SiegeIds.SHOT_STONE, SiegeIds.ENEMY_SHIELD, "shield"],
+		[SiegeIds.SHOT_ARROW, SiegeIds.ENEMY_SPEAR, "flesh"],
+		[SiegeIds.SHOT_ARROW, SiegeIds.ENEMY_RAM, "wood"],
+		[SiegeIds.SHOT_SCORPION, SiegeIds.ENEMY_SPEAR, "flesh"],
+		[SiegeIds.SHOT_SCORPION, SiegeIds.ENEMY_CHARIOT, "wood"],
+		[SiegeIds.SHOT_BOLT, SiegeIds.ENEMY_RAM, "wood"],
+	]
+	for row: Array in table:
+		var got := _surfaces(_sounds_of(row[0], row[1], true))
+		assert_true(got.has(row[2]), "shot %d on enemy %d: %s" % [row[0], row[1], got])
+
+
+func test_nothing_there_is_the_ground() -> void:
+	for kind in [
+		SiegeIds.SHOT_ARROW, SiegeIds.SHOT_STONE, SiegeIds.SHOT_BOLT, SiegeIds.SHOT_SCORPION
+	]:
+		assert_eq(
+			_surfaces(_sounds_of(kind, SiegeIds.ENEMY_SPEAR, false))[0], "dirt", "kind %d" % kind
+		)
+
+
+func test_a_shield_bearer_blocks_by_the_hosts_own_stream() -> void:
+	var got := _surfaces(_sounds_of(SiegeIds.SHOT_ARROW, SiegeIds.ENEMY_SHIELD, true))
+	assert_true(got.has("shield") or got.has("flesh"), "%s" % [got])
+
+
+func test_a_volleys_misses_are_one_patter_and_its_hits_are_capped() -> void:
+	var got := _surfaces(_sounds_of(SiegeIds.SHOT_ARROW, SiegeIds.ENEMY_SPEAR, false))
+	assert_eq(got.count("dirt"), 1, "twelve arrows, one patter")
+	var on_ram := _surfaces(_sounds_of(SiegeIds.SHOT_ARROW, SiegeIds.ENEMY_RAM, true))
+	assert_lte(on_ram.count("wood"), SiegeShotSounds.MAX_HITS_PER_VOLLEY)
+
+
+func test_the_moat_is_water_and_the_bridge_and_the_field_are_not() -> void:
+	assert_eq(SiegeShotSounds.ground_at(Vector3(20.0, 68.0, 0.0)), "water", "before the south wall")
+	assert_eq(SiegeShotSounds.ground_at(Vector3(44.0, 68.0, 0.0)), "dirt", "on the bridge")
+	assert_eq(SiegeShotSounds.ground_at(Vector3(-8.0, 30.0, 0.0)), "water", "beside the west wall")
+	assert_eq(SiegeShotSounds.ground_at(Vector3(-60.0, 45.0, 0.0)), "dirt", "the road")
+	assert_eq(SiegeShotSounds.ground_at(Vector3(20.0, 30.0, 8.0)), "dirt", "inside the fort")
+
+
+func test_a_patter_is_quieter_for_few_arrows() -> void:
+	assert_almost_eq(SiegeAudio.patter_db(12), 0.0, 0.01)
+	assert_almost_eq(SiegeAudio.patter_db(6), SiegeAudio.PATTER_HALVING_DB, 0.01)
+	assert_gte(SiegeAudio.patter_db(1), SiegeAudio.PATTER_MIN_DB)
