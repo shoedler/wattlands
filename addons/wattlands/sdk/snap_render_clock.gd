@@ -26,6 +26,10 @@ var render_t: float = 0.0
 var _placed: bool = false
 
 
+func _init(p_min_delay_s: float = CLIENT_DELAY_S) -> void:
+	min_delay_s = p_min_delay_s
+
+
 ## True once render_t has been placed (after the first entry).
 func is_set() -> bool:
 	return _placed

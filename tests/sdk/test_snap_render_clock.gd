@@ -26,6 +26,12 @@ func test_the_constants() -> void:
 	assert_eq(SnapRenderClock.new().min_delay_s, SnapRenderClock.CLIENT_DELAY_S)
 
 
+func test_the_smallest_delay_is_the_clients_unless_given() -> void:
+	assert_almost_eq(SnapRenderClock.new().delay(null), SnapRenderClock.CLIENT_DELAY_S, 1e-9)
+	var host := SnapRenderClock.new(SnapRenderClock.HOST_DELAY_S)
+	assert_almost_eq(host.delay(null), SnapRenderClock.HOST_DELAY_S, 1e-9)
+
+
 func test_it_does_nothing_without_history() -> void:
 	var c := SnapRenderClock.new()
 	c.advance(0.016, null)
