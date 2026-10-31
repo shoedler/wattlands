@@ -185,6 +185,91 @@ test('a safety prompt clears +6 LU over each horn, a volley and a docking tower 
   }
 });
 
+test('the wheel stops rising under 60 rpm and above 340 W, where a prompt has nothing to spare', () => {
+  const at = (points, x) => {
+    if (x <= points[0][0]) return points[0][1];
+    for (let i = 1; i < points.length; i++) {
+      if (x <= points[i][0]) return points[i - 1][1] + ((points[i][1] - points[i - 1][1]) * (x - points[i - 1][0])) / (points[i][0] - points[i - 1][0]);
+    }
+    return points[points.length - 1][1];
+  };
+  const wheel = doc.machines.treadwheel;
+  for (const layer of [...wheel.events, ...wheel.loops]) {
+    for (const by of layer.db_by ?? []) {
+      if (by.param === 'rpm') assert.equal(at(by.points, 40), at(by.points, 60), `${layer.sound}: rpm under 60`);
+      if (by.param === 'p_eff') assert.equal(at(by.points, 500), at(by.points, 340), `${layer.sound}: p_eff above 340`);
+    }
+  }
+});
+
+// The prompt over what is running, at quarter-revolution steps across two revolutions: a stroke landing
+// in the prompt's own window is what reads worst, and that depends on the phase.
+function promptMargins(bank, shared, scenario, t0, rpm, name) {
+  const out = [];
+  for (let k = 0; k < 8; k++) {
+    const t = t0 + (k * 60) / rpm / 4;
+    const sim = simulate(bank, { ...scenario, duration: t + 0.8, prompts: [{ t, name }], shared });
+    const pm = mixdown(bank, sim, { shared, tail: 0 });
+    const from = Math.round(t * MIX_RATE);
+    const to = Math.round((t + 0.6) * MIX_RATE);
+    const slice = (st) => [st[0].subarray(from, to), st[1].subarray(from, to)];
+    const others = [new Float64Array(to - from), new Float64Array(to - from)];
+    for (const bus of ['Machines', 'Ambience', 'Sfx', 'UI']) {
+      const b = slice(pm.stems[bus]);
+      for (let i = 0; i < to - from; i++) {
+        others[0][i] += b[0][i];
+        others[1][i] += b[1][i];
+      }
+    }
+    out.push(momentaryMaxLufs(slice(pm.stems.Master), MIX_RATE) - momentaryMaxLufs(others, MIX_RATE));
+  }
+  return out;
+}
+
+function ridingScenario(base, rpm, p, others) {
+  const riders = [];
+  for (let i = 0; i < others; i++) {
+    riders.push({ id: `o${i}`, machine: 'treadwheel', lead: false, rpm_scale: 0.97 - i * 0.02, params: { p_eff: p, walkers: 2 } });
+  }
+  return {
+    ...base,
+    cues: [],
+    machines: [
+      { id: 'lead', machine: 'treadwheel', lead: true },
+      ...riders,
+      { id: 'mine', machine: 'mine', lead: true, rpm_by: { param: 'm', points: [[0, 0], [1, 54]] } },
+      { id: 'pump', machine: 'pump', lead: true, rpm_by: { param: 'tar_m', points: [[0, 0], [1, 30]] } },
+    ],
+    loops: [
+      { id: 'junction_clatter', t0: 0, t1: 30, params: { team_w: p * (1 + others) } },
+      { id: 'tar_bubble', t0: 0, t1: 30, params: { m: 0.8 } },
+      { id: 'tar_pour', t0: 0, t1: 30, params: {} },
+    ],
+    segments: [{ rpm, s: 30, params: { p_eff: p, walkers: 2, gust: 0.5, m: 0.9, tar_m: 0.8 } }],
+  };
+}
+
+const PROMPT_CASES = [
+  // The preview's own slow and fast segments, nothing landing.
+  { label: 'nothing landing, 60 rpm 220 W', rpm: 60, t0: 8, name: 'warning', scenario: (base) => ({ ...base, cues: [] }) },
+  { label: 'nothing landing, 110 rpm 340 W', rpm: 110, t0: 50, name: 'warning', scenario: (base) => ({ ...base, cues: [] }) },
+  // The brief tolerates 70-79 rpm with a small arrow.
+  { label: '75 rpm 280 W with 3 others', rpm: 75, t0: 8, name: 'warning', scenario: (base) => ridingScenario(base, 75, 280, 3) },
+  // The cadence the rescue prompt fires at.
+  { label: 'rescue at 44 rpm 250 W', rpm: 44, t0: 8, name: 'rescue', scenario: (base) => ridingScenario(base, 44, 250, 0) },
+];
+
+for (const c of PROMPT_CASES) {
+  test(`a safety prompt clears +6 LU at every quarter revolution: ${c.label}`, () => {
+    const bank = new BankAudio(doc, path.dirname(BANK));
+    const sharedPath = path.join(REPO, 'assets', '_shared', 'audio', 'audio.json');
+    const shared = new BankAudio(loadBank(sharedPath), path.dirname(sharedPath));
+    const margins = promptMargins(bank, shared, c.scenario(previewScenario(doc, {})), c.t0, c.rpm, c.name);
+    const low = Math.min(...margins);
+    assert.ok(low >= 6, `min +${low.toFixed(2)} LU: ${margins.map((m) => m.toFixed(2)).join(' ')}`);
+  });
+}
+
 test('the recipes render as the files on disk say', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(path.dirname(BANK), 'audio_manifest.json'), 'utf8'));
   const r = renderSound('pawl_click', doc.sounds.pawl_click, 1, { game: 'siege' });

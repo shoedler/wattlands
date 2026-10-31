@@ -49,8 +49,9 @@ const HOOVES_MAX_DB := 10.0
 ## The three arrows of a volley's whistle: their pitches spread by the shot's own spread seed.
 const WHISTLE_SPREAD := 0.03
 ## The organ fires every 1.5 s at m = 1. Only a volley this long after the last whistling one
-## whistles: the others are the rack's release and their patter. A whistle every 1.5 s for 5 min grates.
-const WHISTLE_EVERY_S := 3.5
+## whistles: the others are the rack's release and their patter. A whistle every 1.5 s for 5 min
+## grates, and so does a whistle on the dot: at m = 1 these come to 4.5, 6, 4.5 and 9 s.
+const WHISTLE_GAPS_S: Array[float] = [3.5, 5.5, 3.5, 7.5]
 ## Every shot's own small pitch, from its spread seed: the release and flight of a single-file sound.
 const SHOT_PITCH_STEP := 0.015
 ## The hill wind's gusts: two slow sines. View-only, never in the rules.
@@ -73,6 +74,7 @@ var _hoof_t: float = 0.0
 var _ram_t: float = 0.0
 var _ram_n: int = 0
 var _whistle_t: float = 0.0
+var _whistle_n: int = 0
 var _coin_t: float = 0.0
 var _leak_t: float = 0.0
 var _gold_was: float = -1.0
@@ -221,9 +223,11 @@ static func _tower_walking(state: SiegeState) -> bool:
 func _bed(state: SiegeState, dt: float) -> void:
 	_gust_t += dt
 	var gust := 0.5 + 0.3 * sin(_gust_t * GUST_RATES.x) + 0.2 * sin(_gust_t * GUST_RATES.y)
-	var enemies := float(state.enemies.size())
+	# Under a pause the bed still runs, and a burst spot's later beats wait for the resume: no spot of
+	# the battle or of the calm may start, or they all land together when the picture moves again.
+	var enemies := 0.0 if _paused else float(state.enemies.size())
 	# A warm-up wave is the calm hill too: the lark and the anvil belong to all but a real wave.
-	var in_wave := 1.0 if state.role == SiegeIds.ROLE_WAVE else 0.0
+	var in_wave := 1.0 if _paused or state.role == SiegeIds.ROLE_WAVE else 0.0
 	kit.bed_params({"gust": gust, "enemies": enemies, "in_wave": in_wave})
 
 
@@ -269,7 +273,8 @@ func _shot(cue_name: String, data: Dictionary) -> void:
 		if _whistle_t > 0.0:
 			cue_name = CUE_ARROW_RACK
 		else:
-			_whistle_t = WHISTLE_EVERY_S
+			_whistle_t = WHISTLE_GAPS_S[_whistle_n % WHISTLE_GAPS_S.size()]
+			_whistle_n += 1
 	kit.cue(cue_name, vars)
 
 

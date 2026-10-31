@@ -217,6 +217,21 @@ func test_load_raises_the_strokes_and_the_groan() -> void:
 	assert_gt(high_loop.db[0], low_loop.db[0])
 
 
+func test_a_hard_effort_opens_two_strains_a_pitch_apart_and_recovery_none() -> void:
+	var easy := _solo(90.0, 80.0)
+	var hard := _solo(90.0, 300.0)
+	_run(easy, 1.0)
+	_run(hard, 1.0)
+	var soft_loop: LayeredLoop = easy.audio.kit.machine_loop("wheel0")
+	var hard_loop: LayeredLoop = hard.audio.kit.machine_loop("wheel0")
+	assert_eq(hard_loop.layer(1).get("sound"), "timber_strain")
+	assert_eq(hard_loop.layer(2).get("sound"), "timber_strain")
+	for i in [1, 2]:
+		assert_eq(soft_loop.on[i], 0, "no strain player in recovery")
+		assert_eq(hard_loop.on[i], 1)
+	assert_almost_eq(hard_loop.pitch[2] / hard_loop.pitch[1], 1.13, 0.001)
+
+
 func test_the_groan_follows_cadence_in_pitch() -> void:
 	var slow := _solo(60.0)
 	var fast := _solo(120.0)
@@ -314,7 +329,7 @@ func test_a_rack_within_the_gap_is_a_release_and_a_patter_with_no_whistle() -> v
 	assert_eq(_count(v, "arrow_release"), 2)
 	_run(v, SiegeAudio.flight_s(ev) + 0.1)
 	assert_eq(_count(v, "arrow_patter"), 2, "the second rack still lands")
-	_run(v, SiegeAudio.WHISTLE_EVERY_S)
+	_run(v, SiegeAudio.WHISTLE_GAPS_S[0])
 	v.audio.on_cue(SiegeIds.EV_SHOT, _shot(SiegeIds.SHOT_ARROW, 3))
 	_run(v, 0.2)
 	assert_eq(_count(v, "arrow_whistle"), 6, "the gap over: three more")
@@ -327,6 +342,25 @@ func test_an_organ_at_full_rate_whistles_one_volley_in_three() -> void:
 		_run(v, 1.5)
 	assert_eq(_count(v, "arrow_release"), 12)
 	assert_eq(_count(v, "arrow_whistle"), 12, "4 whistling volleys of 12, 3 whistles each")
+
+
+func test_the_whistling_volleys_keep_no_steady_beat() -> void:
+	var v := _solo(0.0)
+	for k in 30:
+		v.audio.on_cue(SiegeIds.EV_SHOT, _shot(SiegeIds.SHOT_ARROW, k + 1))
+		_run(v, 1.5)
+	var kit := v.audio.kit
+	var at: Array[float] = []
+	for i in kit.played.size():
+		# Each whistling volley's first arrow: the other two come 0.07 and 0.15 s after it.
+		if kit.played[i] == "arrow_whistle" and (at.is_empty() or kit.played_t[i] - at[-1] > 1.0):
+			at.append(kit.played_t[i])
+	var gaps: Array[float] = []
+	for i in range(1, at.size()):
+		gaps.append(snappedf(at[i] - at[i - 1], 0.5))
+	assert_eq(
+		gaps.slice(0, 4), [4.5, 6.0, 4.5, 9.0] as Array[float], "the organ's rate through the cycle"
+	)
 
 
 func test_shots_of_a_single_file_sound_carry_a_pitch_from_their_spread_seed() -> void:
@@ -533,6 +567,33 @@ func test_a_pause_stops_the_ram_and_the_hooves_over_a_frozen_picture() -> void:
 	_run(v, 2.0, 0.05)
 	assert_gt(_count(v, "ram_thud"), rams, "the ram goes on after the pause")
 	assert_gt(_count(v, "hooves"), hooves, "and so do the hooves")
+
+
+func test_a_pause_starts_no_war_drums_and_does_not_stack_them_for_the_resume() -> void:
+	var st := SiegeKit.state("short", 1, 0)
+	SiegeKit.enemy(st, SiegeIds.ENEMY_SPEAR, 100.0)
+	var v := _view(st)
+	_run(v, 30.0, 0.05)
+	assert_gt(_count(v, "war_drum"), 0, "they beat before the pause")
+	_bus().paused_changed.emit(true, "test")
+	var drums := _count(v, "war_drum")
+	_run(v, 60.0, 0.05)
+	assert_eq(_count(v, "war_drum"), drums, "no drums over a frozen picture")
+	_bus().paused_changed.emit(false, "resume")
+	_run(v, 2.0, 0.05)
+	assert_lte(_count(v, "war_drum") - drums, 3, "at most one burst's worth after the resume")
+
+
+func test_a_pause_in_a_break_starts_no_anvil_and_no_lark() -> void:
+	var v := _view(SiegeKit.state("short", 1, 0, 1, SiegeIds.ROLE_BREAK))
+	_run(v, 2.0, 0.05)
+	_bus().paused_changed.emit(true, "test")
+	var anvils := _count(v, "far_anvil")
+	var larks := _count(v, "lark")
+	_run(v, 120.0, 0.05)
+	assert_eq(_count(v, "far_anvil"), anvils, "no anvil over a frozen picture")
+	assert_eq(_count(v, "lark"), larks)
+	_bus().paused_changed.emit(false, "resume")
 
 
 func test_each_ram_stroke_differs_a_little() -> void:

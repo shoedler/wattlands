@@ -165,13 +165,14 @@ Every sound is rendered from `assets/siege/audio/audio.json` by `tools/audio`. N
 
 | # | Step | Expected | Result |
 | --- | --- | --- | --- |
-| 59 | Listen: the preview mp3, then 60 s of riding at 60, 90 and 110 rpm | A timber treadwheel: pawl and footfall twice a revolution, a creak, a knock of the axle, a groan under them, a strain that grows when you ride hard. Not a machine gun, not a drone. Tell whether the creak reads as wood and not as a bird | |
-| 60 | Watch your wheel while you change cadence | The walkers' stride and the strokes move together, one walk cycle per revolution; they follow the reported cadence about once a second. Stop pedalling: strokes end at once, the groan is gone within a blink | |
-| 61 | Each weapon firing: ballista, onager, arrow organ, a Scorpion | A ballista's twang and whoosh, the onager's release, a tumbling stone and its landing, three arrows whistling then a patter on landing, only every third rack at full rate, a quick Scorpion snap. Is the whistle every 4.5 s still pleasant over a 5 minute wave? At most 3 shot sounds per tick | |
-| 62 | The tar works and the mine working; chariots, a ram at the gate, a walking tower, gate hits, a Breach | The pump's stroke with its drawn cycle, tar bubbling and pouring, a hiss when the curtain or coat changes, the mine's picks. Hooves quiet, the ram a slow low knock, the tower creaks and docks with a thud, a Breach is a crash that ducks the rest. A warning or rescue prompt still cuts through all of it. Stop pedalling until the session pauses with a ram at the gate: no ram, no hooves over the frozen picture | |
+| 59 | Listen: the preview mp3, then 60 s of riding at 60, 90 and 110 rpm | A timber treadwheel: pawl and footfall twice a revolution, a creak, a knock of the axle, a groan under them, a strain that grows when you ride hard. Not a machine gun, not a drone. Tell whether the creak reads as wood and not as a bird. At 110 rpm and a hard effort the groan is about two thirds of the wheel, by choice (ADR "an even wheel"): do the strokes still carry the cadence, or does it read as a drone? | |
+| 60 | Watch your wheel while you change cadence | The walkers' stride and the strokes move together, one walk cycle per revolution; they follow the reported cadence about once a second. Stop pedalling: the wheel's strokes end at once and the groan is gone within a blink. Two honest exceptions, both following the drawn phase: with Reserve the mine and the pump run on for 10 s after a stop, and with the Aqueduct the pump never stops | |
+| 61 | Each weapon firing: ballista, onager, arrow organ, a Scorpion | A ballista's twang and whoosh, the onager's release, a tumbling stone and its landing, three arrows whistling then a patter on landing, whistles 4.5, 6, 4.5 and 9 s apart at full rate with plain racks between, a quick Scorpion snap. Are the whistles still pleasant over a 5 minute wave, and are the plain racks heard? At most 3 shot sounds per tick | |
+| 62 | The tar works and the mine working; chariots, a ram at the gate, a walking tower, gate hits, a Breach | The pump's stroke with its drawn cycle, tar bubbling and pouring, a hiss when the curtain or coat changes, the mine's picks. Hooves quiet, the ram a slow low knock, the tower creaks and docks with a thud, a Breach is a crash that ducks the rest. A warning or rescue prompt still cuts through all of it. Stop pedalling until the session pauses with a ram at the gate: no ram, no hooves, no war drums over the frozen picture, and no pile of drums on the resume | |
+| 66 | Under load, let your cadence sag: hold a hard wave target and fall through 70 to under 45 rpm, until the rescue prompt sounds. Then the same warning at 60 rpm and at 75 rpm in a busy wave | The prompt is plain over the wheel and the battle every time, not something you have to listen for. The mix alone reaches the +6 LU target only in part of this range (ADR "A safety prompt clears", its table). Log the cadence, the power and whether you heard it at once | |
 | 63 | A wave start, a siege engine's push, a rush, a wave's end | A far horn for each, the wheel ducking under it, and a bell at the end; readable, not startling. Tell whether you hear the horn over the wheel at 110 rpm: it is about level with the mix in its best octave | |
 | 64 | Earn gold, buy, switch a route, Overdrive | A coin when your own gold goes up, a hammer on a purchase, a lever on a route, a horn call on Overdrive. Another rider's lever is quieter than your own | |
-| 65 | The hill and the whole mix | Gusting wind, crows and banners now and then, war drums and the far crowd growing with the enemies; a far anvil and a lark in the warm-up and between waves. Nothing drowns the others at normal volume; the Settings bus sliders each do what they say. Pleasant over a whole shift? Note anything tiring | |
+| 65 | The hill and the whole mix | Gusting wind, brighter between waves, crows and banners now and then, war drums growing with the enemies, the far crowd under them; a far anvil and a lark in the warm-up and between waves. Do the drums, the banners and the anvil reach you at all over the wheel in a wave? They are marginal on paper. Nothing drowns the others at normal volume; the Settings bus sliders each do what they say. Pleasant over a whole shift? Note anything tiring | |
 
 ## 15. The HUD with and without a heart rate sensor
 
@@ -179,20 +180,20 @@ The HUD is Siege's own (`docs/games/siege.md` 3). Run `short` with the real trai
 
 | # | Step | Expected | Result |
 | --- | --- | --- | --- |
-| 66 | No sensor paired: ride a wave | No heart rate cell, the cockpit is the narrow plate (344 art px); clock, watts and cadence read from 3 m | |
-| 67 | Pair a sensor in Settings, ride a wave | The cell shows a muted heart and cream digits, the plate is the wide one (404 art px); the bpm follows your sensor | |
-| 68 | Take the strap off or stop the watch's broadcast for 30 s | The cell stays and shows `--`, never "no sensor", then the digits come back. Log how long the sensor takes | |
-| 69 | Hold steady power inside the band on the real 1 Hz data for 2 minutes | The watts number moves calmly (a 3 s mean), no up or down arrow flickers on and off at a steady effort. Log any flicker | |
-| 70 | Drift 10% under the target, then 10% over | The blue up arrow, then the amber down arrow, each after about 3 s | |
-| 71 | In a wave, let the cadence fall under 70 rpm | After about 1.5 s: the cadence on a red chip and SPIN UP: RESCUE AT 45. Back above 72: both clear | |
-| 72 | In a break, ride at 60 rpm | No red chip: rescue is not armed at 50% FTP | |
-| 73 | Trigger rescue (under 45 rpm for 3 s) | The caption reads RESCUE and the watts really applied (compare with the trainer), RPM 70+, RESCUE: SPIN 70+, THEN: RAMP BACK TO the plan's watts. The platform's rescue banner shows in its own colours | |
-| 74 | Stop pedaling | PEDAL: LOAD DROPPED on the chip within about 3 s; the target caption shows the floor | |
-| 75 | Start an Overdrive | SPRINT LEFT with its clock, SPRINT and the real band for your FTP, the SIM chip and the gear. Under the band: SPRINT ..., SHIFT UP; in it: HOLD ...; over it: EASE TO .... The gear changes with your shifting. Back in ERG, ERG shows and the gear is gone | |
-| 76 | Pull the trainer's power for 10 s during a wave | The platform's trainer notice shows, the watts read `--`, not 0, the caption reads TARGET --, and the chip says NO TRAINER DATA: KEEP PEDALLING until data returns; never PEDAL: LOAD DROPPED | |
-| 77 | Check W/kg with the opt-in off, then on (Settings) | Off: none anywhere. On: the W/kg under the %FTP | |
-| 78 | The last 30 s of a break before a wave | The clock turns gold, LOAD UP IN 0:30, SPIN UP counts down; the NEXT line's watts match what the trainer then applies | |
-| 79 | Ride a whole `short` on an integrated-graphics PC at 1080p with four riders | 60 fps with the HUD up, also with the shop open. Log any dropped frames | |
+| 67 | No sensor paired: ride a wave | No heart rate cell, the cockpit is the narrow plate (344 art px); clock, watts and cadence read from 3 m | |
+| 68 | Pair a sensor in Settings, ride a wave | The cell shows a muted heart and cream digits, the plate is the wide one (404 art px); the bpm follows your sensor | |
+| 69 | Take the strap off or stop the watch's broadcast for 30 s | The cell stays and shows `--`, never "no sensor", then the digits come back. Log how long the sensor takes | |
+| 70 | Hold steady power inside the band on the real 1 Hz data for 2 minutes | The watts number moves calmly (a 3 s mean), no up or down arrow flickers on and off at a steady effort. Log any flicker | |
+| 71 | Drift 10% under the target, then 10% over | The blue up arrow, then the amber down arrow, each after about 3 s | |
+| 72 | In a wave, let the cadence fall under 70 rpm | After about 1.5 s: the cadence on a red chip and SPIN UP: RESCUE AT 45. Back above 72: both clear | |
+| 73 | In a break, ride at 60 rpm | No red chip: rescue is not armed at 50% FTP | |
+| 74 | Trigger rescue (under 45 rpm for 3 s) | The caption reads RESCUE and the watts really applied (compare with the trainer), RPM 70+, RESCUE: SPIN 70+, THEN: RAMP BACK TO the plan's watts. The platform's rescue banner shows in its own colours | |
+| 75 | Stop pedaling | PEDAL: LOAD DROPPED on the chip within about 3 s; the target caption shows the floor | |
+| 76 | Start an Overdrive | SPRINT LEFT with its clock, SPRINT and the real band for your FTP, the SIM chip and the gear. Under the band: SPRINT ..., SHIFT UP; in it: HOLD ...; over it: EASE TO .... The gear changes with your shifting. Back in ERG, ERG shows and the gear is gone | |
+| 77 | Pull the trainer's power for 10 s during a wave | The platform's trainer notice shows, the watts read `--`, not 0, the caption reads TARGET --, and the chip says NO TRAINER DATA: KEEP PEDALLING until data returns; never PEDAL: LOAD DROPPED | |
+| 78 | Check W/kg with the opt-in off, then on (Settings) | Off: none anywhere. On: the W/kg under the %FTP | |
+| 79 | The last 30 s of a break before a wave | The clock turns gold, LOAD UP IN 0:30, SPIN UP counts down; the NEXT line's watts match what the trainer then applies | |
+| 80 | Ride a whole `short` on an integrated-graphics PC at 1080p with four riders | 60 fps with the HUD up, also with the shop open. Log any dropped frames | |
 
 ## Log template
 
