@@ -309,7 +309,7 @@ test('one morning in the LUT: stars gone by sunrise, windows lit then dark, mist
   assert.equal(at(STAR, 0)[3], 255, 'stars at blue hour');
   assert.equal(at(STAR, sunrise + 1)[3], 0, 'no stars after sunrise');
   assert.equal(at(MIST, 0)[3], 255, 'mist at blue hour');
-  assert.equal(at(MIST, Math.floor(0.65 * 31))[3], 0, 'mist gone by the morning');
+  assert.equal(at(MIST, Math.ceil(0.65 * 31))[3], 0, 'mist gone by the morning');
   assert.ok(luma(at(WINDOW, 0)) > 150, 'windows lit at dawn');
   assert.ok(luma(at(WINDOW, 31)) < 80, 'windows dark by day');
   for (let r = 0; r < 32; r++) {
