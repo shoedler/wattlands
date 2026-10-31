@@ -7,7 +7,7 @@ WATTLANDS is a multiplayer fitness party app for the Wahoo KICKR CORE (and KICKR
 | Game | Players | What it is |
 | --- | --- | --- |
 | **Turbo Reel** | 1-4 + bots | Sport fishing on one shared ocean. Pedal your boat out, stop, cast at the fish you see and fight them: the trainer holds the fish's pull and keeping your cadence in the band tires it. Free Roam is competitive (most points in 10 to 60 minutes wins, bots fill empty seats); workouts keep a plan and score together. The first-run game. |
-| **Castellum Rotae** | 1-4 | Co-op tower defense on a Roman hill fort. Your watts turn a treadwheel; send them to the towers or the generator. |
+| **Castellum Rotae** | 1-4 | Co-op tower defense at a Roman wheel fort. Your watts turn a great treadwheel; send them to the gold mine, the tree ballista, the great onager, the arrow organ or the tar works. |
 | **Workout** | 1-8 | Group interval rides, sprints, a rolling road and `.zwo` import. |
 | Diesel Domestiques | 1-3 | Coming next: crew a pedal-powered super-heavy tank, one engine per rider (brief in `docs/games/tank.md`). |
 
