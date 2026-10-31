@@ -50,7 +50,7 @@ const D5_AROUND_LOUDEST_S = [-0.4, -0.2, 0];
 const D5_AROUND_HUD_S = [-0.4, -0.2, 0];
 /** D4 reads the Machines bus this long after the stop. */
 const D4_LATER_S = 0.4;
-/** preview.checks.d4_sweep: long enough for a machine's strokes to go through their variants and pitch tables. */
+/** Long enough for a machine's strokes to go through their variants and pitch tables. */
 const D4_SWEEP_S = 25;
 /** D6: the ride, then a coast if the preview has one. */
 const D6_RIDE_S = 30;
@@ -507,9 +507,9 @@ export function scoreBank(doc, dir, { shared, root = null, rpms = null, stems = 
   if (stopAt === null) rows.push({ id: 'D4', pass: false, value: 'no stop', target: 'preview needs a 0 rpm segment' });
   else {
     const here = levelAfterStop(mix, stopAt, D4_LATER_S, 2);
-    const swept = p.checks?.d4_sweep ? d4Sweep(bank, p, moving) : null;
-    const level = Math.max(here, swept?.level ?? -300);
-    rows.push({ id: 'D4', pass: level < -60, value: round(level), target: `Machines below -60 dBFS 400 ms after ${swept ? 'a stop anywhere in the cycle' : 'the stop'}`, note: swept?.note });
+    const swept = d4Sweep(bank, p, moving);
+    const level = Math.max(here, swept.level);
+    rows.push({ id: 'D4', pass: level < -60, value: round(level), target: 'Machines below -60 dBFS 400 ms after a stop anywhere in the cycle', note: swept.note });
   }
 
   // D5: the safety prompts over the mix, ducking counted: at the mix's midpoint, and on and just before its loudest moment, where a duck that is already releasing meets what is coming.

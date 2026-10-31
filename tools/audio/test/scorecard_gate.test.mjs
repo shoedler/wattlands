@@ -90,15 +90,12 @@ test('D5 hears the loudest moment, not only the midpoint', () => {
   assert.ok(Math.abs(t - (moving - 0.5)) < 1, `the worst of it, ${loud.note}, is on the blast at ${moving - 0.5}`);
 });
 
-test("checks.d4_sweep: a ring that only some stops meet, and that the preview's own stop misses, fails D4", () => {
+test('D4 reads a stop anywhere in the cycle: a ring that few stops would meet still fails, and names the stroke', () => {
   const doc = structuredClone(fixture);
   // Once in 8 revolutions, with a ring long enough to reach past the 400 ms.
   doc.sounds.late_ring = { dur: 0.7, seed: 9, locked: true, layers: [{ src: 'sine', f: 900, gain: 0.8, env: { a: 0.001, h: 0.45, d: 0.2, curve: 'lin' } }] };
   doc.machines.slow = { bus: 'Machines', events: [{ at: [0.13], sound: 'late_ring', db: -6, lead_only: true }] };
   doc.preview.others = [...(doc.preview.others ?? []), { machine: 'slow', lead: true, rpm_scale: 1 / 8 }];
-  const asStopped = row(card(doc), 'D4');
-  assert.ok(asStopped.pass, `the preview's own stop misses it: ${asStopped.value}`);
-  doc.preview.checks = { ...doc.preview.checks, d4_sweep: true };
   const swept = row(card(doc), 'D4');
   assert.equal(swept.pass, false, `${swept.value} ${swept.note}`);
   assert.match(swept.note, /late_ring/);
