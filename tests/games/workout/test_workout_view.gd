@@ -65,7 +65,7 @@ func test_pennants_carry_the_slot_look() -> void:
 	for s: Dictionary in me["shapes"]:
 		colors.append(s["color"])
 	assert_true(colors.has(Wl.slot_look(1)["color"]), "slot 1's color")
-	assert_true(colors.has(WorkoutArt.WHITE), "the local rider's caret")
+	assert_true(bool(me["local"]), "the rider layer puts its caret on this one")
 	# Slot 1 is dashed: two dark stripes on the flag.
 	var dark: Color = (Wl.slot_look(1)["color"] as Color).darkened(0.45)
 	assert_eq(colors.count(dark), 2)
@@ -86,8 +86,42 @@ func test_every_slot_look_is_distinct() -> void:
 			sig.append([s["color"], (s["points"] as PackedVector2Array).size()])
 		assert_false(seen.has(sig), "slot %d differs from the others" % i)
 		seen.append(sig)
+	var rows: Array = []
 	for shape: String in ["circle", "triangle", "square", "diamond"]:
-		assert_gt(WorkoutArt.shape_points(shape, Vector2.ZERO, 3.0).size(), 2)
+		assert_false(rows.has(WorkoutArt.badge_rows(shape)), "%s has its own outline" % shape)
+		rows.append(WorkoutArt.badge_rows(shape))
+
+
+func test_a_pennant_is_small_on_the_art_grid_and_shaded() -> void:
+	for i in 8:
+		var look := Wl.slot_look(i)
+		var tones := {}
+		var flag_right := 0.0
+		for s: Dictionary in WorkoutArt.pennant_shapes(look, i, {"in_band": true}):
+			var pts: PackedVector2Array = s["points"]
+			assert_eq(pts.size(), 4, "a rect")
+			assert_eq(pts[0].x, pts[3].x, "axis aligned")
+			assert_eq(pts[0].y, pts[1].y, "axis aligned")
+			for q in pts:
+				assert_eq(q, q.floor(), "whole art pixels, slot %d" % i)
+			assert_eq(pts[1].x - pts[0].x >= 1.0, true)
+			flag_right = maxf(flag_right, pts[1].x)
+			tones[s["color"]] = true
+		assert_true(flag_right <= 9.0, "the flag is at most 9 px long, slot %d" % i)
+		var color: Color = look["color"]
+		assert_true(tones.has(color), "its colour, slot %d" % i)
+		var other := 0
+		for c: Color in tones:
+			if c.s > 0.2 and absf(wrapf(c.h - color.h, -0.5, 0.5)) < 0.12 and c != color:
+				other += 1
+		assert_true(other >= 2, "a light and a shadow of its colour, slot %d" % i)
+
+
+func test_a_pole_is_one_pixel_wide() -> void:
+	for i in 8:
+		var pole: PackedVector2Array = WorkoutArt.pennant_shapes(Wl.slot_look(i), i)[0]["points"]
+		assert_eq(pole[1].x - pole[0].x, 1.0, "slot %d" % i)
+		assert_eq(pole[2].y, 0.0, "from the foot up")
 
 
 func test_the_road_follows_the_course_in_rolling_road() -> void:

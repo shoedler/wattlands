@@ -63,21 +63,31 @@ func _draw() -> void:
 
 
 ## Where the road sinks below its flat line the verge sinks with it, and the sky would show between
-## the trees' mist and the fence: the verge's ground runs on up behind it. One index stretched, so
-## it stays in the LUT and goes through the shader like the rest.
+## the trees' mist and the fence: the verge's own grass runs on up behind it, tile over tile, as a
+## meadow. It stays in the LUT and goes through the shader like the rest.
 func _ground_under(verge: Dictionary) -> void:
 	var tex := kit.texture(_path_of(verge))
 	if tex == null:
 		return
+	var w := int(verge["tile"][0])
 	var h := int(verge["tile"][1])
 	var above := int(verge["above"])
 	var top := roundi(WorkoutRideView.ROAD_Y) - above + GROUND_ROW
-	var source := Rect2(0, h - 1, 1, 1)
 	for i in range(0, _runs.size(), 3):
-		var bottom := _runs[i + 2] - above + h
-		if _runs[i + 2] > roundi(WorkoutRideView.ROAD_Y):
-			var x0 := _runs[i]
-			draw_texture_rect_region(tex, Rect2(x0, top, _runs[i + 1] - x0, bottom - top), source)
+		if _runs[i + 2] <= roundi(WorkoutRideView.ROAD_Y):
+			continue
+		var y := _runs[i + 2] - above + h
+		while y > top:
+			var rows := mini(h - GROUND_ROW, y - top)
+			var x := _runs[i]
+			while x < _runs[i + 1]:
+				var u := posmod(x + _scroll, w)
+				var n := mini(_runs[i + 1] - x, w - u)
+				draw_texture_rect_region(
+					tex, Rect2(x, y - rows, n, rows), Rect2(u, h - rows, n, rows)
+				)
+				x += n
+			y -= rows
 
 
 func _path_of(verge: Dictionary) -> String:
