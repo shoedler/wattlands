@@ -1,9 +1,10 @@
 class_name TankMech
 extends RefCounted
-## The station machines (v3: the five seats' machines) as
+## The station machines (v4: the six seats' machines) as
 ## procedural pixel art, painted into an Image with the Image API only (works headless, per frame):
-## diesel (Drive), dynamo (Gun: turret traverse + gun charge), steam (Loader), arc (Lights) and
-## feed (v3, Secondaries: the crank-driven twin belt feed of the bow guns). Designed for 112 x 64;
+## diesel (Drive), dynamo (Gun: turret traverse + gun charge), steam (Loader), arc (Lights),
+## feed (v3, Secondaries: the crank-driven twin belt feed of the bow guns) and repair (v4, Repairs: the
+## cam-lifted rivet hammer and the plate press). Designed for 112 x 64;
 ## other sizes get the 112 x 64 picture scaled (nearest).
 ##
 ## Coupling (docs/games/tank.md 3.4): `phase` = crank revolutions (integral of the rider's cadence,
@@ -20,7 +21,7 @@ extends RefCounted
 const W := 112
 const H := 64
 ## The main rotating part of each machine, in revolutions per crank revolution.
-const RATIO := {"diesel": 2.0, "dynamo": 3.0, "steam": 1.0, "arc": 1.0, "feed": 1.0}
+const RATIO := {"diesel": 2.0, "dynamo": 3.0, "steam": 1.0, "arc": 1.0, "feed": 1.0, "repair": 1.0}
 ## Every animated part per crank revolution (all integers: one crank revolution loops seamlessly).
 const PARTS := {
 	"diesel":
@@ -55,6 +56,13 @@ const PARTS := {
 		"rounds_fed_both_belts": TankFeedState.ROUNDS_PER_REV,
 		"bolt_strokes_each_gun": 1,
 		"counter_drum_steps": TankFeedState.ROUNDS_PER_REV,
+	},
+	"repair":
+	{
+		"flywheel_and_cam_revs": 1,
+		"hammer_strokes": 1,
+		"rivets_set": 1,
+		"press_cycles": 1,
 	},
 }
 const IN_BAND_LO := 0.84
@@ -118,13 +126,14 @@ const ARC_GLOW := Color(0.45, 0.55, 1.0)
 ## The ambient light (a cool night fill; the lamps are warm).
 const AMBIENT := Color(0.15, 0.14, 0.16)
 ## Each machine's key: the colour of its room lamp (diesel orange, dynamo pale amber, steam a cool
-## brass-white, arc a cold white) and of its ambient fill.
+## brass-white, arc a cold white, repair a pinker copper) and of its ambient fill.
 const KEYS := {
 	"diesel": Color(1.0, 0.8, 0.6),
 	"dynamo": Color(1.0, 0.8, 0.56),
 	"steam": Color(0.9, 0.9, 0.8),
 	"arc": Color(0.82, 0.85, 0.97),
 	"feed": Color(1.0, 0.86, 0.66),
+	"repair": Color(1.0, 0.74, 0.5),
 }
 const AMBS := {
 	"diesel": Color(0.15, 0.14, 0.16),
@@ -132,6 +141,7 @@ const AMBS := {
 	"steam": Color(0.15, 0.17, 0.16),
 	"arc": Color(0.14, 0.15, 0.19),
 	"feed": Color(0.15, 0.15, 0.17),
+	"repair": Color(0.17, 0.13, 0.13),
 }
 
 static var _seen: Dictionary = {}
@@ -171,6 +181,8 @@ static func paint_ex(
 				_arc_static(cv)
 			"feed":
 				_feed_static(cv)
+			"repair":
+				_repair_static(cv)
 		_static_cache[k] = cv.al
 	var bucket := roundi(pw * 20.0)
 	var key := "%s|%d|%s" % [k, bucket, slot.to_html(false)]
@@ -194,6 +206,9 @@ static func paint_ex(
 			"feed":
 				_lamp_light(lc, F_LAMP, pb, slot)
 				_feed_lights(lc, pb)
+			"repair":
+				_lamp_light(lc, R_LAMP, pb, slot)
+				_repair_lights(lc, pb)
 		_lit_cache[key] = lc.bake(_static_cache[k])
 	var lit: Array = _lit_cache[key]
 	cv.al = (lit[0] as PackedByteArray).duplicate()
@@ -210,6 +225,8 @@ static func paint_ex(
 			_arc(cv, phase, pw, t, slot, rate)
 		"feed":
 			_feed(cv, phase, pw, t, slot, rate)
+		"repair":
+			_repair(cv, phase, pw, t, slot, rate)
 	# over power: the whole machine shakes by a pixel
 	cv.shake = _over(pw) > 0.4 and _h(floorf(t * 14.0)) > 0.45
 	cv.finish(img)
@@ -1657,6 +1674,246 @@ static func _feed_lights(cv: Cv, pw: float) -> void:
 	cv.light(20, 9, 14.0, _key * 0.35)
 	# the caged lamp over the ammo boxes
 	cv.light(78, 4, 34.0, _key * (0.7 * (0.85 + 0.15 * minf(pw, 1.0))))
+
+
+# --- Repair ----------------------------------------------------------------------------------------------
+# A helve hammer, the rivet hammer of the Repairs seat. The flywheel chains to a snail cam, one turn per
+# crank revolution. The cam's growing lobe lifts a tappet, the tappet lifts the helve about its pillar, and
+# at the lobe's drop the head falls: one stroke, and a rivet set, per crank revolution, its sparks on the
+# strike. The patch plate steps one rivet along the anvil per stroke. To the right the screw press works its
+# platen on the stack; on the deck a pot of hot rivets glows with the power. The lamp is a pinker copper
+# than the diesel's. Everything moving is a pure function of the crank revolutions.
+
+const R_FW := Vector2(14, 45)
+const R_FR := 10.0
+const R_HUB := 3.5
+const R_CAM := Vector2(56, 43)
+const R_CAM_R := 5.0
+## The tappet's and so the cam's lift (px) at the top of the stroke.
+const R_LIFT := 8.0
+const R_PIVOT := Vector2(30, 19)
+## The helve's height at the tappet (x 56) with the hammer down.
+const R_REST_Y := 27.5
+const R_HEAD_X := 82.0
+const R_ANVIL := Rect2i(72, 47, 20, 10)
+const R_PLATE_Y := 45
+const R_RIVET_PITCH := 5.0
+const R_PRESS_X := 104
+const R_LAMP := 62
+const R_POT := Rect2i(38, 50, 11, 7)
+const R_DIAL := Vector2i(45, 11)
+## The share of a revolution the hammer takes to fall.
+const R_FALL := 0.12
+## Sparks last this share of a revolution after the strike.
+const R_SPARK := 0.2
+
+
+## The hammer's lift (0 down on the plate .. 1 at the top), a pure function of the crank revolutions: the
+## cam raises it through the revolution, it falls at the end and strikes on each whole revolution.
+static func hammer_lift(revs: float) -> float:
+	var f := fposmod(revs, 1.0)
+	var up := 1.0 - R_FALL
+	if f < up:
+		return smoothstep(0.0, up, f)
+	var k := (f - up) / R_FALL
+	return 1.0 - k * k
+
+
+## How long since the strike, in revolutions (0..1): the sparks' clock.
+static func since_strike(revs: float) -> float:
+	return fposmod(revs, 1.0)
+
+
+## The press's platen (0 open .. 1 closed), once a revolution, shut as the hammer strikes.
+static func press_closed(revs: float) -> float:
+	return 0.5 + 0.5 * cos(fposmod(revs, 1.0) * TAU)
+
+
+static func _repair_static(cv: Cv) -> void:
+	_room_static(cv, R_LAMP)
+	# the flywheel on its pedestal
+	cv.rect(int(R_FW.x) - 6, 53, 13, 4, IRON[2])
+	cv.hl(int(R_FW.x) - 6, int(R_FW.x) + 6, 53, IRON[4])
+	cv.vl(int(R_FW.x) + 6, 53, 56, IRON[0])
+	_wheel_static(cv, R_FW, R_FR, 3, STEEL)
+	# the helve's pillar and its bearing
+	cv.rect(27, 21, 7, 36, IRON[2])
+	cv.vl(27, 21, 56, IRON[4])
+	cv.vl(28, 21, 56, IRON[3])
+	cv.vl(33, 21, 56, IRON[0])
+	for y in range(25, 54, 6):
+		cv.rivet(30, y)
+	cv.rect(24, 53, 13, 4, IRON[3])
+	cv.hl(24, 36, 53, IRON[4])
+	cv.disc_f(R_PIVOT, 4.0, IRON[2])
+	cv.ring_shaded(R_PIVOT.x, R_PIVOT.y, 2.6, 4.0, BRASS)
+	# the cam's bearing post and the tappet's guide on its bracket
+	cv.rect(int(R_CAM.x) - 2, 44, 5, 13, IRON[1])
+	cv.vl(int(R_CAM.x) - 2, 44, 56, IRON[3])
+	cv.rect(int(R_CAM.x) - 11, 53, 23, 4, IRON[2])
+	cv.hl(int(R_CAM.x) - 11, int(R_CAM.x) + 11, 53, IRON[4])
+	cv.line_f(Vector2(R_CAM.x + 3, 31), Vector2(R_CAM.x + 11, 25), IRON[1])
+	cv.line_f(Vector2(R_CAM.x + 11, 25), Vector2(R_CAM.x + 11, 8), IRON[2])
+	cv.rect(int(R_CAM.x) - 2, 30, 5, 2, BRASS[1])
+	# the anvil: a block on its stump, a horn on the far side
+	cv.rect(R_ANVIL.position.x, R_ANVIL.position.y, R_ANVIL.size.x, R_ANVIL.size.y, STEEL[1])
+	cv.hl(R_ANVIL.position.x, R_ANVIL.end.x - 1, R_ANVIL.position.y, STEEL[4])
+	cv.hl(R_ANVIL.position.x, R_ANVIL.end.x - 1, R_ANVIL.position.y + 1, STEEL[3])
+	cv.vl(R_ANVIL.position.x, R_ANVIL.position.y, R_ANVIL.end.y - 1, STEEL[2])
+	cv.vl(R_ANVIL.end.x - 1, R_ANVIL.position.y, R_ANVIL.end.y - 1, STEEL[0])
+	cv.rect(R_ANVIL.position.x + 3, 50, R_ANVIL.size.x - 6, 7, IRON[1])
+	cv.rivet(R_ANVIL.position.x + 4, 53)
+	cv.rivet(R_ANVIL.end.x - 6, 53)
+	# the pot of rivets
+	cv.rect(R_POT.position.x, R_POT.position.y, R_POT.size.x, R_POT.size.y, IRON[1])
+	cv.hl(R_POT.position.x - 1, R_POT.end.x, R_POT.position.y, IRON[4])
+	cv.vl(R_POT.position.x, R_POT.position.y, R_POT.end.y - 1, IRON[3])
+	# the press: screw frame from the ceiling to the deck, a stack of plates at its foot
+	cv.rect(R_PRESS_X - 8, 6, 2, 51, IRON[2])
+	cv.vl(R_PRESS_X - 8, 6, 56, IRON[4])
+	cv.rect(R_PRESS_X + 7, 6, 2, 51, IRON[1])
+	cv.rect(R_PRESS_X - 8, 6, 17, 4, IRON[2])
+	cv.hl(R_PRESS_X - 8, R_PRESS_X + 8, 6, IRON[4])
+	for k in 5:
+		var py := 55 - k * 2
+		cv.hl(R_PRESS_X - 5, R_PRESS_X + 5, py, COPPER[2 if k % 2 == 0 else 1])
+		cv.hl(R_PRESS_X - 5, R_PRESS_X + 5, py + 1, IRON[0])
+		cv.p(R_PRESS_X - 5, py, COPPER[4])
+	# the rate dial
+	_gauge_face(cv, R_DIAL.x, R_DIAL.y, 5, 0.8)
+
+
+static func _repair_lights(cv: Cv, pw: float) -> void:
+	var heat := 0.3 + 0.7 * smoothstep(0.0, 1.3, pw)
+	# the flywheel's own caged lamp, so the crank end reads
+	cv.light(R_FW.x + 4.0, 24.0, 32.0, _key * (0.6 * (0.85 + 0.15 * minf(pw, 1.0))))
+	cv.light(
+		R_POT.position.x + 5,
+		R_POT.position.y - 1,
+		14.0 + 10.0 * heat,
+		Color(1.0, 0.42, 0.22) * (0.15 + 0.45 * heat)
+	)
+	cv.light(
+		R_HEAD_X, float(R_PLATE_Y), 16.0, Color(1.0, 0.6, 0.38) * (0.3 * smoothstep(0.1, 1.0, pw))
+	)
+
+
+static func _repair(cv: Cv, ph: float, pw: float, t: float, slot: Color, rate: float) -> void:
+	var heat := _heat(pw)
+	var over := _over(pw)
+	var th := ph * TAU
+	var lift := hammer_lift(ph)
+	_lamp(cv, R_LAMP, pw, t, slot)
+	# the rivets in the pot glow with the power
+	for x in range(R_POT.position.x + 2, R_POT.end.x - 1):
+		var hot := 0.35 + 0.65 * heat * (0.65 + 0.35 * _h(float(x) + floorf(t * 8.0)))
+		cv.p(x, R_POT.position.y + 1, Color(0.3, 0.14, 0.1))
+		cv.e(x, R_POT.position.y + 1, Color(1.0, 0.42, 0.2), hot)
+		if x % 3 == 0:
+			cv.e(x, R_POT.position.y, Color(1.0, 0.6, 0.32), hot * 0.5)
+	cv.glow(R_POT.position.x + 5.0, R_POT.position.y, 6.0, Color(1.0, 0.45, 0.25), 0.25 * heat)
+	# the flywheel, its chain to the cam's sprocket (1:1)
+	_spokes(cv, R_FW, R_FR - 2.6, 5, th, STEEL, clampf((rate - 1.7) / 1.3, 0.0, 1.0))
+	cv.disc_f(R_FW, R_HUB, BRASS[1])
+	var pin := R_FW + _dir(th) * (R_FR - 5.0)
+	cv.rect(roundi(pin.x) - 1, roundi(pin.y) - 1, 3, 3, BRASS[3])
+	_chain(cv, R_FW, R_HUB + 0.4, R_CAM, R_HUB + 0.4, ph, 11, 3.0)
+	# the snail cam: its radius is the hammer's lift, read round the revolution
+	var cri := ceili(R_CAM_R + R_LIFT) + 1
+	for y in range(int(R_CAM.y) - cri, int(R_CAM.y) + cri + 1):
+		for x2 in range(int(R_CAM.x) - cri, int(R_CAM.x) + cri + 1):
+			var v := Vector2(x2, y) - R_CAM
+			var rho := v.length()
+			# the point of the cam on top (angle -90 degrees) has the lift of the moment
+			var along := fposmod((v.angle() + PI * 0.5) / TAU - ph, 1.0)
+			var rim := R_CAM_R + R_LIFT * hammer_lift(_cam_at(along, ph))
+			if rho > rim + 0.4 or y > 56:
+				continue
+			var lit := (-0.6 * v.x - 0.8 * v.y) / maxf(rho, 0.01)
+			var c: Color = STEEL[clampi(2 + roundi(lit * 1.5), 0, 4)]
+			if rho > rim - 0.8:
+				c = STEEL[4] if lit > 0.0 else STEEL[1]
+			cv.p(x2, y, c)
+	cv.disc_f(R_CAM, 2.4, BRASS[1])
+	cv.disc_f(R_CAM + Vector2(-0.5, -0.5), 1.3, BRASS[3])
+	# the tappet riding on the cam, the helve on the tappet, the head on the helve's end
+	var at_rod := R_REST_Y - R_LIFT * lift
+	var rod_low := R_CAM.y - R_CAM_R - R_LIFT * lift
+	cv.rect(int(R_CAM.x) - 1, roundi(at_rod), 2, maxi(roundi(rod_low - at_rod), 1), STEEL[2])
+	cv.vl(int(R_CAM.x) - 1, roundi(at_rod), roundi(rod_low), STEEL[4])
+	var slope := (at_rod - R_PIVOT.y) / (R_CAM.x - R_PIVOT.x)
+	var end := Vector2(R_HEAD_X, R_PIVOT.y + slope * (R_HEAD_X - R_PIVOT.x))
+	for k in 3:
+		cv.line_f(
+			R_PIVOT + Vector2(0, k - 1),
+			end + Vector2(0, k - 1),
+			LEATHER[3 - k] if k < 2 else IRON[0]
+		)
+	for k2 in 3:
+		var q := R_PIVOT.lerp(end, 0.32 + k2 * 0.24)
+		cv.p(roundi(q.x), roundi(q.y) - 1, BRASS[3])
+	cv.disc_f(R_PIVOT, 1.6, BRASS[4])
+	var head := Rect2i(int(R_HEAD_X) - 5, roundi(end.y) - 3, 11, 12)
+	cv.rect(head.position.x, head.position.y, head.size.x, head.size.y, STEEL[2])
+	cv.hl(head.position.x, head.end.x - 1, head.position.y, STEEL[4])
+	cv.vl(head.position.x, head.position.y, head.end.y - 1, STEEL[3])
+	cv.vl(head.end.x - 1, head.position.y, head.end.y - 1, STEEL[0])
+	cv.hl(head.position.x, head.end.x - 1, head.end.y - 1, STEEL[4])
+	cv.hl(head.position.x + 2, head.end.x - 3, head.end.y - 3, STEEL[1])
+	cv.rivet(head.position.x + 2, head.position.y + 2)
+	cv.rivet(head.end.x - 4, head.position.y + 2)
+	# the patch plate on the anvil, stepping one rivet along per stroke; the newest rivet is hot
+	var step := smoothstep(0.1, 0.5, fposmod(ph, 1.0)) * R_RIVET_PITCH
+	cv.rect(62, R_PLATE_Y, 34, 2, COPPER[1])
+	cv.hl(62, 95, R_PLATE_Y, COPPER[3])
+	var rx := 0.0
+	while rx < 40.0:
+		var px := int(R_HEAD_X - rx - step + R_RIVET_PITCH)
+		if px >= 62 and px < 96:
+			cv.p(px, R_PLATE_Y - 1, STEEL[3])
+			cv.p(px, R_PLATE_Y, STEEL[4])
+		rx += R_RIVET_PITCH
+	var since := since_strike(ph)
+	var fresh := 1.0 - since / 0.75
+	if fresh > 0.0 and pw > 0.05:
+		cv.e(int(R_HEAD_X - step + R_RIVET_PITCH), R_PLATE_Y - 1, Color(1.0, 0.5, 0.25), fresh)
+	# the strike: sparks fly out from under the head; a shower over power
+	if since < R_SPARK and pw > 0.05:
+		var k3 := 1.0 - since / R_SPARK
+		var n := int(roundf(5.0 + 8.0 * heat + 10.0 * over))
+		var st := floorf(ph)
+		for i in n:
+			var a := -PI * (0.08 + 0.84 * _h(st + float(i) * 1.7))
+			var sp := 8.0 + 14.0 * _h(st + float(i) * 3.1)
+			var u := since / R_SPARK
+			var sq := (
+				Vector2(R_HEAD_X, R_PLATE_Y - 1.0) + _dir(a) * sp * u + Vector2(0.0, 7.0 * u * u)
+			)
+			cv.e(roundi(sq.x), roundi(sq.y), Color(1.0, 0.72, 0.42), k3 * (0.8 + 0.6 * heat))
+		cv.glow(
+			R_HEAD_X, R_PLATE_Y - 1.0, 12.0, Color(1.0, 0.55, 0.3), 0.5 * k3 * (0.4 + 0.6 * heat)
+		)
+	# the press: the screw turns, the crosshead comes down on the stack
+	var closed := press_closed(ph)
+	var ph_y := 20 + roundi(closed * 22.0)
+	cv.vl(R_PRESS_X, 2, ph_y, STEEL[2])
+	for y2 in range(3, ph_y, 2):
+		cv.p(R_PRESS_X, y2 + (1 if fposmod(ph * 2.0, 1.0) > 0.5 else 0), STEEL[4])
+	cv.rect(R_PRESS_X - 6, ph_y, 13, 3, IRON[2])
+	cv.hl(R_PRESS_X - 6, R_PRESS_X + 6, ph_y, IRON[4])
+	cv.hl(R_PRESS_X - 6, R_PRESS_X + 6, ph_y + 2, IRON[0])
+	cv.teeth(Vector2(R_PRESS_X, 3), 4.0, 6, th, BRASS[3])
+	# the dial, the tag
+	_gauge_needle(cv, R_DIAL.x, R_DIAL.y, 5, clampf(rate / 2.0, 0.0, 1.05), over)
+	_tag(cv, 4, 4, slot, pw)
+	if over > 0.05:
+		_vent(cv, Vector2(40, 48), Vector2(0.2, -1.0), over, t, 0.0, Color(0.6, 0.55, 0.52))
+
+
+## The cam's lift at `along` of the way round from its top: the lift the hammer had `along` of a revolution
+## ago, so the point on top always carries the lift of now.
+static func _cam_at(along: float, ph: float) -> float:
+	return ph - along
 
 
 # --- Canvas ----------------------------------------------------------------------------------------------

@@ -13,6 +13,8 @@ extends RefCounted
 ##            rack's window (three slots with latches, the telescoping manipulator) and the breech
 ##            window (the tray, the chain rammer, the breech block, recoiling with the gun)
 ##   bow      both bow-gun receivers (belts feeding, cocking slides kicking, a glow per round)
+##   repair   v4, on the upper deck: the rider, the chain to the flywheel and its tappet, the rivet hammer
+##            (one stroke per crank revolution, TankMech.hammer_lift), the patch press, the plate stack
 ## A manned seat shows its rider (slot colour cap) and turns with the rider's crank revolutions; an
 ## empty seat (station slot -1) shows a bare saddle and a still crank, its machine stopped.
 ##
@@ -46,6 +48,12 @@ const STEPS: Array = [
 	["RESET", 6.3, 7.0],
 ]
 const CYCLE := 7.0
+## v4: the Repairs room's plate stack: patches mod this many lie by the press.
+const PATCH_STACK := 5
+## v4: the Repairs room's own slight colour (SPEC_TANK 5.3): its wall and its lamp, a pinker copper.
+const REPAIR_WALL := Color("#2a1a18")
+const REPAIR_LAMP := Color(1.0, 0.7, 0.48)
+const REPAIR_HOT := Color(1.0, 0.72, 0.42)
 
 const OUT := Color("#0b0806")
 const OUT6 := Color("#050302")
@@ -93,6 +101,7 @@ var _clips: Dictionary = {}
 var _keys: Dictionary = {}
 var _last: Dictionary = {}
 var _next: int = 0
+var _repair_walls: Dictionary = {}
 
 
 func _init(p_rig: TankRig) -> void:
@@ -139,8 +148,9 @@ static func recoil(ft: float) -> float:
 	return 11.0 * (1.0 - k) * (1.0 - k)
 
 
-## Repaints the units whose inputs changed. `inp`: seat id -> {slot, revs, on} for the five seats,
-## "t" (flicker clock, s), "loader" {lt, ready, elev, fire_t}, "bow" {revs (-1 silent)}. At most
+## Repaints the units whose inputs changed. `inp`: seat id -> {slot, revs, on} for the six seats ("repair"
+## also press_t, patches), "t" (flicker clock, s), "loader" {lt, ready, elev, fire_t}, "bow" {revs (-1 silent)}.
+## At most
 ## `budget` units paint; the rest wait for the next call. True when the texture changed.
 func paint(inp: Dictionary, now: float, budget: int = 2) -> bool:
 	var done := 0
@@ -191,6 +201,14 @@ func _key(u: String, inp: Dictionary) -> Array:
 		"bow":
 			var revs := float((inp.get("bow", {}) as Dictionary).get("revs", -1.0))
 			return [-1.0 if revs < 0.0 else floorf(revs * 2.0 * 8.0)]
+		"repair":
+			var rp: Dictionary = inp.get("repair", {})
+			return [
+				_seat_key(rp),
+				fl if bool(rp.get("on", false)) else 0,
+				snappedf(float(rp.get("press_t", 0.0)), 0.05),
+				int(rp.get("patches", 0)) % PATCH_STACK,
+			]
 		_:
 			var st: Dictionary = inp.get(u, {})
 			return [_seat_key(st), fl if bool(st.get("on", false)) else 0]
@@ -346,11 +364,108 @@ func wheel(c: Vector2, r: float, ang: float, rim: Color, spokes: int = 4, teeth:
 # --- Repair --------------------------------------------------------------------------------------------
 
 
-## v4: the Repairs machine in room `rr` (stub until builder A: the rider on its saddle).
-func repair_bay(
-	rr: Rect2, revs: float, slot: int, on: bool, _press_t: float, _patches: int
-) -> void:
-	seat(int(rr.position.x + 2), int(rr.end.y - 2), revs * TAU if on else 0.0, slot)
+## v4: the Repairs machine in room `rr`, facing right from the saddle: the crank chains to a flywheel, the
+## flywheel's tappet lifts the helve of a rivet hammer, and the head falls on the patch on its anvil once per
+## crank revolution (a pure function of `revs`: TankMech.hammer_lift), with sparks. The screw press to the
+## right closes at `press_t`, and `patches` mod PATCH_STACK plates lie stacked by it.
+func repair_bay(rr: Rect2, revs: float, slot: int, on: bool, press_t: float, patches: int) -> void:
+	var r := Rect2i(rr)
+	img.blit_rect(_repair_wall(r, on), Rect2i(Vector2i.ZERO, r.size), r.position)
+	var fy := r.end.y - 2
+	var x0 := r.position.x
+	var y0 := r.position.y
+	var rv := revs if on else 0.0
+	var ang := rv * TAU
+	var cc := seat(x0 + 2, fy, ang, slot)
+	# the flywheel and its chain, 1:1 with the crank
+	var fw := Vector2(x0 + 25.5, fy - 7.5)
+	pr(Rect2i(floori(fw.x) - 3, fy - 2, 7, 2), ST1)
+	pr(Rect2i(floori(fw.x) - 3, fy - 2, 7, 1), ST2)
+	chain(cc, fw, 2.5, 2.5, rv * 8.0)
+	wheel(fw, 5.0, ang, ST2, 5)
+	# the hammer's helve on its pillar, the tappet riding the flywheel's cam under it
+	var lift := TankMech.hammer_lift(rv)
+	var piv := Vector2(x0 + 30.5, y0 + 6.5)
+	pr(Rect2i(x0 + 29, y0 + 7, 3, fy - y0 - 7), ST1)
+	pr(Rect2i(x0 + 29, y0 + 7, 1, fy - y0 - 7), ST2)
+	var rest_y := piv.y + 6.0
+	var head_x := x0 + 51.5
+	var end := Vector2(head_x, rest_y - 9.0 * lift)
+	var tap_x := x0 + 37.5
+	var tap_top := piv.y + (end.y - piv.y) * (tap_x - piv.x) / (head_x - piv.x)
+	var cam := Vector2(tap_x, fy - 4.5)
+	pr(Rect2i(floori(cam.x) - 3, fy - 1, 7, 1), ST2)
+	wheel(cam, 2.5, ang, BR1, 3)
+	var lobe := cam + Vector2(cos(ang - PI * 0.5), sin(ang - PI * 0.5)) * 3.0
+	p(floori(lobe.x), floori(lobe.y), BR2)
+	chain(fw, cam, 1.5, 1.5, rv * 8.0)
+	pl(Vector2(tap_x, tap_top), Vector2(tap_x, cam.y - 2.0), ST3)
+	pl(piv + Vector2(0, 1), end + Vector2(0, 1), OUT)
+	pl(piv, end, CU1)
+	p(floori(piv.x), floori(piv.y), BR2)
+	# the head and the anvil with the patch on it
+	var anvil := Rect2i(x0 + 46, fy - 6, 11, 6)
+	box(anvil, ST2, ST4, ST0)
+	pr(Rect2i(x0 + 44, fy - 7, 15, 1), CU1)
+	box(Rect2i(floori(head_x) - 3, floori(end.y) - 1, 7, 6), ST2, ST3, ST0)
+	# the strike's sparks, on the whole revolution
+	var since := TankMech.since_strike(rv)
+	if on and since < TankMech.R_SPARK:
+		var k := 1.0 - since / TankMech.R_SPARK
+		var st := floorf(rv)
+		for i in 5:
+			var a := -PI * (0.1 + 0.8 * TankPx.h2(int(st), i, 11))
+			var spd := 5.0 + 7.0 * TankPx.h2(int(st), i, 12)
+			var q := (
+				Vector2(head_x, fy - 8.0)
+				+ Vector2(cos(a), sin(a)) * spd * (since / TankMech.R_SPARK)
+			)
+			p(floori(q.x), floori(q.y), REPAIR_HOT)
+		glow(Vector2(head_x, fy - 8.0), 9.0, REPAIR_HOT, 0.55 * k)
+	# the screw press on the right: it closes at press_t; the plates lie by its foot
+	var px := x0 + 60
+	pr(Rect2i(px - 1, y0 + 1, 1, fy - y0 - 1), ST2)
+	pr(Rect2i(px + 5, y0 + 1, 1, fy - y0 - 1), ST1)
+	pr(Rect2i(px - 1, y0 + 1, 7, 2), ST3)
+	var ty := y0 + 5 + roundi(clampf(press_t, 0.0, 1.0) * float(fy - y0 - 11))
+	pl(Vector2(px + 2.5, y0 + 3), Vector2(px + 2.5, ty), BR1)
+	box(Rect2i(px, ty, 5, 3), ST2, ST3, ST0)
+	var stack := posmod(patches, PATCH_STACK)
+	for s2 in stack:
+		var sy := fy - 1 - s2 * 2
+		pr(Rect2i(px, sy, 5, 1), CU2 if s2 % 2 == 0 else CU1)
+		pr(Rect2i(px, sy + 1, 5, 1), OUT)
+	# the lamp
+	if on:
+		p(x0 + 40, y0 + 2, Color(1.0, 0.92, 0.8))
+		glow(Vector2(x0 + 40.5, y0 + 2.5), 7.0, REPAIR_LAMP, 0.5)
+	else:
+		p(x0 + 40, y0 + 2, CU0)
+
+
+## The room's backing: the base's picture sunk into the room's own colour (so the machine reads), lit from
+## the lamp when the seat works. Made once per state.
+func _repair_wall(r: Rect2i, on: bool) -> Image:
+	if _repair_walls.has(on):
+		return _repair_walls[on]
+	var w := Image.create_empty(r.size.x, r.size.y, false, Image.FORMAT_RGBA8)
+	var lamp := Vector2(40.5, 3.0)
+	for y in r.size.y:
+		for x in r.size.x:
+			var o := REPAIR_WALL
+			if rig.base_img != null:
+				o = rig.base_img.get_pixel(r.position.x + x, r.position.y + y)
+			var c := o.lerp(REPAIR_WALL, 0.74)
+			c.a = 1.0
+			var d := Vector2(x, y).distance_to(lamp) / 34.0
+			var k := maxf(1.0 - d, 0.0)
+			k = k * k * (0.34 if on else 0.08)
+			c.r = minf(c.r + REPAIR_LAMP.r * k, 1.0)
+			c.g = minf(c.g + REPAIR_LAMP.g * k, 1.0)
+			c.b = minf(c.b + REPAIR_LAMP.b * k, 1.0)
+			w.set_pixel(x, y, c)
+	_repair_walls[on] = w
+	return w
 
 
 # --- The pedal station ------------------------------------------------------------------------------------
