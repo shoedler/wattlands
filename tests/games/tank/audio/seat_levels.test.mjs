@@ -25,6 +25,15 @@ const SEAT_PARAMS = {
   repair: { repairing: 1 },
 };
 const SEATS = Object.keys(SEAT_PARAMS);
+// The one seat with an A8 waiver, scoped to this crew: the diesel's scorecard keeps the whole row.
+const WAIVE = {
+  arc: { A8: 'Arc-led crew: 1 % above 4 kHz against a floor of 2 %. The owner asked for less ear piercing, and the only fix is a continuous 6-9 kHz hiss there for this ratio.' },
+};
+/** A8's bands, as the row prints them, for a seat whose waiver covers only the floor above 4 kHz. */
+function a8Holds(value) {
+  const [low, body, mid, top] = value.split(' / ').map((v) => Number.parseFloat(v));
+  return low <= 35 && body >= 25 && body <= 60 && mid >= 15 && mid <= 45 && top >= 0.9 && top <= 20;
+}
 
 /** The bank with `seat` leading a full crew; the diesel takes the seat's place among the others. */
 function withLead(seat) {
@@ -33,6 +42,7 @@ function withLead(seat) {
   const rest = d.preview.others.filter((o) => o.machine !== 'track' && o.machine !== seat);
   if (seat !== 'diesel') rest.push({ machine: 'diesel', rpm_scale: 1.02, params: { power: 0.95, speed: 4 } });
   d.preview.lead = seat;
+  d.preview.waive = { ...d.preview.waive, ...WAIVE[seat] };
   d.preview.others = [...rest, track];
   d.preview.segments = d.preview.segments.map((s) => (s.rpm > 0 ? { ...s, params: { ...s.params, ...SEAT_PARAMS[seat] } } : s));
   return d;
@@ -67,7 +77,12 @@ for (const seat of SEATS) {
     const card = scoreBank(withLead(seat), DIR, { shared: null });
     const row = (id) => card.rows.find((r) => r.id === id);
     for (const id of ['D2', 'D3', 'D4', 'D6', 'D7', 'A3', 'A4', 'A5', 'A8', 'A15']) {
-      assert.ok(row(id).pass, `${id}: ${row(id).value} ${row(id).note ?? ''}`);
+      if (id === 'A8' && row(id).waived) {
+        // The waiver covers the floor above 4 kHz, down to the measured number, and none of the row's other bands.
+        assert.ok(WAIVE[seat]?.A8 === row(id).waived && a8Holds(row(id).value), `A8: ${row(id).value}`);
+      } else {
+        assert.ok(row(id).pass, `${id}: ${row(id).value} ${row(id).note ?? ''}`);
+      }
     }
     // The only exception: the offline harness's first frame primes past a fraction under one frame's turn at 110 rpm,
     // so rivet_ring@0.03 loses its first revolution. Not the game: test_tank_audio_patterns.gd counts it exact there.

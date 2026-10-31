@@ -11,14 +11,14 @@ import { hardRide, openBank as openReadBank, readOf } from './read_over.mjs';
 
 /** Every limit is in dB against the signal's own total. The old machine's reading is on the right. */
 const LIMIT = {
-  solo: -15, // -4.8 to -3.7
+  solo: -27, // -8.3 to -3.6; now -29.5 at worst, 110 rpm, where the rpm pitch lifts the body
   soloMostSensitive: -25, // 2-5 kHz: -7.5 to -7.2
   soloWorstFrame: -14, // +5.7 to +6.9
   mix: -12, // -6.3
   mixWorstFrame: 3.5, // +4.5
 };
 const MOST_SENSITIVE = [2000, 5000];
-/** Everything that makes the machine's shape: only the lamp may reach up there, and not at 2-5 kHz. */
+/** Everything the machine plays: none of it may reach up there. */
 const DULL_SOUNDS = ['arc_relay', 'arc_relay_over', 'arc_spark', 'belt_tick', 'arc_thrum', 'arc_thrum_open'];
 
 const bank = openBank();
@@ -54,19 +54,6 @@ test('no stroke and no body of the machine reaches 2 kHz: no zap, no buzz', () =
     const e = earBand(x, [2000, 9000]);
     assert.ok(e.share <= -30, `${sound}: ${e.share.toFixed(1)} dB above 2 kHz, limit -30`);
   }
-});
-
-test('the lamp, the one sound up there, stays above the most sensitive band at every cadence', () => {
-  // A8's floor needs the room to keep 2 % above 4 kHz, and a dull lead can't leave it all to a room 13 dB down: see the ADR.
-  const def = bank.doc.machines.arc.loops.find((l) => l.sound === 'arc_lamp');
-  assert.equal(def.pitch_by, undefined, 'pitched by rpm, 60 rpm would slide it down into 2-5 kHz');
-  assert.notEqual(def.other, true, "only the rider's own: another rider's lamp adds nothing they need");
-  const lamp = solo(bank, 'arc', 60, working(1.2), { pick: (s) => s === 'arc_lamp' });
-  const low = earBand(lamp, MOST_SENSITIVE);
-  assert.ok(low.share <= -25, `2-5 kHz of the lamp alone: ${low.share.toFixed(1)} dB`);
-  const whole = earBand(solo(bank, 'arc', 90, working(1.2)));
-  assert.ok(earBand(lamp).level <= whole.level + 0.5, 'the lamp is what is up there, no more');
-  assert.ok(earBand(lamp).level <= -38, `the lamp at ${earBand(lamp).level.toFixed(1)} dBFS at its loudest`);
 });
 
 test('it sits under the diesel at every cadence', () => {
@@ -122,10 +109,10 @@ for (const rpm of RPMS) {
 test('power is heard: louder, and the body opens', () => {
   const lufs = (power) => soloLufs(bank, 'arc', 90, { power, reach: reachOf(power) });
   assert.ok(lufs(1.2) - lufs(0.5) >= 6, `${lufs(0.5).toFixed(1)} to ${lufs(1.2).toFixed(1)} LUFS`);
-  const dull = (power) => solo(bank, 'arc', 90, { power, reach: reachOf(power) }, { pick: (s) => s !== 'arc_lamp' });
-  const lo = centroidHz(dull(0.5));
-  const hi = centroidHz(dull(1.2));
-  assert.ok(hi / lo >= 1.1, `centroid under the lamp ${lo.toFixed(0)} to ${hi.toFixed(0)} Hz`);
+  const whole = (power) => solo(bank, 'arc', 90, { power, reach: reachOf(power) });
+  const lo = centroidHz(whole(0.5));
+  const hi = centroidHz(whole(1.2));
+  assert.ok(hi / lo >= 1.1, `centroid ${lo.toFixed(0)} to ${hi.toFixed(0)} Hz`);
 });
 
 test('reach is heard: the stroke grows, and the sparks only come at the top', () => {
