@@ -43,10 +43,6 @@ func add_rider(peer: int, ftp_w: float) -> void:
 	_riders[peer] = r
 
 
-func has_rider(peer: int) -> bool:
-	return _riders.has(peer)
-
-
 ## One sample of `dt` game seconds. `band_lo`/`band_hi` is the rider's published power band
 ## (0, 0 = none).
 func add_sample(

@@ -152,14 +152,6 @@ static func text_on(bg: Color) -> Color:
 	return Color.BLACK if bg.get_luminance() > 0.45 else TEXT
 
 
-## Drops the cached Theme and fonts (tests that add or remove font files).
-static func reset_cache() -> void:
-	_theme = null
-	_font = null
-	_font_bold = null
-	_font_checked = false
-
-
 static func _load_fonts() -> void:
 	if _font_checked:
 		return
