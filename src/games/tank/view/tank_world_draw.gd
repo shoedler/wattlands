@@ -5,8 +5,9 @@ extends RefCounted
 ## shadow under its track run, the halt line (concrete teeth, a post with a hooded amber lamp),
 ## obstacles (wire, hulks, tank traps), wrecks aging on sim time from a burning hulk into a debris
 ## heap, the enemies in their depth lanes (a dark rim, dimmer further back, a warm pulse while they
-## telegraph), each on the relief (rotated as a whole to the fit of the ground under it) and the
-## Behemoth. Free roam: the turning places at the road's ends; the turn's dust cloud. No people.
+## telegraph), each on the relief (rotated as a whole to the fit of the ground under it). Far enemies
+## and the Behemoth stand in the far panel (TankFarPanel). Free roam: the turning places at the
+## road's ends; the turn's dust cloud. No people.
 
 const LANE_DIM: Array[float] = [1.0, 0.74, 0.56, 0.44]
 ## How much night haze each depth lane carries (a cool teal laid over the sprite).
@@ -48,7 +49,6 @@ static func draw_world(ci: CanvasItem, v: TankView, state: TankState) -> void:
 	_halt_line(ci, v, state)
 	for ob in state.obstacles:
 		_obstacle(ci, v, ob)
-	_boss(ci, v, state)
 	# Back lanes first, each lane's wrecks before its live enemies (a nearer bank hides the foot of
 	# whatever stands behind it).
 	for want in [3, 2, 1, 0]:
@@ -82,7 +82,7 @@ static func _tank_contact(ci: CanvasItem, v: TankView) -> void:
 			)
 
 
-# --- Enemies, wrecks, the Behemoth ------------------------------------------------------------------------
+# --- Enemies, wrecks ------------------------------------------------------------------------
 
 
 static func _enemy(ci: CanvasItem, v: TankView, e: TankEnemyState, lane: int) -> void:
@@ -293,17 +293,6 @@ static func _torn_plates(ci: CanvasItem, r: Rect2, seed_v: float, dim: float) ->
 		ci.draw_rect(Rect2(p + Vector2(0, -1), Vector2(gash - 1.0, 1)), lip)
 		if h > 0.5:
 			ci.draw_rect(Rect2(p + Vector2(gash, -2), Vector2(1, 2)), lip.darkened(0.1))
-
-
-static func _boss(ci: CanvasItem, v: TankView, state: TankState) -> void:
-	if not v.boss_visible(state):
-		return
-	var r := v.boss_rect(state)
-	var b := state.boss
-	var tint := Color(0.66, 0.68, 0.68) if b.phase != TankIds.BOSS_DEAD else Color(0.3, 0.27, 0.25)
-	if b.telegraph_s > 0.0:
-		tint = tint.lerp(Color(1.3, 0.9, 0.7), 0.3 + 0.2 * sin(v.time * 25.0))
-	ci.draw_texture(v.kit.enemies["behemoth"]["tex"], r.position, tint)
 
 
 # --- The halt line, obstacles, the depot -------------------------------------------------------------------

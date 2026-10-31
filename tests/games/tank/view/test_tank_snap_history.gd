@@ -183,3 +183,24 @@ func test_the_host_view_records_every_sim_tick_it_sees() -> void:
 		v.advance(1.0 / 60.0)
 	assert_eq(v.history.entries.size(), 6)
 	assert_eq(v.history.newest_tick(), s.tick)
+
+
+func test_far_ranges_and_shell_seconds_interpolate() -> void:
+	var h := TankSnapHistory.new()
+	var st := TankFixturesV4.make("far_duel")
+	var e := st.enemy(21)
+	var shell := st.shells[0]
+	st.boss.range_m = 1200.0
+	e.range_m = 1600.0
+	shell.left_s = 2.0
+	h.push(100, st)
+	st.boss.range_m = 1100.0
+	e.range_m = 1500.0
+	shell.left_s = 1.9
+	h.push(102, st)
+	var mid := 101.0 * Wl.SIM_DT
+	assert_almost_eq(h.enemy_range_at(21, mid, 0.0), 1550.0, 0.001)
+	assert_almost_eq(h.boss_range_at(mid, 0.0), 1150.0, 0.001)
+	assert_almost_eq(h.shell_left_at(shell.id, mid, 0.0), 1.95, 0.001)
+	assert_eq(h.enemy_range_at(999, mid, 7.0), 7.0, "unknown: the fallback")
+	assert_eq(h.shell_left_at(999, mid, 7.0), 7.0)

@@ -12,7 +12,8 @@ const CAPACITY := 8
 ## An entry more than this after the newest (a rejoin, a long stall) starts the history over.
 const MAX_GAP_S := 1.5
 
-## Oldest first: {"t", "tick", "hull": float, "boss": float, "e": {id: x}, "s": {id: Vector2},
+## Oldest first: {"t", "tick", "hull": float, "boss": float, "br": the boss's range_m, "e": {id: x},
+## "er": {id: range_m}, "s": {id: Vector2}, "sl": {id: left_s},
 ## "r": {peer: Vector2(raw_w, cadence_rpm)}}.
 var entries: Array[Dictionary] = []
 
@@ -47,11 +48,15 @@ func mean_spacing() -> float:
 func push(tick: int, state: TankState) -> void:
 	var t := float(tick) * Wl.SIM_DT
 	var enemies := {}
+	var ranges := {}
 	for e in state.enemies:
 		enemies[e.id] = e.x_px
+		ranges[e.id] = e.range_m
 	var shells := {}
+	var lefts := {}
 	for s in state.shells:
 		shells[s.id] = Vector2(s.x, s.y)
+		lefts[s.id] = s.left_s
 	var riders := {}
 	for r in state.riders:
 		riders[r.peer] = Vector2(r.raw_w, r.cadence_rpm)
@@ -67,8 +72,11 @@ func push(tick: int, state: TankState) -> void:
 			"tick": tick,
 			"hull": state.hull.x_px,
 			"boss": state.boss.x_px,
+			"br": state.boss.range_m,
 			"e": enemies,
+			"er": ranges,
 			"s": shells,
+			"sl": lefts,
 			"r": riders
 		}
 	)
@@ -86,6 +94,21 @@ func boss_x_at(t: float, fallback: float) -> float:
 
 func enemy_x_at(id: int, t: float, fallback: float) -> float:
 	return float(_sample(t, "e", id, fallback))
+
+
+## v4: a far enemy's range (m) at host time `t`.
+func enemy_range_at(id: int, t: float, fallback: float) -> float:
+	return float(_sample(t, "er", id, fallback))
+
+
+## v4: the Behemoth's range (m) at host time `t`.
+func boss_range_at(t: float, fallback: float) -> float:
+	return float(_sample(t, "br", null, fallback))
+
+
+## v4: a far shell's seconds until it lands at host time `t`.
+func shell_left_at(id: int, t: float, fallback: float) -> float:
+	return float(_sample(t, "sl", id, fallback))
 
 
 func shell_at(id: int, t: float, fallback: Vector2) -> Vector2:

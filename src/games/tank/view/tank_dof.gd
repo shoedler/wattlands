@@ -59,6 +59,8 @@ var auto_off: bool = false
 ## The canvas size (art px) and the sharp band (art y, top and bottom) on it.
 var canvas: Vector2 = Vector2(960, 540)
 var band: Vector2 = Vector2(195, 405)
+## The part of the canvas it covers (UV.y still spans the height).
+var rect: Rect2 = Rect2(0, 0, 960, 540)
 
 var _mat: ShaderMaterial = null
 var _smooth_dt: float = 0.0
@@ -100,9 +102,11 @@ func note_frame(delta: float, sim_advance: float) -> void:
 		_slow_s = 0.0
 
 
-func update(p_canvas: Vector2, p_band: Vector2) -> void:
+## `p_rect`: what it covers on the canvas (the near panel; the far panel never runs it). Empty: all of it.
+func update(p_canvas: Vector2, p_band: Vector2, p_rect: Rect2 = Rect2()) -> void:
 	canvas = p_canvas
 	band = p_band
+	rect = p_rect if p_rect.size != Vector2.ZERO else Rect2(Vector2.ZERO, canvas)
 	visible = active()
 	var ramp := RAMP_PX
 	var max_r := MAX_RADIUS_PX
@@ -116,4 +120,4 @@ func update(p_canvas: Vector2, p_band: Vector2) -> void:
 
 func _draw() -> void:
 	if active():
-		draw_texture_rect(TankDraw.white_tex(), Rect2(Vector2.ZERO, canvas), false)
+		draw_texture_rect(TankDraw.white_tex(), rect, false)
