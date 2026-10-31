@@ -22,6 +22,12 @@
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(dirname "$here")"
+# Plan capture for tools/gate matrix: write the arguments (0x1f after each) and start nothing.
+if [ -n "${WATTLANDS_SIM_PLAN:-}" ]; then
+  printf '%s\x1f' "$@" >>"$WATTLANDS_SIM_PLAN"
+  printf '\n' >>"$WATTLANDS_SIM_PLAN"
+  exit 0
+fi
 export WATTLANDS_NO_HW_CONTROL=1
 export WATTLANDS_NO_NETWORK_INTEGRATIONS=1
 

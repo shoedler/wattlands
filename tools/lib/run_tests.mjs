@@ -50,7 +50,9 @@ const USAGE = `usage: tools/run_tests [options]      (tools/run_tests.ps1 in Pow
   --no-lint            skip gdlint / gdformat --check (otherwise any finding fails the static step
                        whenever gdtoolkit is available; gdlint reads ./gdlintrc)
   --strict-lint        no-op, kept for compatibility (lint is always fatal)
-  --project=<dir>      project root (default: this checkout)`;
+  --project=<dir>      project root (default: this checkout)
+  --games=<id,...>     sim and e2e: only these registered games
+  --sim-outer-timeout=<s>  sim: the timer on one run, lock wait included (default ${SIM_TIMEOUT_S})`;
 
 // ---------------------------------------------------------------- options
 
@@ -69,6 +71,8 @@ export function parseArgs(argv) {
     noLint: false,
     project: REPO,
     shell: process.platform === 'win32' ? 'ps' : 'bash',
+    games: null,
+    simOuterS: SIM_TIMEOUT_S,
   };
   const list = (v) => v.split(',').map((s) => s.trim()).filter(Boolean);
   for (const a of argv) {
@@ -92,6 +96,12 @@ export function parseArgs(argv) {
     else if (key === '--no-lint' && val === null) o.noLint = true;
     else if (key === '--project' && val) o.project = path.resolve(val);
     else if (key === '--shell' && (val === 'bash' || val === 'ps')) o.shell = val;
+    else if (key === '--games' && val) o.games = list(val);
+    else if (key === '--sim-outer-timeout' && val) {
+      const n = Number(val);
+      if (!(Number.isFinite(n) && n > 0)) fail(`--sim-outer-timeout needs a number of seconds, got "${val}"`);
+      o.simOuterS = n;
+    }
     else fail(`unknown option "${a}"`);
   }
   for (const name of [...(o.only ?? []), ...o.skip]) {
@@ -145,7 +155,7 @@ function stopTree(pid) {
  * written to that file. A run past timeoutS is stopped (stopTree) and returns code 124, even if
  * an orphan still holds its pipes open.
  */
-function run(exe, args, { cwd, log = null, timeoutS = 0, env = process.env, quiet = false } = {}) {
+function run(exe, args, { cwd, log = null, timeoutS = 0, env = process.env, quiet = false, onSpawn = null } = {}) {
   return new Promise((resolve) => {
     const chunks = [];
     const out = log ? fs.createWriteStream(log) : null;
@@ -156,6 +166,7 @@ function run(exe, args, { cwd, log = null, timeoutS = 0, env = process.env, quie
       resolve({ code: 127, text: `cannot start ${exe}: ${err.message}\n` });
       return;
     }
+    if (onSpawn) onSpawn(child);
     let timedOut = false;
     let giveUp = null;
     const timer =
@@ -459,9 +470,11 @@ async function stepSim(o) {
   // reports and FIT files to build/sims/ for the fit step, and checks that every run completed.
   if (process.env[NESTED_ENV]) return { status: 'SKIP', note: 'nested run_tests' };
   const out = path.join(o.project, 'build', 'sims');
-  fs.rmSync(out, { recursive: true, force: true });
+  // Concurrent --games lanes share build/sims, so each deletes only its own game's files.
+  if (o.games) clearSimFiles(out, o.games);
+  else fs.rmSync(out, { recursive: true, force: true });
   fs.mkdirSync(out, { recursive: true });
-  const games = registeredGames(o);
+  const games = selectedGames(o);
   if (games.length === 0) return { status: 'SKIP', note: 'no registered games' };
   const runs = [];
   for (const g of games) {
@@ -483,7 +496,7 @@ async function stepSim(o) {
       ? [powershellExe(), ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(TOOLS, 'run_game_sim.ps1'), ...args]]
       : [process.env.WATTLANDS_BASH || 'bash', [path.join(TOOLS, 'run_game_sim').replaceAll('\\', '/'), ...args]];
     process.stdout.write(`run_tests: sim ${stem}\n`);
-    const r = await run(tool[0], tool[1], { cwd: o.project, log: path.join(out, `${stem}.log`), timeoutS: SIM_TIMEOUT_S, quiet: true });
+    const r = await run(tool[0], tool[1], { cwd: o.project, log: path.join(out, `${stem}.log`), timeoutS: o.simOuterS, quiet: true });
     let endReason = '';
     try {
       endReason = JSON.parse(fs.readFileSync(report, 'utf8')).end_reason ?? '';
@@ -524,6 +537,31 @@ function registeredGames(o) {
     }
   }
   return out.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+/** registeredGames narrowed by --games; an id that is not registered throws (the step then fails). */
+function selectedGames(o) {
+  const all = registeredGames(o);
+  if (!o.games) return all;
+  for (const id of o.games) {
+    if (!all.some((g) => g.id === id)) throw new Error(`--games: "${id}" is not a registered game`);
+  }
+  return all.filter((g) => o.games.includes(g.id));
+}
+
+/** Deletes build/sims/<id>_* and build/sims/fit/<id>_* of these games, nothing else. */
+function clearSimFiles(out, ids) {
+  for (const dir of [out, path.join(out, 'fit')]) {
+    let names = [];
+    try {
+      names = fs.readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const n of names) {
+      if (ids.some((id) => n.startsWith(`${id}_`))) fs.rmSync(path.join(dir, n), { recursive: true, force: true });
+    }
+  }
 }
 
 /** `npm ci` in a suite dir with a lockfile and no node_modules. Returns 'ok', 'installed' or the error. */
@@ -669,17 +707,18 @@ async function stepNode(o) {
 async function stepE2e(o) {
   // BRIEF 7.7: one host and two clients per registered game; holds 3 Godot slots, so it runs last.
   if (process.env[NESTED_ENV]) return { status: 'SKIP', note: 'nested run_tests' };
-  const games = registeredGames(o).map((g) => g.id);
+  const games = selectedGames(o).map((g) => g.id);
   if (games.length === 0) return { status: 'SKIP', note: 'no registered games' };
   if (!fs.existsSync(path.join(o.project, 'tools', 'e2e', 'run.mjs'))) return { status: 'FAIL', note: 'tools/e2e/run.mjs is missing' };
   await ensureNpm(o, 'server/relay');
   await ensureNpm(o, 'tools/fit_check');
+  const logName = o.games ? `e2e_${games.join('_')}.log` : 'e2e.log';
   const r = await run(process.execPath, ['tools/e2e/run.mjs', `--games=${games.join(',')}`], {
-    cwd: o.project, log: path.join(o.project, 'build', 'e2e.log'), timeoutS: E2E_TIMEOUT_S,
+    cwd: o.project, log: path.join(o.project, 'build', logName), timeoutS: E2E_TIMEOUT_S,
   });
-  if (r.code === 0) return { status: 'PASS', note: `games ${games.join(', ')} (log build/e2e.log)` };
+  if (r.code === 0) return { status: 'PASS', note: `games ${games.join(', ')} (log build/${logName})` };
   if (r.code === 75) return { status: 'FAIL', note: 'godot lock wait timeout (exit 75)' };
-  return { status: 'FAIL', note: `exit ${r.code} for games ${games.join(', ')} (log build/e2e.log)` };
+  return { status: 'FAIL', note: `exit ${r.code} for games ${games.join(', ')} (log build/${logName})` };
 }
 
 export const STEPS = [
@@ -750,6 +789,8 @@ export async function main(argv) {
 
 // Exported for tests.
 export { FORBIDDEN, hasNodeTests };
+// For tools/lib/gate.mjs.
+export { wrapperCommand, run, ensureNpm, registeredGames, ensureBuildDir, selectedGames };
 
 const isMain = (() => {
   if (!process.argv[1]) return false;
