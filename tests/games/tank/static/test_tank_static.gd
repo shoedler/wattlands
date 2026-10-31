@@ -1,5 +1,5 @@
 extends TestGameStaticSuite
-## Brief 4 static tests for Diesel Domestiques, lexer-based (comments are cut out and string
+## Brief 4 static tests for Torque Company, lexer-based (comments are cut out and string
 ## contents reduced to quotes first, so a doc comment that mentions "Time." or a toast key never
 ## trips them). They extend the lead's test_tank_package.gd scans instead of repeating them:
 ##   - nothing under src/games/tank names the trainer stack, in code or as an exact string, in any

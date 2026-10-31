@@ -4,7 +4,7 @@
 //   bash assets/readme/render_frames.sh
 //   node assets/readme/compose.mjs
 //
-// hero.png: four cuts of the games' own frames, with the name in Diesel Domestiques' stencil face.
+// hero.png: four cuts of the games' own frames, with the name in Torque Company's stencil face.
 // screen_*.png: the frames as rendered; only a frame over MAX_BYTES is reduced to 256 colours.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -262,4 +262,4 @@ save('hero.png', hero());
 save('screen_turbo_reel.png', load(onlyPng('fishing_wreck')));
 save('screen_castellum_rotae.png', load(onlyPng('siege')));
 save('screen_workout.png', load(path.join(frames, 'workout/sprint_4.png')));
-save('screen_diesel_domestiques.png', load(onlyPng('tank')));
+save('screen_torque_company.png', load(onlyPng('tank')));

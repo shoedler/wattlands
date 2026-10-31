@@ -1,6 +1,6 @@
 class_name TankState
 extends TankRecord
-## The whole Diesel Domestiques game state (G0 contract). The rules (TankRules.step) mutate it on
+## The whole Torque Company game state (G0 contract). The rules (TankRules.step) mutate it on
 ## the host; the director (TankDirector) only reads it; the module encodes it into snapshots
 ## (TankSnapshot) and clients rebuild the [snap] part from them; the view and HUD only read it.
 ## Deterministic: every random draw goes through `rng` (ctx.rng on the host), and every list keeps

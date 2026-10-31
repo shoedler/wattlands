@@ -1,6 +1,6 @@
 class_name TankHudFont
 extends RefCounted
-## Diesel Domestiques' own pixel type (brief 3.6), authored here as grids and written to the PNGs
+## Torque Company's own pixel type (brief 3.6), authored here as grids and written to the PNGs
 ## under assets/tank/hud/ by write() (the PNGs are committed; a test checks they still match):
 ##  - TEXT: a square, condensed, stencil-flavoured 5 x 7 face (capitals with stencil breaks in the
 ##    closed bowls of B D O P Q R, lower case with 2-row descenders, a slashed zero), one 5 x 9 grid

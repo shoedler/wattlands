@@ -1,6 +1,6 @@
 # Tank contracts
 
-The shared types Diesel Domestiques is built on. The sections after "Rules every builder keeps" are the log of each version's contract changes, dated, so they name things later versions removed. Brief: `docs/games/tank.md`; decisions: `docs/decisions/tank.md`; platform: `docs/GAME_SDK.md`.
+The shared types Torque Company is built on. The sections after "Rules every builder keeps" are the log of each version's contract changes, dated, so they name things later versions removed. Brief: `docs/games/tank.md`; decisions: `docs/decisions/tank.md`; platform: `docs/GAME_SDK.md`.
 
 ## Data flow per tick (host / SOLO, every 0.05 s of game time)
 

@@ -1,6 +1,6 @@
 class_name TankHudDraw
 extends RefCounted
-## Drawing helpers for Diesel Domestiques' own HUD (brief 3.6). Every call takes art px of the
+## Drawing helpers for Torque Company's own HUD (brief 3.6). Every call takes art px of the
 ## 960 x 540 base: each TankHudCtl sets draw_set_transform(scale = screen px per art px, 2 at
 ## 1080p) before it draws, and the Controls filter nearest, so every pixel lands on the art grid.
 ## The look: riveted dark-iron plates (panel #17140f, a 1 px brass frame #8a6a3a with a darker
