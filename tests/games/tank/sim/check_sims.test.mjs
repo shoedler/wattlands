@@ -27,6 +27,14 @@ const DRILL_TABLE = [
   ['skirmish', 1, 'WARMUP', 70],
   ['checkpoint', 1, 'RECOVERY', 30],
 ];
+// v4: the 15-minute session (SPEC_TANK 3.8), nominal 900 s with the cool-down.
+const AMBUSH_TABLE = [
+  ['depot', 0, 'WARMUP', 300],
+  ['advance', 1, 'WORK', 120, 80, 160],
+  ['gun_line', 1, 'WORK', 90, 60, 120],
+  ['checkpoint', 1, 'RECOVERY', 60],
+  ['boss', 4, 'WORK', 150, 100, 190],
+];
 // v3: one tank, every slot on its start seat for the whole plan (no rotation; seat switches replan).
 const START = { 1: ['diesel'], 2: ['diesel', 'dynamo'], 3: ['diesel', 'dynamo', 'steam'], 4: ['diesel', 'dynamo', 'steam', 'arc'] };
 
@@ -38,7 +46,7 @@ function planPhase(crew, slot, i, table = SEG_TABLE) {
   const [seg, stage, kind, dur, min, max] = table[i];
   const engine = engineAt(crew, slot);
   const drill = table === DRILL_TABLE;
-  const meta = { engine, mission: 'ashfall_road', seg, segment: i, stage };
+  const meta = { engine, mission: table === AMBUSH_TABLE ? 'ambush_15' : 'ashfall_road', seg, segment: i, stage };
   const base = { duration_s: dur, kind, label: `L${i}`, lap: true, meta };
   if (min !== undefined) Object.assign(base, { min_s: min, max_s: max, open_ended: true });
   if (seg === 'checkpoint') return { ...base, mode: 'ERG', target_pct: 50 };
@@ -60,14 +68,17 @@ function planPhase(crew, slot, i, table = SEG_TABLE) {
 /**
  * A clean compliant ashfall_road run of `crew` riders. opts: durations {advance, gun_line, boss}
  * (seconds, per run), grade, score, ended {index: how}, dynamoPct (applied % in dynamo fights), arcPct (in arc fights),
- * events [], directives [], extraRows (fn(row, peer) -> row), seed, role, endReason.
+ * events [], directives [], extraRows (fn(row, peer) -> row), seed, role, endReason; v4: content 'ambush_15', options (the
+ * run's --options), rider (--rider), bots (bot slots after the humans).
  */
 function makeRun(crew, opts = {}) {
-  const table = opts.content === 'drill' ? DRILL_TABLE : SEG_TABLE;
+  const table = opts.content === 'drill' ? DRILL_TABLE : opts.content === 'ambush_15' ? AMBUSH_TABLE : SEG_TABLE;
   const d = { advance: 200, gun_line: 100, boss: 250, ...(opts.durations ?? {}) };
   const durOf = (i) => {
     const [seg, , , nominal] = table[i];
-    return table === DRILL_TABLE ? nominal : d[seg] ?? nominal;
+    if (table === DRILL_TABLE) return nominal;
+    if (table === AMBUSH_TABLE) return opts.durations?.[seg] ?? nominal;
+    return d[seg] ?? nominal;
   };
   const starts = [];
   let t = 0;
@@ -124,6 +135,19 @@ function makeRun(crew, opts = {}) {
     }
     if (row[0] === 'gun_line' && row[1] >= 2) events.push(ge(starts[i] + 20, { type: 'shot', s: -1, sh: 5, id: 3, src: 3, e: 5 }));
   });
+  // v4: two near threats in each Advance from crew 2 up: a recon car killed, shooting until it dies, a tankette that gets away.
+  if (crew >= 2 && table === SEG_TABLE) {
+    SEG_TABLE.forEach((row, i) => {
+      if (row[0] !== 'advance') return;
+      const a = starts[i];
+      events.push(ge(a + 60, { type: 'ambush', id: 900 + i, e: 7 }));
+      events.push(ge(a + 64, { type: 'shot', s: -1, sh: 5, id: 800 + i, src: 900 + i, e: 7, rng_m: 0 }));
+      events.push(ge(a + 70, { type: 'kill', id: 900 + i, e: 7, by: 3, s: 1 }));
+      events.push(ge(a + 74, { type: 'shot', s: -1, sh: 5, id: 820 + i, src: 950 + i, e: 8, rng_m: 0 }));
+      events.push(ge(a + 72, { type: 'ambush', id: 950 + i, e: 8 }));
+      events.push(ge(a + 95, { type: 'escaped', id: 950 + i, e: 8 }));
+    });
+  }
   // The Loader (v3, slot 2): three shells stowed 7 s apart in each Advance, gun line and the boss, with the boiler
   // grade rising and dropping; the Gun (slot 1) fires in each gun line and the boss.
   const directives = [...(opts.directives ?? [])];
@@ -153,18 +177,22 @@ function makeRun(crew, opts = {}) {
     });
   }
   events.push(...(opts.events ?? []));
+  for (let k = 0; k < (opts.bots ?? 0); k += 1) {
+    slots.push({ slot: crew + k, peer: -(k + 1), is_bot: true, ftp: 200, ftp_verified: true, haptics_on: true, autopilot: true, rider: 'erg:compliance=1.0+band' });
+  }
   const report = {
     schema: 1,
     game_id: 'tank',
     content_id: opts.content ?? 'ashfall_road',
     role: opts.role ?? (crew >= 2 ? 'HOST' : 'SOLO'),
     seed: opts.seed ?? 1,
-    args: { game: 'tank', content: opts.content ?? 'ashfall_road', players: crew, bots: 0, seed: opts.seed ?? 1, riders: ['erg:compliance=1.0'] },
+    args: { game: 'tank', content: opts.content ?? 'ashfall_road', players: crew, bots: opts.bots ?? 0, seed: opts.seed ?? 1, riders: [opts.rider ?? 'erg:compliance=1.0'], options: opts.options ?? {} },
     slots,
     plans,
     plan_warnings: Object.fromEntries(Object.keys(plans).map((p) => [p, []])),
     end_reason: opts.endReason ?? 'complete',
     finished_reason: opts.finished ?? 'victory',
+    game_seconds: end,
     phases,
     directives,
     directives_unmatched: [],
@@ -307,7 +335,7 @@ test('T3 (v3) needs 3 shells stowed per stage and about 7 s a shell back to back
   assert.match(ids(C.t3Problems('x', none)), /no back-to-back stows/);
 });
 
-test('T4 (v3) reads the solo loop: Drive share per Advance, main-gun shells or a bow kill per gun line', () => {
+test('T4 (v4) reads the solo loop: Drive share per Advance, main-gun shells per holding action', () => {
   assert.deepEqual(C.t4Problems('x', makeRun(1)), []);
   // Stage 1 Advance 300-500: the solo rider leaves Drive for the Loader at 330 s and comes back at 470 s (30% on Drive).
   const r = makeRun(1);
@@ -322,10 +350,10 @@ test('T4 (v3) reads the solo loop: Drive share per Advance, main-gun shells or a
   assert.match(ids(C.t4Problems('x', r)), /stage 1 Advance on Drive 30%/);
   const quiet = makeRun(1);
   quiet.events = quiet.events.filter((e) => !(e.event?.type === 'shot' && e.event.s === 0));
-  assert.match(ids(C.t4Problems('x', quiet)), /stage 1 gun line: 0 main-gun shells fired and no bow-gun kill/);
+  assert.match(ids(C.t4Problems('x', quiet)), /stage 1 holding action: 0 main-gun shells fired \(min 2\)/);
   const gl1 = C.segmentsOf(quiet).find((s) => s.seg === 'gun_line' && s.stage === 1);
-  quiet.events.push({ type: 'game_event', t: gl1.start + 5, pt: gl1.start + 5, event: { type: 'kill', id: 99, e: 4, by: 3, s: 0 } });
-  assert.doesNotMatch(ids(C.t4Problems('x', quiet)), /stage 1 gun line/, 'the bow guns worked it');
+  quiet.events.push({ type: 'game_event', t: gl1.start + 5, pt: gl1.start + 5, event: { type: 'kill', id: 99, e: 7, by: 3, s: 0 } });
+  assert.match(ids(C.t4Problems('x', quiet)), /stage 1 holding action/, 'v4: a bow kill no longer stands in for the main gun');
   assert.equal(C.soloLoop(makeRun(1)).filter((x) => x.seg === 'gun_line').length, 3);
 });
 
@@ -937,6 +965,398 @@ test('S13 (0.3.1, no lock) fails on a move its trainer never follows, a refused 
   assert.match(ids(C.seatProblems('x', warned)), /split 904 warned: switches 10 s apart/);
 });
 
+// --- v4: T1, T8, T9, the Repairs directive, rescue and AFK shield the crew ------------------------------------------
+
+const ge4 = (t, event) => ({ type: 'game_event', t, pt: t, event });
+/** A tank loss at \`t\` and, unless \`restart\` is false, the restart after the 8 s tow. */
+const lostAt = (t, n = 1, restart = true) => [ge4(t, { type: 'tank_lost', n, sg: 2, st: 1 }), ...(restart ? [ge4(t + 8, { type: 'stage_restart', sg: 2, st: 1, hp: 70 })] : [])];
+
+test('T1 ranges are keyed by content; ambush_15 has its own', () => {
+  assert.deepEqual(C.T1_RANGES.ambush_15, { advance: [80, 160], gun_line: [60, 120], boss: [100, 190] });
+  assert.deepEqual(C.T1_RANGES.ashfall_road, { advance: [120, 280], gun_line: [60, 160], boss: [120, 330] });
+  assert.deepEqual(C.EXPECTED_LAPS, { ashfall_road: 12, ambush_15: 6, drill: 4 });
+  assert.deepEqual(C.t1Problems('x', makeRun(3, { content: 'ambush_15' })), []);
+  assert.match(ids(C.t1Problems('x', makeRun(3, { content: 'ambush_15', durations: { advance: 170 } }))), /advance 1 lasted 170 s \(80-160\)/);
+  assert.deepEqual(C.t1Problems('x', makeRun(3, { durations: { advance: 170 } })), [], 'inside ashfall_road range');
+});
+
+test('T1 lets a segment that lost the tank run long, holds at most one loss and no breakdown on Normal', () => {
+  // The stage 1 Advance (300-590) would be over its range and overrun: it holds the loss, so neither counts.
+  const long = makeRun(3, { durations: { advance: 290 }, ended: { 1: 'max_s' }, events: lostAt(350) });
+  const probs = C.t1Problems('x', long);
+  assert.doesNotMatch(ids(probs), /advance 1/);
+  assert.match(ids(probs), /advance 2 lasted 290/, 'a segment without one still answers');
+  assert.match(ids(C.t1Problems('x', makeRun(3, { events: [...lostAt(350), ...lostAt(1000, 2)] }))), /2 tank losses \(at most 1\)/);
+  const one = [ge4(400, { type: 'breakdown' })];
+  assert.match(ids(C.t1Problems('x', makeRun(3, { events: one }))), /1 breakdowns \(at most 0 on normal\)/);
+  assert.deepEqual(C.t1Problems('x', makeRun(3, { events: one, options: { difficulty: 'easy' } })), [], 'Easy keeps the old breakdown');
+  const two = [...one, ge4(800, { type: 'breakdown' })];
+  assert.match(ids(C.t1Problems('x', makeRun(3, { events: two, options: { difficulty: 'easy' } }))), /2 breakdowns \(at most 1 on easy\)/);
+});
+
+test('difficultyOf reads the option, and auto through the mission', () => {
+  assert.equal(C.difficultyOf(makeRun(1)), 'normal');
+  assert.equal(C.difficultyOf(makeRun(1, { options: { difficulty: 'auto' } })), 'normal');
+  assert.equal(C.difficultyOf(makeRun(1, { content: 'ambush_15' })), 'hard');
+  assert.equal(C.difficultyOf(makeRun(1, { content: 'ambush_15', options: { difficulty: 'normal' } })), 'normal');
+  assert.equal(C.difficultyOf(makeRun(1, { content: 'drill' })), 'easy');
+});
+
+test('T8 needs an ambush in every Advance, each threat accounted for, and 40% killed by crews 3-4', () => {
+  assert.deepEqual(C.t8Problems('x', makeRun(3), 3), []);
+  assert.deepEqual(C.t8Problems('x', makeRun(2), 2), []);
+  const none = makeRun(3);
+  none.events = none.events.filter((e) => !(e.event?.type === 'ambush' && e.t < 600));
+  const p = ids(C.t8Problems('x', none, 3));
+  assert.match(p, /stage 1 Advance has no ambush/);
+  assert.match(p, /killed or escaped with no ambush/);
+  const open = makeRun(3);
+  open.events = open.events.filter((e) => !(e.event?.type === 'escaped' && e.t < 600));
+  assert.match(ids(C.t8Problems('x', open, 3)), /near threat 951 from 372 s neither killed nor escaped/);
+  const rows = C.nearLedger(makeRun(3)).rows;
+  assert.deepEqual(rows.slice(0, 2).map((x) => [x.id, x.out, x.seg.seg]), [[901, 'killed', 'advance'], [951, 'escaped', 'advance']]);
+});
+
+test('T8 forgives only a threat young enough to be out when its segment ends or the tank is lost', () => {
+  const late = (t) => [ge4(t, { type: 'ambush', id: 5, e: 8 })];
+  // The stage 1 holding action: 500-600.
+  assert.deepEqual(C.t8Problems('x', makeRun(3, { events: late(590) }), 3), [], 'cut off by the segment change, 10 s old');
+  assert.match(ids(C.t8Problems('x', makeRun(3, { events: late(560) }), 3)), /near threat 5 from 560 s/, '40 s old: it should be gone');
+  assert.deepEqual(C.t8Problems('x', makeRun(3, { events: [...late(520), ...lostAt(530)] }), 3), [], 'the tank loss cleared it');
+  assert.match(ids(C.t8Problems('x', makeRun(3, { events: [...late(520), ...lostAt(570)] }), 3)), /near threat 5 from 520 s/, 'alive 50 s before the loss');
+});
+
+test('T8 crews 3-4 kill at least 40%; a crew of 2 is not held to it', () => {
+  const noKills = (crew) => {
+    const r = makeRun(crew);
+    for (const e of r.events) if (e.event?.type === 'kill' && e.event.e === 7) e.event = { type: 'escaped', id: e.event.id, e: 7 };
+    return r;
+  };
+  assert.match(ids(C.t8Problems('x', noKills(3), 3)), /0 of 6 near threats killed \(at least 40%\)/);
+  assert.deepEqual(C.t8Problems('x', noKills(2), 2), []);
+  assert.match(ids(C.checkS1({ s1_c3_seed1: noKills(3) }, { seeds: [1] }).details), /s1_c3_seed1: 0 of 6 near threats killed/);
+});
+
+test('T9: no enemy shot in a checkpoint, losses only in WORK, each one restarted unless the segment ended', () => {
+  assert.deepEqual(C.t9Problems('x', makeRun(3, { events: lostAt(350) })), []);
+  // The stage 1 checkpoint: 600-660; the tick that changes the segment still belongs to the holding action.
+  const shot = (t, s = -1) => [ge4(t, { type: 'shot', s, sh: 5, id: 7, src: 1, e: 2 })];
+  assert.match(ids(C.t9Problems('x', makeRun(3, { events: shot(620) }))), /enemy shot at 620 s in a checkpoint/);
+  assert.deepEqual(C.t9Problems('x', makeRun(3, { events: shot(600) })), []);
+  assert.deepEqual(C.t9Problems('x', makeRun(3, { events: shot(620, 1) })), [], 'our own shell');
+  assert.match(ids(C.t9Problems('x', makeRun(3, { events: lostAt(100) }))), /tank lost at 100 s in a WARMUP phase/);
+  assert.match(ids(C.t9Problems('x', makeRun(3, { events: lostAt(630) }))), /tank lost at 630 s in a RECOVERY phase/);
+  assert.match(ids(C.t9Problems('x', makeRun(3, { events: lostAt(350, 1, false) }))), /no stage_restart within 9 s/);
+  assert.deepEqual(C.t9Problems('x', makeRun(3, { events: lostAt(595, 1, false) })), [], 'the segment ended inside the tow');
+  const slow = makeRun(3, { events: [ge4(350, { type: 'tank_lost', n: 1, sg: 2, st: 1 }), ge4(361, { type: 'stage_restart', sg: 2, st: 1, hp: 70 })] });
+  assert.match(ids(C.t9Problems('x', slow)), /no stage_restart within 9 s/);
+  assert.match(ids(C.checkS1({ s1_c3_seed1: makeRun(3, { events: lostAt(350, 1, false) }) }, { seeds: [1] }).details), /no stage_restart/);
+});
+
+test('S2 (v4): the idle crew may lose the tank; every stage still overruns, grade D', () => {
+  const idle = idleCrew3();
+  idle.events.push(...lostAt(350));
+  const r = C.checkS2(allS2({ s2_c3_idle: idle }));
+  assert.equal(r.status, 'PASS', ids(r.details));
+  const lazy = idleCrew3();
+  lazy.events.push(...lostAt(350, 1, false));
+  assert.match(ids(C.checkS2(allS2({ s2_c3_idle: lazy })).details), /s2_c3_idle: tank lost at 350 s with no stage_restart/);
+});
+
+/** A Repairs phase for peer 3 in the stage 1 holding action: its pattern 10 target. */
+function repairRun(directives) {
+  const r = makeRun(3, { directives });
+  r.directives = r.directives.filter((d) => !(d.requested?.reason === 'boiler' && d.t >= 500 && d.t < 600));
+  const ph = r.plans['3'].phases[2];
+  r.plans['3'].phases[2] = { ...ph, mode: 'ERG', target_pct: 55, range_pct: [55, 70], grade_source: undefined, meta: { ...ph.meta, engine: 'repair' } };
+  return r;
+}
+const repairReq = (t, pct, extra = {}) => ({
+  id: 77,
+  peer: 3,
+  t,
+  kind: 'request',
+  accepted: true,
+  reason: '',
+  requested: { mode: 'ERG', target_pct: pct, reason: 'repair', source: 'tank', duration_s: 0 },
+  applied: { clamped_by: [], refused: false, applied: { target_pct: pct } },
+  ...extra,
+});
+
+test('S4 (v4) knows the Repairs target: pattern 10, inside its range, on its own seat', () => {
+  assert.equal(C.classify(repairReq(510, 60)), 'repair');
+  assert.equal(C.classify({ requested: { mode: 'SIM', target_pct: 60, reason: 'repair' } }), '', 'ERG only');
+  assert.deepEqual(C.directivesProblems('x', repairRun([repairReq(510, 60)])), []);
+  assert.match(ids(C.directivesProblems('x', repairRun([repairReq(510, 75)]))), /repair target 75% outside range_pct \[55,70\]/);
+  // Peer 3 is on the Loader (SIM) in the next Advance: no such target there, nor in a checkpoint.
+  assert.match(ids(C.directivesProblems('x', repairRun([repairReq(310, 60)]))), /repair target outside an ERG phase/);
+  assert.match(ids(C.directivesProblems('x', repairRun([repairReq(610, 60)]))), /repair target outside an ERG phase/);
+  const onGun = repairReq(510, 60);
+  onGun.peer = 2;
+  const r = repairRun([onGun]);
+  assert.match(ids(C.directivesProblems('x', r)), /repair target to a rider on dynamo/);
+  const raised = repairReq(510, 60, { applied: { clamped_by: [], refused: false, applied: { target_pct: 65 } } });
+  assert.match(ids(C.directivesProblems('x', repairRun([raised]))), /applied ERG target % 65 above the requested 60/);
+  const unnamed = repairReq(510, 60);
+  unnamed.requested = { ...unnamed.requested, duration_s: 5 };
+  assert.match(ids(C.directivesProblems('x', repairRun([unnamed]))), /repair with duration_s 5/);
+});
+
+test('flagSpans and lossesInSpans read the 1 Hz trace, with the telemetry lag at a span start', () => {
+  const r = rescueRun('2', 500, 520, 560);
+  assert.deepEqual(C.flagSpans(r, '2', 'rescue'), [[520, 559]]);
+  assert.deepEqual(C.flagSpans(r, '3', 'rescue'), []);
+  const at = (t) => {
+    const x = rescueRun('2', 500, 520, 560);
+    x.events.push(...lostAt(t));
+    return C.lossesInSpans('x', x, '2', 'rescue');
+  };
+  assert.match(ids(at(540)), /tank lost at 540 s while peer 2 was in rescue/);
+  assert.match(ids(at(520.3)), /520\.3/);
+  assert.deepEqual(at(520.1), [], 'the host has not heard yet');
+  assert.deepEqual(at(561), []);
+});
+
+test('S5 (v4) and S10 (v4): no tank lost while a dropped rider is in rescue or AFK', () => {
+  const dyn = rescueRun('2', 500, 520, 560);
+  dyn.events.push(...lostAt(540));
+  const r5 = C.checkS5({ s5_c3_dynamo_drop: dyn, s5_c4_arc_drop: arcRescueRun() });
+  assert.match(ids(r5.details), /s5_c3_dynamo_drop: tank lost at 540 s while peer 2 was in rescue/);
+  const stop = stopRun();
+  stop.events.push(...lostAt(550));
+  const r10 = C.checkS10(s10Set(clientSprintRun(), stop));
+  assert.match(ids(r10.details), /s10_c3_dynamo_stop: tank lost at 550 s while peer 2 was in afk/);
+  const before = stopRun();
+  before.events.push(...lostAt(350));
+  assert.equal(C.checkS10(s10Set(clientSprintRun(), before)).status, 'PASS');
+});
+
+test('S9 (v4) counts an evade at its landing, after the shot', () => {
+  const landed = [300, 660, 1020].flatMap((a, i) => [ge4(a + 40, { type: 'shot', s: -1, sh: 5, id: 40 + i, src: 10 + i, e: 3, rng_m: 1800, flight_s: 3.3 }), ge4(a + 43.3, { type: 'evade', id: 10 + i, e: 3, ok: 1, s: 0 })]);
+  const r = C.checkS9({ s9_c1_sprint: sprintRun({ events: landed }) });
+  assert.equal(r.status, 'PASS', ids(r.details));
+  assert.match(r.summary, /3 of 6 telegraphed shots evaded/);
+});
+
+test('S13 (v4) follows a move to the sixth seat', () => {
+  assert.equal(C.ENGINE_OF_CODE[7], 'repair');
+  assert.deepEqual(Object.values(C.ENGINE_OF_CODE).sort(), ['arc', 'diesel', 'dynamo', 'feed', 'repair', 'steam']);
+  const r = seatRun();
+  const plan3 = r.plans['3'].phases;
+  for (let i = 7; i < plan3.length - 1; i += 1) plan3[i] = { ...plan3[i], meta: { ...plan3[i].meta, engine: 'repair' } };
+  r.events.push(ge4(1020, { type: 'seat', s: 2, from: 3, to: 7 }));
+  r.directives.push({ id: 905, peer: 3, t: 990, kind: 'replan', accepted: true, reason: '', requested: {} });
+  assert.deepEqual(C.seatProblems('x', r), []);
+  assert.equal(C.seatAt(r, '3', 1100), 'repair');
+});
+
+// --- S14-S18 -----------------------------------------------------------------------------------------------------
+
+/** The clean report \`name\` promises, by its name. */
+function matrixReport(name, over = {}) {
+  const w = C.matrixRun(name);
+  return makeRun(w.players, { content: w.content, options: { difficulty: w.difficulty }, bots: w.bots, seed: w.seed, rider: w.rider, ...over });
+}
+const seedsOf = [1, 2, 3];
+
+test('matrixRun reads a report name into what it promises, and nothing else', () => {
+  assert.deepEqual(C.matrixRun('s14_easy_c1_seed2'), { id: 'S14', content: 'ashfall_road', difficulty: 'easy', players: 1, bots: 0, seed: 2, role: 'SOLO', rider: 'erg:compliance=1.0' });
+  assert.deepEqual(C.matrixRun('s16_amb_normal_c4_seed3'), { id: 'S16', content: 'ambush_15', difficulty: 'normal', players: 4, bots: 0, seed: 3, role: 'HOST', rider: 'erg:compliance=1.0' });
+  assert.equal(C.matrixRun('s17_hard_c3_c85_seed1').rider, 'erg:compliance=0.85');
+  assert.equal(C.matrixRun('s17_hard_c3_c70_seed1').rider, 'erg:compliance=0.70');
+  assert.deepEqual(C.matrixRun('s18_bots_h1b3'), { id: 'S18', content: 'ambush_15', difficulty: 'hard', players: 1, bots: 3, seed: 1, role: 'SOLO', rider: 'erg:compliance=1.0' });
+  assert.equal(C.matrixRun('s18_bots_h2b2').role, 'HOST');
+  for (const n of ['s1_c3_seed1', 's4_drill_c1', 's14_hard_c1_seed1', 's16_amb_easy_c1_seed1']) assert.equal(C.matrixRun(n), null, n);
+  assert.deepEqual([C.mostOf(3), C.mostOf(1), C.mostOf(2)], [2, 1, 2]);
+});
+
+test('argsProblems (v4) checks the difficulty and the rider a run was started with', () => {
+  const r = matrixReport('s15_hard_c3_seed1');
+  assert.deepEqual(C.argsProblems('x', r, C.matrixRun('s15_hard_c3_seed1')), []);
+  assert.match(ids(C.argsProblems('x', r, C.matrixRun('s14_easy_c3_seed1'))), /difficulty hard, wanted easy/);
+  assert.match(ids(C.argsProblems('x', r, { rider: 'erg:compliance=0.85' })), /rider erg:compliance=1\.0, wanted erg:compliance=0\.85/);
+});
+
+test('S4 (v4) reads the S14-S18 reports too, with their real content and bots', () => {
+  const set = { ...goodSet(seedsOf), s4_drill_c1: makeRun(1, { content: 'drill' }), s4_drill_c2: makeRun(2, { content: 'drill' }), s4_drill_c3: makeRun(3, { content: 'drill' }), s4_drill_c4: makeRun(4, { content: 'drill' }) };
+  // goodSet's drill-less report shape would flag its 12 laps on the drill: only the new reports are under test here.
+  const base = C.checkS4(set, { seeds: seedsOf }).details.length;
+  const clean = { ...set, s18_bots_h1b3: matrixReport('s18_bots_h1b3'), s16_amb_hard_c3_seed1: matrixReport('s16_amb_hard_c3_seed1') };
+  assert.equal(C.checkS4(clean, { seeds: seedsOf }).details.length, base, 'clean matrix reports add nothing, and the bot name does not throw');
+  const refused = matrixReport('s18_bots_h1b3', { directives: [req(1, 310, { mode: 'SIM', mode_grade: 3, reason: 'boiler', source: 'tank', duration_s: 0 }, { accepted: false, reason: 'nope', id: 5 })] });
+  assert.match(ids(C.checkS4({ ...set, s18_bots_h1b3: refused }, { seeds: seedsOf }).details), /s18_bots_h1b3: directive 5 .* refused: nope/);
+  const wrong = matrixReport('s15_hard_c1_seed1', { options: { difficulty: 'easy' } });
+  assert.match(ids(C.checkS4({ ...set, s15_hard_c1_seed1: wrong }, { seeds: seedsOf }).details), /s15_hard_c1_seed1: difficulty easy, wanted hard/);
+  const laps = matrixReport('s16_amb_hard_c1_seed1');
+  laps.plans['1'].phases[1].lap = false;
+  delete laps.plans['1'].phases[1].meta.offset_s;
+  assert.match(ids(C.checkS4({ ...set, s16_amb_hard_c1_seed1: laps }, { seeds: seedsOf }).details), /s16_amb_hard_c1_seed1: peer 1 plan has 5 lap-true phases, wanted 6/);
+  const fast = matrixReport('s14_easy_c1_seed1', { extraRows: (row) => (row.mode === 'ERG' ? { ...row, applied_pct: 120, applied_target_w: 240 } : row) });
+  assert.match(ids(C.checkS4({ ...set, s14_easy_c1_seed1: fast }, { seeds: seedsOf }).details), /s14_easy_c1_seed1: peer 1 applied ERG 120% FTP/);
+});
+
+const s14Set = (over = {}) => {
+  const out = {};
+  for (const c of C.CREWS) for (const s of seedsOf) out[`s14_easy_c${c}_seed${s}`] = matrixReport(`s14_easy_c${c}_seed${s}`);
+  return { ...out, ...over };
+};
+
+test('S14 Easy: victory every run, no loss, T1', () => {
+  const r = C.checkS14(s14Set(), { seeds: seedsOf });
+  assert.equal(r.status, 'PASS', ids(r.details));
+  assert.equal(C.checkS14({}, { seeds: seedsOf }).status, 'SKIP');
+  const { s14_easy_c1_seed1: _gone, ...some } = s14Set();
+  assert.match(ids(C.checkS14(some, { seeds: seedsOf }).details), /missing report s14_easy_c1_seed1/);
+  const n = 's14_easy_c3_seed2';
+  assert.match(ids(C.checkS14(s14Set({ [n]: matrixReport(n, { finished: 'withdrawn' }) }), { seeds: seedsOf }).details), /s14_easy_c3_seed2: finished "withdrawn", wanted victory/);
+  assert.match(ids(C.checkS14(s14Set({ [n]: matrixReport(n, { events: lostAt(350) }) }), { seeds: seedsOf }).details), /1 tank losses on Easy/);
+  assert.match(ids(C.checkS14(s14Set({ [n]: matrixReport(n, { grade: 'C' }) }), { seeds: seedsOf }).details), /grade C/);
+  assert.match(ids(C.checkS14(s14Set({ [n]: matrixReport(n, { durations: { boss: 340 } }) }), { seeds: seedsOf }).details), /boss 4 lasted 340/);
+});
+
+const s15Set = (lossesBySeed = [1, 2, 1], over = {}) => {
+  const out = {};
+  for (const c of C.CREWS) {
+    seedsOf.forEach((s, i) => {
+      const events = [];
+      for (let k = 0; k < lossesBySeed[i]; k += 1) events.push(...lostAt(320 + 50 * k, k + 1));
+      out[`s15_hard_c${c}_seed${s}`] = matrixReport(`s15_hard_c${c}_seed${s}`, { events });
+    });
+  }
+  return { ...out, ...over };
+};
+
+test('S15 Hard: 1-2 losses on at least 2 of 3 seeds per crew, none above 4, phases and the plan hold', () => {
+  const r = C.checkS15(s15Set(), { seeds: seedsOf });
+  assert.equal(r.status, 'PASS', ids(r.details));
+  assert.match(r.summary, /c3 losses 1\/2\/1/);
+  assert.equal(C.checkS15({}, { seeds: seedsOf }).status, 'SKIP');
+  assert.equal(C.checkS15(s15Set([0, 1, 2]), { seeds: seedsOf }).status, 'PASS', 'one easy seed is allowed');
+  assert.match(ids(C.checkS15(s15Set([0, 0, 1]), { seeds: seedsOf }).details), /crew 1: 1 of 3 seeds with 1-2 losses \(at least 2; losses 0, 0, 1\)/);
+  assert.match(ids(C.checkS15(s15Set([3, 3, 1]), { seeds: seedsOf }).details), /crew 3: 1 of 3 seeds with 1-2 losses/);
+  assert.match(ids(C.checkS15(s15Set([5, 1, 1]), { seeds: seedsOf }).details), /s15_hard_c1_seed1: 5 tank losses \(at most 4\)/);
+  // A subset run: one seed, one crew's worth of target.
+  assert.equal(C.checkS15(Object.fromEntries(Object.entries(s15Set()).filter(([n]) => n.endsWith('seed1'))), { seeds: [1] }).status, 'PASS');
+});
+
+test('phaseBoundProblems holds every open segment to min_s..max_s, through a split; planMaxS is the longest plan', () => {
+  assert.deepEqual(C.phaseBoundProblems('x', makeRun(3)), []);
+  assert.match(ids(C.phaseBoundProblems('x', makeRun(3, { durations: { advance: 310 } }))), /peer 1 advance 1 lasted 310 s \(90-300\)/);
+  assert.match(ids(C.phaseBoundProblems('x', makeRun(3, { durations: { gun_line: 50 } }))), /peer 1 gun_line 1 lasted 50 s \(60-180\)/);
+  assert.deepEqual(C.phaseBoundProblems('x', makeRun(3, { durations: { advance: 300.05 } })), [], 'a tick past max_s');
+  assert.deepEqual(C.phaseBoundProblems('x', splitRun()), [], 'a split segment is one segment');
+  // 300 + 3 x (300 + 180 + 60) + 360 + the cool-down.
+  assert.equal(C.planMaxS(makeRun(3)), 300 + 3 * 540 + 360 + 180);
+  assert.equal(C.planMaxS(splitRun()), 300 + 3 * 540 + 360 + 180, 'the rest of a split adds nothing');
+  assert.equal(C.planMaxS(makeRun(3, { content: 'ambush_15' })), 1010);
+  const over = makeRun(3);
+  over.game_seconds = 2500;
+  assert.match(ids(C.planTotalProblems('x', over)), /2500 game seconds, over the plan's longest 2460 s/);
+  assert.deepEqual(C.planTotalProblems('x', makeRun(3)), []);
+  const s = s15Set();
+  s.s15_hard_c2_seed1.game_seconds = 2500;
+  assert.match(ids(C.checkS15(s, { seeds: seedsOf }).details), /s15_hard_c2_seed1: 2500 game seconds/);
+});
+
+const s16Set = (over = {}) => {
+  const out = {};
+  for (const c of [1, 3, 4]) {
+    for (const s of seedsOf) {
+      out[`s16_amb_normal_c${c}_seed${s}`] = matrixReport(`s16_amb_normal_c${c}_seed${s}`);
+      out[`s16_amb_hard_c${c}_seed${s}`] = matrixReport(`s16_amb_hard_c${c}_seed${s}`, { events: lostAt(320) });
+    }
+  }
+  return { ...out, ...over };
+};
+
+test('S16 ambush_15: Normal at most a loss and mostly wins, Hard 1-2 losses mostly, 780-1010 game seconds', () => {
+  const r = C.checkS16(s16Set(), { seeds: seedsOf });
+  assert.equal(r.status, 'PASS', ids(r.details));
+  assert.equal(C.checkS16({}, { seeds: seedsOf }).status, 'SKIP');
+  const d = (over) => ids(C.checkS16(s16Set(over), { seeds: seedsOf }).details);
+  const nn = (s) => `s16_amb_normal_c3_seed${s}`;
+  assert.match(d({ [nn(1)]: matrixReport(nn(1), { events: [...lostAt(320), ...lostAt(500, 2)] }) }), /s16_amb_normal_c3_seed1: 2 tank losses \(at most 1 on Normal\)/);
+  // One seed may fall short, and is not then held to T1's times; two may not.
+  const short = (s) => matrixReport(nn(s), { finished: 'withdrawn', grade: 'D', durations: { boss: 190 }, ended: { 4: 'max_s' } });
+  assert.equal(C.checkS16(s16Set({ [nn(1)]: short(1) }), { seeds: seedsOf }).status, 'PASS');
+  assert.match(d({ [nn(1)]: short(1), [nn(2)]: short(2) }), /normal crew 3: 1 of 3 seeds won \(at least 2\)/);
+  assert.match(d({ [nn(1)]: matrixReport(nn(1), { durations: { advance: 170 } }) }), /advance 1 lasted 170/, 'T1 holds a win');
+  const hh = (s) => `s16_amb_hard_c4_seed${s}`;
+  assert.match(d({ [hh(1)]: matrixReport(hh(1)), [hh(2)]: matrixReport(hh(2)) }), /hard crew 4: 1 of 3 seeds with 1-2 losses/);
+  const longest = matrixReport(nn(1));
+  longest.game_seconds = 1020;
+  assert.match(d({ [nn(1)]: longest }), /s16_amb_normal_c3_seed1: 1020 game seconds \(780-1010\)/);
+  const shortest = matrixReport(nn(1));
+  shortest.game_seconds = 770;
+  assert.match(d({ [nn(1)]: shortest }), /770 game seconds/);
+});
+
+const s17Set = (over = {}) => {
+  const out = {};
+  for (const s of seedsOf) {
+    out[`s15_hard_c3_seed${s}`] = matrixReport(`s15_hard_c3_seed${s}`, { events: lostAt(320) });
+    out[`s17_hard_c3_c85_seed${s}`] = matrixReport(`s17_hard_c3_c85_seed${s}`, { events: [...lostAt(320), ...lostAt(800, 2)] });
+  }
+  out.s17_hard_c3_c70_seed1 = matrixReport('s17_hard_c3_c70_seed1');
+  return { ...out, ...over };
+};
+
+test('S17: strictly more losses at 85% than at 100%; at 70% no loss inside anyone\'s rescue', () => {
+  const r = C.checkS17(s17Set(), { seeds: seedsOf });
+  assert.equal(r.status, 'PASS', ids(r.details));
+  assert.match(r.summary, /mean losses 100% 1, 85% 2, 70% 0/);
+  assert.equal(C.checkS17({}, { seeds: seedsOf }).status, 'SKIP');
+  const same = {};
+  for (const s of seedsOf) same[`s17_hard_c3_c85_seed${s}`] = matrixReport(`s17_hard_c3_c85_seed${s}`, { events: lostAt(320) });
+  assert.match(ids(C.checkS17(s17Set(same), { seeds: seedsOf }).details), /mean losses at 85% \(1\) are not above 100% \(1\)/);
+  const { s15_hard_c3_seed2: _gone, ...noBase } = s17Set();
+  assert.match(ids(C.checkS17(noBase, { seeds: seedsOf }).details), /missing report s15_hard_c3_seed2/);
+  const n = 's17_hard_c3_c70_seed1';
+  const inRescue = (row, p) => (p === '3' && row.t >= 700 && row.t < 760 ? { ...row, rescue: true } : row);
+  const wiped = matrixReport(n, { extraRows: inRescue, events: lostAt(720) });
+  assert.match(ids(C.checkS17(s17Set({ [n]: wiped }), { seeds: seedsOf }).details), /tank lost at 720 s while peer 3 was in rescue/);
+  const outside = matrixReport(n, { extraRows: inRescue, events: lostAt(330) });
+  assert.equal(C.checkS17(s17Set({ [n]: outside }), { seeds: seedsOf }).status, 'PASS');
+  assert.match(ids(C.checkS17(s17Set({ [n]: matrixReport(n, { endReason: 'timeout' }) }), { seeds: seedsOf }).details), /end_reason timeout/);
+  assert.match(ids(C.checkS17(s17Set({ [n]: matrixReport(n, { rider: 'erg:compliance=0.85' }) }), { seeds: seedsOf }).details), /rider erg:compliance=0\.85, wanted erg:compliance=0\.70/);
+});
+
+/** Crew of one human and three bots: bot slot 1 moves to the Secondaries, slot 2 to Repairs. */
+function botRun(over = {}) {
+  const moves = [ge4(340, { type: 'seat', s: 1, from: 2, to: 6 }), ge4(400, { type: 'seat', s: 2, from: 3, to: 7 })];
+  return matrixReport('s18_bots_h1b3', { events: over.events ?? moves, directives: over.directives ?? [] });
+}
+const s18Set = (a = botRun(), b = matrixReport('s18_bots_h2b2', { events: [ge4(340, { type: 'seat', s: 2, from: 3, to: 6 })] })) => ({ s18_bots_h1b3: a, s18_bots_h2b2: b });
+
+test('S18 bots: complete, nothing refused, bots act only through their own seats', () => {
+  const r = C.checkS18(s18Set());
+  assert.equal(r.status, 'PASS', ids(r.details));
+  assert.match(r.summary, /s18_bots_h1b3 victory, 2 seat moves, 0 losses/);
+  assert.equal(C.checkS18({}).status, 'SKIP');
+  assert.match(ids(C.checkS18({ s18_bots_h1b3: botRun() }).details), /missing report s18_bots_h2b2/);
+  const stuck = matrixReport('s18_bots_h1b3', { endReason: 'timeout' });
+  assert.match(ids(C.checkS18(s18Set(stuck)).details), /end_reason timeout/);
+  const refused = botRun({ directives: [req(1, 310, { mode: 'SIM', mode_grade: 3, reason: 'boiler', source: 'tank', duration_s: 0 }, { accepted: false, reason: 'nope', id: 5 })] });
+  assert.match(ids(C.checkS18(s18Set(refused)).details), /directive 5 .* refused: nope/);
+  const idle = matrixReport('s18_bots_h1b3');
+  assert.match(ids(C.botSeatProblems('x', idle)), /no bot ever moved seats/);
+});
+
+test('S18: a bot on a human\'s seat, or a human\'s trainer moved with no move of its own, fails', () => {
+  // The human (slot 0) starts on Drive (code 1).
+  const onHuman = botRun({ events: [ge4(340, { type: 'seat', s: 1, from: 2, to: 1 })] });
+  assert.match(ids(C.botSeatProblems('x', onHuman)), /bot slot 1 landed on diesel at 340 s, peer 1's seat/);
+  // A cover swap: the human moves off in the same tick, so the bot takes a seat that is free.
+  const swap = botRun({ events: [ge4(340, { type: 'seat', s: 0, from: 1, to: 6 }), ge4(340, { type: 'seat', s: 3, from: 6, to: 1 })] });
+  assert.deepEqual(C.botSeatProblems('x', swap), []);
+  const split = { id: 9, peer: 1, t: 350, kind: 'split', accepted: true, reason: '', requested: {} };
+  assert.match(ids(C.botSeatProblems('x', botRun({ directives: [split] }))), /split 9 to human peer 1 at 350 s with no seat move of its own/);
+  const own = botRun({ events: [ge4(340, { type: 'seat', s: 0, from: 1, to: 6 }), ge4(345, { type: 'seat', s: 1, from: 2, to: 7 })], directives: [split] });
+  assert.deepEqual(C.botSeatProblems('x', own), []);
+  const botSplit = { id: 10, peer: -1, t: 350, kind: 'split', accepted: true, reason: '', requested: {} };
+  assert.deepEqual(C.botSeatProblems('x', botRun({ directives: [botSplit] })), [], 'a bot follows its own seat on its own trainer');
+});
+
 // --- FIT, arguments, main ----------------------------------------------------------------------------------------------
 
 test('fitGroups groups existing FIT files by expected laps and skips what is not there', () => {
@@ -955,6 +1375,7 @@ test('parseArgs and runChecks', () => {
   assert.throws(() => C.parseArgs([]), /usage/);
   assert.throws(() => C.parseArgs(['d', '--nope']), /unknown option/);
   assert.throws(() => C.parseArgs(['d', '--only=S8']), /unknown scenario/);
+  assert.deepEqual(C.parseArgs(['d', '--only=s14,S15,s16,S17,s18']).only, ['S14', 'S15', 'S16', 'S17', 'S18']);
   const o = C.parseArgs(['d', '--only=s1,S7', '--seeds=1,2', '--fit', '--require-prompts']);
   assert.deepEqual(o.only, ['S1', 'S7']);
   assert.deepEqual(o.seeds, [1, 2]);

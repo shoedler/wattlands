@@ -87,15 +87,26 @@ func test_game_json_is_exactly_the_brief() -> void:
 	assert_eq(m["title"], "Diesel Domestiques")
 	assert_eq([int(m["min_players"]), int(m["max_players"])], [1, 4])
 	assert_eq(m["version"], "0.3.1")
-	assert_false(m["bots"], "no bots (brief 0.3)")
+	assert_true(m["bots"], "v4: bots fill the empty seats")
 	assert_eq(
 		m["contents"],
-		["ashfall_road", "roam_30", "roam_10", "roam_20", "roam_45", "roam_60", "drill"],
-		"brief 2.2's order"
+		[
+			"ashfall_road",
+			"ambush_15",
+			"roam_30",
+			"roam_10",
+			"roam_20",
+			"roam_45",
+			"roam_60",
+			"drill"
+		],
+		"brief 2.2's order, the short session second"
 	)
 	var cards: Dictionary = m.get("content_cards", {})
-	assert_eq(cards.keys().size(), 7, "a card per content")
+	assert_eq(cards.keys().size(), 8, "a card per content")
 	assert_true(bool(cards["ashfall_road"]["featured"]))
+	assert_true(bool(cards["ambush_15"]["featured"]), "the short session is featured")
+	assert_eq(cards["ambush_15"]["detail"], "TANK_CARD_AMBUSH")
 	assert_true(bool(cards["roam_30"]["featured"]), "Free Roam 30 min is featured")
 	for id: String in ["roam_10", "roam_20", "roam_45", "roam_60", "drill"]:
 		assert_false(bool(cards[id].get("featured", false)), id)

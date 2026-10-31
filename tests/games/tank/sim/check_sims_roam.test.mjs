@@ -188,3 +188,23 @@ test('S12 fails on a kill by crew fire, a grade above D, a resumed pause or leav
   const barrage = C.checkS12({ s12_roam10_c3_zero: zeroRun({ kills: [C.BY_BARRAGE] }) });
   assert.equal(barrage.status, 'PASS', 'a barrage is no crew fire');
 });
+
+const ev = (t, event) => ({ type: 'game_event', t, pt: t, event });
+
+test('S11 and S12 (v4): every far enemy fires from a range ahead of the hull, and nothing is dug in', () => {
+  const ahead = ev(400, { type: 'shot', s: -1, sh: 5, id: 1, src: 2, e: 2, rng_m: 1300, flight_s: 2.4 });
+  const near = ev(410, { type: 'shot', s: -1, sh: 5, id: 2, src: 3, e: 7, rng_m: 0 });
+  assert.deepEqual(C.behindProblems('x', makeRoam(3, 10, { events: [ahead, near] })), [], 'a near threat fires from the bushes, with no range');
+  const noRange = ev(420, { type: 'shot', s: -1, sh: 5, id: 3, src: 4, e: 5, rng_m: 0 });
+  assert.match(C.behindProblems('x', makeRoam(3, 10, { events: [noRange] })).join(' | '), /shot of enemy code 5 at 420 s with range 0/);
+  const dugin = ev(430, { type: 'kill', id: 4, e: 4, by: 0, s: 0 });
+  assert.match(C.behindProblems('x', makeRoam(3, 10, { events: [dugin] })).join(' | '), /kill of enemy code 4/);
+  const many = Array.from({ length: 5 }, (_, i) => ev(440 + i, { type: 'shot', s: -1, sh: 5, id: 10 + i, src: 4, e: 5, rng_m: 0 }));
+  assert.match(C.behindProblems('x', makeRoam(3, 10, { events: many })).join(' | '), /\.\.\. 2 more/);
+  const r = C.checkS11(s11({ s11_roam10_c4: makeRoam(4, 10, { events: [noRange] }) }));
+  assert.equal(r.status, 'FAIL');
+  assert.match(r.details.join(' | '), /s11_roam10_c4: shot of enemy code 5/);
+  const zero = zeroRun();
+  zero.events.push(noRange);
+  assert.match(C.checkS12({ s12_roam10_c3_zero: zero }).details.join(' | '), /s12_roam10_c3_zero: shot of enemy code 5/);
+});

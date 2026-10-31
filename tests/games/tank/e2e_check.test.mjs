@@ -194,6 +194,10 @@ test('the drill: nothing a WARMUP session forbids', () => {
     [{ type: 'boss_phase', p: 1 }, /1 boss_phase event\(s\)/],
     [{ type: 'overrun', sg: 2, st: 1 }, /1 overrun event\(s\)/],
     [{ type: 'rotation', r: [[0, 2]] }, /1 rotation event\(s\)/],
+    [{ type: 'tank_lost', n: 1, sg: 6, st: 1 }, /1 tank_lost event\(s\)/],
+    [{ type: 'stage_restart', sg: 6, st: 1, hp: 70 }, /1 stage_restart event\(s\)/],
+    [{ type: 'ambush', id: 30, e: 7 }, /1 ambush event\(s\)/],
+    [{ type: 'escaped', id: 30, e: 8 }, /1 escaped event\(s\)/],
   ]) {
     const e = [...drillEvents().slice(0, 6), bad, ...drillEvents().slice(6)];
     assert.match(errs(report({ host: e, client1: e })), pattern);
