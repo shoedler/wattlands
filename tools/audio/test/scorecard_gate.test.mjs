@@ -76,6 +76,20 @@ test('D5 needs the _shared bank, and fails a mix that buries the prompts', () =>
   assert.equal(row(card(doc), 'D5').pass, false);
 });
 
+test('D5 hears the loudest moment, not only the midpoint', () => {
+  const doc = structuredClone(fixture);
+  const moving = doc.preview.segments.filter((s) => s.rpm > 0).reduce((a, s) => a + s.s, 0);
+  const calm = row(card(doc), 'D5');
+  doc.cues = { ...doc.cues, late_blast: { hits: [{ sound: 'body', db: 12, bus: 'Sfx', priority: 6 }] } };
+  doc.preview.events = [...(doc.preview.events ?? []), { t: moving - 0.5, cue: 'late_blast', vars: {} }];
+  const loud = row(card(doc), 'D5');
+  assert.ok(calm.pass, `${calm.value}`);
+  assert.equal(loud.pass, false, `${loud.value} ${loud.note}`);
+  assert.ok(loud.value < calm.value - 3, `${loud.value} against ${calm.value}`);
+  const t = Number(loud.note.match(/at ([\d.]+) s/)[1]);
+  assert.ok(Math.abs(t - (moving - 0.5)) < 1, `the worst of it, ${loud.note}, is on the blast at ${moving - 0.5}`);
+});
+
 test('D4: a machine layer with no min_rpm still stops dead, as the kit stops it', () => {
   const doc = structuredClone(fixture);
   for (const l of doc.machines.engine.loops) delete l.min_rpm;

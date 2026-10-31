@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { BankAudio, MIX_RATE, PROMPT_VOICE_DB, limit, mixdown, simulate, toInt16 } from '../lib/offline_mix.mjs';
+import { BankAudio, MIX_RATE, PROMPT_VOICE_DB, SAFETY_DUCK, limit, mixdown, simulate, toInt16 } from '../lib/offline_mix.mjs';
 import { FIXTURE_BANK, REPO, bankOf, readJson } from './helpers.mjs';
 
 const TICK = { dur: 0.04, seed: 1, locked: true, norm: { peak: -6 }, layers: [{ src: 'noise', env: { a: 0.0003, d: 0.03 } }] };
@@ -135,9 +135,23 @@ test('a safety prompt plays on Master and ducks Machines, Ambience, Sfx', () => 
   const shared = new BankAudio(readJson(`${FIXTURE_BANK.replace(/tools[\\/]audio.*$/, '')}assets/_shared/audio/audio.json`), null);
   const b = bank({ machines: { m: { loops: [{ sound: 'hum', db: -6 }] } } });
   const sim = simulate(b, { segments: [{ rpm: 60, s: 2, params: {} }], machines: [{ id: 'a', machine: 'm', lead: true }], prompts: [{ t: 1, name: 'warning' }], shared });
-  assert.deepEqual(sim.ducks.map((d) => [d.bus, d.db]), [['Machines', -6], ['Ambience', -6], ['Sfx', -4]]);
+  assert.deepEqual(sim.ducks.map((d) => [d.bus, d.db]), [['Machines', -14], ['Ambience', -14], ['Sfx', -20]]);
   const mix = mixdown(b, sim, { shared });
   assert.ok(firstLoud(mix.stems.Master[0]) > 0);
+});
+
+test('the preview ducks a safety prompt as WlSfx does', () => {
+  const src = fs.readFileSync(path.join(REPO, 'addons', 'wattlands', 'audio', 'sfx.gd'), 'utf8');
+  const attack = Number(src.match(/SAFETY_DUCK_ATTACK_S := ([\d.]+)/)[1]);
+  const release = Number(src.match(/SAFETY_DUCK_RELEASE_S := ([\d.]+)/)[1]);
+  const asked = [...src.matchAll(/AudioBuses\.duck\(AudioBuses\.(\w+), (-?[\d.]+), SAFETY_DUCK_ATTACK_S, SAFETY_DUCK_RELEASE_S\)/g)];
+  assert.equal(asked.length, SAFETY_DUCK.length);
+  for (const [i, m] of asked.entries()) {
+    assert.equal(m[1].toLowerCase(), SAFETY_DUCK[i].bus.toLowerCase());
+    assert.equal(Number(m[2]), SAFETY_DUCK[i].db);
+    assert.equal(attack, SAFETY_DUCK[i].attack_s);
+    assert.equal(release, SAFETY_DUCK[i].release_s);
+  }
 });
 
 test('a safety prompt plays at the level HudLayer asks for', () => {

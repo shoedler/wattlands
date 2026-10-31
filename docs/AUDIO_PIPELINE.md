@@ -113,7 +113,7 @@ Levels add up tightly: Machines at -22 and Ambience at -32 sum to about -21.5 LU
 How a row reads the audio, where the name alone doesn't say:
 
 - D1, D2: each event entry of the lead machine, rendered alone over 10 revolutions, against the pattern: a sharp rise of the fast envelope, 20 ms apart at least. A stroke with no attack of its own, ringing into the next, fails.
-- D5: `warning` and `rescue` momentary against every other bus in the same window, the prompt's own ducks counted, and the prompt at the -4 dB `HudLayer` plays it (`PROMPT_VOICE_DB`). On the fixture this passes up to a mix of about -17.6 LUFS, so a louder bank fails D5 before it leaves A1's window.
+- D5: `warning` and `rescue` momentary against every other bus in the same 600 ms, the prompt's own ducks counted (`SAFETY_DUCK`, `WlSfx`'s -14 dB on Machines and Ambience and -20 dB on Sfx, back over 2 s), and the prompt at the -4 dB `HudLayer` plays it (`PROMPT_VOICE_DB`). It plays the prompts at the mix's midpoint and on and just before the mix's loudest moment (0, 0.2 and 0.4 s ahead of the loudest 400 ms): a prompt can fire in a sprint, and one fired just before a stinger meets it with its duck already releasing. The worst of these is the row's value, with the prompt and time in its note. A preview's loudest moment should be the game's real one.
 - A3: spectral flux, stdev over mean plus 2 % of the frame magnitude, from the second revolution on, with a 2048 window. A steady drone reads near 0.2, and an engine with strokes above 1.
 - A5: the correlation of a 4 ms envelope between successive revolutions.
 - A12: the bed's 50 ms envelope, autocorrelated at each layer's own length. A second layer of a co-prime length and the spots are what bring it down.
