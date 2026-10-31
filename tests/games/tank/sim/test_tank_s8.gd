@@ -1,6 +1,6 @@
 extends GutTest
 ## S8 (brief 4): crew 3 on ashfall_road with every enemy count x 3 (in memory: the mission's
-## encounter and gun-line counts are patched through GameContext.content_overrides, the same patch
+## encounter, gun-line and near threat counts are patched through GameContext.content_overrides, the same patch
 ## `tools/run_game_sim --override` takes), stepped through the whole GameModule with synthetic
 ## compliant riders (TankSyntheticRiders): never more than 16 enemies alive (the cap), never more
 ## than 24 shells, every snapshot at most 4 KB, and the session still reaches the cool-down.
@@ -43,11 +43,11 @@ func test_s8_the_tripled_mission_really_has_three_times_the_enemies() -> void:
 	var plain_n := 0
 	var big_n := 0
 	for i in plain.segments().size():
-		for key in ["encounters", "enemies"]:
+		for key in ["encounters", "enemies", "near"]:
 			for e: Dictionary in plain.segment(i).get(key, []):
-				plain_n += plain.scaled_count(int(e["count"]), TankIds.TANK_LANDSHIP)
+				plain_n += plain.scaled_count(int(e.get("count", 1)), TankIds.TANK_LANDSHIP)
 			for e: Dictionary in big.segment(i).get(key, []):
-				big_n += big.scaled_count(int(e["count"]), TankIds.TANK_LANDSHIP)
+				big_n += big.scaled_count(int(e.get("count", 1)), TankIds.TANK_LANDSHIP)
 	assert_gt(plain_n, 10)
 	assert_eq(big_n, 3 * plain_n, "every count x 3 (scale 1.0)")
 	# A tripled gun line is a real crowd: the rules must hold the line at the cap of 16.

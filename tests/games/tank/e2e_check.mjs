@@ -18,7 +18,8 @@
 //      (v2 never emits them), no successful evade (nobody can evade in WARMUP), boss event
 //      or overrun, no haptic directive); no more kills than the skirmish has tanks, none twice;
 //      every repair follows a breakdown; no hit or kill in the depot; no rotation event (v3
-//      retired rotation; the name stays reserved); seat moves (v3) carry known seats;
+//      retired rotation; the name stays reserved); seat moves (v3) carry known seats; no tank loss, restart or
+//      near threat (v4: the drill is a warm-up, so its hull cannot be lost, and it has no recon car or tankette);
 //   4. every peer's final snapshot is a well-formed Tank snapshot (the schema of
 //      contracts/tank_snapshot_schema.gd, whole numbers, at most 4 KB, three riders and the
 //      landship's six rooms) and matches the host's within 2%;
@@ -270,9 +271,9 @@ export function drillErrors(events, { tail = false } = {}) {
     if (idx.some((v, k) => k > 0 && v <= idx[k - 1])) errs.push(`segments out of order: ${JSON.stringify(idx)}`);
     if (new Set(idx).size !== idx.length) errs.push(`a segment twice: ${JSON.stringify(idx)}`);
   }
-  for (const t of ['ram', 'dodge', 'boss_phase', 'overrun', 'rotation']) {
+  for (const t of ['ram', 'dodge', 'boss_phase', 'overrun', 'rotation', 'tank_lost', 'stage_restart', 'ambush', 'escaped']) {
     const n = events.filter((e) => e.type === t).length;
-    if (n > 0) errs.push(`${n} ${t} event(s) in the drill (a WARMUP-only session with no boss; v3 has no rotation)`);
+    if (n > 0) errs.push(`${n} ${t} event(s) in the drill (a WARMUP-only session with no boss and no near threats; v3 has no rotation)`);
   }
   const evaded = events.filter((e) => e.type === 'evade' && e.ok === 1).length;
   if (evaded > 0) errs.push(`${evaded} evaded shot(s) in the drill (nobody can evade in a WARMUP phase)`);
