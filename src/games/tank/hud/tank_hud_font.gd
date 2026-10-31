@@ -1,7 +1,7 @@
 class_name TankHudFont
 extends RefCounted
 ## Diesel Domestiques' own pixel type (brief 3.6), authored here as grids and written to the PNGs
-## under assets/tank/v2/hud/ by write() (the PNGs are committed; a test checks they still match):
+## under assets/tank/hud/ by write() (the PNGs are committed; a test checks they still match):
 ##  - TEXT: a square, condensed, stencil-flavoured 5 x 7 face (capitals with stencil breaks in the
 ##    closed bowls of B D O P Q R, lower case with 2-row descenders, a slashed zero), one 5 x 9 grid
 ##    per character, laid out for Godot's Image Font importer (tank_stencil_5x7.png, COLUMNS x ROWS
@@ -12,8 +12,8 @@ extends RefCounted
 ##    (tank_digits_14x24.png, one strip of DIGIT_CELL cells in DIGIT_CHARS order); TankHudDraw
 ##    blits it per glyph, so key numbers are 24 art px tall (48 px at 1080p).
 
-const TEXT_PNG := "res://assets/tank/v2/hud/tank_stencil_5x7.png"
-const DIGITS_PNG := "res://assets/tank/v2/hud/tank_digits_14x24.png"
+const TEXT_PNG := "res://assets/tank/hud/tank_stencil_5x7.png"
+const DIGITS_PNG := "res://assets/tank/hud/tank_digits_14x24.png"
 const COLUMNS := 16
 const ROWS := 7
 const CELL := Vector2i(6, 9)
@@ -21,7 +21,7 @@ const CELL := Vector2i(6, 9)
 ## descent 2) by doubling two stem rows (capitals, digits, signs: rows 1 and 4; lower case: rows
 ## 3 and 5 of the x-height), so the stencil look stays and the advance stays 6 px. Every text a
 ## rider reads mid-effort uses it (8-9 art px cap, 18 px at 1080p).
-const TALL_PNG := "res://assets/tank/v2/hud/tank_stencil_5x9.png"
+const TALL_PNG := "res://assets/tank/hud/tank_stencil_5x9.png"
 const CELL_T := Vector2i(6, 11)
 const FIRST := 32
 const LAST := 126
@@ -134,7 +134,6 @@ const TEXT := {
 ## The key-number face: 7 x 12 grids (2 px stems, 1 px bars: thick verticals, thin
 ## horizontals, like stencilled hull numbers), doubled to DIGIT_CELL.
 const DIGIT_CHARS := "0123456789:.-"
-const DIGIT_SRC := Vector2i(7, 12)
 const DIGIT_CELL := Vector2i(14, 24)
 ## Advance of each digit glyph in art px (glyph width + 2 px gap); ':' '.' are narrow.
 const DIGIT_ADVANCE := {":": 9, ".": 7}

@@ -4,7 +4,7 @@ extends SceneTree
 # args: <render dir>; reads <dir>/<name>/view_fixture_scene.png for picker, mission, ambush, drill and roam
 # (TankFixturesV4: the tank, the seam and the enemy across the valley).
 
-const OUT := "res://assets/tank/v2/"
+const OUT := "res://assets/tank/cards/"
 ## name -> [the crop of the 960 x 540 render (x, y, w, h; 16:9), the card's file].
 const CARDS := {
 	"picker": [Rect2i(60, 0, 900, 486), "picker_card.png"],
@@ -17,7 +17,7 @@ const CARDS := {
 
 func _init() -> void:
 	var args := OS.get_cmdline_user_args()
-	var dir: String = args[0] if args.size() > 0 else "build/v2/cards"
+	var dir: String = args[0] if args.size() > 0 else "build/tank_cards/renders"
 	for name: String in CARDS:
 		var src := Image.load_from_file(dir.path_join(name).path_join("view_fixture_scene.png"))
 		if src == null or src.is_empty():

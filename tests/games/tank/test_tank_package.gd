@@ -111,7 +111,7 @@ func test_game_json_is_exactly_the_brief() -> void:
 	for id: String in ["roam_10", "roam_20", "roam_45", "roam_60", "drill"]:
 		assert_false(bool(cards[id].get("featured", false)), id)
 	for id2: String in ["roam_10", "roam_20", "roam_30", "roam_45", "roam_60"]:
-		assert_eq(cards[id2]["image"], "res://assets/tank/v2/card_roam.png", id2)
+		assert_eq(cards[id2]["image"], "res://assets/tank/cards/card_roam.png", id2)
 		assert_eq(cards[id2]["detail"], "TANK_CARD_ROAM", id2)
 	for c: String in cards:
 		assert_true(ResourceLoader.exists(str(cards[c]["image"])), "%s card image exists" % c)
