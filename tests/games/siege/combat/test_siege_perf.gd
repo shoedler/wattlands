@@ -1,7 +1,7 @@
 extends GutTest
 ## A rules step stays cheap at the cap (brief 4: <= 1 ms with 150 enemies plus live projectiles,
 ## so a 55 minute shift simulates in about a minute). The clock is read here, in the test, never in
-## the rules.
+## the rules, and runs around SiegeRules.step alone: this rig's inputs are not the rules' cost.
 
 const BUDGET_US := 1000.0
 
@@ -45,9 +45,12 @@ func _mean_us(rig: SiegeRig, steps: int) -> float:
 	var total := 0
 	for _i in steps:
 		_fill(rig)
+		var inputs := rig.inputs()
 		var t0 := Time.get_ticks_usec()
-		rig.step()
+		SiegeRules.step(rig.state, inputs, Wl.SIM_DT)
 		total += Time.get_ticks_usec() - t0
+		rig.tick += 1
+		rig.intents = {}
 	return float(total) / steps
 
 

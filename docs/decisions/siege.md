@@ -410,3 +410,9 @@ Short ADRs for the siege game: date, decision, alternatives, reason. Game sessio
 - Decision: stale power shows NO TRAINER DATA: KEEP PEDALLING ahead of coasting, with no target; Overdrive's line follows the band state (SPRINT, HOLD, EASE TO); the shop plate is 364 art px with the coin in a fixed column; the clock column is 4 px wider and the watts 4 narrower; chips keep 2 px clear of digits, so the gate number moves down 2 px and its bar is 3 px tall; three help strings are one line so their panels stay under 480 px (the kit fixes a wrapped panel at 560).
 - Alternatives: keep the mock's 340 px shop (OUTPUT runs into the note); a platform option for a help panel's width.
 - Reason: the governor counts a silent stream as coasting, so "pedal" would be a false instruction to a rider who is pedalling, and so is SHIFT UP to one already in the band.
+
+## 2026-10-31 Rules step speedups; the perf test times the rules alone
+
+- Decision: the rules step was over its 1 ms budget on the CI runners (1.3 ms at the cap). A walker's place() looks in its last path segment first, segment directions are computed once, `SiegeState.enemy` searches by id, and the onager's pick sums hit points through the grid without building lists (about 6 x cheaper per pick). The test now times `SiegeRules.step` alone: building the rig's inputs was inside the clock.
+- Alternatives: raising the budget (the brief's number stays), a median like tank's rules test (it would hide the once-a-second pick).
+- Reason: the budget is what lets a long shift simulate quickly, and CI runs at about 1.7 x this machine's times.

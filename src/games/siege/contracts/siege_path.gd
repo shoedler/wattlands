@@ -17,6 +17,8 @@ var data: Dictionary = {}
 ## Path points [x, y, z] from the camp to the gate, and the cumulative ground length at each.
 var points: PackedVector3Array = PackedVector3Array()
 var cum: PackedFloat32Array = PackedFloat32Array()
+## Each segment's unit direction on the ground, computed once.
+var seg_dir: PackedVector2Array = PackedVector2Array()
 var length_m: float = 0.0
 var bridge_from_m: float = 0.0
 var bridge_to_m: float = 0.0
@@ -91,6 +93,7 @@ static func from_dict(d: Dictionary) -> SiegePath:
 		var a := m.points[i - 1]
 		var b := m.points[i]
 		m.cum.append(m.cum[i - 1] + Vector2(b.x - a.x, b.y - a.y).length())
+		m.seg_dir.append(Vector2(b.x - a.x, b.y - a.y).normalized())
 	m.length_m = m.cum[m.cum.size() - 1] if m.points.size() > 1 else 0.0
 	var br: Dictionary = d.get("bridge", {}) if d.get("bridge") is Dictionary else {}
 	m.bridge_from_m = float(br.get("from_prog_m", m.length_m))
@@ -153,15 +156,22 @@ func point_at(prog: float, lat: float = 0.0) -> Vector3:
 	if points.size() < 2:
 		return points[0] if points.size() == 1 else Vector3.ZERO
 	var p := clampf(prog, 0.0, length_m)
-	var i := segment_at(p)
-	var a := points[i]
-	var b := points[i + 1]
+	return point_on(segment_at(p), p, lat)
+
+
+## point_at for a prog already clamped to the path, on the segment that holds it. Needs 2 points.
+func point_on(i: int, p: float, lat: float) -> Vector3:
 	var seg := maxf(cum[i + 1] - cum[i], 0.0001)
-	var at := a.lerp(b, (p - cum[i]) / seg)
+	var at := points[i].lerp(points[i + 1], (p - cum[i]) / seg)
 	if lat != 0.0:
-		var d := Vector2(b.x - a.x, b.y - a.y).normalized()
+		var d := seg_dir[i]
 		at += Vector3(d.y, -d.x, 0.0) * lat
 	return at
+
+
+## True when segment `i` is the one segment_at(p) returns, for a p already clamped to the path.
+func holds(i: int, p: float) -> bool:
+	return i <= cum.size() - 2 and cum[i] <= p and (i == cum.size() - 2 or p < cum[i + 1])
 
 
 ## Unit travel direction on the ground at `prog`.

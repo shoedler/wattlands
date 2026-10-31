@@ -36,11 +36,19 @@ var rush: bool = false
 var reached: bool = false
 ## World position (path.point_at(prog_m, lat_m)), kept current by the rules and place().
 var pos: Vector3 = Vector3.ZERO
+## The path segment pos was last placed on: a walker rarely leaves it, so place() looks there first.
+var seg: int = 0
 
 
 ## Recomputes `pos` from prog_m and lat_m.
 func place(path: SiegePath) -> void:
-	pos = path.point_at(prog_m, lat_m)
+	if path.points.size() < 2:
+		pos = path.point_at(prog_m, lat_m)
+		return
+	var p := clampf(prog_m, 0.0, path.length_m)
+	if not path.holds(seg, p):
+		seg = path.segment_at(p)
+	pos = path.point_on(seg, p, lat_m)
 
 
 func alive() -> bool:
