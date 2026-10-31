@@ -2,7 +2,8 @@ class_name AmbienceBed
 extends RefCounted
 ## One environment (SPEC_AUDIO 1.2, 1.5): layered loops plus spot details on seeded timers. Pure. Own
 ## RandomNumberGenerator seeded with p_seed, so the same seed and params give the same spots. Bursts expand to several
-## entries with at_s offsets up to 1 s (the kit's pending queue handles them).
+## entries with at_s offsets up to 1 s (the kit's pending queue handles them). A spot's gap_s never follows a param: for
+## a gap by speed, write one spot per speed band, each with its own gap_s and a `when` on speed.
 const BURST_MAX_S := 1.0
 var loops: LayeredLoop
 var trim_db: float = 0.0  ## added to every layer and spot: the kit's crossfade and pause drop

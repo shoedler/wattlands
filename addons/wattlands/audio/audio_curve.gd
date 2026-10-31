@@ -43,7 +43,7 @@ static func product(curves: Array, params: Dictionary) -> float:
 	return total
 
 
-## {"param", "min"?, "max"?}; {} passes.
+## {"param", "min"?, "max"?}; {} passes. One param only: a gate on two needs one composite param from the adapter.
 static func passes(when: Dictionary, params: Dictionary) -> bool:
 	if when.is_empty():
 		return true

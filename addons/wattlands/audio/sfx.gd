@@ -81,7 +81,9 @@ func play(sound: String, volume_db: float = 0.0, pitch: float = 1.0) -> void:
 	play_count += 1
 	if muted or not is_inside_tree():
 		return
-	var p := _free_player()
+	var p := _free_player(SAFETY_SOUNDS.has(sound))
+	if p == null:
+		return
 	p.stream = s
 	p.bus = bus_of(sound)
 	p.volume_db = volume_db + master_db
@@ -202,16 +204,26 @@ func _shared_stream(sound: String) -> AudioStream:
 	return load(path) as AudioStream if ResourceLoader.exists(path) else null
 
 
-func _free_player() -> AudioStreamPlayer:
+## A free player, else a new one up to POOL_SIZE, else the next in turn. A player holding a safety prompt (only those
+## play on Master) is never cut (SPEC_AUDIO 5): if all of them hold one, a new prompt gets a player past the cap and
+## anything else gets none.
+func _free_player(safety: bool) -> AudioStreamPlayer:
 	for p in _players:
 		if not p.playing:
 			return p
 	if _players.size() < POOL_SIZE:
-		var np := AudioStreamPlayer.new()
-		np.name = "Player%d" % _players.size()
-		add_child(np)
-		_players.append(np)
-		return np
-	var p := _players[_next_player % _players.size()]
-	_next_player += 1
+		return _new_player()
+	for i in _players.size():
+		var p := _players[_next_player % _players.size()]
+		_next_player += 1
+		if str(p.bus) != AudioBuses.MASTER:
+			return p
+	return _new_player() if safety else null
+
+
+func _new_player() -> AudioStreamPlayer:
+	var p := AudioStreamPlayer.new()
+	p.name = "Player%d" % _players.size()
+	add_child(p)
+	_players.append(p)
 	return p

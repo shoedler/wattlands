@@ -2,6 +2,46 @@ extends GutTest
 ## AudioBank (SPEC_AUDIO 1.5): one audio.json per game, validated at load, every error naming its key path.
 
 const BANK := "res://tests/audio/fixtures/bank_min.json"
+## Where in _doc(), the wrong value, the key path its error must name.
+const WRONG_SHAPES: Array = [
+	[["mix"], {"other_db": [1.0]}, "mix.other_db: needs a number"],
+	[["sounds", "hit"], 5.0, "sounds.hit: needs an object"],
+	[["sounds", "hit", "rate"], [22050.0], "sounds.hit.rate"],
+	[["sounds", "hit", "ch"], {}, "sounds.hit.ch"],
+	[["sounds", "hit", "variants"], [2.0], "sounds.hit.variants"],
+	[["sounds", "hit", "locked"], [], "sounds.hit.locked: needs true or false"],
+	[["sounds", "lp", "loop"], 1.0, "sounds.lp.loop: needs true or false"],
+	[["machines", "m"], 5.0, "machines.m: needs an object"],
+	[["machines", "m", "events"], 5.0, "machines.m.events: needs a list"],
+	[["machines", "m", "events", 0], 5.0, "machines.m.events[0]: needs an object"],
+	[["machines", "m", "events", 0, "at"], ["x"], "machines.m.events[0].at[0]: needs a number"],
+	[["machines", "m", "events", 0, "db"], [1.0], "machines.m.events[0].db: needs a number"],
+	[["machines", "m", "events", 0, "db_by"], 5.0, "machines.m.events[0].db_by: needs a list"],
+	[["machines", "m", "events", 0, "db_by"], [5.0], "machines.m.events[0].db_by[0]"],
+	[["machines", "m", "events", 0, "when"], 5.0, "machines.m.events[0].when: needs an object"],
+	[["machines", "m", "events", 0, "pitch_table"], 5.0, "pitch_table: needs a list"],
+	[["machines", "m", "loops"], {}, "machines.m.loops: needs a list"],
+	[["machines", "m", "loops", 0], "x", "machines.m.loops[0]: needs an object"],
+	[["machines", "m", "loops", 0, "pitch_by"], {}, "machines.m.loops[0].pitch_by"],
+	[["machines", "m", "loops", 0, "min_rpm"], [8.0], "machines.m.loops[0].min_rpm"],
+	[["loops", "l"], 5.0, "loops.l: needs an object"],
+	[["loops", "l", "layers"], 5.0, "loops.l.layers: needs a list"],
+	[["loops", "l", "layers", 0], 5.0, "loops.l.layers[0]: needs an object"],
+	[["beds", "b"], [], "beds.b: needs an object"],
+	[["beds", "b", "layers"], 5.0, "beds.b.layers: needs a list"],
+	[["beds", "b", "spots"], 5.0, "beds.b.spots: needs a list"],
+	[["beds", "b", "spots", 0], 5.0, "beds.b.spots[0]: needs an object"],
+	[["beds", "b", "spots", 0, "gap_s"], {}, "beds.b.spots[0].gap_s"],
+	[["beds", "b", "spots", 0, "db"], [1.0], "beds.b.spots[0].db"],
+	[["cues", "c"], 5.0, "cues.c: needs an object"],
+	[["cues", "c", "hits"], 5.0, "cues.c.hits: needs a list"],
+	[["cues", "c", "hits", 0], 5.0, "cues.c.hits[0]: needs an object"],
+	[["cues", "c", "hits", 0, "delay_s"], [], "cues.c.hits[0].delay_s: needs a number"],
+	[["cues", "c", "duck"], 5.0, "cues.c.duck: needs a list"],
+	[["cues", "c", "duck", 0], 5.0, "cues.c.duck[0]: needs an object"],
+	[["cues", "c", "duck", 0, "db"], [], "cues.c.duck[0].db: needs a number"],
+	[["cues", "c", "other_db"], {}, "cues.c.other_db: needs a number"],
+]
 
 
 func _doc() -> Dictionary:
@@ -182,6 +222,25 @@ func test_loop_player_budget() -> void:
 	var doc := _doc()
 	doc["mix"] = {"max_loop_players": 2.0}
 	_assert_rejected(doc, "exceed 2")
+
+
+## SPEC_AUDIO 1.5: a wrong shape is an error naming the key path, never a run-time type error on a typed parameter.
+func test_wrong_shapes_name_their_key_path() -> void:
+	for row: Array in WRONG_SHAPES:
+		var doc := _doc()
+		var keys: Array = row[0]
+		var block: Variant = doc
+		for k in keys.size() - 1:
+			block = block[keys[k]]
+		block[keys[keys.size() - 1]] = row[1]
+		_assert_rejected(doc, row[2])
+
+
+func test_a_wrong_shape_loads_as_null() -> void:
+	var doc := _doc()
+	doc["machines"] = {"d": 5.0}
+	assert_null(AudioBank.from_dict(doc, "res://x"))
+	assert_push_error("machines.d: needs an object")
 
 
 func test_load_errors_name_the_path() -> void:

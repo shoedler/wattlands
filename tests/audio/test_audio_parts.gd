@@ -239,6 +239,21 @@ func test_bed_spot_when_gates_and_loops_run() -> void:
 	assert_gt(_bed_run(bed, 10.0, {"night": 1.0}).size(), 0)
 
 
+## The bank has no gap_by: a gap that follows speed is one spot per band (hull_slap, SPEC_AUDIO 4.2).
+func test_bed_gap_by_speed_is_one_spot_per_band() -> void:
+	var spec := {
+		"spots":
+		[
+			{"sound": "slap", "gap_s": 4.0, "when": {"param": "speed", "max": 3.0}},
+			{"sound": "slap", "gap_s": 1.0, "when": {"param": "speed", "min": 3.0}},
+		]
+	}
+	var slow := _bed_run(AmbienceBed.new(spec, 5), 40.0, {"speed": 1.0})
+	var fast := _bed_run(AmbienceBed.new(spec, 5), 40.0, {"speed": 6.0})
+	assert_between(slow.size(), 9, 10, "every 4 s below the band's edge")
+	assert_between(fast.size(), 39, 40, "every second above it")
+
+
 func test_bed_trim_reaches_layers_and_spots() -> void:
 	var bed := AmbienceBed.new(_bed_spec(), 5)
 	bed.trim_db = -9.0

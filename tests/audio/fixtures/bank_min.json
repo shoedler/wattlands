@@ -39,6 +39,10 @@
       "bus": "Machines",
       "priority": 5,
       "events": [{"at": [0.0, 0.5], "sound": "other_stroke", "db": 0.0}]
+    },
+    "bare": {
+      "bus": "Machines",
+      "loops": [{"sound": "body", "db": -8.0}]
     }
   },
   "loops": {
@@ -65,6 +69,7 @@
       "duck": [{"bus": "Machines", "db": -4, "attack_s": 0.01, "release_s": 0.35}],
       "other_db": -8.0
     },
-    "quiet": {"hits": [{"sound": "bang", "db": 0.0, "bus": "Sfx"}]}
+    "quiet": {"hits": [{"sound": "bang", "db": 0.0, "bus": "Sfx"}]},
+    "plain_duck": {"hits": [], "duck": [{"bus": "Machines", "db": -4}]}
   }
 }

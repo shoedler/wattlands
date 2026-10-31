@@ -237,6 +237,18 @@ func test_cue_other_db_and_duck_on_the_lead_only() -> void:
 	assert_almost_eq(AudioBuses.duck_db(AudioBuses.MACHINES), -4.0, 0.01, "own gun ducks")
 
 
+## The preview applies the same defaults (offline_mix.mjs duckEnvelope), so critics hear the duck the game plays.
+func test_cue_duck_without_times_takes_the_mix_defaults() -> void:
+	var kit := _kit()
+	kit.cue("plain_duck")
+	AudioBuses.tick(GameAudioKit.DUCK_ATTACK_S)
+	assert_almost_eq(AudioBuses.duck_db(AudioBuses.MACHINES), -4.0, 0.01, "10 ms attack")
+	AudioBuses.tick(GameAudioKit.DUCK_RELEASE_S / 2.0)
+	assert_almost_eq(AudioBuses.duck_db(AudioBuses.MACHINES), -2.0, 0.01, "350 ms release")
+	AudioBuses.tick(GameAudioKit.DUCK_RELEASE_S)
+	assert_eq(AudioBuses.duck_db(AudioBuses.MACHINES), 0.0, "and it is over")
+
+
 func test_sound_records_and_clear_played() -> void:
 	var kit := _kit()
 	kit.sound("bang", -3.0, 1.2)

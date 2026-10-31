@@ -133,21 +133,32 @@ func test_stop_dead() -> void:
 	for i in 300:
 		clock.advance(90.0, DT)
 		kit.drive("a", "main", clock.revs, 90.0, {"power": 1.0}, true)
+		kit.drive("b", "bare", clock.revs, 90.0, {}, true)
 		kit.commit(DT)
 		t += DT
 	var loop := kit.machine_loop("a")
+	var bare := kit.machine_loop("b")
 	assert_eq(loop.on[0], 1, "precondition: the body loop runs")
+	assert_eq(bare.on[0], 1, "precondition: so does the layer with no min_rpm")
 	var stop_t := t
 	var count := kit.played.size()
 	var off_after := -1.0
+	var bare_off_after := -1.0
 	for i in 60:
 		kit.drive("a", "main", clock.revs, 0.0, {"power": 0.0}, true)
+		kit.drive("b", "bare", clock.revs, 0.0, {}, true)
 		kit.commit(DT)
 		t += DT
 		if off_after < 0.0 and loop.all_off():
 			off_after = t - stop_t
+		if bare_off_after < 0.0 and bare.all_off():
+			bare_off_after = t - stop_t
 	assert_eq(kit.played.size(), count, "no stroke starts once the crank stands")
 	assert_true(off_after >= 0.0 and off_after <= 0.12, "loops off in %.3f s" % off_after)
+	assert_true(
+		bare_off_after >= 0.0 and bare_off_after <= 0.12,
+		"whatever the layers say: off in %.3f s" % bare_off_after
+	)
 	assert_gt(count, 0, "precondition: strokes were played")
 	for when: float in kit.played_t:
 		assert_lte(when, stop_t + GameAudioKit.HORIZON_MAX_S, "due by the horizon")
@@ -320,22 +331,28 @@ func test_pause_is_silent_and_resumes_with_no_burst() -> void:
 	for i in 120:
 		clock.advance(90.0, DT)
 		kit.drive("a", "main", clock.revs, 90.0, {"power": 0.2}, true)
+		kit.set_loop("drag_scream", {"tension": 1.0})
 		kit.commit(DT)
 	var voice := kit.machine_voice("a")
 	var dropped := voice.dropped
+	var entry := kit.entry_loop("drag_scream")
+	assert_eq(entry.on[0], 1, "precondition: the entry runs")
 	kit.clear_played()
 	kit._on_paused_changed(true, "test")
 	for i in 300:
 		clock.advance(90.0, DT)
 		kit.drive("a", "main", clock.revs, 90.0, {"power": 0.2}, true)
+		kit.set_loop("drag_scream", {"tension": 1.0})
 		kit.commit(DT)
 	assert_eq(kit.played.size(), 0, "no stroke while paused")
 	assert_true(kit.machine_loop("a").all_off(), "machine loops closed")
+	assert_true(entry.all_off(), "a loops entry closes too, though the adapter still asks for it")
 	kit._on_paused_changed(false, "test")
 	var strokes := 0
 	for i in 30:
 		clock.advance(90.0, DT)
 		kit.drive("a", "main", clock.revs, 90.0, {"power": 0.2}, true)
+		kit.set_loop("drag_scream", {"tension": 1.0})
 		kit.commit(DT)
 		var n := 0
 		for id: String in kit.played:
@@ -345,4 +362,5 @@ func test_pause_is_silent_and_resumes_with_no_burst() -> void:
 		assert_lte(n, 1, "no burst on resume")
 		strokes += n
 	assert_between(strokes, 1, 2, "half a second at two strokes a revolution, 90 rpm")
+	assert_eq(entry.on[0], 1, "the entry comes back with the resume")
 	assert_eq(voice.dropped, dropped, "dropped unchanged")

@@ -22,6 +22,9 @@ const NO_LEAD_RISE_DB := 4.0
 const OTHER_PRIORITY := 3
 const SPOT_PRIORITY := 2
 const CUE_PRIORITY := 6
+## A cue's duck that leaves these out (SPEC_AUDIO 5, the same defaults as the offline preview).
+const DUCK_ATTACK_S := 0.01
+const DUCK_RELEASE_S := 0.35
 const PAUSE_BED_DB := -9.0
 const PAUSE_BED_DB_PER_S := 30.0
 const BED_FADE_IN_FROM_DB := -30.0
@@ -239,8 +242,8 @@ func cue(cue_name: String, vars: Dictionary = {}, lead: bool = true) -> void:
 			AudioBuses.duck(
 				str(d.get("bus", "")),
 				float(d.get("db", 0.0)),
-				float(d.get("attack_s", 0.0)),
-				float(d.get("release_s", 0.0))
+				float(d.get("attack_s", DUCK_ATTACK_S)),
+				float(d.get("release_s", DUCK_RELEASE_S))
 			)
 
 
@@ -545,10 +548,11 @@ func _run_pending(dt: float) -> void:
 	_pending = keep
 
 
+## Paused, they close like a machine's loops, whatever the adapter still asks for: its view keeps running under a pause.
 func _commit_entries(dt: float) -> void:
 	for id: String in _entries.keys():
 		var slot: EntrySlot = _entries[id]
-		if slot.wanted:
+		if slot.wanted and not _paused:
 			var trim := 0.0 if slot.loops.lead else float(_bank.mix["other_db"])
 			slot.loops.loop.update(slot.params, trim, slot.loops.lead, dt)
 		else:

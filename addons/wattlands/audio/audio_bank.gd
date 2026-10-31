@@ -86,21 +86,32 @@ static func validate(doc: Dictionary) -> Array[String]:
 			return errors
 	var all: Dictionary = doc["sounds"]
 	_check_sounds(all, errors)
+	_check_numbers("mix", doc.get("mix", {}), DEFAULT_MIX.keys(), errors)
 	var machine_docs: Dictionary = doc.get("machines", {})
 	for id: String in machine_docs:
-		_check_machine("machines.%s" % id, machine_docs[id], all, errors)
+		var path := "machines.%s" % id
+		if _is_object(path, machine_docs[id], errors):
+			_check_machine(path, machine_docs[id], all, errors)
 	var loop_docs: Dictionary = doc.get("loops", {})
 	for id: String in loop_docs:
+		var path := "loops.%s" % id
+		if not _is_object(path, loop_docs[id], errors):
+			continue
 		var entry: Dictionary = loop_docs[id]
-		_check_bus("loops.%s.bus" % id, entry.get("bus", AudioBuses.SFX), errors)
-		_check_layers("loops.%s.layers" % id, entry.get("layers", []), all, errors)
+		_check_bus(path + ".bus", entry.get("bus", AudioBuses.SFX), errors)
+		_check_layers(path + ".layers", _list_at(entry, "layers", path, errors), all, errors)
 	var bed_docs: Dictionary = doc.get("beds", {})
 	for id: String in bed_docs:
-		_check_bed("beds.%s" % id, bed_docs[id], all, errors)
+		var path := "beds.%s" % id
+		if _is_object(path, bed_docs[id], errors):
+			_check_bed(path, bed_docs[id], all, errors)
 	var cue_docs: Dictionary = doc.get("cues", {})
 	for id: String in cue_docs:
-		_check_cue("cues.%s" % id, cue_docs[id], all, errors)
-	_check_loop_budget(doc, errors)
+		var path := "cues.%s" % id
+		if _is_object(path, cue_docs[id], errors):
+			_check_cue(path, cue_docs[id], all, errors)
+	if errors.is_empty():
+		_check_loop_budget(doc, errors)
 	return errors
 
 
@@ -182,19 +193,21 @@ static func _check_sounds(all: Dictionary, errors: Array[String]) -> void:
 	var files := {}
 	for id: String in all:
 		var path := "sounds.%s" % id
-		if not all[id] is Dictionary:
-			errors.append("%s: needs an object" % path)
+		if not _is_object(path, all[id], errors):
 			continue
 		var sound: Dictionary = all[id]
-		if not RATES.has(int(sound.get("rate", 0))):
+		if not RATES.has(_int_of(sound.get("rate"), 0)):
 			errors.append("%s.rate: %s is not 11025 or 22050" % [path, str(sound.get("rate"))])
-		var ch := int(sound.get("ch", 0))
+		var ch := _int_of(sound.get("ch"), 0)
 		if ch != 1 and ch != 2:
 			errors.append("%s.ch: %s is not 1 or 2" % [path, str(sound.get("ch"))])
-		var n := int(sound.get("variants", 1))
+		var n := _int_of(sound.get("variants", 1), 0)
 		if n < 1:
-			errors.append("%s.variants: %d is below 1" % [path, n])
-		if bool(sound.get("locked", false)) and str(sound.get("compress", "pcm")) != "pcm":
+			errors.append("%s.variants: %s is not 1 or more" % [path, str(sound.get("variants"))])
+		for key: String in ["locked", "loop"]:
+			if sound.has(key) and not sound[key] is bool:
+				errors.append("%s.%s: needs true or false" % [path, key])
+		if _flag(sound, "locked") and str(sound.get("compress", "pcm")) != "pcm":
 			errors.append("%s.compress: a locked sound stays PCM, its seek must be exact" % path)
 		var stems: Array[String] = [id]
 		if n > 1:
@@ -213,10 +226,12 @@ static func _check_machine(
 	path: String, machine: Dictionary, all: Dictionary, errors: Array[String]
 ) -> void:
 	_check_bus(path + ".bus", machine.get("bus", AudioBuses.MACHINES), errors)
-	var events: Array = machine.get("events", [])
+	var events := _list_at(machine, "events", path, errors)
 	for i in events.size():
-		_check_event("%s.events[%d]" % [path, i], events[i], all, errors)
-	_check_layers(path + ".loops", machine.get("loops", []), all, errors)
+		var at_path := "%s.events[%d]" % [path, i]
+		if _is_object(at_path, events[i], errors):
+			_check_event(at_path, events[i], all, errors)
+	_check_layers(path + ".loops", _list_at(machine, "loops", path, errors), all, errors)
 
 
 static func _check_event(
@@ -227,16 +242,22 @@ static func _check_event(
 		errors.append("%s.sound: no sound '%s'" % [path, id])
 	elif all[id] is Dictionary:
 		var sound: Dictionary = all[id]
-		if not bool(sound.get("locked", false)):
+		if not _flag(sound, "locked"):
 			errors.append("%s.sound: '%s' is not locked" % [path, id])
-		if int(sound.get("ch", 1)) != 1:
+		if _int_of(sound.get("ch", 1), 1) != 1:
 			errors.append("%s.sound: '%s' is stereo, machines are mono" % [path, id])
+	_check_numbers(path, ev, ["db", "priority"], errors)
+	_check_curves(path, ev, errors)
+	_list_at(ev, "pitch_table", path, errors)
 	if not ev.get("at") is Array or (ev["at"] as Array).is_empty():
 		errors.append("%s.at: needs a list of fractions" % path)
 		return
 	var ats: Array = ev["at"]
 	var seen := {}
 	for k in ats.size():
+		if not _is_number(ats[k]):
+			errors.append("%s.at[%d]: needs a number" % [path, k])
+			continue
 		var at := float(ats[k])
 		if at < 0.0 or at >= 1.0:
 			errors.append("%s.at[%d]: %s is outside [0, 1)" % [path, k, str(at)])
@@ -249,43 +270,65 @@ static func _check_layers(
 	path: String, layers: Array, all: Dictionary, errors: Array[String]
 ) -> void:
 	for i in layers.size():
+		var at_path := "%s[%d]" % [path, i]
+		if not _is_object(at_path, layers[i], errors):
+			continue
 		var layer: Dictionary = layers[i]
 		var id := str(layer.get("sound", ""))
 		if not all.has(id):
-			errors.append("%s[%d].sound: no sound '%s'" % [path, i, id])
-		elif all[id] is Dictionary and not bool((all[id] as Dictionary).get("loop", false)):
-			errors.append("%s[%d].sound: '%s' is not a loop" % [path, i, id])
+			errors.append("%s.sound: no sound '%s'" % [at_path, id])
+		elif all[id] is Dictionary and not _flag(all[id], "loop"):
+			errors.append("%s.sound: '%s' is not a loop" % [at_path, id])
+		_check_numbers(at_path, layer, ["db", "min_rpm", "slew_s"], errors)
+		_check_curves(at_path, layer, errors)
 
 
 static func _check_bed(
 	path: String, bed: Dictionary, all: Dictionary, errors: Array[String]
 ) -> void:
-	_check_layers(path + ".layers", bed.get("layers", []), all, errors)
-	var spots: Array = bed.get("spots", [])
+	_check_layers(path + ".layers", _list_at(bed, "layers", path, errors), all, errors)
+	var spots := _list_at(bed, "spots", path, errors)
 	for i in spots.size():
+		var at_path := "%s.spots[%d]" % [path, i]
+		if not _is_object(at_path, spots[i], errors):
+			continue
 		var spot: Dictionary = spots[i]
 		var id := str(spot.get("sound", ""))
 		if not all.has(id):
-			errors.append("%s.spots[%d].sound: no sound '%s'" % [path, i, id])
+			errors.append("%s.sound: no sound '%s'" % [at_path, id])
+		_check_numbers(at_path, spot, ["burst_gap_s"], errors)
+		_check_curves(at_path, spot, errors)
+		for key: String in ["gap_s", "db", "pitch", "burst"]:
+			if spot.has(key) and not _is_number_or_range(spot[key]):
+				errors.append("%s.%s: needs a number or a [lo, hi] range" % [at_path, key])
 
 
 static func _check_cue(
 	path: String, cue: Dictionary, all: Dictionary, errors: Array[String]
 ) -> void:
-	var hits: Array = cue.get("hits", [])
+	_check_numbers(path, cue, ["other_db"], errors)
+	var hits := _list_at(cue, "hits", path, errors)
 	for i in hits.size():
+		var at_path := "%s.hits[%d]" % [path, i]
+		if not _is_object(at_path, hits[i], errors):
+			continue
 		var hit: Dictionary = hits[i]
 		var id := str(hit.get("sound", ""))
 		if not all.has(id):
-			errors.append("%s.hits[%d].sound: no sound '%s'" % [path, i, id])
-		_check_bus("%s.hits[%d].bus" % [path, i], hit.get("bus", AudioBuses.SFX), errors)
-	var ducks: Array = cue.get("duck", [])
+			errors.append("%s.sound: no sound '%s'" % [at_path, id])
+		_check_bus(at_path + ".bus", hit.get("bus", AudioBuses.SFX), errors)
+		_check_numbers(at_path, hit, ["db", "pitch", "priority", "delay_s"], errors)
+	var ducks := _list_at(cue, "duck", path, errors)
 	for i in ducks.size():
+		var at_path := "%s.duck[%d]" % [path, i]
+		if not _is_object(at_path, ducks[i], errors):
+			continue
 		var duck: Dictionary = ducks[i]
 		var bus := str(duck.get("bus", ""))
-		_check_bus("%s.duck[%d].bus" % [path, i], bus, errors)
+		_check_bus(at_path + ".bus", bus, errors)
 		if bus == AudioBuses.UI:
-			errors.append("%s.duck[%d].bus: UI is never ducked" % [path, i])
+			errors.append("%s.bus: UI is never ducked" % at_path)
+		_check_numbers(at_path, duck, ["db", "attack_s", "release_s"], errors)
 
 
 ## A known bus: the four of AudioBuses, or one that exists on the server (the jitter bench's temporary bus).
@@ -297,7 +340,8 @@ static func _check_bus(path: String, bus: Variant, errors: Array[String]) -> voi
 		errors.append("%s: unknown bus '%s'" % [path, name_of])
 
 
-## The run-time pool (SPEC_AUDIO 1.3): lead layers of one machine + `loops` + the largest bed must fit.
+## The run-time pool (SPEC_AUDIO 1.3): lead layers of one machine + `loops` + the largest bed must fit. Reads only a
+## doc whose shapes have passed.
 static func _check_loop_budget(doc: Dictionary, errors: Array[String]) -> void:
 	var mix_doc: Dictionary = doc.get("mix", {})
 	var limit := int(mix_doc.get("max_loop_players", DEFAULT_MIX["max_loop_players"]))
@@ -317,3 +361,59 @@ static func _check_loop_budget(doc: Dictionary, errors: Array[String]) -> void:
 		var total: int = (machine.get("loops", []) as Array).size() + fixed + largest_bed
 		if total > limit:
 			errors.append("machines.%s.loops: %d loop players exceed %d" % [id, total, limit])
+
+
+## db_by and pitch_by are lists of curves and `when` is an object, on an event, a layer or a spot.
+static func _check_curves(path: String, item: Dictionary, errors: Array[String]) -> void:
+	for key: String in ["db_by", "pitch_by"]:
+		var curves := _list_at(item, key, path, errors)
+		for i in curves.size():
+			_is_object("%s.%s[%d]" % [path, key, i], curves[i], errors)
+	if item.has("when"):
+		_is_object(path + ".when", item["when"], errors)
+
+
+static func _check_numbers(
+	path: String, item: Dictionary, keys: Array, errors: Array[String]
+) -> void:
+	for key: String in keys:
+		if item.has(key) and not _is_number(item[key]):
+			errors.append("%s.%s: needs a number" % [path, key])
+
+
+## True when `value` is an object; else an error naming `path`.
+static func _is_object(path: String, value: Variant, errors: Array[String]) -> bool:
+	if value is Dictionary:
+		return true
+	errors.append("%s: needs an object" % path)
+	return false
+
+
+## `block[key]` when it is a list, [] when it is absent; else an error naming the key, and [].
+static func _list_at(block: Dictionary, key: String, path: String, errors: Array[String]) -> Array:
+	var value: Variant = block.get(key, [])
+	if value is Array:
+		return value
+	errors.append("%s.%s: needs a list" % [path, key])
+	return []
+
+
+static func _is_number(value: Variant) -> bool:
+	return value is float or value is int
+
+
+static func _is_number_or_range(value: Variant) -> bool:
+	if value is Array:
+		var range_of: Array = value
+		return range_of.size() == 2 and _is_number(range_of[0]) and _is_number(range_of[1])
+	return _is_number(value)
+
+
+## A number as an int; `fallback` for anything else, which then fails the check that reads it.
+static func _int_of(value: Variant, fallback: int) -> int:
+	return int(value) if _is_number(value) else fallback
+
+
+static func _flag(block: Dictionary, key: String) -> bool:
+	var value: Variant = block.get(key, false)
+	return value is bool and value
