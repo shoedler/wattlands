@@ -5,7 +5,8 @@ extends SceneTree
 ## Writes build/tank/v4_art/*.png: lineup_960 (a 960 x 540 stage: our tank, the near threats ahead of its
 ## nose, the far kinds as they stand on the far panel), kinds_3x, wrecks_3x, motion_3x (track and wheels over
 ## one shoe pitch, turret traverse, gun recoil, a bump), far_852 (three enemies on the 286 px panel, in the game's
-## sky and ridges), bogie_3x (a live Behemoth with one bogie smashed and nothing in front of it).
+## sky and ridges), bogie_3x (a live Behemoth with one bogie smashed and nothing in front of it), flip_3x (every kind
+## flipped, some with the turret traversed back).
 
 const OUTDIR := "res://build/tank/v4_art/"
 const NIGHT := Color("#090c13")
@@ -107,6 +108,7 @@ func _run() -> void:
 	_sheet("lineup_960", Vector2i(960, 540), 1, _lineup)
 	_sheet("kinds_3x", Vector2i(470, 330), 3, _kinds)
 	_sheet("sil_1x", Vector2i(700, 260), 2, _sil)
+	_sheet("flip_3x", Vector2i(470, 460), 3, _flipped)
 	_sheet("wrecks_3x", Vector2i(470, 330), 3, _wrecks)
 	_sheet("motion_3x", Vector2i(760, 340), 2, _motion)
 	_sheet("far_852", Vector2i(286, 480), 2, _far852)
@@ -216,6 +218,21 @@ func _kinds(st: Stage, _vp: SubViewport) -> void:
 		st.calls.append([r[0], r[1], {"travel": 2.0, "turret_sx": 1.0, "elev_deg": 2.0}])
 	st.calls.append(["recon", Vector2(400, 150), {"travel": 2.0, "turret_sx": -1.0}])
 	st.calls.append(["tankette", Vector2(400, 200), {"travel": 2.0, "turret_sx": -1.0}])
+
+
+## Every kind as a flip draws it, and flipped with its turret traversed back: what a west-bound far panel can show. No
+## number on it may read as a code, and no gun may leave its turret.
+func _flipped(st: Stage, _vp: SubViewport) -> void:
+	_ground(st, 800.0, 470.0)
+	var rows := [
+		["tankette", Vector2(40, 40)], ["recon", Vector2(130, 50)], ["light", Vector2(250, 56)], ["medium", Vector2(380, 70)],
+		["heavy", Vector2(110, 150)], ["destroyer", Vector2(330, 136)], ["behemoth", Vector2(160, 320)],
+	]
+	for r: Array in rows:
+		st.calls.append([r[0], r[1], {"travel": 2.0, "flip": true, "elev_deg": 2.0}])
+	st.calls.append(["light", Vector2(60, 440), {"flip": true, "turret_sx": -1.0, "elev_deg": 2.0}])
+	st.calls.append(["medium", Vector2(170, 450), {"flip": true, "turret_sx": -1.0, "elev_deg": 2.0}])
+	st.calls.append(["heavy", Vector2(330, 450), {"flip": true, "turret_sx": -1.0, "elev_deg": 2.0}])
 
 
 func _wrecks(st: Stage, _vp: SubViewport) -> void:

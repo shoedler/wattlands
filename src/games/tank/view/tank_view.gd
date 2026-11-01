@@ -322,6 +322,7 @@ func _draw_tank() -> void:
 		return
 	var ci := layer("Tank")
 	dust_fx.draw_smoke(ci)
+	fx.draw_smoke(ci, true)
 	fx.draw_leaves(ci)
 	TankWorldDraw.draw_near_threats(ci, self, game.state)
 	ci.draw_set_transform_matrix(xf)

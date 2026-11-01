@@ -8,14 +8,14 @@ extends GutTest
 ## bushes and the far ground are what the view expects. No test needs a display.
 
 const DIR := "res://assets/tank/v4/"
-const COLD_OUTLINE := Color("#0b0806")
+const COLD_OUTLINE := Color("#040504")
 const SLIT_CORE := Color("#d8fff4")
 const SLIT_GLOW := Color("#7fe0d0")
 ## Fastener heads: lit, and dimmed by grime. Colours nothing but a head uses.
 const RIV_LIT := Color("#505b4f")
 const RIV_DIM := Color("#384139")
 const RIV_LOW := Color("#262c27")
-## The moon's rim (enemy_bake.gd COLD 18, 19).
+## The moon's rim (enemy_paint.gd MOON).
 const MOON: Array[Color] = [Color("#46555a"), Color("#5c6e75")]
 ## A torn hole's mouth (enemy_bake.gd HOLE).
 const HOLE := Color("#050403")
@@ -620,7 +620,7 @@ func test_the_slits_are_the_tables_and_stand_on_the_armour() -> void:
 		"medium": [3, 0],
 		"heavy": [4, 0],
 		"destroyer": [2, 0],
-		"behemoth": [6, 0],
+		"behemoth": [4, 0],
 	}
 	for k: String in table:
 		var row := _kit.kind(k)
@@ -831,7 +831,7 @@ func test_the_kinds_outlines_differ_with_the_scale_taken_away() -> void:
 			for c in a.size():
 				d += absf(a[c] - b[c])
 			d /= float(a.size())
-			assert_gt(d, 0.05, "%s vs %s: %.3f" % [kinds[i], kinds[j], d])
+			assert_gte(d, 0.08, "%s vs %s: %.3f" % [kinds[i], kinds[j], d])
 
 
 ## The veils lie on every part: the gun has its own silhouette, and a silhouette has no holes in it.
