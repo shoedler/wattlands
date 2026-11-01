@@ -18,6 +18,32 @@ const D_CYCLE: Array[float] = [0.0, 480.0, 240.0]
 const D_SPA := Vector2(92, 45)
 const D_SPB := Vector2(103, 50)
 const D_LAMP := 68
+## How far ahead of a firing top this card's flapper lifts, in crank degrees: _diesel's `since` wraps at 200 and its
+## firing tops come at 240. The diesel's strokes in audio.json sit on the flapper (test_tank_audio_bank.gd).
+const D_STROKE_LEAD := 40.0
+## How long a bore stays lit from its firing top, in crank degrees, as _diesel's `cyc2 < 90.0`.
+const D_LIT_DEG := 90.0
+
+
+## The crank, in degrees, of the cutaway on the tank (TankInterior.diesel_open) at `ph` crank revolutions: this card's
+## ratio, moved so a firing top lands on a fire stroke and an overlap top on an inlet stroke.
+static func stroke_crank_deg(ph: float) -> float:
+	return ph * float(RATIO["diesel"]) * 360.0 + D_STROKE_LEAD
+
+
+## Bore i's throw from its top at `crank` degrees, 0 to 360.
+static func throw_deg(crank: float, i: int) -> float:
+	return fposmod(crank + D_THROW[i], 360.0)
+
+
+## Bore i's place in its four strokes at `crank` degrees, 0 to 720: 0 is its firing top, 360 its overlap top.
+static func cycle_deg(crank: float, i: int) -> float:
+	return fposmod(crank + D_CYCLE[i], 720.0)
+
+
+## Whether bore i has just fired at `crank` degrees. An overlap top never lights it.
+static func bore_lit(crank: float, i: int) -> bool:
+	return cycle_deg(crank, i) < D_LIT_DEG
 
 
 static func _diesel_static(cv: Cv) -> void:

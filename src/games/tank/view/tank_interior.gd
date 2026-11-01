@@ -4,8 +4,8 @@ extends RefCounted
 ## the r6 mock's generator: one Image
 ## the size of the sprite that starts as the base art and gets each seat's machine painted into its
 ## room, clipped to the room's open cutaway:
-##   drive    the rider on the crank, the chain to the flywheel, the diesel opened (four pistons on
-##            con-rods, rockers, the crankcase glowing)
+##   drive    the rider on the crank, the chain to the flywheel, the diesel opened (the machine card's three
+##            pistons on con-rods, topping out on the diesel's strokes, rockers, the crankcase glowing)
 ##   gun      the rider and the dynamo face on (copper windings turning, commutator sparks)
 ##   lights   the rider and the arc generator (the coil, two carbon rods, the cold arc)
 ##   sec      the rider and the crank-driven twin belt feed (the star wheel, the belts climbing)
@@ -20,7 +20,8 @@ extends RefCounted
 ##
 ## Cost: painting is per pixel on the CPU, so paint() repaints only the units whose inputs changed
 ## (machines quantised to UNIT_STEPS per crank revolution, flicker to FLICKER_HZ), each at most
-## MAX_HZ, at most `budget` units per call; the texture uploads once per call that painted.
+## MAX_HZ, at most `budget` units per call; the texture uploads once per call that painted. One exception: the Drive
+## room paints at once when a bore fires, ahead of the others and of MAX_HZ, since that top is heard.
 
 const UNITS: Array[String] = ["drive", "gun", "lights", "sec", "loader", "bow", "repair"]
 ## The rooms and windows each unit paints into (it is clipped to them).
@@ -75,6 +76,9 @@ const RP_EDGE := Color("#2e1d18")
 const RP_WALL_FALL := 0.42
 const RP_WALL_FALL_R := 30.0
 const RP_LAMP_REACH := 30.0
+## The Drive room's diesel: its bores' width and spacing, in a 48 px room.
+const DIESEL_BORE_W := 12
+const DIESEL_BORE_PITCH := 15
 ## The flywheel: its centre from the room's left and from its floor row, its radius.
 const RP_FLYWHEEL := Vector2(31.5, -8.5)
 const RP_FLY_R := 7.5
@@ -126,6 +130,7 @@ var _keys: Dictionary = {}
 var _last: Dictionary = {}
 var _next: int = 0
 var _repair_walls: Dictionary = {}
+var _drive_lit: int = 0
 
 
 func _init(p_rig: TankRig) -> void:
@@ -178,7 +183,16 @@ static func recoil(ft: float) -> float:
 ## `budget` units paint; the rest wait for the next call. True when the texture changed.
 func paint(inp: Dictionary, now: float, budget: int = 2) -> bool:
 	var done := 0
+	var lit := _drive_lit_now(inp)
+	if budget > 0 and lit & ~_drive_lit != 0:
+		_keys["drive"] = _key("drive", inp)
+		_last["drive"] = now
+		_paint_unit("drive", inp)
+		done += 1
+	_drive_lit = lit
 	for n in UNITS.size():
+		if done >= budget:
+			break
 		var u: String = UNITS[(_next + n) % UNITS.size()]
 		var key := _key(u, inp)
 		if _keys.get(u, null) == key:
@@ -203,6 +217,7 @@ func paint_all(inp: Dictionary) -> void:
 	for u in UNITS:
 		_keys[u] = _key(u, inp)
 		_paint_unit(u, inp)
+	_drive_lit = _drive_lit_now(inp)
 	tex.update(img)
 	paints += UNITS.size()
 
@@ -277,6 +292,19 @@ func _paint_unit(u: String, inp: Dictionary) -> void:
 				float(rp.get("press_t", 0.0)),
 				int(rp.get("patches", 0))
 			)
+
+
+## The bores of the Drive room that have just fired, one bit each; none on a stopped machine.
+static func _drive_lit_now(inp: Dictionary) -> int:
+	var st: Dictionary = inp.get("drive", {})
+	if not _on(st):
+		return 0
+	var crank := TankMechDiesel.stroke_crank_deg(float(st.get("revs", 0.0)))
+	var out := 0
+	for k in TankMechDiesel.D_THROW.size():
+		if TankMechDiesel.bore_lit(crank, k):
+			out |= 1 << k
+	return out
 
 
 static func _ang(st: Dictionary) -> float:
@@ -790,40 +818,41 @@ func _drive(st: Dictionary, t: float) -> void:
 	var rd: Rect2i = Rect2i(rig.rooms["drive"])
 	var fyd := rd.end.y - 2
 	var ad := _ang(st)
-	var eng := ad * 2.4
+	var eng := ad * float(TankMechDiesel.RATIO["diesel"])
 	var slot := int(st.get("slot", -1))
 	var cc := seat(rd.position.x + 1, fyd, ad, slot)
-	diesel_open(Rect2i(rd.position.x + 33, rd.position.y + 6, 48, 22), eng, _on(st), t)
+	diesel_open(Rect2i(rd.position.x + 33, rd.position.y + 6, 48, 22), ad / TAU, _on(st), t)
 	var fw := Vector2(rd.position.x + 25.5, fyd - 9.5)
 	chain(cc, fw, 2.5, 3.0, ad * 1.4)
 	wheel(fw, 6.5, eng, ST2, 6)
 	wheel(fw, 2.0, eng, BR1, 3, 6)
 
 
-## The diesel with its side open: four bores, pistons a quarter turn apart, con-rods to the crank,
-## rockers on top, the crankcase lit by its own heat.
-func diesel_open(r: Rect2i, eng: float, on: bool, t: float) -> void:
+## The diesel with its side open at `revs` crank revolutions: the machine card's three bores on its ratio, throws and
+## firing order, topping out on the diesel's strokes (TankMechDiesel.stroke_crank_deg). Con-rods to the crank, rockers on
+## top, a spark in a bore from its firing top, the crankcase lit by its own heat.
+func diesel_open(r: Rect2i, revs: float, on: bool, t: float) -> void:
 	pr(r, OUT6)
 	pr(r.grow(-1), Color("#120d0a"))
 	var crank_y := r.end.y - 5
 	pr(Rect2i(r.position.x + 1, crank_y, r.size.x - 2, 1), BR0)
-	for k in 4:
-		var bx := r.position.x + 3 + k * 11
-		var ph := eng + k * PI * 0.5
-		pr(Rect2i(bx, r.position.y + 2, 8, 11), Color("#2a2622"))
+	var crank := TankMechDiesel.stroke_crank_deg(revs)
+	for k in TankMechDiesel.D_THROW.size():
+		var bx := r.position.x + 3 + k * DIESEL_BORE_PITCH
+		var mid := bx + DIESEL_BORE_W / 2
+		var ph := deg_to_rad(TankMechDiesel.throw_deg(crank, k))
+		pr(Rect2i(bx, r.position.y + 2, DIESEL_BORE_W, 11), Color("#2a2622"))
 		pr(Rect2i(bx, r.position.y + 2, 1, 11), ST1)
-		pr(Rect2i(bx + 7, r.position.y + 2, 1, 11), Color("#0a0806"))
+		pr(Rect2i(bx + DIESEL_BORE_W - 1, r.position.y + 2, 1, 11), Color("#0a0806"))
 		var py := r.position.y + 4 + roundi(3.0 * (1.0 - cos(ph)))
-		pr(Rect2i(bx + 1, py, 6, 3), ST3)
-		pr(Rect2i(bx + 1, py, 6, 1), ST4)
+		pr(Rect2i(bx + 1, py, DIESEL_BORE_W - 2, 3), ST3)
+		pr(Rect2i(bx + 1, py, DIESEL_BORE_W - 2, 1), ST4)
 		p(bx + 1, py + 1, ST1)
-		var cxp := Vector2(bx + 4.0 + 2.0 * sin(ph), crank_y + 0.5 - 2.0 * cos(ph))
-		pl(Vector2(bx + 4.0, py + 3.0), cxp, ST3)
+		var cxp := Vector2(mid + 2.0 * sin(ph), crank_y + 0.5 - 2.0 * cos(ph))
+		pl(Vector2(mid, py + 3.0), cxp, ST3)
 		p(floori(cxp.x), floori(cxp.y), BR2)
 		var bob := roundi(sin(ph + 1.0) + 1.0)
-		pr(Rect2i(bx + 2, r.position.y - 1 - bob, 4, 1), CU1)
-		if on and cos(ph) > 0.92:
-			p(bx + 3, r.position.y + 3, FIRE1)
+		pr(Rect2i(mid - 2, r.position.y - 1 - bob, 4, 1), CU1)
 	if on:
 		glow(
 			Vector2(r.position.x + r.size.x * 0.5, crank_y - 2),
@@ -831,6 +860,10 @@ func diesel_open(r: Rect2i, eng: float, on: bool, t: float) -> void:
 			Color("#ff8a30"),
 			0.16 + 0.05 * sin(t * 13.0)
 		)
+		for k in TankMechDiesel.D_THROW.size():
+			if TankMechDiesel.bore_lit(crank, k):
+				var sx := r.position.x + 3 + k * DIESEL_BORE_PITCH + DIESEL_BORE_W / 2 - 1
+				pr(Rect2i(sx, r.position.y + 3, 2, 1), FIRE1)
 
 
 ## The gun room's dynamo face on: copper windings round a dark hub, turning; sparks.
