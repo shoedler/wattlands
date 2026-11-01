@@ -191,7 +191,21 @@ func test_every_arrow_lands_at_its_own_moment_and_place() -> void:
 		assert_true(heard.has(r.landing(j)), "arrow %d where it comes down" % j)
 
 
-## Real players on the Dummy driver. A full crowd pool or a flight losing its voice to an arrow would show here.
+## Ends each crowd voice when its sound has run its length on the sim clock. This test steps many times faster than
+## the mixer plays, so on the mixer's clock nothing would finish and a pool of any size would fill. since: voice -> sim t.
+func _finish_crowd_on_sim_clock(crowd: Array, since: Dictionary, t: float) -> void:
+	for v: GameAudioKit.Voice in crowd:
+		if not v.player.playing:
+			since.erase(v)
+			continue
+		var started: float = since.get_or_add(v, t)
+		if t - started >= v.player.stream.get_length() / v.player.pitch_scale:
+			v.player.stop()
+			since.erase(v)
+
+
+## Real players on the Dummy driver, ended on the sim clock. A full crowd pool or a flight losing its voice to an arrow
+## would show here.
 func test_arrows_play_on_their_own_pool_and_take_nothing_from_the_rest() -> void:
 	var ctx := F.make_ctx(1, 3, "short", Wl.SOLO, 1, 3)
 	_game = F.make_game(ctx)
@@ -205,9 +219,11 @@ func test_arrows_play_on_their_own_pool_and_take_nothing_from_the_rest() -> void
 	kit.force_audio = true
 	kit.setup(SiegeAudio.BANK_PATH, 3)
 	var on_sfx := 0
+	var since := {}
 	for tick in roundi(150.0 / Wl.SIM_DT):
 		_game.sim_step(Wl.SIM_DT, F.frame(ctx, final, tick))
 		_view.update(Wl.SIM_DT)
+		_finish_crowd_on_sim_clock(kit._pools[GameAudioKit.CROWD], since, tick * Wl.SIM_DT)
 		for v: GameAudioKit.Voice in kit._pools[AudioBuses.SFX]:
 			if v.player.stream != null and v.player.playing:
 				var file := str(v.player.stream.resource_path).get_file()
