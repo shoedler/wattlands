@@ -129,13 +129,13 @@
 		"armored_light_mult": 0.25
 	},
 	"bow": {
-		"_doc": "v3: the Secondaries seat (feed): two bow guns, 6 rounds per pedal revolution of its rider (alternating guns; 540 a minute at 90 rpm) at the nearest near threat (v4: recon, tankette) whose near edge is min_px..max_px off the hull front, else a wire or wreck barricade there (clear_rounds rounds that hit clear it: 18 damage, 5.3 s at 90 rpm). damage per round (armour: enemies.json light_mult). The guns slew at slew_deg_s [under band, in band] (power in band sets their speed); a round hits when the gun points within aim_tol_deg of the target, else it misses.",
+		"_doc": "v3: the Secondaries seat (feed): two bow guns, 6 rounds per pedal revolution of its rider (alternating guns; 540 a minute at 90 rpm) at the nearest near threat (v4: recon, tankette) whose near edge is min_px..max_px off the hull front, else a wire or wreck barricade there (clear_rounds rounds that hit clear it: 4 s at 90 rpm, as before). damage per round (armour: enemies.json light_mult). The guns slew at slew_deg_s [under band, in band] (power in band sets their speed); a round hits when the gun points within aim_tol_deg of the target, else it misses.",
 		"damage": 0.375,
 		"min_px": 4,
 		"max_px": 200,
 		"slew_deg_s": [8, 40],
 		"aim_tol_deg": 3,
-		"clear_rounds": 48
+		"clear_rounds": 36
 	},
 	"arc": {
 		"_doc": "v3: the Lights seat (arc generator). While its rider is in band the searchlights are lit: the main gun reaches its full range with its normal dispersion. Empty or not lit, far targets only up to dark_range_m, with its dispersion x dark_dispersion_mult (dark_range_px is v3's, until the Autopilot moves).",

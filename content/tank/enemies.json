@@ -70,7 +70,7 @@
 		},
 		"recon": {
 			"code": 7,
-			"hp": 30,
+			"hp": 22.5,
 			"size_px": [52, 24],
 			"spawn_px": [10, 50],
 			"burst_s": 0.6,
@@ -86,7 +86,7 @@
 		},
 		"tankette": {
 			"code": 8,
-			"hp": 18,
+			"hp": 13.5,
 			"size_px": [37, 17],
 			"spawn_px": [10, 50],
 			"burst_s": 0.8,

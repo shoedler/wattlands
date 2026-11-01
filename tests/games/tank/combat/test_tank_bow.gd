@@ -144,12 +144,26 @@ func test_far_enemies_and_the_behemoth_are_not_bow_targets() -> void:
 	assert_eq(boss.state.boss.bogie_hp[0], boss.state.boss.bogie_max)
 
 
-func test_a_barricade_takes_the_same_damage_it_always_did() -> void:
+## Rounds a second at 90 rpm, and the old guns' damage a second there (2 rounds of 1.5 a revolution).
+const RATE_90 := 90.0 / 60.0 * TankFeedState.ROUNDS_PER_REV
+const OLD_DPS_90 := 90.0 / 60.0 * 2.0 * 1.5
+
+
+func test_a_barricade_clears_in_its_old_time_at_three_quarters_of_its_old_damage() -> void:
 	var c := TankFixtures.content()
 	var need := c.num("tanks", "bow.clear_rounds", 0.0)
-	assert_almost_eq(
-		need * c.num("tanks", "bow.damage", 0.0), 18.0, 1e-6, "12 rounds of 1.5 before"
-	)
+	assert_almost_eq(need / RATE_90, 4.0, 1e-6, "12 rounds at 3 a second before")
+	var dealt := need * c.num("tanks", "bow.damage", 0.0)
+	assert_almost_eq(dealt, 0.75 * 18.0, 1e-6, "scaled like a near threat: 18 before")
+
+
+func test_near_threats_take_the_old_time_to_kill() -> void:
+	var c := TankFixtures.content()
+	var dps := RATE_90 * c.num("tanks", "bow.damage", 0.0)
+	var old_hp := {TankIds.ENEMY_RECON: 30.0, TankIds.ENEMY_TANKETTE: 18.0}
+	for type: String in old_hp:
+		var hp := float(c.enemy_def(type)["hp"])
+		assert_almost_eq(hp / dps, float(old_hp[type]) / OLD_DPS_90, 1e-6, type)
 
 
 func test_the_guns_deal_three_quarters_of_the_old_damage_a_revolution() -> void:

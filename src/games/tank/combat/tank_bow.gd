@@ -133,7 +133,7 @@ static func _round(
 		r.bow_hits += 1
 	if t.kind == TankTarget.KIND_OBSTACLE:
 		t.obstacle.bow_s += 1.0
-		if t.obstacle.bow_s >= c.num("tanks", "bow.clear_rounds", 48.0) - 1e-6:
+		if t.obstacle.bow_s >= c.num("tanks", "bow.clear_rounds", 36.0) - 1e-6:
 			t.obstacle.cleared = true
 		return
 	var dmg := TankDamage.against(c, TankIds.SHELL_BOW, t)
