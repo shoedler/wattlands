@@ -827,10 +827,11 @@ func _drive(st: Dictionary, t: float) -> void:
 	wheel(fw, 6.5, eng, ST2, 6)
 	wheel(fw, 2.0, eng, BR1, 3, 6)
 
-## The diesel with its side open at `revs` crank revolutions: the machine card's three bores on its ratio, throws and
+
 ## The diesel with its side open at `revs` crank revolutions: the machine card's three bores on its ratio,
 ## throws and firing order, topping out on the diesel's strokes (TankMechDiesel.stroke_crank_deg). Con-rods to the
 ## crank, rockers on top, a spark in a bore from its firing top, the crankcase lit by its own heat.
+func diesel_open(r: Rect2i, revs: float, on: bool, t: float) -> void:
 	pr(r, OUT6)
 	pr(r.grow(-1), Color("#120d0a"))
 	var crank_y := r.end.y - 5
