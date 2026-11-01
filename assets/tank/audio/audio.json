@@ -121,12 +121,11 @@
         {"src": "grains", "rate_hz": 66, "f": [700, 2800], "dur_s": [0.003, 0.012], "g": [0.2, 1.0], "gain": 0.9},
         {"src": "noise", "color": "pink", "gain": 0.12, "fx": [{"bp": {"f": 1300, "q": 0.8}}]}
       ]},
-    "bow_far": {"dur": 0.4444, "rate": 22050, "ch": 1, "seed": 1185, "loop": true, "xfade_s": 0.01, "norm": {"peak": -9},
+    "bow_far": {"dur": 0.3333, "rate": 22050, "ch": 1, "seed": 1185, "loop": true, "xfade_s": 0.01, "norm": {"peak": -9},
       "layers": [
         {"src": "noise", "color": "white", "at": 0, "dur": 0.05, "gain": 1, "env": {"a": 0.0005, "d": 0.012}, "fx": [{"bp": {"f": 2500, "q": 1.2}}]},
         {"src": "noise", "color": "white", "at": 0.1111, "dur": 0.05, "gain": 1, "env": {"a": 0.0005, "d": 0.012}, "fx": [{"bp": {"f": 2500, "q": 1.2}}]},
-        {"src": "noise", "color": "white", "at": 0.2222, "dur": 0.05, "gain": 1, "env": {"a": 0.0005, "d": 0.012}, "fx": [{"bp": {"f": 2500, "q": 1.2}}]},
-        {"src": "noise", "color": "white", "at": 0.3333, "dur": 0.05, "gain": 1, "env": {"a": 0.0005, "d": 0.012}, "fx": [{"bp": {"f": 2500, "q": 1.2}}]}
+        {"src": "noise", "color": "white", "at": 0.2222, "dur": 0.05, "gain": 1, "env": {"a": 0.0005, "d": 0.012}, "fx": [{"bp": {"f": 2500, "q": 1.2}}]}
       ]},
     "repair_compressor": {"dur": 1.6, "rate": 22050, "ch": 1, "seed": 1179, "loop": true, "xfade_s": 0.3,
       "layers": [
