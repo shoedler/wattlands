@@ -17,8 +17,8 @@ extends SceneTree
 ## --app runs the app itself: the main scene, its autoloads, a solo quick start on the session screen with a mock
 ## trainer, the same screen a rider sees. Without it the session is GameSimRunner's, with --bots riders.
 ## --mute-master takes Master to -80 dB, for a run on a real driver (--audio-driver WASAPI) nobody may hear: the
-## captures sit before the volume, so they read the same. Use it: the Dummy driver mixes in chunks of 4096 frames, 93 ms,
-## so every voice started inside one begins on the same sample and a crowd of short sounds piles up in the recording.
+## captures sit before the volume, so they read the same. Use it: the Dummy driver mixes in chunks of 4096 frames,
+## 93 ms, so every voice started inside one begins on the same sample and a crowd of short sounds piles up.
 ## A window opens, because a headless kit stays silent by design (GameAudioKit._quiet_run).
 
 const BUSES: Array[String] = ["Master", "Machines", "Ambience", "Sfx", "UI"]

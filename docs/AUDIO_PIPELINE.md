@@ -157,6 +157,8 @@ tools/godot.sh --path . --timeout=600 --audio-driver Dummy -s tools/audio/live_m
     --game=<id> --content=<id> --bots=3 --seed=1 --skip-s=430 --run-s=240 --out=build/audio_live/<name>
 ```
 
+`--audio-driver Dummy` mixes in chunks of 4096 frames, 93 ms, so every voice started inside one begins on the same sample: few voices hardly show it, and a crowd of short ones piles up. For those, `--audio-driver WASAPI` with `--mute-master` (after the `--`) runs the real driver with Master at -80 dB. The captures sit before the volume, so nothing is heard and they read the same. Its mix rate is usually 48000 Hz; `live_report.mjs` reads it from the file.
+
 With `--app` it runs the app itself instead of `GameSimRunner`: the main scene, the autoloads and a solo quick start on the real session screen, with a mock trainer. Either way the JSON has `voice_starts`: what each player really took, by file, its buses and level, read off the pools once a frame. A window opens, because a headless kit is silent by design; the Dummy driver keeps the speakers out of it, in real time. `node tools/audio/live_report.mjs build/audio_live/<name> [--bank=<audio.json>] [--out=<file>]` reads the recording: LUFS, LRA, the 2-8 kHz share, the top band and how the Sfx bus moves. Do this when a sound is heard not to be there. A preview's Sfx and its Machines sum to a passing LUFS whether or not the part you asked about can be heard over the rest.
 
 ## What no number here can say
