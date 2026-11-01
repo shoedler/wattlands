@@ -535,6 +535,7 @@ function projectileRows(bank, p, sim, mix, rows) {
   let quietHit = Infinity;
   let quietHitWhat = '';
   let worstOne = Infinity;
+  const medians = [];
   for (const [surface, cues] of surfaces) {
     const overs = [];
     for (const v of sim.voices.filter((x) => cues.includes(x.cue) && x.sound === bank.doc.cues[x.cue].hits[0].sound)) {
@@ -542,6 +543,7 @@ function projectileRows(bank, p, sim, mix, rows) {
     }
     overs.sort((x, y) => x - y);
     const mid = median(overs);
+    medians.push(`${surface} ${round(mid)}`);
     if (overs.length > 0) worstOne = Math.min(worstOne, overs[0]);
     if (mid < quietHit) {
       quietHit = mid;
@@ -553,7 +555,7 @@ function projectileRows(bank, p, sim, mix, rows) {
     pass: missing.length === 0 && quietHit >= P_IMPACT_MARGIN_DB,
     value: missing.length > 0 ? `missing ${missing.join(', ')}` : `${surfaces.length} surfaces, quietest median +${round(quietHit)} dB`,
     target: targets.P4,
-    note: `${quietHitWhat}; the worst single impact +${round(worstOne)} dB`,
+    note: `${medians.join(', ')}; the worst single impact ${round(worstOne)} dB`,
   });
   const shapes = surfaces.map(([surface, cues]) => {
     const sounds = cues.map((c) => bank.doc.cues[c]?.hits?.[0]?.sound).filter(Boolean);

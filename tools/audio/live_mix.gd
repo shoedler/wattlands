@@ -16,12 +16,16 @@ extends SceneTree
 ##   arrows: arrows landed and struck by SiegeShotSounds and by the host's station.hits (Siege only).
 ## --app runs the app itself: the main scene, its autoloads, a solo quick start on the session screen with a mock
 ## trainer, the same screen a rider sees. Without it the session is GameSimRunner's, with --bots riders.
+## --mute-master takes Master to -80 dB, for a run on a real driver (--audio-driver WASAPI) nobody may hear: the
+## captures sit before the volume, so they read the same. Use it: the Dummy driver mixes in chunks of 4096 frames, 93 ms,
+## so every voice started inside one begins on the same sample and a crowd of short sounds piles up in the recording.
 ## A window opens, because a headless kit stays silent by design (GameAudioKit._quiet_run).
 
 const BUSES: Array[String] = ["Master", "Machines", "Ambience", "Sfx", "UI"]
 const SIM_DT := 0.05
 const SETTLE_FRAMES := 30
 const PEAK := 32767.0
+const MUTED_DB := -80.0
 
 var _runner: GameSimRunner = null
 var _host: GameHost = null
@@ -144,6 +148,7 @@ func _begin() -> void:
 	_run_s = CmdLine.get_float("run-s", 240.0)
 	_skip_s = CmdLine.get_float("skip-s", 0.0)
 	_station = CmdLine.get_int("station", -1)
+	_mute_master()
 	if CmdLine.has("app"):
 		_begin_app()
 		return
@@ -191,6 +196,7 @@ func _begin_app() -> void:
 	_main = (packed as PackedScene).instantiate()
 	root.add_child(_main)
 	current_scene = _main
+	_mute_master()
 	var trainer := root.get_node_or_null(^"TrainerService") as WlTrainerService
 	trainer.use_mock(CmdLine.get_str("rider", "erg:compliance=1.0"))
 	var settings := root.get_node_or_null(^"Settings") as WlSettings
@@ -208,6 +214,12 @@ func _begin_app() -> void:
 			"quick": true
 		}
 	)
+
+
+## The app's boot sets Master from Settings, so an app run calls this twice.
+func _mute_master() -> void:
+	if CmdLine.has("mute-master"):
+		AudioServer.set_bus_volume_db(0, MUTED_DB)
 
 
 func _app_session() -> GameHost:

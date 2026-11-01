@@ -180,7 +180,157 @@ function a14Read(m, rate, starts) {
   return { n: reads.length, median: round(pct(reads, 0.5)) };
 }
 
-const IMPACT_SOUNDS = new Set(['hit_flesh', 'hit_wood', 'hit_shield', 'arrow_dirt', 'arrow_water', 'bolt_dirt', 'bolt_wood', 'stone_impact', 'stone_wood', 'stone_splash']);
+const IMPACT_SOUNDS = new Set(['arrow_flesh', 'arrow_wood', 'arrow_shield', 'arrow_dirt', 'arrow_water', 'hit_flesh', 'hit_wood', 'hit_shield', 'bolt_dirt', 'bolt_wood', 'stone_impact', 'stone_wood', 'stone_splash']);
+/** The sounds of one arrow that lands, on a body and on nothing. */
+export const ARROW_SOUNDS = { body: ['arrow_flesh', 'arrow_wood', 'arrow_shield'], miss: ['arrow_dirt', 'arrow_water'] };
+/** Where a body is heard: P4's whole band, then under and over the flights' 1-2.4 kHz. */
+const ONE_ARROW_BANDS = { all_400_6000: [400, 6000], low_400_1000: [400, 1000], high_2400_6000: [2400, 6000] };
+const ONE_ARROW_S = 0.05;
+
+function median(values) {
+  return round(pct(values, 0.5));
+}
+
+/** A sound's first ONE_ARROW_S in a band, all variants, as power at 0 dB on the mix's scale. */
+function fileBandPower(doc, dir, sound, lo, hi) {
+  const n = doc.sounds[sound]?.variants ?? 1;
+  let sum = 0;
+  for (let k = 0; k < n; k++) {
+    const stem = n > 1 ? `${sound}_${k + 1}` : sound;
+    const w = decodeWav(fs.readFileSync(`${dir}/${stem}.wav`));
+    const x = deinterleave(w.samples, w.ch)[0];
+    const y = bandFilter(x, lo, hi, w.rate);
+    const span = Math.min(y.length, Math.round(ONE_ARROW_S * w.rate));
+    let e = 0;
+    for (let i = 0; i < span; i++) e += y[i] * y[i];
+    sum += e / Math.round(ONE_ARROW_S * w.rate);
+  }
+  return sum / n;
+}
+
+/**
+ * One arrow over the mix at the level the code plays it: the file at its logged level against the master in the same
+ * 50 ms, less the file, so it holds in a crowd of other arrows. `rise` needs no model: the master's own 50 ms against the
+ * 180 ms before it, beside what an arbitrary moment reads. The medians hear every arrow that landed there.
+ */
+export function oneArrow(m, rate, doc, dir, log, sets = ARROW_SOUNDS) {
+  const out = {};
+  const span = Math.round(ONE_ARROW_S * rate);
+  const before = Math.round(0.2 * rate);
+  const gap = Math.round(0.02 * rate);
+  const power = (y, a, n) => {
+    let e = 0;
+    const from = Math.max(0, a);
+    const to = Math.min(y.length, a + n);
+    for (let i = from; i < to; i++) e += y[i] * y[i];
+    return e / Math.max(1, to - from);
+  };
+  for (const [band, [lo, hi]] of Object.entries(ONE_ARROW_BANDS)) {
+    const y = bandFilter(m, lo, hi, rate);
+    const row = {};
+    for (const [group, sounds] of Object.entries(sets)) {
+      const overs = [];
+      const rises = [];
+      const per = {};
+      for (const sound of sounds) {
+        if (!doc.sounds[sound]) continue;
+        const file = fileBandPower(doc, dir, sound, lo, hi);
+        const mine = [];
+        for (const [t, id, dbv] of log) {
+          if (id !== sound) continue;
+          const at = Math.round(t * rate);
+          const own = file * 10 ** (dbv / 10);
+          const all = power(y, at, span);
+          mine.push(db10(own / Math.max(all - own, all * 0.02)));
+          rises.push(db10(all) - db10(power(y, at - before, before - gap)));
+        }
+        if (mine.length > 0) per[sound] = { n: mine.length, median: median(mine), p10: round(pct(mine, 0.1)) };
+        overs.push(...mine);
+      }
+      row[group] = { n: overs.length, median: median(overs), p10: round(pct(overs, 0.1)), rise: median(rises), sounds: per };
+    }
+    const arbitrary = [];
+    for (let at = before; at + span < y.length; at += Math.round(0.37 * rate)) arbitrary.push(db10(power(y, at, span)) - db10(power(y, at - before, before - gap)));
+    row.arbitrary_rise = median(arbitrary);
+    out[band] = row;
+  }
+  return out;
+}
+
+/** Does it tire: how the master's level holds over 30 s and 3 s, how evenly arrows come, and whether anything repeats. */
+export function fatigueFigures(master, m, rate, live, sets = ARROW_SOUNDS) {
+  const n30 = Math.round(30 * rate);
+  const lufs30 = [];
+  for (let at = 0; at + n30 <= m.length; at += n30) lufs30.push(round(integratedLufs(master.x.map((c) => c.subarray(at, at + n30)), rate)));
+  const n3 = Math.round(3 * rate);
+  const short = [];
+  for (let at = 0; at + n3 <= m.length; at += rate) short.push(integratedLufs(master.x.map((c) => c.subarray(at, at + n3)), rate));
+  const all = new Set([...sets.body, ...sets.miss]);
+  const log = (live.played_log ?? []).filter((e) => all.has(e[1]));
+  const per30 = [];
+  for (let k = 0; k * 30 < m.length / rate - 1; k++) per30.push(log.filter((e) => e[0] >= k * 30 && e[0] < (k + 1) * 30).length / 30);
+  const gaps = [];
+  for (let i = 1; i < log.length; i++) gaps.push(log[i][0] - log[i - 1][0]);
+  // The envelope of the arrows' band against itself: a peak near 1 at some lag is a metronome.
+  const env = bandPower(m, rate, 400, 6000).map(db10);
+  const mean = env.reduce((a, b) => a + b, 0) / Math.max(1, env.length);
+  let bestLag = 0;
+  let best = -1;
+  let var0 = 0;
+  for (const v of env) var0 += (v - mean) * (v - mean);
+  for (let lag = 10; lag < Math.min(env.length / 2, 600); lag++) {
+    let c = 0;
+    for (let i = 0; i + lag < env.length; i++) c += (env[i] - mean) * (env[i + lag] - mean);
+    c /= var0 || 1;
+    if (c > best) {
+      best = c;
+      bestLag = lag;
+    }
+  }
+  const stems = (live.start_log ?? []).filter((e) => all.has(String(e[1]).replace(/_\d+$/, ''))).map((e) => e[1]);
+  let twice = 0;
+  const last = {};
+  for (const stem of stems) {
+    const sound = stem.replace(/_\d+$/, '');
+    if (last[sound] === stem) twice++;
+    last[sound] = stem;
+  }
+  return {
+    lufs_30s: lufs30,
+    lufs_30s_spread: lufs30.length > 0 ? round(Math.max(...lufs30) - Math.min(...lufs30)) : 0,
+    lufs_3s_p10_p90: [round(pct(short, 0.1)), round(pct(short, 0.9))],
+    arrows_per_s_30s: per30.map(round),
+    gap_ms_p10_p50_p90: [0.1, 0.5, 0.9].map((p) => Math.round(pct(gaps, p) * 1000)),
+    envelope_repeat: { lag_s: round(bestLag * 0.05), correlation: round(best) },
+    same_file_twice_running: twice,
+  };
+}
+
+/** Every arrow that landed, against the sounds it got and the players that took them. */
+function arrowCounts(live, sets = ARROW_SOUNDS) {
+  const sounds = [...sets.body, ...sets.miss];
+  const asked = {};
+  for (const [, id] of live.played_log ?? []) if (sounds.includes(id)) asked[id] = (asked[id] ?? 0) + 1;
+  const started = {};
+  for (const [stem, v] of Object.entries(live.voice_starts ?? {})) {
+    const id = stem.replace(/_\d+$/, '');
+    if (sounds.includes(id)) started[id] = (started[id] ?? 0) + v.playing;
+  }
+  const sum = (o, ids) => ids.reduce((a, id) => a + (o[id] ?? 0), 0);
+  return {
+    landed: live.arrows?.landed ?? 0,
+    struck_by_ear: live.arrows?.struck ?? 0,
+    station_hits: live.arrows?.station_hits ?? 0,
+    sounds_asked: sum(asked, sounds),
+    sounds_started: sum(started, sounds),
+    body_sounds: sum(asked, sets.body),
+    miss_sounds: sum(asked, sets.miss),
+    by_sound: asked,
+    crowd_voiceless: live.crowd_voiceless ?? 0,
+    stolen: live.stolen ?? {},
+    crowd_voices: live.voices?.Crowd ?? null,
+  };
+}
 
 function liveFigures(base, master, m, doc, dir, live) {
   const rate = master.rate;
@@ -190,10 +340,10 @@ function liveFigures(base, master, m, doc, dir, live) {
   const out = {};
   // Where one voice can be told from another: the mix, not the file.
   const shapes = {
-    flesh: onsetShape(m, startsOf(['hit_flesh']), rate),
+    flesh: onsetShape(m, startsOf(['arrow_flesh', 'hit_flesh']), rate),
     dirt: onsetShape(m, startsOf(['arrow_dirt', 'bolt_dirt']), rate),
-    wood: onsetShape(m, startsOf(['hit_wood', 'bolt_wood', 'stone_wood']), rate),
-    shield: onsetShape(m, startsOf(['hit_shield']), rate),
+    wood: onsetShape(m, startsOf(['arrow_wood', 'hit_wood', 'bolt_wood', 'stone_wood']), rate),
+    shield: onsetShape(m, startsOf(['arrow_shield', 'hit_shield']), rate),
   };
   const apart = (a, b) => {
     const d = shapeApart(shapes[a], shapes[b]);
@@ -203,9 +353,6 @@ function liveFigures(base, master, m, doc, dir, live) {
   const impacts = log.filter((e) => IMPACT_SOUNDS.has(e[1]));
   out.impacts_per_s = round(impacts.length / seconds);
   out.kills_per_s = round(log.filter((e) => e[1] === 'kill_thud').length / seconds);
-  const patters = log.filter((e) => e[1] === 'arrow_dirt').map((e) => e[0]);
-  const bodies = log.filter((e) => ['hit_flesh', 'hit_wood', 'hit_shield'].includes(e[1])).map((e) => e[0]);
-  out.patters_with_a_body_in_300ms = patters.length > 0 ? round(patters.filter((t) => bodies.some((b) => Math.abs(b - t) < 0.3)).length / patters.length) : 0;
   let over = 0;
   let last = -Infinity;
   const ceiling = 10 ** (-1 / 20);
@@ -219,12 +366,15 @@ function liveFigures(base, master, m, doc, dir, live) {
   }
   out.head_episodes_per_min = round((over / seconds) * 60);
   out.a14_ballista = a14Read(m, rate, startsOf(['ballista_twang']));
+  out.arrows = arrowCounts(live);
+  out.fatigue = fatigueFigures(master, m, rate, live);
   const dirSounds = dir;
   if (doc && dirSounds) {
     out.flights_1k_2k4 = flightFigures(m, rate, doc, dirSounds, live, 1000, 2400);
     const sfx = mono(load(base, 'sfx').x);
     const machines = mono(load(base, 'machines').x);
     out.sfx_over_machines_1k_2k = busOver(sfx, machines, rate, 1000, 2000);
+    out.one_arrow = oneArrow(m, rate, doc, dirSounds, log);
   }
   return out;
 }
@@ -233,7 +383,7 @@ export function report(base, doc = null, dir = null) {
   const master = load(base, 'master');
   const sfx = load(base, 'sfx');
   const m = mono(master.x);
-  const e = earBand(m);
+  const e = earBand(m, undefined, master.rate);
   const live = JSON.parse(fs.readFileSync(`${base}.json`, 'utf8'));
   return {
     ...liveFigures(base, master, m, doc, dir, live),
@@ -261,6 +411,7 @@ function main() {
   const out = report(base, bank ? JSON.parse(fs.readFileSync(bank, 'utf8')) : null, bank ? path.dirname(bank) : null);
   if (bank) out.bank_sha = crypto.createHash('sha256').update(fs.readFileSync(bank)).digest('hex');
   const live = JSON.parse(fs.readFileSync(`${base}.json`, 'utf8'));
+  out.driver = live.driver ?? '';
   out.shots = live.cues?.shot ?? 0;
   out.flight_starts = live.flight_starts ?? 0;
   out.voiceless = live.voiceless ?? 0;
