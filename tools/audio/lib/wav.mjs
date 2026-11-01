@@ -50,6 +50,36 @@ export function decodeWav(buf) {
   throw new Error('no data chunk');
 }
 
+/**
+ * A capture on disk, PCM16 or 32-bit float -> {rate, ch, x: one Float64Array per channel}. tools/audio/live_mix.gd writes
+ * float, so what plays over full scale before the limiter stays over it. Nothing rendered from a bank is ever float.
+ */
+export function readCapture(buf) {
+  let at = 12;
+  let fmt = null;
+  while (at + 8 <= buf.length) {
+    const id = buf.toString('ascii', at, at + 4);
+    const size = buf.readUInt32LE(at + 4);
+    const body = at + 8;
+    if (id === 'fmt ') {
+      fmt = { tag: buf.readUInt16LE(body), ch: buf.readUInt16LE(body + 2), rate: buf.readUInt32LE(body + 4), bits: buf.readUInt16LE(body + 14) };
+    } else if (id === 'data') {
+      if (!fmt) throw new Error('data chunk before fmt chunk');
+      if (fmt.tag === 1 && fmt.bits === 16) {
+        const w = decodeWav(buf);
+        return { rate: w.rate, ch: w.ch, x: deinterleave(w.samples, w.ch) };
+      }
+      if (fmt.tag !== 3 || fmt.bits !== 32) throw new Error(`a capture is PCM16 or float32 (tag ${fmt.tag}, ${fmt.bits} bits)`);
+      const frames = Math.floor(Math.min(size, buf.length - body) / (4 * fmt.ch));
+      const x = Array.from({ length: fmt.ch }, () => new Float64Array(frames));
+      for (let i = 0; i < frames; i++) for (let c = 0; c < fmt.ch; c++) x[c][i] = buf.readFloatLE(body + (i * fmt.ch + c) * 4);
+      return { rate: fmt.rate, ch: fmt.ch, x };
+    }
+    at = body + size + (size & 1);
+  }
+  throw new Error('no data chunk');
+}
+
 /** Interleaved Int16Array -> one Float64Array per channel, in [-1, 1). */
 export function deinterleave(samples, ch) {
   const frames = Math.floor(samples.length / ch);

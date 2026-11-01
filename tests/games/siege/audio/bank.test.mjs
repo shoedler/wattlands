@@ -29,7 +29,11 @@ const VARIANTS = {
   arrow_swarm: 3,
   bolt_hiss: 3,
   arrow_release: 2,
-  arrow_dirt: 2,
+  arrow_flesh: 4,
+  arrow_wood: 4,
+  arrow_shield: 3,
+  arrow_dirt: 4,
+  arrow_water: 3,
   bolt_dirt: 2,
   bolt_wood: 2,
   hit_flesh: 3,
@@ -42,7 +46,7 @@ const VARIANTS = {
 };
 const SINGLES = [
   'wheel_rumble', 'wheel_rumble_far', 'wheel_load', 'junction_clatter', 'pump_stroke', 'tar_bubble', 'tar_pour', 'tar_hiss',
-  'onager_release', 'stone_tumble', 'stone_wood', 'stone_splash', 'arrow_water', 'horn_wave', 'horn_push', 'horn_rush',
+  'onager_release', 'stone_tumble', 'stone_wood', 'stone_splash', 'horn_wave', 'horn_push', 'horn_rush',
   'wave_end_bell', 'gate_crash', 'gate_restored', 'ram_thud', 'tower_creak', 'reach_alarm', 'lever_route', 'coin_clink',
   'hammer_buy', 'overdrive_on', 'overdrive_off', 'overdrive_no', 'wind_hill_lo', 'wind_hill_hi', 'crowd_far', 'banner_flap', 'lark',
 ];
@@ -210,11 +214,54 @@ test('every hit cue is on the card, and another rider\'s shots are under your ow
   const hits = Object.keys(doc.cues).filter((c) => c.startsWith('hit_')).sort();
   assert.deepEqual(listed, hits);
   for (const c of [...hits, 'shot_bolt', 'shot_stone', 'shot_arrow', 'shot_scorpion']) {
+    if (c.startsWith('hit_arrow_')) continue;
     assert.ok(doc.cues[c].other_db >= -6 && doc.cues[c].other_db <= -4, `${c}: ${doc.cues[c].other_db}`);
+  }
+  // The lead's ruling, after the owner: "arrow hits make no sound". Another rider's arrows sit closer than other shots.
+  for (const s of ['flesh', 'wood', 'shield']) assert.equal(doc.cues[`hit_arrow_${s}`].other_db, -2, s);
+  for (const s of ['dirt', 'water']) assert.equal(doc.cues[`hit_arrow_${s}`].other_db, -3, s);
+});
+
+const ARROW_LANDINGS = ['arrow_flesh', 'arrow_wood', 'arrow_shield', 'arrow_dirt', 'arrow_water'];
+
+test('one arrow is a very short sound, in several variants, on a crowd pool that cannot take a player from anything', () => {
+  assert.ok(doc.mix.crowd_voices >= 12, `${doc.mix.crowd_voices} crowd voices`);
+  assert.equal(doc.mix.sfx_voices, 16, 'Sfx keeps its cap');
+  for (const id of ARROW_LANDINGS) {
+    const s = doc.sounds[id];
+    assert.ok(s.dur >= 0.04 && s.dur <= 0.1, `${id}: ${s.dur} s`);
+    assert.ok(s.variants >= 3, id);
+    assert.equal(s.compress, 'pcm', `${id}: an attack this short keeps its samples`);
+  }
+  for (const surface of SURFACES) {
+    const hit = doc.cues[`hit_arrow_${surface}`].hits[0];
+    assert.equal(hit.sound, `arrow_${surface}`);
+    assert.equal(hit.crowd, true);
+    assert.ok(hit.priority < 6, 'under every cue, for what a stolen player would mean');
+    assert.equal(hit.pan_var, 'pan');
+    assert.equal(hit.pitch_var, 'pv');
+    assert.equal(hit.db_var, 'lvl');
+    assert.equal(hit.variant_var, 'vr');
+    assert.equal(doc.cues[`hit_arrow_${surface}`].hits.length, 1);
   }
 });
 
-test('a miss is under a hit: the patter is quieter than a body at the same level of the mix', () => {
+test('the preview lands every volley, arrow by arrow, about as a real wave does', () => {
+  const events = doc.preview.events;
+  const volleys = events.filter((e) => e.cue === 'shot_arrow' && e.t < 58).length;
+  const landings = events.filter((e) => e.cue.startsWith('hit_arrow_')).length;
+  assert.ok(Math.abs(landings - volleys * 12) <= 24, `${landings} landings of ${volleys} volleys`);
+  const misses = events.filter((e) => e.cue === 'hit_arrow_dirt' || e.cue === 'hit_arrow_water').length;
+  assert.ok(misses / landings >= 0.75, `${misses} of ${landings} miss, as in a real wave`);
+});
+
+test('the flight has passed before its arrows land: 40 % of the way, not halfway', () => {
+  const f = doc.cues.shot_arrow.hits.find((h) => h.flight).flight;
+  assert.deepEqual(f.gain, [[0, -40], [0.26, -18], [0.4, 0], [0.5, -8], [0.62, -30], [1, -40]]);
+  assert.deepEqual(f.pitch, [[0, 1.3], [0.4, 1], [1, 0.75]]);
+});
+
+test('a miss is under a hit: the small sound of the ground is quieter than a body at the same level of the mix', () => {
   const bank = new BankAudio(doc, path.dirname(BANK));
   const loudest = (id, db) => {
     const x = bandFilter(bank.file(id, 0).data[0], 400, 6000, 22050);
@@ -228,8 +275,8 @@ test('a miss is under a hit: the patter is quieter than a body at the same level
     return best + db;
   };
   const db = (cue) => doc.cues[cue].hits[0].db;
-  assert.ok(loudest('arrow_dirt', db('hit_arrow_dirt')) <= loudest('hit_flesh', db('hit_arrow_flesh')) - 1.5);
-  assert.ok(loudest('arrow_dirt', db('hit_arrow_dirt')) <= loudest('hit_wood', db('hit_arrow_wood')) - 1.5);
+  assert.ok(loudest('arrow_dirt', db('hit_arrow_dirt')) <= loudest('arrow_flesh', db('hit_arrow_flesh')) - 6);
+  assert.ok(loudest('arrow_dirt', db('hit_arrow_dirt')) <= loudest('arrow_wood', db('hit_arrow_wood')) - 6);
 });
 
 test('what a rider must hear of the gate cannot lose its voice to a flight', () => {
@@ -275,6 +322,39 @@ test('a body at full level stays under the master head on its own', () => {
 });
 
 const REAL = ['organ', 'auto'].map((k) => [k, JSON.parse(fs.readFileSync(new URL(`./real_wave_${k}.json`, import.meta.url), 'utf8'))]);
+const ALL_REAL = [...REAL, ...['app', 'wave3'].map((k) => [k, JSON.parse(fs.readFileSync(new URL(`./real_wave_${k}.json`, import.meta.url), 'utf8'))])];
+/** rc.2's bank, on the same driver and sessions, as played. The rows below must fail these: rc.2 is what the owner rejected. */
+const RC2 = {
+  organ: { coverage: 0.15, contrast: 1.35, body_over_miss: -0.86 },
+  auto: { coverage: 0.08, contrast: 1.06, body_over_miss: 5.5 },
+  app: { coverage: 0.13, contrast: 1.29, body_over_miss: -4.79 },
+};
+const ROWS = doc.preview.checks.real_wave;
+
+test('the crowd rows fail on rc.2, each of them, in every session', () => {
+  for (const [name, r] of Object.entries(RC2)) {
+    assert.ok(r.coverage < ROWS.coverage, `${name} coverage ${r.coverage}`);
+    assert.ok(r.contrast < ROWS.contrast, `${name} landing contrast ${r.contrast}`);
+    assert.ok(r.body_over_miss < ROWS.body_over_miss, `${name} body over miss ${r.body_over_miss}`);
+  }
+});
+
+for (const [name, wave] of ALL_REAL) {
+  test(`the crowd rows hold on the real wave, ${name}`, () => {
+    const sha = crypto.createHash('sha256').update(fs.readFileSync(BANK)).digest('hex');
+    assert.equal(wave.bank_sha, sha, 'the bank has moved on: record it again, tools/audio/live_report.mjs');
+    assert.notEqual(wave.driver, 'Dummy');
+    assert.ok(wave.arrows.coverage >= ROWS.coverage, `coverage ${wave.arrows.coverage}`);
+    assert.ok(wave.landing_contrast.ratio >= ROWS.contrast, `landing contrast ${wave.landing_contrast.ratio}`);
+    const one = wave.one_arrow.all_400_6000;
+    assert.ok(one.body.median - one.miss.median >= ROWS.body_over_miss, `body ${one.body.median}, miss ${one.miss.median}`);
+    assert.ok(wave.ear_band_share <= -12, `2-8 kHz ${wave.ear_band_share} dB`);
+    assert.ok(wave.prompt_margin_worst >= 6, `warning ${wave.prompt_margin_worst} LU`);
+    assert.ok(wave.lufs <= -16, `${wave.lufs} LUFS`);
+    assert.equal(one.body.accented, one.body.n, 'every body is an accent');
+    for (const a of wave.events?.reach_alarm ?? []) assert.ok(a.best_octave >= 3, `an alarm at ${a.t} s rises ${a.best_octave} dB in its best octave`);
+  });
+}
 
 for (const [name, wave] of REAL) {
   test(`the real wave, rider ${name}: holds what the preview can only estimate`, () => {
@@ -294,7 +374,32 @@ for (const [name, wave] of REAL) {
       assert.ok(own.n >= 50, 'flights from the log');
       assert.ok(own.median >= 3, `your arrow's peak +${own.median} dB over everything, 1-2.4 kHz`);
     }
-    assert.ok(wave.impacts_per_s + wave.kills_per_s <= 2.5, `${wave.impacts_per_s} impacts and ${wave.kills_per_s} kills a second`);
+    // The owner's request withdrew the limit of 2.5 impacts a second: every arrow that lands now has its sound.
+    assert.notEqual(wave.driver, 'Dummy', 'the Dummy driver mixes in 93 ms chunks: a crowd of short sounds piles up in it');
+    const n = wave.arrows;
+    assert.ok(n.landed >= 1000, `${n.landed} arrows landed`);
+    assert.equal(n.sounds_asked, n.landed, 'every arrow that landed asked for one sound');
+    assert.ok(n.landed - n.sounds_started <= 2, `${n.landed} landed, players took ${n.sounds_started}, the last frame's aside`);
+    assert.equal(n.body_sounds - (n.by_sound.arrow_shield ?? 0), n.struck_by_ear, 'one body sound per arrow that struck');
+    assert.ok(Math.abs(n.struck_by_ear - n.station_hits) <= Math.max(5, n.station_hits * 0.25), `${n.struck_by_ear} by ear, ${n.station_hits} by the host`);
+    assert.equal(n.crowd_voiceless, 0, 'no arrow dropped');
+    assert.deepEqual(Object.keys(n.stolen).filter((k) => k.startsWith('Crowd')), [], 'no arrow cut short by another');
+    const one = wave.one_arrow;
+    const own = name === 'organ';
+    for (const sound of ['arrow_flesh', 'arrow_wood']) {
+      const best = Math.max(one.all_400_6000.body.sounds[sound].median, one.low_400_1000.body.sounds[sound].median);
+      // Your own arrows at P4's own +3 dB over everything else, the crowd of other arrows too; another rider's 5 dB under.
+      assert.ok(best >= (own ? 3 : -2), `${sound} over the mix ${best} dB`);
+    }
+    // No model: what the master itself does in the 50 ms a body lands, against what any moment does.
+    const rise = one.all_400_6000.body.rise - one.all_400_6000.arbitrary_rise;
+    assert.ok(rise >= (own ? 6 : 4), `a body lifts the master ${rise} dB over an arbitrary moment`);
+    const bodyOverMiss = one.all_400_6000.body.median - one.all_400_6000.miss.median;
+    assert.ok(bodyOverMiss >= 6, `a body stands ${bodyOverMiss} dB over a miss in the same mix`);
+    const f = wave.fatigue;
+    assert.ok(f.lufs_30s_spread <= 2.5, `30 s levels ${f.lufs_30s.join(' ')}`);
+    assert.equal(f.same_file_twice_running, 0, 'no file twice running on a surface');
+    assert.ok(f.envelope_repeat.correlation < 0.6, `the arrows' band repeats at ${f.envelope_repeat.lag_s} s: ${f.envelope_repeat.correlation}`);
   });
 }
 

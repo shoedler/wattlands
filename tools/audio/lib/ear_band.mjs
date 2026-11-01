@@ -41,7 +41,7 @@ const db = (v) => 10 * Math.log10(v + 1e-30);
  * stops a loud low end from flattering the number. `worst`: the loudest 186 ms frame's band against the signal's mean
  * total, so a sharp zap can't hide in an average. `level`: the band in dB under full scale.
  */
-export function earBand(x, [lo, hi] = EAR_BAND) {
+export function earBand(x, [lo, hi] = EAR_BAND, rate = MIX_RATE) {
   const all = frames(x);
   let total = 0;
   let band = 0;
@@ -51,7 +51,7 @@ export function earBand(x, [lo, hi] = EAR_BAND) {
   for (const p of all) {
     let frameBand = 0;
     for (let k = 1; k < p.length; k++) {
-      const f = (k * MIX_RATE) / WIN;
+      const f = (k * rate) / WIN;
       const w = aWeight(f);
       total += p[k];
       aTotal += p[k] * w;

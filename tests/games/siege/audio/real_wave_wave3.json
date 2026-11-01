@@ -1,0 +1,276 @@
+{
+  "mix_apart_first_60ms": {
+    "flesh_dirt": 4.31,
+    "wood_dirt": 4.95,
+    "flesh_wood": 5.01,
+    "shield_dirt": 4.78
+  },
+  "impacts_per_s": 13.66,
+  "kills_per_s": 0.29,
+  "head_episodes_per_min": 24,
+  "a14_ballista": {
+    "n": 29,
+    "median": 0.84
+  },
+  "arrows": {
+    "landed": 2256,
+    "struck_by_ear": 258,
+    "station_hits": 219,
+    "sounds_asked": 2256,
+    "sounds_started": 2256,
+    "body_sounds": 260,
+    "miss_sounds": 1996,
+    "by_sound": {
+      "arrow_dirt": 1996,
+      "arrow_flesh": 45,
+      "arrow_wood": 213,
+      "arrow_shield": 2
+    },
+    "crowd_voiceless": 0,
+    "stolen": {
+      "Sfx:6": 2,
+      "Sfx:7": 8
+    },
+    "crowd_voices": {
+      "cap": 16,
+      "frames_full": 0,
+      "max": 9,
+      "mean": 1.16
+    },
+    "coverage": 1
+  },
+  "fatigue": {
+    "lufs_30s": [
+      -16.6,
+      -17.53,
+      -16.86,
+      -16.05,
+      -16.64,
+      -16.03
+    ],
+    "lufs_30s_spread": 1.5,
+    "lufs_3s_p10_p90": [
+      -18.21,
+      -15.35
+    ],
+    "arrows_per_s_30s": [
+      12.4,
+      7.6,
+      12.2,
+      14.37,
+      13.93,
+      14.7
+    ],
+    "gap_ms_p10_p50_p90": [
+      0,
+      22,
+      128
+    ],
+    "envelope_repeat": {
+      "lag_s": 0.8,
+      "correlation": 0.2
+    },
+    "same_file_twice_running": 0
+  },
+  "landing_contrast": {
+    "ratio": 3.1,
+    "inside_per_s": 2.25,
+    "outside_per_s": 0.73,
+    "duty": 0.51,
+    "volleys": 193
+  },
+  "flights_1k_2k4": {
+    "over": {
+      "own_arrow_swarm": {
+        "n": 197,
+        "median": 1.85,
+        "p90": 8.61
+      },
+      "own_arrow_swarm_full_level": {
+        "n": 98,
+        "median": 4.18,
+        "p90": 14.64
+      },
+      "other_bolt_hiss": {
+        "n": 245,
+        "median": -1.61,
+        "p90": 3.89
+      },
+      "other_stone_tumble": {
+        "n": 25,
+        "median": -3.26,
+        "p90": -0.33
+      }
+    },
+    "ripple_p90_p10": 7.5
+  },
+  "sfx_over_machines_1k_2k": 20.47,
+  "one_arrow": {
+    "all_400_6000": {
+      "body": {
+        "n": 260,
+        "median": 5.8,
+        "p10": -2.35,
+        "rise": 5.74,
+        "rise_accented": 5.74,
+        "rise_plain": 0,
+        "accented": 260,
+        "sounds": {
+          "arrow_flesh": {
+            "n": 45,
+            "median": 8.74,
+            "p10": -3.02
+          },
+          "arrow_wood": {
+            "n": 213,
+            "median": 5.62,
+            "p10": -2.17
+          },
+          "arrow_shield": {
+            "n": 2,
+            "median": -1.7,
+            "p10": -1.7
+          }
+        }
+      },
+      "miss": {
+        "n": 1996,
+        "median": -4.19,
+        "p10": -11.98,
+        "rise": 1.74,
+        "rise_accented": 2.07,
+        "rise_plain": 1.68,
+        "accented": 354,
+        "sounds": {
+          "arrow_dirt": {
+            "n": 1996,
+            "median": -4.19,
+            "p10": -11.98
+          }
+        }
+      },
+      "arbitrary_rise": -0.86
+    },
+    "low_400_1000": {
+      "body": {
+        "n": 260,
+        "median": 0.45,
+        "p10": -5.55,
+        "rise": 4.23,
+        "rise_accented": 4.23,
+        "rise_plain": 0,
+        "accented": 260,
+        "sounds": {
+          "arrow_flesh": {
+            "n": 45,
+            "median": 9.89,
+            "p10": -1.73
+          },
+          "arrow_wood": {
+            "n": 213,
+            "median": -0.16,
+            "p10": -5.65
+          },
+          "arrow_shield": {
+            "n": 2,
+            "median": -16.42,
+            "p10": -16.42
+          }
+        }
+      },
+      "miss": {
+        "n": 1996,
+        "median": -2.93,
+        "p10": -8.99,
+        "rise": 2.22,
+        "rise_accented": 2.78,
+        "rise_plain": 2.12,
+        "accented": 354,
+        "sounds": {
+          "arrow_dirt": {
+            "n": 1996,
+            "median": -2.93,
+            "p10": -8.99
+          }
+        }
+      },
+      "arbitrary_rise": -0.86
+    },
+    "high_2400_6000": {
+      "body": {
+        "n": 260,
+        "median": 0.03,
+        "p10": -6.63,
+        "rise": 3.8,
+        "rise_accented": 3.8,
+        "rise_plain": 0,
+        "accented": 260,
+        "sounds": {
+          "arrow_flesh": {
+            "n": 45,
+            "median": -4.73,
+            "p10": -10.63
+          },
+          "arrow_wood": {
+            "n": 213,
+            "median": 0.3,
+            "p10": -5.07
+          },
+          "arrow_shield": {
+            "n": 2,
+            "median": 8.43,
+            "p10": 8.43
+          }
+        }
+      },
+      "miss": {
+        "n": 1996,
+        "median": -2.76,
+        "p10": -8.18,
+        "rise": 2,
+        "rise_accented": 2.87,
+        "rise_plain": 1.85,
+        "accented": 354,
+        "sounds": {
+          "arrow_dirt": {
+            "n": 1996,
+            "median": -2.76,
+            "p10": -8.18
+          }
+        }
+      },
+      "arbitrary_rise": -0.75
+    }
+  },
+  "events": {
+    "reach_alarm": [
+      {
+        "t": 64.61,
+        "db": -7,
+        "rise": 2.86,
+        "best_octave": 7.64,
+        "arrows_around": 4
+      }
+    ]
+  },
+  "seconds": 180.01,
+  "lufs": -16.58,
+  "lra": 3.12,
+  "ear_band_share": -12.46,
+  "ear_band_worst": 1.13,
+  "ear_band_a_share": -8.12,
+  "top_band_share": -35.43,
+  "sfx_lufs": -18.49,
+  "sfx_movement_1k_4k": {
+    "p10": -34.9,
+    "p50": -30.29,
+    "p90": -24.95,
+    "spread": 9.95
+  },
+  "prompt_margin_worst": 9.31,
+  "bank_sha": "df334ae495d7bd730402b838830ac78f7ef30cbbeefdbf6bed6e18b737f433a9",
+  "driver": "WASAPI",
+  "shots": 457,
+  "flight_starts": 457,
+  "voiceless": 2
+}

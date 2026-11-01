@@ -1,61 +1,289 @@
 {
   "mix_apart_first_60ms": {
-    "flesh_dirt": 5.61,
-    "wood_dirt": 4.96,
-    "flesh_wood": 1.74,
-    "shield_dirt": 5.44
+    "flesh_dirt": 4.37,
+    "wood_dirt": 5.16,
+    "flesh_wood": 4.94,
+    "shield_dirt": 5.09
   },
-  "impacts_per_s": 2.17,
+  "impacts_per_s": 12.84,
   "kills_per_s": 0.3,
-  "patters_with_a_body_in_300ms": 0.44,
-  "head_episodes_per_min": 38.41,
+  "head_episodes_per_min": 27,
   "a14_ballista": {
     "n": 10,
-    "median": 1.63
+    "median": 0.66
+  },
+  "arrows": {
+    "landed": 2110,
+    "struck_by_ear": 246,
+    "station_hits": 228,
+    "sounds_asked": 2110,
+    "sounds_started": 2110,
+    "body_sounds": 246,
+    "miss_sounds": 1864,
+    "by_sound": {
+      "arrow_flesh": 100,
+      "arrow_dirt": 1862,
+      "arrow_wood": 146,
+      "arrow_water": 2
+    },
+    "crowd_voiceless": 0,
+    "stolen": {
+      "Sfx:7": 2
+    },
+    "crowd_voices": {
+      "cap": 16,
+      "frames_full": 0,
+      "max": 10,
+      "mean": 1.08
+    },
+    "coverage": 1
+  },
+  "fatigue": {
+    "lufs_30s": [
+      -16.09,
+      -17.29,
+      -16.43,
+      -16.54,
+      -16.63,
+      -15.89
+    ],
+    "lufs_30s_spread": 1.4,
+    "lufs_3s_p10_p90": [
+      -17.99,
+      -15.3
+    ],
+    "arrows_per_s_30s": [
+      8,
+      7.6,
+      12.8,
+      13.6,
+      13.73,
+      14.6
+    ],
+    "gap_ms_p10_p50_p90": [
+      0,
+      22,
+      149
+    ],
+    "envelope_repeat": {
+      "lag_s": 1.55,
+      "correlation": 0.19
+    },
+    "same_file_twice_running": 0
+  },
+  "landing_contrast": {
+    "ratio": 3.01,
+    "inside_per_s": 2.25,
+    "outside_per_s": 0.75,
+    "duty": 0.48,
+    "volleys": 181
   },
   "flights_1k_2k4": {
     "over": {
       "own_arrow_swarm": {
         "n": 185,
-        "median": 1.25,
-        "p90": 9.64
+        "median": 0.87,
+        "p90": 8.52
       },
       "own_arrow_swarm_full_level": {
-        "n": 93,
-        "median": 4.64,
-        "p90": 15.55
+        "n": 92,
+        "median": 4.31,
+        "p90": 10.68
       },
       "other_stone_tumble": {
-        "n": 39,
-        "median": -2.62,
-        "p90": 0.72
+        "n": 40,
+        "median": -2.69,
+        "p90": 1.35
       },
       "other_bolt_hiss": {
-        "n": 195,
-        "median": -1.99,
-        "p90": 2.43
+        "n": 196,
+        "median": -2.99,
+        "p90": 0.93
       }
     },
-    "ripple_p90_p10": 8.23
+    "ripple_p90_p10": 8.17
   },
-  "sfx_over_machines_1k_2k": 16.34,
-  "seconds": 179.63,
-  "lufs": -17.72,
-  "lra": 1.67,
-  "ear_band_share": -12.22,
-  "ear_band_worst": 0.08,
-  "ear_band_a_share": -6.42,
-  "top_band_share": -36.35,
-  "sfx_lufs": -20.76,
+  "sfx_over_machines_1k_2k": 19.87,
+  "one_arrow": {
+    "all_400_6000": {
+      "body": {
+        "n": 246,
+        "median": 7.19,
+        "p10": -2.45,
+        "rise": 7.07,
+        "rise_accented": 7.07,
+        "rise_plain": 0,
+        "accented": 246,
+        "sounds": {
+          "arrow_flesh": {
+            "n": 100,
+            "median": 8.32,
+            "p10": -2.5
+          },
+          "arrow_wood": {
+            "n": 146,
+            "median": 6.44,
+            "p10": -2.45
+          }
+        }
+      },
+      "miss": {
+        "n": 1864,
+        "median": -5.18,
+        "p10": -12.42,
+        "rise": 1.8,
+        "rise_accented": 2.52,
+        "rise_plain": 1.67,
+        "accented": 300,
+        "sounds": {
+          "arrow_dirt": {
+            "n": 1862,
+            "median": -5.19,
+            "p10": -12.42
+          },
+          "arrow_water": {
+            "n": 2,
+            "median": -4.4,
+            "p10": -4.4
+          }
+        }
+      },
+      "arbitrary_rise": -0.96
+    },
+    "low_400_1000": {
+      "body": {
+        "n": 246,
+        "median": 2.97,
+        "p10": -5.07,
+        "rise": 5.23,
+        "rise_accented": 5.23,
+        "rise_plain": 0,
+        "accented": 246,
+        "sounds": {
+          "arrow_flesh": {
+            "n": 100,
+            "median": 8.7,
+            "p10": -2.69
+          },
+          "arrow_wood": {
+            "n": 146,
+            "median": 0.87,
+            "p10": -6.04
+          }
+        }
+      },
+      "miss": {
+        "n": 1864,
+        "median": -4.15,
+        "p10": -10.44,
+        "rise": 2.18,
+        "rise_accented": 2.91,
+        "rise_plain": 1.99,
+        "accented": 300,
+        "sounds": {
+          "arrow_dirt": {
+            "n": 1862,
+            "median": -4.15,
+            "p10": -10.44
+          },
+          "arrow_water": {
+            "n": 2,
+            "median": -3.01,
+            "p10": -3.01
+          }
+        }
+      },
+      "arbitrary_rise": -1.06
+    },
+    "high_2400_6000": {
+      "body": {
+        "n": 246,
+        "median": -0.34,
+        "p10": -8.25,
+        "rise": 3.89,
+        "rise_accented": 3.89,
+        "rise_plain": 0,
+        "accented": 246,
+        "sounds": {
+          "arrow_flesh": {
+            "n": 100,
+            "median": -1.9,
+            "p10": -10.93
+          },
+          "arrow_wood": {
+            "n": 146,
+            "median": 0.46,
+            "p10": -5.02
+          }
+        }
+      },
+      "miss": {
+        "n": 1864,
+        "median": -3.04,
+        "p10": -8.49,
+        "rise": 2.23,
+        "rise_accented": 3.43,
+        "rise_plain": 2.03,
+        "accented": 300,
+        "sounds": {
+          "arrow_dirt": {
+            "n": 1862,
+            "median": -3.01,
+            "p10": -8.48
+          },
+          "arrow_water": {
+            "n": 2,
+            "median": -34.86,
+            "p10": -34.86
+          }
+        }
+      },
+      "arbitrary_rise": -0.57
+    }
+  },
+  "events": {
+    "reach_alarm": [
+      {
+        "t": 103.3,
+        "db": -7,
+        "rise": -0.57,
+        "best_octave": 5.23,
+        "arrows_around": 10
+      },
+      {
+        "t": 107.9,
+        "db": -7,
+        "rise": -0.89,
+        "best_octave": 4.24,
+        "arrows_around": 3
+      },
+      {
+        "t": 142.91,
+        "db": -7,
+        "rise": 1.74,
+        "best_octave": 6.03,
+        "arrows_around": 9
+      }
+    ]
+  },
+  "seconds": 180.03,
+  "lufs": -16.45,
+  "lra": 2.8,
+  "ear_band_share": -13.04,
+  "ear_band_worst": -1.29,
+  "ear_band_a_share": -8.51,
+  "top_band_share": -35.95,
+  "sfx_lufs": -18.42,
   "sfx_movement_1k_4k": {
-    "p10": -36.61,
-    "p50": -31.2,
-    "p90": -26.02,
-    "spread": 10.59
+    "p10": -35.6,
+    "p50": -30.44,
+    "p90": -25.12,
+    "spread": 10.47
   },
-  "prompt_margin_worst": 10.43,
-  "bank_sha": "8249ec1495a34b6e68ef0127d9f81be92db45fd1d07d37ba35038f9916e84fc0",
+  "prompt_margin_worst": 9.12,
+  "bank_sha": "df334ae495d7bd730402b838830ac78f7ef30cbbeefdbf6bed6e18b737f433a9",
+  "driver": "WASAPI",
   "shots": 416,
   "flight_starts": 416,
-  "voiceless": 2
+  "voiceless": 0
 }

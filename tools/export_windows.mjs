@@ -19,7 +19,8 @@
 // override.cfg, so --relay-url with exactly that value writes none and says so. --smoke starts
 // the exported app headless with a mock trainer for a few seconds (it hosts and joins nothing, so
 // it connects to no relay) and fails on a non-zero exit, a script error, or a default relay URL
-// other than the one this export set (none for the built-in default). Godot runs go through
+// other than the one this export set (none for the built-in default), and it says how many of each
+// game's bank sounds the PCK holds, failing if one is lost. Godot runs go through
 // tools/godot.sh's lock helper. Zero dependencies.
 
 import fs from 'node:fs';
@@ -58,7 +59,8 @@ export const USAGE = `usage: node tools/export_windows.mjs [options]
                          written then), the build keeps ${BUILT_IN_RELAY_URL}.
   --smoke                run the exported app headless with a mock trainer for 8 s (it hosts and
                          joins nothing, so it connects to no relay) and check the exit code, script
-                         errors and the default relay URL the build reports
+                         errors, the default relay URL the build reports and how many of each game's
+                         bank sounds the PCK holds
   -h, --help             show this help`;
 
 // {ok, url} for a usable --relay-url value, else {ok: false, error}.
@@ -188,6 +190,58 @@ function godotBin() {
   return 'godot';
 }
 
+// The paths inside an unencrypted Godot 4 PCK file: {version, files}, or null if it isn't one this can read.
+export function readPckFiles(buf) {
+  if (buf.length < 112 || buf.toString('latin1', 0, 4) !== 'GDPC') return null;
+  const version = buf.readUInt32LE(4);
+  const flags = buf.readUInt32LE(20);
+  if (flags & 1) return null; // an encrypted directory
+  // Version 2 has its directory after the header's reserved words; later ones say where it is.
+  let at = version >= 3 ? Number(buf.readBigUInt64LE(32)) : 32 + 16 * 4;
+  const count = buf.readUInt32LE(at);
+  at += 4;
+  const files = [];
+  for (let i = 0; i < count; i++) {
+    const len = buf.readUInt32LE(at);
+    at += 4;
+    files.push(buf.toString('utf8', at, at + len).replace(/\0+$/, ''));
+    at += len + 8 + 8 + 16 + 4; // offset, size, md5, flags
+  }
+  return { version, files };
+}
+
+// Per game, how many of the sounds of its audio_manifest.json a PCK holds: the file list a game could silently lose one
+// from. A sound resolves when the export kept its import (<stem>.wav.import or .remap) and its imported data.
+export function bankSoundsInPck(files, manifests) {
+  const set = new Set(files);
+  const imported = files.filter((f) => f.startsWith('.godot/imported/')).map((f) => f.slice('.godot/imported/'.length));
+  const out = [];
+  for (const [game, stems] of Object.entries(manifests)) {
+    const missing = [];
+    for (const stem of stems) {
+      const base = `assets/${game}/audio/${stem}.wav`;
+      const hasImport = set.has(`${base}.import`) || set.has(`${base}.remap`);
+      const hasData = imported.some((f) => f.startsWith(`${stem}.wav-`));
+      if (!hasImport || !hasData) missing.push(stem);
+    }
+    out.push({ game, total: stems.length, resolved: stems.length - missing.length, missing, bank: set.has(`assets/${game}/audio/audio.json`) });
+  }
+  return out;
+}
+
+// { game id: [file stems] } from every assets/<id>/audio/audio_manifest.json under `root`.
+export function bankManifests(root) {
+  const out = {};
+  const assets = path.join(root, 'assets');
+  for (const id of fs.readdirSync(assets)) {
+    const file = path.join(assets, id, 'audio', 'audio_manifest.json');
+    if (!fs.existsSync(file)) continue;
+    const doc = JSON.parse(fs.readFileSync(file, 'utf8'));
+    out[id] = Object.keys(doc).filter((k) => doc[k] && typeof doc[k] === 'object' && doc[k].sound !== undefined);
+  }
+  return out;
+}
+
 function lockRun(args, opts = {}) {
   const r = spawnSync(process.execPath, [path.join(TOOLS, 'lib', 'godot_lock.mjs'), 'run', '--timeout=900', '--', ...args], {
     cwd: REPO, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...(opts.env || {}) }, maxBuffer: 64 * 1024 * 1024,
@@ -281,6 +335,12 @@ function main(argv) {
     const relay = checkSmokeRelay(r.out, opts.relayUrl);
     if (!relay.ok) die(`smoke run failed: ${relay.error}\n${r.out.slice(-3000)}`);
     process.stdout.write(`export_windows: smoke ${relay.line}\n`);
+    const pck = readPckFiles(fs.readFileSync(path.join(out, 'Wattlands.pck')));
+    if (pck === null) die('smoke run failed: cannot read Wattlands.pck');
+    const banks = bankSoundsInPck(pck.files, bankManifests(REPO));
+    process.stdout.write(`export_windows: smoke bank sounds in the PCK: ${banks.map((b) => `${b.game} ${b.resolved}/${b.total}${b.bank ? '' : ' (no audio.json)'}`).join(', ')}\n`);
+    const lost = banks.filter((b) => b.missing.length > 0 || !b.bank);
+    if (lost.length > 0) die(`smoke run failed: sounds lost from the export: ${lost.map((b) => `${b.game}: ${b.missing.slice(0, 5).join(', ')}`).join('; ')}`);
   }
   process.stdout.write('export_windows: done\n');
 }

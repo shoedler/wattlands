@@ -159,7 +159,8 @@ export function simulate(bank, scenario) {
       const rr = cueRr.get(h.sound) ?? 0;
       cueRr.set(h.sound, rr + 1);
       const pan = h.pan_var ? Number(vars[h.pan_var] ?? 0) : 0;
-      const v = { sound: h.sound, variant: rr % Math.max(1, bank.variants(h.sound)), t: t + delay, db, pitch, bus: h.bus ?? 'Sfx', priority: h.priority ?? 6, lead, cue: c.cue, pan };
+      const chosen = h.variant_var && vars[h.variant_var] !== undefined ? Number(vars[h.variant_var]) : rr;
+      const v = { sound: h.sound, variant: chosen % Math.max(1, bank.variants(h.sound)), t: t + delay, db, pitch, bus: h.bus ?? 'Sfx', priority: h.priority ?? 6, lead, cue: c.cue, pan, crowd: h.crowd === true && (mix.crowd_voices ?? 0) > 0 };
       if (h.flight) {
         const panTo = h.flight.pan_to_var ? Number(vars[h.flight.pan_to_var] ?? pan) : pan;
         const dur = Math.max(0.05, h.flight.dur_var ? Number(vars[h.flight.dur_var] ?? h.flight.dur_s ?? 1) : (h.flight.dur_s ?? 1));
@@ -250,23 +251,24 @@ function voiceLength(bank, shared, v) {
   return (f.frames - f.preroll) / (f.rate * v.pitch);
 }
 
-/** The kit's voice pools: Machines 16, Sfx 16, Ambience spots 6; the oldest voice of lowest priority is stolen. */
+/** The kit's voice pools: Machines 16, Sfx 16, Ambience spots 6, a crowd hit's own; the oldest voice of lowest priority is stolen. */
 function applyVoicePools(bank, voices, mix, shared) {
-  const caps = { Machines: mix.machine_voices ?? 16, Sfx: mix.sfx_voices ?? 16, Ambience: mix.spot_voices ?? 6 };
-  const active = { Machines: [], Sfx: [], Ambience: [] };
-  const peak = { Machines: 0, Sfx: 0, Ambience: 0 };
+  const caps = { Machines: mix.machine_voices ?? 16, Sfx: mix.sfx_voices ?? 16, Ambience: mix.spot_voices ?? 6, Crowd: mix.crowd_voices ?? 0 };
+  const active = { Machines: [], Sfx: [], Ambience: [], Crowd: [] };
+  const peak = { Machines: 0, Sfx: 0, Ambience: 0, Crowd: 0 };
   const sorted = [...voices].sort((a, b) => a.t - b.t);
   const kept = [];
   for (const v of sorted) {
     v.end = v.t + voiceLength(bank, shared, v);
-    const pool = active[v.bus];
+    const key = v.crowd ? 'Crowd' : v.bus;
+    const pool = active[key];
     if (!pool) {
       kept.push(v);
       continue;
     }
-    active[v.bus] = pool.filter((a) => a.end > v.t);
-    const now = active[v.bus];
-    if (now.length >= caps[v.bus]) {
+    active[key] = pool.filter((a) => a.end > v.t);
+    const now = active[key];
+    if (now.length >= caps[key]) {
       if (v.spot) continue;
       let victim = null;
       for (const a of now) {
@@ -279,7 +281,7 @@ function applyVoicePools(bank, voices, mix, shared) {
       now.splice(now.indexOf(victim), 1);
     }
     now.push(v);
-    peak[v.bus] = Math.max(peak[v.bus], now.length);
+    peak[key] = Math.max(peak[key], now.length);
     kept.push(v);
   }
   return { voices: kept, peak };

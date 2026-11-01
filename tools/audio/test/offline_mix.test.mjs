@@ -94,6 +94,46 @@ test('voice pools: a full pool steals the oldest of lowest priority; a lead is s
   assert.ok(sorted[0].end <= sorted[2].t + 1e-9, 'the oldest was cut');
 });
 
+test('a crowd hit has its own pool: it takes nothing from Sfx, and steals only inside itself', () => {
+  const b = bank({
+    sounds: { long: { dur: 1, seed: 3, layers: [{ src: 'noise' }] } },
+    cues: {
+      big: { hits: [{ sound: 'long', priority: 7 }] },
+      small: { hits: [{ sound: 'long', priority: 3, crowd: true }] },
+    },
+    mix: { sfx_voices: 1, crowd_voices: 2 },
+  });
+  const cues = [{ t: 0, cue: 'big' }, { t: 0.1, cue: 'small' }, { t: 0.2, cue: 'small' }, { t: 0.3, cue: 'small' }];
+  const sim = simulate(b, { segments: [{ rpm: 0, s: 2, params: {} }], machines: [], cues });
+  assert.equal(sim.voicePeak.Sfx, 1);
+  assert.equal(sim.voicePeak.Crowd, 2);
+  const big = sim.voices.find((v) => v.cue === 'big');
+  assert.ok(big.end >= 1, 'the big one plays out');
+  const small = sim.voices.filter((v) => v.cue === 'small').sort((x, y) => x.t - y.t);
+  assert.equal(small.length, 3);
+  assert.ok(small[0].end <= small[2].t + 1e-9, 'the oldest of the crowd was cut');
+});
+
+test('a hit may name its file with variant_var, as the kit does', () => {
+  const b = bank({
+    sounds: { two: { dur: 0.05, seed: 3, variants: 2, layers: [{ src: 'noise' }] } },
+    cues: { pick: { hits: [{ sound: 'two', variant_var: 'vr' }] } },
+  });
+  const sim = simulate(b, {
+    segments: [{ rpm: 0, s: 1, params: {} }],
+    machines: [],
+    cues: [{ t: 0, cue: 'pick', vars: { vr: 1 } }, { t: 0.2, cue: 'pick', vars: { vr: 1 } }, { t: 0.4, cue: 'pick' }],
+  });
+  assert.deepEqual(sim.voices.map((v) => v.variant), [1, 1, 0]);
+});
+
+test('without crowd_voices a crowd hit is any other hit of its bus', () => {
+  const b = bank({ cues: { small: { hits: [{ sound: 'tick', crowd: true }] } } });
+  const sim = simulate(b, { segments: [{ rpm: 0, s: 1, params: {} }], machines: [], cues: [{ t: 0, cue: 'small' }] });
+  assert.equal(sim.voicePeak.Sfx, 1);
+  assert.equal(sim.voicePeak.Crowd, 0);
+});
+
 test('cues: delay, vars, pitch, variant round-robin; a stem per bus', () => {
   const b = bank({
     sounds: { boom: { dur: 0.1, seed: 4, variants: 2, layers: [{ src: 'noise', env: { d: 0.05 } }] } },

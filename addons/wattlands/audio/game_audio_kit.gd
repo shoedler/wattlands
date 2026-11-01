@@ -32,6 +32,10 @@ const PAUSE_BED_DB_PER_S := 30.0
 const BED_FADE_IN_FROM_DB := -30.0
 const BED_FADE_DB_PER_S := 40.0
 const FLIGHT_MIN_S := 0.05
+## A cue hit that says "crowd": true plays on a pool of its own, mix.crowd_voices players (0, the default: on its bus's
+## pool as any other hit). For many very short sounds at once: they can neither take a player from the bus's other
+## sounds nor lose one to them. A full crowd pool steals only inside itself.
+const CROWD := "Crowd"
 ## Tests read these. Record even when silent.
 var silent: bool = true  ## headless, or --sim-speed != 1, or no bank
 var force_audio: bool = false  ## the jitter bench only; set before setup()
@@ -44,6 +48,8 @@ var played_t: Array[float] = []  ## kit time the attack is due
 var thinned: int = 0
 var voiceless: int = 0  ## strokes and events that found no voice to start on (a full pool, nothing it may steal)
 var flight_starts: int = 0  ## flight hits started (the cue hit that says "flight"), voiced or not
+var crowd_voiceless: int = 0  ## of voiceless, those of a crowd hit
+var stolen: Dictionary = {}  ## players taken from a sound still playing: "<pool>:<its priority>" -> count
 
 var _bank: AudioBank = null
 var _seed: int = 0
@@ -78,6 +84,7 @@ class Voice:
 	var lead: bool = true
 	var started: float = 0.0
 	var serial: int = 0  ## counts the voice's grants, so a flight can tell that it was stolen
+	var tag: int = 0  ## what the cue's tag_var said, for a recording to read; 0 without one
 
 
 ## One projectile in the air: a looping voice whose level, pitch and side follow the flight, and which ends with it.
@@ -189,12 +196,14 @@ func setup_bank(bank: AudioBank, p_seed: int) -> bool:
 			AudioBuses.MACHINES: [] as Array[Voice],
 			AudioBuses.SFX: [] as Array[Voice],
 			AudioBuses.AMBIENCE: [] as Array[Voice],
+			CROWD: [] as Array[Voice],
 		}
 	if not silent:
 		# A lazy load() on the first stroke would hitch the frame the sync depends on.
 		for id: String in bank.sounds:
 			for v in bank.variants(id):
 				bank.stream(id, v)
+	AudioRunLog.attach_if_asked(self)
 	return true
 
 
@@ -376,6 +385,11 @@ func entry_loop(id: String) -> LayeredLoop:
 	return slot.loops.loop if slot != null else null
 
 
+## How many files a sound has; 1 for an unknown one or with no bank.
+func variants_of(sound_id: String) -> int:
+	return _bank.variants(sound_id) if _bank != null and _bank.sounds.has(sound_id) else 1
+
+
 ## Flights in the air (tests, tools).
 func flights_live() -> int:
 	return _flights.size()
@@ -538,10 +552,12 @@ func _start_plain(
 	priority: int,
 	lead: bool,
 	pan: float = 0.0,
+	crowd: bool = false,
 ) -> void:
-	var player := _voice(bus, priority, lead)
+	var player := _voice(bus, priority, lead, crowd)
 	if player == null:
 		voiceless += 1
+		crowd_voiceless += 1 if crowd else 0
 		return
 	player.stream = stream
 	player.bus = AudioBuses.pan_bus(bus, pan)
@@ -558,7 +574,8 @@ func _fire(
 	bus: String,
 	priority: int,
 	lead: bool,
-	pan: float = 0.0
+	pan: float = 0.0,
+	crowd: bool = false
 ) -> void:
 	_record(id, db, _t)
 	if silent:
@@ -569,7 +586,7 @@ func _fire(
 	if _bank.is_locked(id):
 		_start_locked(stream, 0.0, db, pitch, bus, priority, lead)
 	else:
-		_start_plain(stream, db, pitch, bus, priority, lead, pan)
+		_start_plain(stream, db, pitch, bus, priority, lead, pan, crowd)
 
 
 func _cue_hit(hit: Dictionary, vars: Dictionary, trim: float, lead: bool) -> void:
@@ -579,8 +596,11 @@ func _cue_hit(hit: Dictionary, vars: Dictionary, trim: float, lead: bool) -> voi
 	var id := str(hit.get("sound", ""))
 	var bus := str(hit.get("bus", AudioBuses.SFX))
 	var priority := int(hit.get("priority", CUE_PRIORITY))
-	var variant := _next_variant(id)
+	# A game may pick the file itself (a shuffle, say); the kit's round robin otherwise.
+	var variant := int(_var(vars, hit.get("variant_var", ""), -1.0))
+	variant = _next_variant(id) if variant < 0 else variant
 	var pan := _var(vars, hit.get("pan_var", ""), 0.0)
+	var crowd := bool(hit.get("crowd", false))
 	var flight: Flight = null
 	if hit.has("flight"):
 		flight = _new_flight(hit["flight"], vars, pan)
@@ -595,7 +615,10 @@ func _cue_hit(hit: Dictionary, vars: Dictionary, trim: float, lead: bool) -> voi
 		if flight != null:
 			_start_flight(flight)
 		else:
-			_fire(id, variant, db, pitch, bus, priority, lead, pan)
+			_granted = null
+			_fire(id, variant, db, pitch, bus, priority, lead, pan, crowd)
+			if _granted != null:
+				_granted.tag = int(_var(vars, hit.get("tag_var", ""), 0.0))
 		return
 	var entry := {
 		"left": delay,
@@ -607,6 +630,7 @@ func _cue_hit(hit: Dictionary, vars: Dictionary, trim: float, lead: bool) -> voi
 		"priority": priority,
 		"lead": lead,
 		"pan": pan,
+		"crowd": crowd,
 	}
 	if flight != null:
 		entry["flight"] = flight
@@ -715,6 +739,7 @@ func _run_pending(dt: float) -> void:
 			p["priority"],
 			p["lead"],
 			float(p.get("pan", 0.0)),
+			bool(p.get("crowd", false)),
 		)
 	_pending = keep
 
@@ -878,11 +903,13 @@ func _pool_cap(key: String) -> int:
 			return int(_bank.mix["spot_voices"])
 		AudioBuses.SFX:
 			return int(_bank.mix["sfx_voices"])
+		CROWD:
+			return int(_bank.mix.get("crowd_voices", 0))
 	return int(_bank.mix["machine_voices"])
 
 
-func _voice(bus: String, priority: int, lead: bool) -> AudioStreamPlayer:
-	var key := _pool_key(bus)
+func _voice(bus: String, priority: int, lead: bool, crowd: bool = false) -> AudioStreamPlayer:
+	var key := CROWD if crowd and _pool_cap(CROWD) > 0 else _pool_key(bus)
 	var pool: Array[Voice] = _pools[key]
 	var chosen: Voice = null
 	for v: Voice in pool:
@@ -897,12 +924,16 @@ func _voice(bus: String, priority: int, lead: bool) -> AudioStreamPlayer:
 		pool.append(chosen)
 	if chosen == null and key != AudioBuses.AMBIENCE:  # bed spots are dropped if the spot pool is full
 		chosen = _steal_voice(pool, priority, lead)
+		if chosen != null:
+			var tally := "%s:%d" % [key, chosen.priority]
+			stolen[tally] = int(stolen.get(tally, 0)) + 1
 	if chosen == null:
 		return null
 	chosen.priority = priority
 	chosen.lead = lead
 	chosen.started = _t
 	chosen.serial += 1
+	chosen.tag = 0
 	chosen.player.stream_paused = false
 	_granted = chosen
 	return chosen.player

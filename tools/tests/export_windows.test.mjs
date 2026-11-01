@@ -9,7 +9,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { REPO, TOOLS } from './helpers.mjs';
 import {
-  BUILT_IN_RELAY_URL, RELAY_KEY, RELAY_LOG_PREFIX, RELAY_SECTION, USAGE, checkSmokeRelay, overrideCfg, parseExportArgs, parseRelayUrl, relayOverride,
+  BUILT_IN_RELAY_URL, bankSoundsInPck, readPckFiles, RELAY_KEY, RELAY_LOG_PREFIX, RELAY_SECTION, USAGE, checkSmokeRelay, overrideCfg, parseExportArgs, parseRelayUrl, relayOverride,
 } from '../export_windows.mjs';
 
 const SCRIPT = path.join(TOOLS, 'export_windows.mjs');
@@ -161,4 +161,49 @@ test('a bad --relay-url or an unknown option exits 2 with the usage and builds n
     assert.match(r.stderr, /usage: node tools\/export_windows\.mjs/);
     assert.doesNotMatch(r.stderr + r.stdout, /cannot run Godot/, 'refused before probing Godot');
   }
+});
+
+// A PCK as Godot 4.7 writes it, version 3 or later: the directory where the header says.
+function fakePck(names) {
+  const entries = names.map((n) => {
+    const raw = Buffer.from(n, 'utf8');
+    const padded = Buffer.alloc(raw.length + ((4 - (raw.length % 4)) % 4));
+    raw.copy(padded);
+    const head = Buffer.alloc(4);
+    head.writeUInt32LE(padded.length);
+    return Buffer.concat([head, padded, Buffer.alloc(8 + 8 + 16 + 4)]);
+  });
+  const header = Buffer.alloc(112);
+  header.write('GDPC', 0, 'latin1');
+  header.writeUInt32LE(4, 4);
+  header.writeUInt32LE(2, 20);
+  header.writeBigUInt64LE(112n, 32);
+  const count = Buffer.alloc(4);
+  count.writeUInt32LE(names.length);
+  return Buffer.concat([header, count, ...entries]);
+}
+
+test('a PCK reads back its file names, and something else reads as nothing', () => {
+  assert.deepEqual(readPckFiles(fakePck(['a.wav', 'res/b.import'])).files, ['a.wav', 'res/b.import']);
+  assert.equal(readPckFiles(Buffer.from('not a pck')), null);
+  const encrypted = fakePck(['a']);
+  encrypted.writeUInt32LE(1, 20);
+  assert.equal(readPckFiles(encrypted), null, 'an encrypted directory says so');
+});
+
+test('a bank sound resolves with its import and its data, and a lost one is named', () => {
+  const files = [
+    'assets/siege/audio/audio.json',
+    'assets/siege/audio/hit_1.wav.import',
+    '.godot/imported/hit_1.wav-0123.sample',
+    'assets/siege/audio/gone_1.wav.import',
+    '.godot/imported/nodata.wav-0.sample',
+    'assets/siege/audio/nodata.wav.import',
+  ];
+  const [r] = bankSoundsInPck(files, { siege: ['hit_1', 'gone_1', 'noimport'] });
+  assert.equal(r.total, 3);
+  assert.equal(r.resolved, 1);
+  assert.deepEqual(r.missing, ['gone_1', 'noimport']);
+  assert.equal(r.bank, true);
+  assert.equal(bankSoundsInPck([], { tank: ['x'] })[0].bank, false);
 });

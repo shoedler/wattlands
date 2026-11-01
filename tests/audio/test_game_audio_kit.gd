@@ -620,6 +620,89 @@ func test_a_flight_with_a_high_priority_keeps_its_voice() -> void:
 	assert_eq(kit.voiceless, 1, "and finds no voice")
 
 
+## A kit with a one-player Sfx pool, a flight on it, and a crowd cue.
+func _crowd_kit(crowd_voices: int) -> GameAudioKit:
+	var kit := _flight_kit(true)
+	kit._bank.mix["sfx_voices"] = 1
+	kit._bank.mix["crowd_voices"] = crowd_voices
+	kit._bank.cues["tick_crowd"] = {
+		"hits": [{"sound": "bang", "priority": 3, "crowd": true, "pan_var": "pan"}]
+	}
+	return kit
+
+
+func test_a_crowd_hit_takes_no_player_from_a_flight() -> void:
+	var kit := _crowd_kit(2)
+	kit.cue("fly", {"flight_s": 5.0})
+	var serial: int = kit._pools[AudioBuses.SFX][0].serial
+	kit.cue("tick_crowd", {"pan": -0.5})
+	kit.cue("tick_crowd", {"pan": 0.5})
+	kit.commit(DT)
+	assert_eq(kit.flights_live(), 1, "the flight still flies")
+	assert_eq(kit._pools[AudioBuses.SFX][0].serial, serial, "on its own player")
+	assert_eq(kit._pools[GameAudioKit.CROWD].size(), 2)
+	assert_eq(kit.voiceless, 0)
+	assert_true(kit.stolen.is_empty(), "%s" % [kit.stolen])
+	var player: AudioStreamPlayer = kit._pools[GameAudioKit.CROWD][0].player
+	assert_eq(str(player.bus), AudioBuses.pan_bus(AudioBuses.SFX, -0.5), "and it pans")
+
+
+func test_a_full_crowd_pool_steals_only_inside_itself_and_says_so() -> void:
+	var kit := _crowd_kit(2)
+	kit.cue("fly", {"flight_s": 5.0})
+	for _i in 3:
+		kit.cue("tick_crowd")
+	assert_eq(kit._pools[GameAudioKit.CROWD].size(), 2, "the pool stays at its cap")
+	assert_eq(kit.stolen, {"Crowd:3": 1}, "one of the crowd was cut short")
+	assert_eq(kit.crowd_voiceless, 0)
+	kit.commit(DT)
+	assert_eq(kit.flights_live(), 1, "and no flight was touched")
+
+
+func test_an_other_riders_crowd_hit_is_dropped_before_it_cuts_your_own() -> void:
+	var kit := _crowd_kit(1)
+	kit.cue("tick_crowd", {}, true)
+	kit.cue("tick_crowd", {}, false)
+	assert_eq(kit.crowd_voiceless, 1)
+	assert_eq(kit.voiceless, 1)
+	assert_true(kit.stolen.is_empty())
+
+
+func test_without_crowd_voices_a_crowd_hit_is_any_other_hit_of_its_bus() -> void:
+	var kit := _crowd_kit(0)
+	kit.cue("tick_crowd")
+	assert_eq(kit._pools[GameAudioKit.CROWD].size(), 0)
+	assert_eq(kit._pools[AudioBuses.SFX].size(), 1)
+
+
+func test_a_stolen_voice_is_counted_by_the_pool_and_priority_it_was_taken_from() -> void:
+	var kit := _loud_kit({"sfx_voices": 1})
+	kit.sound("bang", 0.0, 1.0, AudioBuses.SFX)
+	kit.sound("boom", 0.0, 1.0, AudioBuses.SFX)
+	assert_eq(kit.stolen, {"Sfx:%d" % GameAudioKit.CUE_PRIORITY: 1})
+
+
+func test_a_hit_may_name_its_file_and_otherwise_takes_the_round_robin() -> void:
+	var kit := _flight_kit(false)
+	kit._bank.cues["pick"] = {"hits": [{"sound": "bang", "variant_var": "vr"}]}
+	var before: int = kit._variant.get("bang", 0)
+	kit.cue("pick", {"vr": 1})
+	assert_eq(int(kit._variant.get("bang", 0)), before, "the round robin stays where it was")
+	kit.cue("pick")
+	assert_eq(int(kit._variant.get("bang", 0)), before + 1, "no var: the round robin")
+	assert_eq(kit.variants_of("bang"), kit._bank.variants("bang"))
+	assert_eq(kit.variants_of("no such sound"), 1)
+
+
+func test_a_hit_may_tag_its_voice_for_a_recording_to_read() -> void:
+	var kit := _crowd_kit(2)
+	kit._bank.cues["tagged"] = {"hits": [{"sound": "bang", "crowd": true, "tag_var": "acc"}]}
+	kit.cue("tagged", {"acc": 1.0})
+	assert_eq(kit._pools[GameAudioKit.CROWD][0].tag, 1)
+	kit.cue("tick_crowd")
+	assert_eq(kit._pools[GameAudioKit.CROWD][1].tag, 0, "no tag_var, no tag")
+
+
 func test_a_delayed_flight_starts_when_its_delay_is_over() -> void:
 	var kit := _flight_kit(false)
 	var c: Dictionary = kit._bank.cues["fly"]

@@ -9,9 +9,10 @@ extends RefCounted
 ## nothing there and sound like a miss. So bodies are kept for RECENT_S after they were last seen alive. That also
 ## covers a client, whose picture runs behind its snapshots, and it gives a kill its side of the screen.
 ##
-##   arrows      each lands alone: the nearest body within hit_r + its radius, else the ground. A volley that strikes
-##               anything is its hits, at most MAX_HITS_PER_VOLLEY of a surface; one that strikes nothing is one patter:
-##               12 arrows must not be 12 voices. A shield bearer's block comes from the same hash stream as the host's.
+##   arrows      each lands alone and is heard alone, at its own land_t and where it comes down: the nearest body
+##               within hit_r + its radius, else the ground. A shield bearer's block comes from the same hash stream as
+##               the host's. Twelve arrows land in about 340 ms, faster than anyone counts, so every arrow on a body
+##               is an accent, and at most one miss in ACCENT_GAP_S: the first to land, unless a body is due inside it.
 ##   bolts       fly frame by frame: each body the path passes. The ballista's bolt goes on through them as long as it
 ##               has damage left, a Scorpion's stops at the first; a bolt that reaches the ground ends there.
 ##   stones      land once: the ground under them, and whatever stands within the splash.
@@ -28,7 +29,6 @@ const WEAPON_ARROW := "arrow"
 const WEAPON_BOLT := "bolt"
 const WEAPON_SCORPION := "scorpion"
 const WEAPON_STONE := "stone"
-const MAX_HITS_PER_VOLLEY := 1
 ## The moat (src/games/siege/art/world.mjs): a band around the fort on three sides, the bridge across it.
 const FORT_MIN := Vector2(0.0, 2.0)
 const FORT_MAX := Vector2(84.0, 60.0)
@@ -37,6 +37,7 @@ const MOAT_OUT_M := 14.0
 const BRIDGE_X_M := 44.0
 const BRIDGE_HALF_M := 3.5
 const RECENT_S := 0.3
+const ACCENT_GAP_S := 0.15
 
 
 ## An enemy as last seen alive.
@@ -62,9 +63,10 @@ class Flying:
 	var left: int = 0
 	var swept_to: PackedFloat32Array = PackedFloat32Array()
 	var hit_ids: Dictionary = {}
-	var patter_done: bool = false
-	var hits: Dictionary = {}
 	var lead: bool = true
+	var order: PackedInt32Array = PackedInt32Array()  ## arrows: indices by landing time
+	var next_k: int = 0  ## arrows: the next of `order` to land
+	var mid: Vector3 = Vector3.ZERO  ## arrows: the middle of where the volley comes down
 	var struck_any: bool = false
 
 
@@ -76,6 +78,7 @@ var flying: Array[Flying] = []
 var landed_count: Dictionary = {}
 var struck_count: Dictionary = {}
 
+var _accent_free_s: float = -INF
 var _seen: Dictionary = {}
 var _bodies: Array[Body] = []
 
@@ -103,6 +106,9 @@ func add(ev: Dictionary, start_s: float, level: int = 0, lead: bool = true) -> D
 	f.left = r.n
 	if r.kind == SiegeIds.SHOT_ARROW:
 		f.blocks = _blocks(r, float(def.get("testudo_block", 0.7)))
+		f.order = _by_landing(r)
+		for j in r.n:
+			f.mid += r.landing(j) / float(r.n)
 	flying.append(f)
 	var sum := 0.0
 	for j in r.n:
@@ -151,7 +157,8 @@ func last_seen(enemy_id: int) -> Variant:
 	return b.pos if b != null else null
 
 
-## The impacts due by `now_s`, oldest shot first: {weapon, surface, at, count, lead}.
+## The impacts due by `now_s`, oldest shot first: {weapon, surface, at, lead}. An arrow's also says `accent`, and `mid`,
+## the middle of its volley's landing.
 func step(now_s: float, enemies: Array[SiegeEnemyState]) -> Array[Dictionary]:
 	track(now_s, enemies)
 	var out: Array[Dictionary] = []
@@ -214,47 +221,55 @@ static func _blocks(r: SiegeV2ShotReplay, chance: float) -> PackedByteArray:
 
 
 func _arrows(f: Flying, t: float, out: Array[Dictionary]) -> void:
-	for j in f.replay.n:
-		if f.landed[j] != 0 or t < f.replay.land_t[j]:
-			continue
+	while f.next_k < f.order.size() and t >= f.replay.land_t[f.order[f.next_k]]:
+		var j := f.order[f.next_k]
+		f.next_k += 1
 		f.landed[j] = 1
 		f.left -= 1
 		_count(landed_count, f.weapon)
 		var at := f.replay.landing(j)
 		var body := _nearest(at, f.hit_r)
-		if body == null:
-			# A volley is either a hit or a patter: two sounds a beat apart read as neither.
-			if not f.patter_done:
-				f.patter_done = true
-				if f.hits.is_empty() and not _a_hit_to_come(f):
-					out.append(_impact(f, ground_at(at), at, _misses_left(f)))
-			continue
-		var surface := surface_of(body.type)
-		if body.type == SiegeIds.ENEMY_SHIELD and f.blocks[j] == 0:
-			surface = SURFACE_FLESH
-		if not (body.type == SiegeIds.ENEMY_SHIELD and f.blocks[j] != 0):
-			_count(struck_count, f.weapon)
-		var n := int(f.hits.get(surface, 0))
-		if n < MAX_HITS_PER_VOLLEY:
-			f.hits[surface] = n + 1
-			out.append(_impact(f, surface, at, 1))
+		var surface := ground_at(at)
+		if body != null:
+			surface = surface_of(body.type)
+			if body.type == SiegeIds.ENEMY_SHIELD and f.blocks[j] == 0:
+				surface = SURFACE_FLESH
+			if not (body.type == SiegeIds.ENEMY_SHIELD and f.blocks[j] != 0):
+				_count(struck_count, f.weapon)
+		var impact := _impact(f, surface, at)
+		impact["accent"] = _take_accent(f, j, body != null)
+		impact["mid"] = f.mid
+		out.append(impact)
 
 
-## Any arrow still in the air that would come down on a body as things stand.
-func _a_hit_to_come(f: Flying) -> bool:
-	for j in f.replay.n:
-		if f.landed[j] == 0 and _nearest(f.replay.landing(j), f.hit_r) != null:
-			return true
-	return false
+## Whether this arrow is an accent. A body always is: half of them used to lose their accent to the gap, and those read
+## as the crowd. A miss is one only if no accent came in the gap and no body is due inside it, as things stand. All
+## volleys share that gap.
+func _take_accent(f: Flying, j: int, on_body: bool) -> bool:
+	var land_s := f.start_s + f.replay.land_t[j]
+	if on_body:
+		_accent_free_s = maxf(_accent_free_s, land_s + ACCENT_GAP_S)
+		return true
+	if land_s < _accent_free_s:
+		return false
+	var k := f.next_k
+	while k < f.order.size():
+		var other := f.order[k]
+		if f.replay.land_t[other] - f.replay.land_t[j] >= ACCENT_GAP_S:
+			break
+		if _nearest(f.replay.landing(other), f.hit_r) != null:
+			return false
+		k += 1
+	_accent_free_s = land_s + ACCENT_GAP_S
+	return true
 
 
-## This arrow and those still in the air that would come down on nothing as things stand.
-func _misses_left(f: Flying) -> int:
-	var n := 1
-	for j in f.replay.n:
-		if f.landed[j] == 0 and _nearest(f.replay.landing(j), f.hit_r) == null:
-			n += 1
-	return n
+static func _by_landing(r: SiegeV2ShotReplay) -> PackedInt32Array:
+	var list: Array[int] = []
+	for j in r.n:
+		list.append(j)
+	list.sort_custom(func(a: int, b: int) -> bool: return r.land_t[a] < r.land_t[b])
+	return PackedInt32Array(list)
 
 
 func _stone(f: Flying, t: float, out: Array[Dictionary]) -> void:
@@ -276,7 +291,7 @@ func _stone(f: Flying, t: float, out: Array[Dictionary]) -> void:
 			break
 	if struck:
 		_count(struck_count, f.weapon)
-	out.append(_impact(f, surface, at, 1))
+	out.append(_impact(f, surface, at))
 
 
 func _bolt(f: Flying, t: float, out: Array[Dictionary]) -> void:
@@ -292,7 +307,7 @@ func _bolt(f: Flying, t: float, out: Array[Dictionary]) -> void:
 			if not f.struck_any:
 				f.struck_any = true
 				_count(struck_count, f.weapon)
-			out.append(_impact(f, surface_of(body.type), b, 1))
+			out.append(_impact(f, surface_of(body.type), b))
 			if f.weapon == WEAPON_SCORPION:
 				_count(landed_count, f.weapon)
 				f.left = 0
@@ -309,7 +324,7 @@ func _bolt(f: Flying, t: float, out: Array[Dictionary]) -> void:
 		# A bolt that struck home has had its sound: only a miss is heard in the dirt.
 		if not f.struck_any:
 			var at := f.replay.landing(0)
-			out.append(_impact(f, ground_at(at), at, 1))
+			out.append(_impact(f, ground_at(at), at))
 
 
 ## The bodies segment a..b passes, by the host's test: within hit_r + radius in plan, between feet and head.
@@ -349,8 +364,8 @@ func _body_h(enemy_type: int) -> float:
 	return float(content.enemy_def(enemy_type).get("body_h_m", 1.8)) if content != null else 1.8
 
 
-func _impact(f: Flying, surface: String, at: Vector3, count: int) -> Dictionary:
-	return {"weapon": f.weapon, "surface": surface, "at": at, "count": count, "lead": f.lead}
+func _impact(f: Flying, surface: String, at: Vector3) -> Dictionary:
+	return {"weapon": f.weapon, "surface": surface, "at": at, "lead": f.lead}
 
 
 static func _count(tally: Dictionary, weapon: String) -> void:
