@@ -357,7 +357,7 @@ static func streak_of(c: Color) -> Color:
 
 
 ## The moon: a cold rim under the outline on a top edge with open sky over it, in long broken runs, its bright step only
-## on a level edge, and the next row a step up. `share` of the edge takes it.
+## on a level edge. `share` of the edge takes it.
 static func moon(cv: Dictionary, share: float = 0.66) -> void:
 	var img: Image = cv["img"]
 	var src := img.duplicate() as Image
