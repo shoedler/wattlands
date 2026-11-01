@@ -86,8 +86,8 @@ const BOW_MIN_DEG := -12.0
 const BOW_MAX_DEG := 12.0
 const BOW_SLEW := 24.0
 ## The bow guns' kick (px) and how long it lasts (s).
-const BOW_KICK := 1.5
-const BOW_KICK_S := 0.06
+const BOW_KICK := 1.0
+const BOW_KICK_S := 0.05
 const MAX_ROUNDS_PER_FRAME := 4
 ## Both searchlights fade in and out over SEARCH_FADE_S and hold SEARCH_HOLD_S after the Lights
 ## seat's rider drops out of band before they fade (a rider wobbling at the band's edge does not

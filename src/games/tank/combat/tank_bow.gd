@@ -1,21 +1,23 @@
 class_name TankBow
 extends RefCounted
 ## The bow guns (v3 brief "One tank, five seats": the Secondaries seat, a crank-driven twin belt
-## feed; owner: rules). Two short guns in the nose fire exactly TankFeedState.ROUNDS_PER_REV (2)
+## feed; owner: rules). Two short guns in the nose fire exactly TankFeedState.ROUNDS_PER_REV (6)
 ## rounds per pedal revolution of the Secondaries rider, alternating guns (round k from gun
 ## (k - 1) mod 2), at the nearest near threat (recon, tankette) whose near edge is bow.min_px ..
 ## bow.max_px off the hull front, else at a wire or wreck barricade there (bow.clear_rounds rounds
 ## that hit clear it). v4: far enemies and the Behemoth are out of their reach. With nothing in range
 ## the guns are silent. The
 ## revolutions come from the rider's cadence (TankFeedState.rev_acc integrates cadence / 60 per
-## second), so the rate is 2 x cadence rounds a minute (TankFeedState.rpm).
+## second), so the rate is 6 x cadence rounds a minute (TankFeedState.rpm): 540 at 90 rpm, a machine
+## gun that stays 1:1 with the crank.
 ##
 ## Power in band sets the guns' slew speed: they elevate toward the target at tanks.json
 ## bow.slew_deg_s [under band, in band]; a round hits (bow.damage, armour by enemies.json
 ## light_mult) when the guns point within bow.aim_tol_deg of the target, else it misses. Rounds are
-## hitscan and raise no shot or hit events (up to 6 a second would swamp the event budget): the
-## view reads TankFeedState.rounds and fire_tick; kills raise `kill` (BY_BOW, credited to the
-## rider), and the score and the rider count rounds fired (shells_by_type) and hits (bow_hits).
+## hitscan and raise no shot or hit events (12 a second at the band's 120 rpm would swamp the event
+## budget): the view reads TankFeedState.rounds and fire_tick; kills raise `kill` (BY_BOW, credited
+## to the rider), and the rider counts rounds fired (shells_by_type) and hits (bow_hits). Those two
+## are results-page counts, never score: accuracy is the main gun's alone (TankScore).
 ##
 ## An empty Secondaries seat is silent, and so are the guns on reserve, in a rescue, in a
 ## breakdown or with every rider AFK.
@@ -131,7 +133,7 @@ static func _round(
 		r.bow_hits += 1
 	if t.kind == TankTarget.KIND_OBSTACLE:
 		t.obstacle.bow_s += 1.0
-		if t.obstacle.bow_s >= c.num("tanks", "bow.clear_rounds", 12.0) - 1e-6:
+		if t.obstacle.bow_s >= c.num("tanks", "bow.clear_rounds", 36.0) - 1e-6:
 			t.obstacle.cleared = true
 		return
 	var dmg := TankDamage.against(c, TankIds.SHELL_BOW, t)

@@ -179,3 +179,67 @@ Short ADRs for Diesel Domestiques' sound on the audio kit. "SPEC" is the run's S
 - Alternatives: `arc_lamp`, a continuous 6-9 kHz hiss, -13.5 dB, the rider's own, which this branch first landed with. It read 2.06 % on this crew, and held the machine's 2-8 kHz at about -19 dB. A waiver in the bank's own `preview.waive`, which would also excuse the diesel's row.
 - Reason: the owner asked for less ear piercing, and a continuous 6-9 kHz sound existed only to meet a ratio. The scorecard's A8 reads 2.4 % with or without it, and only this crew needed it. A8 allows a waiver and is not BRIEF 4.6 or 7. The room above 4 kHz is what is left: 2.1 % of its own power, about 1 % of the mix.
 - Numbers: removing the lamp took the crew's mix to -20.05 LUFS, under the window, so the thrum, its body and the relay each rose 0.5 dB: -19.8 LUFS, -1.1 dBTP, A8 13.7 / 53.7 / 31.7 / 1 %, D5 +6.89 LU. Bank 6.92 MB, against 6.91 before this work and a 7.0 cap.
+
+## 2026-11-01 The cylinders' tops: what played there, and a big engine's strokes
+
+- What plays at the top of the stroke, against `tank_mech_diesel.gd`: the crank turns twice a revolution, so three pistons reach the top six times: firing tops at 0, 1/3, 2/3, overlap tops at 1/6, 1/2, 5/6. Every top had a stroke 18 to 55 ms ahead of it (40 crank degrees, the exhaust valve 24): `diesel_fire_c`, `_a`, `_b` with `diesel_fire_hard` and `diesel_valve_ex` on the firing tops, `diesel_valve_in` alone on the overlap tops. `exhaust_crackle` only plays on a lift-off or well over band. The Loader's dead centres (0, 0.5) are its chuffs, whose numbers don't read as ticks, so `steam` stays as it was. `TankInterior.diesel_open`, the cutaway on the tank itself, turns at 2.4 x the crank with four pistons: 9.6 tops a revolution, locked to nothing the sound plays.
+- Decision: both candidates change. The bare tick was the valves, and the snap and small fundamental were the fires. The overlay's chip pulse goes too. Fires: a fundamental with less glide, a saw, a block of low modes with a 3.5-5 ms attack, a driven noise body low-passed after the drive, and a soft breath 7-16 ms after the attack; no iron room, whose 18 and 31 ms combs are a small metal box (the numbers below do not isolate it). Valves: a noise knock around 1 kHz, low modes and a low sine, 4 takes each (3 would give each cylinder its own take for good), a pitch table, and half the swell with rpm, up 1.5 dB at 90 rpm now that they have left the band where the room is thin. Fire pitch by rpm drops to +-1.5 %. `at`, gates, power curves and every take count of the fires are unchanged.
+- Numbers, each stroke as the machine plays it, at 90 rpm unless given, before and after (`node tests/games/tank/audio/diesel_stroke.mjs`):
+
+| Stroke | First 10 ms centre, Hz | Body against click, dB | Under 300 Hz against 1.5 kHz up, dB | 2-8 kHz of its total, dB | Line, Hz | Falls 30 dB, ms |
+| --- | --- | --- | --- | --- | --- | --- |
+| `diesel_fire_a` | 2296 to 895 | -16.8 to -6.4 | 9.2 to 13.5 | -12.6 to -15.9 | 113 to 92 | 68 to 112 |
+| `diesel_fire_b` | 2588 to 1154 | -23.7 to -9.1 | 4.3 to 11.4 | -8.2 to -13.9 | 135 to 108 | 54 to 92 |
+| `diesel_fire_c` | 1970 to 633 | -11.2 to -8.5 | 17.1 to 16.7 | -22.3 to -19.5 | 97 to 86 | 70 to 124 |
+| `diesel_valve_ex` | 2923 to 955 | -39.1 to -23.7 | -8.7 to 24.1 | -15.7 to -30.3 | 964 to 113 | 20 to 36 |
+| `diesel_valve_in` | 2570 to 1015 | -45.8 to -26.4 | -8.7 to 21.6 | -14.1 to -28.6 | 1206 to 129 | 14 to 30 |
+| `diesel_fire_hard`, power 1.2 | 4322 to 1175 | -32.9 to -21.3 | -11.3 to 12.7 | -2.2 to -20.0 | 2347 to 118 | 26 to 44 |
+
+- Fire pitch from 60 to 110 rpm: 129 cents before, 32 after. Valves between strokes: 0 cents and 0 dB before, 45-47 cents and 1.2-1.5 dB after. Their swell from 60 to 110 rpm: 5 dB before, 2.5 after. The machine's 2-8 kHz at power 1, 60, 90, 110 rpm: share -10.2, -10.6, -10.8 before, -11.6, -12.9, -13.9 after; loudest moment -1.3, -2.9, -3.6 before, -6.5, -8.3, -9.5 after; level -34.4, -33.4, -33.0 dBFS before, -36.1, -35.7, -35.7 after. Crew with it leading: -11.0 of the mix before, -12.5 after. Solo at 90 rpm: -20.70 LUFS before, -21.05 after.
+- What stopped a lower engine: the far fight. Fundamentals gliding down to 62, 68 and 78 Hz took `enemy_thump` from +4.0 dB to 0 and `splash_far` and `hit_far_boom` under 0 in `cue_reads.test.mjs`: a far shot lives at 50 and 63 Hz, and a thump in a fight must always be a real shot. The fundamentals now end at 78 to 94 Hz, so the weight comes from length and from 150-260 Hz modes rather than from depth. No limit moved.
+- What kept some top end: the first version had no breath and read A8's floor above 4 kHz at 1.3 %, 2 % needed. It also left `incoming_whistle`'s first second at 7.4 dB over the room, 6 allowed (rc.2 read 2.5): the whistle was hiding behind the old snap. A soft-attack breath in each fire, which is where the exhaust's noise belongs, holds both: A8 2.1 %, whistle 5.83 dB. Both now have little room, and `feed` changes on another branch move both. An alternative, +1.5 dB on `diesel_rasp`, also worked, but it moved a sound the owner didn't ask about and was put back.
+- Alternatives: a lower valve only, which leaves the snap; dropping the valves, which `cue_reads.test.mjs` holds by name, and the owner asked for them; a level cut, which keeps the shape.
+- Nobody has listened. Whether it reads as big, whether the breath reads as exhaust or as a hiss on each stroke, and whether the knock is too present (peak -13.3 dB against the quietest fire's -12.0, it was -14 against -8) are the hardware test's step 100a.
+
+## 2026-11-01 The cutaway tops out on the strokes
+
+- Decision: `TankInterior.diesel_open` draws three bores on the machine card's `RATIO["diesel"]`, `D_THROW` and `D_CYCLE`, through helpers in `TankMechDiesel`, with its crank moved 40 degrees (`D_STROKE_LEAD`) so a firing top lands on each fire stroke and an overlap top on each inlet stroke. A spark shows for 90 crank degrees from a firing top, as the card lights its bore, and never at an overlap top. The flywheel turns on the same ratio. `TankInterior.paint` paints the Drive room at once when a bore fires, ahead of the round robin and `MAX_HZ`, inside the budget. `test_tank_cutaway_sync.gd` reads the fractions from `audio.json`.
+- Alternatives: the card's crank with no lead, which tops out 40 crank degrees after the stroke: 0.0556 of a revolution, 1.33 of the 24 paint steps, 37 ms at 90 rpm, and fails "within one step". Moving the strokes to the card's tops, which breaks the flapper they are pinned to and the phase the sound work kept. Moving the card's pistons too, which would make card and cutaway identical but repaints a picture nobody asked to change: left as a question for the lead.
+- Reason: 1:1 cadence sync is the owner's requirement, and the old cutaway ran at 2.4 x the crank with four pistons, 9.6 tops a revolution locked to nothing.
+- One crank: `paint_input` and `audio_feed` both read `machine_phase(seat)`, one `CrankClock` a seat, advanced once a frame before either, on the same rider. Sound and picture stop together on a breakdown. They differ in three places: the strokes are planned at `revs - rpm / 60 * lead_s`, the frame clock's correction, 16 ms or so at most (`docs/AUDIO_PIPELINE.md`); the audio driver's latency, not measured; and the paint.
+- The paint, measured at 60 frames a second with all seven units changing: on the old round robin a spark came up to 65 ms after its stroke, 2.3 steps at 90 rpm. With the firing top first: 5.6, 14.8 and 15.2 ms at 60, 90 and 110 rpm, against steps of 41.7, 27.8 and 22.7 ms. So a firing top lands within one step, at 60 frames a second. An overlap top has no such priority: it waits for its step and its turn. The cost is at most 3 extra paints a revolution, inside the same budget, so another room can wait a frame.
+- On a client: each machine integrates its own crank from its own frame delta, and other riders' cadence arrives in 10 Hz snapshots, interpolated. Picture and sound still read one number on that machine, so they stay together; two machines' cranks have never been in phase with each other, and FTMS gives no crank angle to put them there.
+
+## 2026-11-01 The critic's pass on the strokes: no tune, less tone, and limits held at every load
+
+- The critic read the first version: the click was gone, but the strokes had more tone, the fires played 94, 108 and 83 Hz in that order every revolution (+2.4 and -4.4 semitones, which this branch's own test required), and the exhaust knock passed a fire at low load. Its numbers are the "first version" below; mine are from the same definitions.
+- Decision: the critic's set A for the knocks and modal gains. The fires' fundamentals move to within a semitone, their takes to +-1.5 %, so the table and takes overlap: a 1.23 semitone spread, and no order of the three holds more than half the revolutions. They differ in length and colour now. The modes move off the fundamental's octaves and off each other's, ring less, and a small low noise body takes level from the sine. `incoming_whistle` comes down 1.6 dB up to 1.9 s and not from 2.0 s on. `steam_valve` gets the diesel valves' treatment, with 3 takes on 2 strokes a revolution and a table of 7. `track_squeak` -3.5 dB and `turbo_whistle` -2 dB go back to the reads the earlier ADR chose.
+- Numbers, rc.2, first version, now, at 90 rpm and power 0.9:
+
+| | rc.2 | First version | Now |
+| --- | --- | --- | --- |
+| Fires' lines (a, b, c), Hz | 110, 131, 96 | 94, 108, 85 | 94, 96, 93 |
+| Spread across every stroke, semitones | 14.8 | 7.0 | 1.2 |
+| Commonest order of the three, of 90 revolutions | 90 | 90 | 33 |
+| Line over the 50-500 Hz median, dB | 18.1-23.6 | 30.3-35.3 | 28.4-29.4 |
+| Flatness in 50-500 Hz | 0.128-0.248 | 0.014-0.024 | 0.044-0.051 |
+| Two lines' share of 60-150 ms, % | 27-58 | 81-85 | 70-86 |
+| Knock under the quietest fire, worst cell at 60-110 rpm, power 0.5-0.9, dB | +1.3 | -2.6 (the critic's) | +1.9 |
+| Whistle's first second over the room, power 1.1 and 0.9, limit 6, dB | 2.52, 4.05 | 5.83, 7.56 | 2.76, 4.86 |
+| `enemy_thump`, power 1.1, dB | +4.03 | +4.34 | +6.53 |
+| `track_squeak`, power 1.1, dB | +1.63 | +5.03 | +1.96 |
+| `turbo_whistle`, power 1.1, dB | +1.40 | +4.13 | +1.86 |
+| `steam_valve`: first 10 ms centre, Hz; line, Hz; falls 30 dB, ms | 2136, 727, 24 | unchanged | 858, 205, 34 |
+
+- What this did not reach: the strokes are still more tonal than rc.2, whose line heights were 5 to 10 dB lower and whose two-line share is about half. A fire's own weight is that low line. More low noise is the way to go further, and the critic's brown-noise tail failed D1, D2, `kill_far` and `splash_far`. `diesel_fire_b`'s two-line share rose to 86 % when its tail was lengthened to meet its 85 ms floor.
+- `diesel_fire_c`'s lowness held nothing up. Raising it took `enemy_thump` from +4.34 to +6.53 dB and `splash_far` from +0.82 to +2.55.
+- Left alone: `small_mg` reads +9.77 at power 1.1 and +9.44 at 0.9 against rc.2's +8.71 and +8.75. It is a threat, and a trim would also lower it on the five seats whose rooms did not change. `chuff_a`, `chuff_b` (first 10 ms centre 3020, 3440 Hz, 74 and 66 ms) cross the diesel's limits, but as noise bursts with a 3-4 ms attack and a body, which is what steam is; and `hoist_pawl` (2673 Hz, 14 ms) is a bare tick, at 16 dB under the chuff and only while the rack fills. It is also the `latch_hoist` cue's sound.
+- `steam_valve` plays at 0.25 and 0.75, the middle of the Loader's stroke, not its top: its dead centres are 0 and 0.5, the chuffs. Its level rises 4 dB, to -10: the duller version read -2.8 dB over the room at -14, where the old one read +6.3, and reads +1.2 at -10.
+- Nobody has listened to this pass either.
+
+## 2026-11-01 The machine card joins the lock; the chuffs and the pawl stay
+
+- Decision, the lead's ruling: the card's pistons, rockers and bore glow use `stroke_crank_deg` too, on the one `D_STROKE_LEAD`, so its firing tops land on the fire strokes. The flapper stays on `since`, where the strokes are pinned, so it now lifts on the firing top. The flywheel, its timing mark and the sprockets keep the plain crank, as the cutaway's flywheel does: nothing on them marks a top.
+- The card had its own crank. `TankHudSeats` ran one `CrankClock` per card on the HUD's delta and the HUD's cadence, so its phase had no relation to the sound's, and this branch's earlier report that the card was 1:1 with the sound was wrong: the fractions matched and the clocks did not. `phase_of` now reads `view.machine_phase` for every card, the number the rooms and the audio read, through `TankGame.view`. With no view built it keeps the card's own clock.
+- The card refreshes every 0.1 s, slower than the 9 tops a second at 90 rpm. Its diesel window now also paints in the frame a bore fires. Its overlap tops and the piston travel between firings stay at the refresh: a faster card is a frame-cost decision nobody has asked for. Other cards take the shared crank and stay at 10 Hz.
+- Left alone, the lead's ruling: `chuff_a` and `chuff_b` cross the diesel's limits (first 10 ms centred at 3020 and 3440 Hz, body -15.3 and -16.3 dB against it, 2-8 kHz -6.6 and -3.8 dB), but they are 66-74 ms noise bursts with a 3-4 ms attack and a body, not ticks, and centred under 1300 Hz they would stop reading as steam. `hoist_pawl` (2673 Hz, 14 ms) is a bare tick, but 16 dB under the chuff, only while the rack fills, and it is also the `latch_hoist` cue's sound.

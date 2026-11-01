@@ -414,6 +414,9 @@ func _drive_seat(state: TankState, seat: String, f: Dictionary, dt: float) -> vo
 		return
 	var machine: String = MACHINE_OF_SEAT[seat]
 	var params := _machine_params(state, seat, power, lift)
+	# A mate hears two of the six rounds as strokes; a quiet loop of far rounds says the rest are flying.
+	if not lead and float(params.get("firing", 0.0)) > 0.5:
+		params["mate_firing"] = 1.0
 	kit.drive(seat, machine, float(f.get("revs", 0.0)), rpm, params, lead)
 
 

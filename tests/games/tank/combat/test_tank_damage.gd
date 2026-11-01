@@ -38,7 +38,7 @@ func test_the_shell_damage_table() -> void:
 	assert_eq(TankDamage.shell_damage(c, TankIds.SHELL_LIGHT), 14.0)
 	assert_eq(TankDamage.shell_damage(c, TankIds.SHELL_HEAVY), 35.0)
 	assert_eq(TankDamage.shell_damage(c, TankIds.SHELL_OVER), 70.0)
-	assert_eq(TankDamage.shell_damage(c, TankIds.SHELL_BOW), 1.5, "v3: a bow-gun round")
+	assert_eq(TankDamage.shell_damage(c, TankIds.SHELL_BOW), 0.375, "a machine-gun round")
 	assert_eq(
 		TankDamage.shell_damage(c, TankIds.SHELL_ENEMY), 0.0, "enemy rounds have their gun's damage"
 	)

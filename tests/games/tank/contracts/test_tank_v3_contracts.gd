@@ -136,11 +136,11 @@ func test_the_feed_state_round_trips_and_names_its_last_gun() -> void:
 	var s := TankStationState.make(TankIds.ENGINE_FEED)
 	assert_is(s, TankFeedState)
 	var fd := s as TankFeedState
-	assert_eq(TankFeedState.ROUNDS_PER_REV, 2)
+	assert_eq(TankFeedState.ROUNDS_PER_REV, 6)
 	assert_eq([fd.rounds, fd.fire_tick, fd.last_gun()], [0, -1, -1])
 	assert_true(fd.is_empty(), "a fresh seat is empty")
 	fd.rounds = 7
-	fd.rpm = 176.0
+	fd.rpm = 528.0
 	fd.fire_tick = 1234
 	fd.rev_acc = 0.25
 	fd.slot = 2
@@ -213,7 +213,7 @@ func test_the_v3_fields_ride_the_snapshot_as_ints_and_round_trip() -> void:
 	sm.load_t = 0.6
 	var fd := host.station(TankIds.ENGINE_FEED) as TankFeedState
 	fd.rounds = 1201
-	fd.rpm = 183.4
+	fd.rpm = 550.2
 	fd.fire_tick = 49199
 	var snap := TankSnapshot.encode(host)
 	assert_eq(TankSnapshotSchema.check(snap), "")
@@ -233,7 +233,7 @@ func test_the_v3_fields_ride_the_snapshot_as_ints_and_round_trip() -> void:
 	)
 	assert_ne(int(st[TankSnapshotSchema.ST_FLAGS]) & TankSnapshotSchema.STF_CHAMBER, 0)
 	var fr := _row(snap, "feed")
-	assert_eq([fr[TankSnapshotSchema.ST_A], fr[TankSnapshotSchema.ST_B]], [1201, 1834])
+	assert_eq([fr[TankSnapshotSchema.ST_A], fr[TankSnapshotSchema.ST_B]], [1201, 5502])
 	assert_eq(fr[TankSnapshotSchema.ST_C], 49199)
 	assert_eq(fr[TankSnapshotSchema.ST_SLOT], -1, "crew 4: the feed seat is empty")
 	var client := _fresh(4)
@@ -248,7 +248,7 @@ func test_the_v3_fields_ride_the_snapshot_as_ints_and_round_trip() -> void:
 	assert_almost_eq(csm.load_t, 0.6, 1e-9)
 	var cfd := client.station(TankIds.ENGINE_FEED) as TankFeedState
 	assert_eq([cfd.rounds, cfd.fire_tick], [1201, 49199])
-	assert_almost_eq(cfd.rpm, 183.4, 1e-9)
+	assert_almost_eq(cfd.rpm, 550.2, 1e-9)
 	assert_true(cfd.is_empty())
 	assert_eq(cfd.peer, 0, "derive(): nobody on an empty seat")
 	assert_eq(JSON.stringify(TankSnapshot.encode(client)), JSON.stringify(snap), "round trip")
@@ -283,7 +283,7 @@ func test_crew_4_at_the_caps_with_every_v3_field_busy_fits_4_kb() -> void:
 	sm.load_t = 0.999
 	var fd := s.station(TankIds.ENGINE_FEED) as TankFeedState
 	fd.rounds = 99999
-	fd.rpm = 239.9
+	fd.rpm = 719.9
 	fd.fire_tick = 99999
 	var snap := TankSnapshot.encode(s)
 	assert_eq((snap["r"] as Array).size(), 4)

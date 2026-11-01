@@ -67,6 +67,7 @@ var _tex: Dictionary = {}
 var _rest: Dictionary = {}
 var _clocks: Dictionary = {}
 var _wall: float = 0.0
+var _diesel_lit: int = 0
 
 
 func tick(delta: float) -> void:
@@ -76,6 +77,7 @@ func tick(delta: float) -> void:
 		if not _clocks.has(key):
 			_clocks[key] = CrankClock.new()
 		(_clocks[key] as CrankClock).advance(float(c["cad"]), delta)
+	_paint_diesel_on_firing()
 
 
 func refresh() -> void:
@@ -138,8 +140,27 @@ func mode_text(mode_to: String, wait_s: float) -> String:
 	return tx("TANK_HUD_MODE_IN", [mode_to, ceili(wait_s - 1e-6)])
 
 
-## The crank revolutions of `engine`'s card so far.
+## The diesel's window between refreshes: a bore that fires is heard, so it can't wait up to 0.1 s for the next one.
+func _paint_diesel_on_firing() -> void:
+	for c: Dictionary in cards:
+		if str(c["engine"]) != TankIds.ENGINE_DIESEL or bool(c["empty"]):
+			continue
+		var revs := phase_of(TankIds.ENGINE_DIESEL)
+		var lit := TankMechDiesel.lit_bores(revs)
+		if lit & ~_diesel_lit != 0:
+			c["phase"] = revs
+			_paint_window(c)
+		_diesel_lit = lit
+
+
+## The crank revolutions of `engine`'s card so far: the view's, the number the rooms and the audio read. With no view
+## built (a HUD on its own), the card's own clock.
 func phase_of(engine: String) -> float:
+	var view: TankView = game.view if game != null else null
+	if is_instance_valid(view) and view.rig != null:
+		var seat := view.seat_of_engine(engine)
+		if seat != "":
+			return view.machine_phase(seat)
 	var clock: CrankClock = _clocks.get(engine)
 	return clock.revs if clock != null else 0.0
 
@@ -159,6 +180,7 @@ func _paint_window(c: Dictionary) -> void:
 		_img[key] = Image.create_empty(WIN.x, WIN.y, false, Image.FORMAT_RGBA8)
 	var img: Image = _img[key]
 	var power := float(c["ratio"]) if not bool(c["reserve"]) else 0.5
+	var fd := st().station(key) as TankFeedState
 	TankMech.paint_ex(
 		img,
 		str(c["mech"]),
@@ -166,7 +188,9 @@ func _paint_window(c: Dictionary) -> void:
 		power,
 		_wall,
 		slot_color(int(c["slot"])),
-		float(c["cad"])
+		float(c["cad"]),
+		fd == null or fd.rpm > 0.0,
+		fd.rounds if fd != null else -1
 	)
 	if not _tex.has(key):
 		_tex[key] = ImageTexture.create_from_image(img)
