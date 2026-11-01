@@ -204,6 +204,7 @@ func paint_input(state: TankState) -> Dictionary:
 	var feed := seat_station(state, "sec") as TankFeedState
 	if feed != null and feed.rpm <= 0.0:
 		inp["bow"] = {"revs": -1.0}
+		sec["dry"] = true
 	return inp
 
 

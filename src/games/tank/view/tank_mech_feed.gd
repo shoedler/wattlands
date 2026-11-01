@@ -9,7 +9,8 @@ extends TankMechKit
 # TankFeedState.ROUNDS_PER_REV rounds (F_STROKES per belt, the belts half a stroke apart, so the guns
 # alternate): each belt advances one cartridge pitch a stroke, each bolt strokes, a flash at the
 # receiver and a spent casing drops down the chute. A round counter steps per round, a dial reads
-# the rate. Warm brass key, olive boxes.
+# the rate. With no target the crank still turns but nothing fires: each bolt cycles dry once a
+# revolution, with no flash and no casing, and the counter stands. Warm brass key, olive boxes.
 
 const F_FW := Vector2(15, 45)
 const F_FR := 11.0
@@ -89,7 +90,17 @@ static func _feed_static(cv: Cv) -> void:
 	cv.vl(F_DIAL.x, F_DIAL.y + 6, 56, Color(0.08, 0.07, 0.06))
 
 
-static func _feed(cv: Cv, ph: float, pw: float, t: float, slot: Color, rate: float) -> void:
+static func _feed(
+	cv: Cv,
+	ph: float,
+	pw: float,
+	t: float,
+	slot: Color,
+	rate: float,
+	firing: bool = true,
+	fired: int = -1
+) -> void:
+	var strokes := F_STROKES if firing else 1.0
 	var heat := _heat(pw)
 	var over := _over(pw)
 	var th := ph * TAU
@@ -116,7 +127,7 @@ static func _feed(cv: Cv, ph: float, pw: float, t: float, slot: Color, rate: flo
 		var gy := F_GUN_Y[k2]
 		var up := float(F_BELT_Y0 - gy)
 		var run := float(F_RECV_X + 3 - bx)
-		var u := fposmod(ph * F_STROKES - 0.5 * float(k2), 1.0)
+		var u := fposmod(ph * strokes - 0.5 * float(k2), 1.0)
 		var s := u * F_PITCH
 		while s < up + run:
 			if s < up:
@@ -139,17 +150,17 @@ static func _feed(cv: Cv, ph: float, pw: float, t: float, slot: Color, rate: flo
 		cv.rect(F_RECV_X + 3 + back, gy - 1, 4, 2, BRASS[3])
 		cv.p(F_RECV_X + 3 + back, gy - 1, BRASS[4])
 		cv.rect(F_RECV_X + 5 + back, gy - 3, 1, 2, BRASS[2])
-		if pw > 0.1 and u < F_FLASH_U:
+		if firing and pw > 0.1 and u < F_FLASH_U:
 			var k3 := (1.0 - u / F_FLASH_U) * (0.4 + 0.4 * heat)
 			cv.e(W - 1, gy - 1, Color(1.0, 0.85, 0.5), k3)
 			cv.e(W - 1, gy, Color(1.0, 0.7, 0.35), k3)
 			cv.e(W - 2, gy, Color(1.0, 0.8, 0.45), 0.6 * k3)
 			cv.glow(W - 1, gy, 5.0, Color(1.0, 0.7, 0.35), 0.4 * k3)
 		# the spent casing drops down the chute
-		if pw > 0.05:
+		if firing and pw > 0.05:
 			cv.rect(101, roundi(27.0 + u * 14.0), 2, 2, BRASS[3])
 	# the counter's drums step one round at a time
-	var rounds := floori(ph * float(TankFeedState.ROUNDS_PER_REV))
+	var rounds := fired if fired >= 0 else floori(ph * float(TankFeedState.ROUNDS_PER_REV))
 	for i in 3:
 		var dg := posmod(floori(float(rounds) / pow(10.0, 2 - i)), 10)
 		var dx := 14 + i * 5
