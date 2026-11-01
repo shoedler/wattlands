@@ -6,7 +6,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { FIRES, HARD, IN_BAND, OVERLAY, shapeOf, strokeOf, strokes, VALVES } from './diesel_stroke.mjs';
+import { FIRES, HARD, IN_BAND, OVERLAY, shapeOf, STEAM_BAND, strokeOf, strokes, tonalOf, VALVES, voicesOf } from './diesel_stroke.mjs';
 import { crewMix, earBand, openBank, RPMS, solo, soloLufs, toMono, WORKING } from './ear_band.mjs';
 import { simulate } from '../../../../tools/audio/lib/offline_mix.mjs';
 
@@ -21,8 +21,8 @@ const FIRE = {
   earShare: -13.5, // -22.4 to -8.1
   ringMs: 85, // 52 to 74
 };
-/** Their lowest and highest lines: a fundamental under far thumps would mask them (cue_reads.test.mjs). */
-const LINE_HZ = { diesel_fire_a: [78, 100], diesel_fire_b: [88, 115], diesel_fire_c: [72, 90] }; // 108-118, 129-140, 92-97
+/** Each line's range: under 78 Hz far thumps go under it (cue_reads.test.mjs), and rc.2 read 97 to 140. */
+const LINE_HZ = [78, 105];
 
 for (const sound of FIRES) {
   for (const rpm of RPMS) {
@@ -32,17 +32,72 @@ for (const sound of FIRES) {
       assert.ok(m.bodyToClick >= FIRE.bodyToClick, `body ${m.bodyToClick.toFixed(1)} dB against the click, floor ${FIRE.bodyToClick}`);
       assert.ok(m.earShare <= FIRE.earShare, `2-8 kHz ${m.earShare.toFixed(1)} dB of its total, limit ${FIRE.earShare}`);
       assert.ok(m.ringMs >= FIRE.ringMs, `falls 30 dB in ${m.ringMs} ms, floor ${FIRE.ringMs}`);
-      const [lo, hi] = LINE_HZ[sound];
+      const [lo, hi] = LINE_HZ;
       assert.ok(m.lineHz >= lo && m.lineHz <= hi, `heard at ${m.lineHz.toFixed(0)} Hz, ${lo} to ${hi}`);
     });
   }
 }
 
-test('the three cylinders stay unequal: C lowest and longest, B highest and shortest', () => {
+test('the three cylinders stay unequal in length and colour, not in pitch: C longest and darkest, B shortest and brightest', () => {
   const [a, b, c] = FIRES.map((s) => strokes(bank, s, 90, IN_BAND));
-  assert.ok(c.lineHz < a.lineHz && a.lineHz < b.lineHz, `lines ${a.lineHz.toFixed(0)}, ${b.lineHz.toFixed(0)}, ${c.lineHz.toFixed(0)} Hz`);
   assert.ok(b.ringMs < a.ringMs && a.ringMs < c.ringMs, `${a.ringMs}, ${b.ringMs}, ${c.ringMs} ms`);
-  assert.ok(c.earShare < a.earShare && a.earShare < b.earShare, `${a.earShare.toFixed(1)}, ${b.earShare.toFixed(1)}, ${c.earShare.toFixed(1)} dB`);
+  assert.ok(c.clickHz < a.clickHz && a.clickHz < b.clickHz, `${a.clickHz.toFixed(0)}, ${b.clickHz.toFixed(0)}, ${c.clickHz.toFixed(0)} Hz`);
+});
+
+/** One line per stroke, in the order the cylinders fire, for `revs` revolutions. */
+function linesByCylinder(rpm, revs = 90) {
+  const voices = voicesOf(bank, rpm, IN_BAND, { revs });
+  return FIRES.map((s) => voices.filter((v) => v.sound === s).map((v) => tonalOf(strokeOf(bank, v)).line));
+}
+
+for (const rpm of RPMS) {
+  test(`at ${rpm} rpm the cylinders play no tune: within about 1.5 semitones, no cylinder owns a pitch`, () => {
+    const lines = linesByCylinder(rpm);
+    const all = lines.flat();
+    const spread = 12 * Math.log2(Math.max(...all) / Math.min(...all));
+    assert.ok(spread <= 1.6, `${spread.toFixed(2)} semitones across the three, limit 1.6 (rc.2 and the first version, 4.6 and up)`);
+    for (let i = 0; i < 3; i++) {
+      for (let j = i + 1; j < 3; j++) {
+        const low = Math.max(Math.min(...lines[i]), Math.min(...lines[j]));
+        const high = Math.min(Math.max(...lines[i]), Math.max(...lines[j]));
+        assert.ok(high > low, `${FIRES[i]} and ${FIRES[j]} share no pitch: ${low.toFixed(1)} to ${high.toFixed(1)} Hz`);
+      }
+    }
+  });
+
+  test(`at ${rpm} rpm no order of the three repeats every revolution: no fixed melody`, () => {
+    const lines = linesByCylinder(rpm);
+    const counts = {};
+    const revs = Math.min(...lines.map((l) => l.length));
+    for (let r = 0; r < revs; r++) {
+      const order = [0, 1, 2].sort((p, q) => lines[p][r] - lines[q][r]).join('');
+      counts[order] = (counts[order] ?? 0) + 1;
+    }
+    const top = Math.max(...Object.values(counts));
+    assert.ok(Object.keys(counts).length >= 5, `orders heard: ${JSON.stringify(counts)}`);
+    assert.ok(top / revs <= 0.5, `one order holds ${((100 * top) / revs).toFixed(0)} % of revolutions, limit 50 (100 in rc.2)`);
+  });
+}
+
+test('a fire rings less on lines: less modal height, and no modes in near-octaves', () => {
+  for (const sound of FIRES) {
+    const ts = voicesOf(bank, 90, IN_BAND)
+      .filter((v) => v.sound === sound)
+      .map((v) => tonalOf(strokeOf(bank, v)));
+    const heights = ts.map((t) => t.height).sort((p, q) => p - q);
+    const flats = ts.map((t) => t.flatness).sort((p, q) => p - q);
+    const height = heights[Math.floor(heights.length / 2)];
+    const flat = flats[Math.floor(flats.length / 2)];
+    assert.ok(height <= 30, `${sound}: line ${height.toFixed(1)} dB over its band, limit 30 (30.3 to 35.3 before; rc.2 18.1 to 23.6)`);
+    assert.ok(flat >= 0.04, `${sound}: flatness ${flat.toFixed(3)}, floor 0.04 (0.014 to 0.024 before; rc.2 0.128 to 0.248)`);
+    const modes = doc.sounds[sound].layers.find((l) => l.src === 'modal').f;
+    for (let i = 0; i < modes.length; i++) {
+      for (let j = i + 1; j < modes.length; j++) {
+        const ratio = modes[j] / modes[i];
+        assert.ok(ratio < 1.92 || ratio > 2.08, `${sound}: ${modes[i]} and ${modes[j]} Hz are a near-octave`);
+      }
+    }
+  }
 });
 
 for (const sound of FIRES) {
@@ -78,12 +133,33 @@ for (const sound of VALVES) {
   });
 }
 
-test('a knock stays under the cylinder it comes with', () => {
-  const quietestFire = Math.min(...FIRES.map((s) => strokes(bank, s, 90, IN_BAND).peakDb));
-  for (const sound of VALVES) {
-    const m = strokes(bank, sound, 90, IN_BAND);
-    assert.ok(m.peakDb < quietestFire, `${sound} ${m.peakDb.toFixed(1)} dB, the quietest fire ${quietestFire.toFixed(1)} dB`);
+for (const rpm of RPMS) {
+  for (const power of [0.5, 0.7, 0.9]) {
+    test(`a knock stays under the quietest fire at ${rpm} rpm, power ${power}`, () => {
+      const params = { power, ...WORKING.diesel };
+      const quietest = Math.min(...FIRES.map((s) => strokes(bank, s, rpm, params).peakDb));
+      for (const sound of VALVES) {
+        const m = strokes(bank, sound, rpm, params);
+        assert.ok(m.peakDb < quietest, `${sound} ${m.peakDb.toFixed(1)} dB, the quietest fire ${quietest.toFixed(1)} dB`);
+      }
+    });
   }
+}
+
+test("the two knocks don't share a line", () => {
+  const line = (sound) => doc.sounds[sound].layers.find((l) => l.src === 'modal').f[0];
+  assert.ok(Math.abs(line('diesel_valve_in') / line('diesel_valve_ex') - 1) > 0.1, `${line('diesel_valve_ex')} and ${line('diesel_valve_in')} Hz`);
+});
+
+test('the Loader\'s valve is a dull knock too, not a tick', () => {
+  const m = strokes(bank, 'steam_valve', 90, STEAM_BAND, 'steam');
+  assert.ok(m.clickHz <= 1200, `first 10 ms centred at ${m.clickHz.toFixed(0)} Hz, limit 1200 (2136)`);
+  assert.ok(m.bodyToClick >= -28, `body ${m.bodyToClick.toFixed(1)} dB against the click, floor -28 (-33.9)`);
+  assert.ok(m.earShare <= -25, `2-8 kHz ${m.earShare.toFixed(1)} dB of its total, limit -25 (-20)`);
+  assert.ok(m.lineHz <= 300, `heard at ${m.lineHz.toFixed(0)} Hz, limit 300 (727)`);
+  assert.ok(m.ringMs >= 28, `falls 30 dB in ${m.ringMs} ms, floor 28 (24)`);
+  assert.ok(m.centsSpan >= 30, `${m.centsSpan.toFixed(0)} cents between strokes`);
+  assert.equal(doc.sounds.steam_valve.variants % 2, 1, 'two strokes a revolution: an even count of takes gives each its own');
 });
 
 test('the overlay over 100 % FTP thickens the stroke, with no blip on top', () => {
