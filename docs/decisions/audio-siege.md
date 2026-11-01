@@ -296,15 +296,17 @@ R2 is the critic's measure, ported to `live_report.mjs`, which reads his recordi
 | 2-8 kHz of the master, limit -12 | -12.41 / -15.07 / -12.36 | -13.35 / -14.59 / -13.31 |
 | LUFS, limit -20 to -16 on the first two | -17.76 / -17.84 / -21.36 | -16.32 / -16.60 / -19.54 |
 | LRA | 1.58 / 3.34 / 2.22 | 3.35 / 4.13 / 5.06 |
-| Worst prompt margin, +6 needed | | +7.42 / +8.33 / see `real_wave_app.json` |
-| Own flight over everything, 1-2.4 kHz, +3 needed | | +4.86 (organ) |
+| Worst prompt margin, +6 needed | +9.60 / +8.15 / +11.57 | +7.42 / +8.33 / +9.05 |
+| Own flight over everything, 1-2.4 kHz, +3 needed | +4.67 (organ) | +4.86 (organ) |
+| Flesh to dirt, wood to dirt, first 60 ms in the mix | 6.2 6.2 / 3.6 3.9 / 7.6 8.1 | 4.8 5.1 / 4.3 4.2 / 4.3 4.5 |
+| Master over -1 dBFS, episodes a minute | 29.3 / 17.0 / 11.7 | 43.7 / 39.0 / 27.0 |
 
 Third wave, rider on the organ: 2257 landed, 2257 on players, none dropped, 9 voices at most, ear band -12.81, -16.45 LUFS, R2 2.88.
 
 So against rc.2: the median body is stronger at the organ and for another rider's arrows (+2.3 and +0.9 dB, over a mix that now holds every other arrow), level solo, and its p10 is lower by 3 to 5 dB, because a body with no accent, or a far one, sits lower in the crowd. An accent with a body has what rc.2's one sound had and more.
 
-The price is 1.3 to 1.8 LU: the wave reads -16.32 against the limit of -16 and is the loudest this game has been. The prompt's margin fell by 3 LU and is still +7.4.
+The price is 1.2 to 1.8 LU: the wave reads -16.32 against the limit of -16 and is the loudest this game has been. The prompt's worst margin went from +9.6 to +7.42 on the organ and from +11.57 to +9.05 solo, and rose by 0.2 with the rider elsewhere. The master goes over -1 dBFS two to three times as often, so the limiter works harder. A rc.2 target against the ground was already apart, by its dirt's sand; it now stands apart by its own body, and the figure fell by 1.1 to 3.6 dB on the organ and solo.
 
 **Fatigue, by measurement only.** 30 s level spread 1.45, 1.93, 1.60 LU (rc.2 0.93, 0.96, 1.08). 3 s loudness on the organ -18.0 to -15.0 (rc.2 -18.65 to -17.2): the wave moves more, because accents come and go. The envelope's best repeat in 30 s is 0.20 at 1.55 s on the organ, 0.26 at 0.8 s with the rider elsewhere, 0.36 at 1.85 s solo (rc.2 0.21, 0.38, 0.32). Nobody has heard this for an hour.
 
-**The exported exe.** The owner plays the exe, and nothing had recorded one. See the report of this branch and `tools/export_windows.mjs --smoke`, which now says how many of each game's bank sounds resolve in the PCK.
+**The exported exe.** The owner plays the exe, and nothing had recorded one, so this could have been the whole story. It is not. rc.2's own PCK (`C:/Projects/wattlands/build/windows`, read only) holds all of its bank: siege 98/98, and the file list of the sounds at issue includes `hit_flesh` and `arrow_dirt`, import and imported data. This branch's exe, exported with the standard editor: siege 113/113 in the PCK. An export template ignores `-s`, so `--audio-log` went in (`AudioRunLog`). A throwaway profile rode the exe through the zero-touch start on `--mock-trainer`, Master at -80 dB, WASAPI, 553.78 s, into the first wave: `exported: true`, 150 flights, 889 `arrow_dirt`, 100 `arrow_flesh` and 7 `arrow_wood` taken by players, all still playing a frame later, 0 voiceless, nothing stolen, and 86 volleys in the air or landed against 996 arrow sounds. Its Master capture reads -19.37 LUFS in the last 100 s, as the solo app does (-19.54). rc.2's own exe was not run, since it has no such log: what is shown is that its files are there and that the same export of the same engine plays this bank's. `node tools/export_windows.mjs --smoke` now reads the PCK and fails if a sound is lost: fishing 70/70, siege 113/113, tank 163/163, workout 57/57, `_shared` 15/15.
