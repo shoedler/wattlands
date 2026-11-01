@@ -204,6 +204,7 @@ func paint_input(state: TankState) -> Dictionary:
 	var feed := seat_station(state, "sec") as TankFeedState
 	if feed != null and feed.rpm <= 0.0:
 		inp["bow"] = {"revs": -1.0}
+		sec["dry"] = true
 	return inp
 
 
@@ -273,8 +274,9 @@ func fire(kind: String, gun: int = -1) -> void:
 		firing.bow_round(gun)
 		if bow_target != Vector2.ZERO:
 			var hit := bow_target + Vector2(fx.rng.randf_range(-8, 8), fx.rng.randf_range(-5, 3))
-			fx.spark_burst(hit, 3, Color(1.0, 0.8, 0.4), 46.0)
-			fx.flash(hit, 5.0, 0.08, Color(1.0, 0.82, 0.5))
+			# A round every tenth of a second: a spark and a small flash each add up to a steady spatter.
+			fx.spark_burst(hit, 1, Color(1.0, 0.8, 0.4), 46.0)
+			fx.flash(hit, 3.0, 0.06, Color(1.0, 0.82, 0.5))
 		return
 	var mz := muzzle()
 	firing.fire_main(mz, barrel_vector().angle())

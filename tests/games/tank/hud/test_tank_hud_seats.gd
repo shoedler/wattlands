@@ -393,8 +393,48 @@ func test_the_fonts_cover_the_seat_panels_text() -> void:
 	assert_true(D.ICONS.has(TankIds.ENGINE_FEED), "the Secondaries' icon")
 
 
-func test_the_belt_feed_paints_two_rounds_a_revolution() -> void:
+## The bolts' strip in the feed machine, for one gun: everything the bolt moves through.
+func _bolt_strip(phase: float, firing: bool, gy: int) -> Array:
+	var img := Image.create_empty(TankMech.W, TankMech.H, false, Image.FORMAT_RGBA8)
+	TankMech.paint_ex(img, "feed", phase, 1.0, 1.0, Color(0.9, 0.5, 0.2), 90.0, firing, 7)
+	var out: Array = []
+	for x in range(TankMechFeed.F_RECV_X + 3, TankMechFeed.F_RECV_X + 13):
+		out.append(img.get_pixel(x, gy))
+	return out
+
+
+func test_with_no_target_the_bolts_cycle_dry_as_the_sound_does() -> void:
+	var gy: int = TankMechFeed.F_GUN_Y[0]
+	var third := 1.0 / 3.0
+	assert_eq(
+		_bolt_strip(0.2, true, gy), _bolt_strip(0.2 + third, true, gy), "firing: 3 a revolution"
+	)
+	assert_ne(_bolt_strip(0.2, false, gy), _bolt_strip(0.2 + third, false, gy), "dry: not")
+	assert_eq(_bolt_strip(0.2, false, gy), _bolt_strip(1.2, false, gy), "dry: one a revolution")
+	var a := Image.create_empty(TankMech.W, TankMech.H, false, Image.FORMAT_RGBA8)
+	var b := Image.create_empty(TankMech.W, TankMech.H, false, Image.FORMAT_RGBA8)
+	# Just after a stroke: the flash and a case in the chute when it fires, neither dry.
+	TankMech.paint_ex(a, "feed", 0.01, 1.0, 1.0, Color(0.9, 0.5, 0.2), 90.0, true, 7)
+	TankMech.paint_ex(b, "feed", 0.01, 1.0, 1.0, Color(0.9, 0.5, 0.2), 90.0, false, 7)
+	var chute := 0
+	for y in range(27, 42):
+		if not a.get_pixel(101, y).is_equal_approx(b.get_pixel(101, y)):
+			chute += 1
+	assert_gt(chute, 0, "a case falls only from a round")
+	var counter_a := Image.create_empty(TankMech.W, TankMech.H, false, Image.FORMAT_RGBA8)
+	var counter_b := Image.create_empty(TankMech.W, TankMech.H, false, Image.FORMAT_RGBA8)
+	TankMech.paint_ex(counter_a, "feed", 0.1, 1.0, 1.0, Color.WHITE, 90.0, false, 7)
+	TankMech.paint_ex(counter_b, "feed", 3.6, 1.0, 1.0, Color.WHITE, 90.0, false, 7)
+	assert_eq(
+		counter_a.get_region(Rect2i(14, 7, 15, 5)).get_data(),
+		counter_b.get_region(Rect2i(14, 7, 15, 5)).get_data(),
+		"the counter stands with nothing fired"
+	)
+
+
+func test_the_belt_feed_paints_six_rounds_a_revolution() -> void:
 	assert_eq(TankMech.PARTS["feed"]["rounds_fed_both_belts"], TankFeedState.ROUNDS_PER_REV)
+	assert_eq(TankMech.PARTS["feed"]["bolt_strokes_each_gun"] * 2, TankFeedState.ROUNDS_PER_REV)
 	var a := Image.create_empty(TankMech.W, TankMech.H, false, Image.FORMAT_RGBA8)
 	var b := Image.create_empty(TankMech.W, TankMech.H, false, Image.FORMAT_RGBA8)
 	var c := Image.create_empty(TankMech.W, TankMech.H, false, Image.FORMAT_RGBA8)

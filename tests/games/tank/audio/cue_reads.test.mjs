@@ -148,5 +148,5 @@ test('the preview plays the UI the game plays', () => {
 
 test('a waiver is still needed for what it says', () => {
   assert.deepEqual(Object.keys(doc.preview.waive ?? {}), ['A13']);
-  assert.match(doc.preview.waive.A13, /31 repeats among 465/);
+  assert.match(doc.preview.waive.A13, /30 repeats among 465/);
 });

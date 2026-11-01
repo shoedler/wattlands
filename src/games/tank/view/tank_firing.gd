@@ -8,9 +8,12 @@ extends RefCounted
 ##             and the pebbles on the road ("ground") and 26 sparks; 11 px recoil, the hull's
 ##             2 degree rock on its springs, a 2 px jolt, the scene flash (TankLightDraw) and a
 ##             three-frame screen shake (the view's stage offset)
-##   bow guns  per round, alternating guns: a star flash at the muzzle for FLASH_BOW_S, a tracer
-##             TRACER_W px wide and TRACER_LEN long (white head, yellow, orange tail; its glow on the
-##             Light layer, tracers()), a case tumbling down from under the receiver, a 1.5 px kick
+##   bow guns  per round, alternating guns, 9 to 11 rounds a second: a star flash at the muzzle for
+##             FLASH_BOW_S, a tracer TRACER_W px wide and TRACER_LEN long (white head, yellow, orange
+##             tail; its glow on the Light layer, tracers()), a case tumbling down from under the
+##             receiver, a 1 px kick. So that it reads as a machine gun and not a strobe, the tracers
+##             are quick and short-lived, and the muzzle's light is a steady glow with a small pulse
+##             per round (muzzle_glow()), not a full flash per round
 ## Timed on the view's own clock from the shot cues; nothing feeds the rules.
 
 const F_WHITE := Color("#fff8e0")
@@ -21,14 +24,21 @@ const CASE_LO := Color("#a07c40")
 ## How long the main gun's effects run (s) and the scene flash (s).
 const MAIN_S := 2.0
 const FLASH_S := 0.14
-## The bow guns' rounds kept for drawing (s) and at most how many.
-const ROUND_S := 0.9
+## The bow guns' rounds kept for drawing (s, the case's fall) and at most how many (12 a second at
+## the band's top).
+const ROUND_S := 0.6
 const MAX_ROUNDS := 24
-const TRACER_SPEED := 240.0
+## A tracer's speed (px/s) and how long it flies (s): about 220 px, past the guns' reach.
+const TRACER_SPEED := 520.0
+const TRACER_S := 0.42
 ## A bow round's tracer (px) and its muzzle flash (s).
 const TRACER_LEN := 11
 const TRACER_W := 2
 const FLASH_BOW_S := 0.08
+## A gun has been firing if its last round is this young (s): its own gap at 60 rpm, and a bit.
+const GUN_HOT_S := 0.36
+## The muzzle's light while its gun fires: the steady share, the rest pulsing with each round.
+const GLOW_STEADY := 0.45
 ## The loader's adapter: where the stow and the chambering sit in the r6 7 s cycle.
 const STOW_TO := 3.4
 const CHAMBER_FROM := 3.4
@@ -208,7 +218,8 @@ static func tracer_head(m: Vector2, sd: Vector2, age: float) -> Vector2:
 
 
 ## The bow rounds' tracer heads and muzzle flashes now, for the Light layer's glow: [{p (the
-## tracer's head), muzzle, flash (0..1 while the muzzle flash burns, else 0)}].
+## tracer's head), flying (it has not struck or burnt out), muzzle, flash (0..1 while the muzzle
+## flash burns, else 0)}]. A round whose tracer and flash are both over is left out.
 func tracers(v: TankView) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for r in rounds:
@@ -216,8 +227,28 @@ func tracers(v: TankView) -> Array[Dictionary]:
 		var age := float(r["age"])
 		var m := v.bow_muzzle(k)
 		var sd := v.bow_shot(k)
-		out.append({"p": _head(v, m, sd, age), "muzzle": m, "flash": _bow_flash(age)})
+		var p := _head(v, m, sd, age)
+		var flying := age < TRACER_S and (v.bow_target == Vector2.ZERO or p != v.bow_target)
+		var fl := _bow_flash(age)
+		if flying or fl > 0.0:
+			out.append({"p": p, "flying": flying, "muzzle": m, "flash": fl})
 	return out
+
+
+## How bright gun `k`'s muzzle light is now (0..1): 0 while it is silent, GLOW_STEADY while it fires,
+## and up to 1 in a round's flash. At 9 to 11 rounds a second a full flash per round would strobe.
+func muzzle_glow(k: int) -> float:
+	var hot := false
+	var fl := 0.0
+	for r in rounds:
+		if int(r["k"]) != k:
+			continue
+		var age := float(r["age"])
+		hot = hot or age < GUN_HOT_S
+		fl = maxf(fl, _bow_flash(age))
+	if not hot:
+		return 0.0
+	return GLOW_STEADY + (1.0 - GLOW_STEADY) * fl
 
 
 ## A tracer's head, stopped where it strikes the near threat the guns fire at.
@@ -244,7 +275,7 @@ func _rounds(ci: CanvasItem, v: TankView) -> void:
 		var sd := v.bow_shot(k)
 		var nn := Vector2(-sd.y, sd.x)
 		var tp := _head(v, m, sd, age)
-		if age < ROUND_S and (v.bow_target == Vector2.ZERO or tp != v.bow_target):
+		if age < TRACER_S and (v.bow_target == Vector2.ZERO or tp != v.bow_target):
 			for s in TRACER_LEN:
 				var c := F_WHITE if s < 3 else (F_YEL if s < 6 else F_ORA)
 				if s >= TRACER_LEN - 2:

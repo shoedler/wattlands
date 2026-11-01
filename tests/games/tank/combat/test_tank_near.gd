@@ -180,7 +180,29 @@ func test_difficulty_scales_its_hp() -> void:
 		rig.state.difficulty = level
 		var e := _spawn(rig, TankIds.ENEMY_RECON)
 		var row: Dictionary = rig.content.value("enemies", "difficulty.%s" % level, {})
-		assert_almost_eq(e.hp_max, 30.0 * float(row["hp"]), 0.001, level)
+		assert_almost_eq(e.hp_max, 22.5 * float(row["hp"]), 0.001, level)
+
+
+func test_fractional_hp_crosses_the_wire_rounded_up_on_every_difficulty() -> void:
+	# 22.5 and 13.5 x 0.6, 1, 1.25. The wire carries whole HP: a host's 0.125 must never read dead.
+	for level: String in TankIds.DIFFICULTIES:
+		for type: String in TankIds.NEAR_KINDS:
+			var rig := _rig()
+			rig.state.difficulty = level
+			var e := _spawn(rig, type)
+			var client := _rig()
+			client.state.difficulty = level
+			var label := "%s %s" % [level, type]
+			TankSnapshot.apply(client.state, TankSnapshot.encode(rig.state))
+			var c := client.state.enemy(e.id)
+			assert_eq(c.hp_max, ceilf(e.hp_max), label)
+			assert_eq(c.hp, c.hp_max, "%s: a full bar stays hidden" % label)
+			e.hp = e.hp_max * 0.5
+			TankSnapshot.apply(client.state, TankSnapshot.encode(rig.state))
+			assert_almost_eq(c.hp / c.hp_max, 0.5, 1.0 / c.hp_max, "%s: half a bar" % label)
+			e.hp = 0.125
+			TankSnapshot.apply(client.state, TankSnapshot.encode(rig.state))
+			assert_eq(client.state.enemy(e.id).hp, 1.0, "%s: alive, never 0" % label)
 
 
 func test_a_bow_kill_is_scored_at_the_near_kinds_index() -> void:

@@ -180,6 +180,7 @@ func _paint_window(c: Dictionary) -> void:
 		_img[key] = Image.create_empty(WIN.x, WIN.y, false, Image.FORMAT_RGBA8)
 	var img: Image = _img[key]
 	var power := float(c["ratio"]) if not bool(c["reserve"]) else 0.5
+	var fd := st().station(key) as TankFeedState
 	TankMech.paint_ex(
 		img,
 		str(c["mech"]),
@@ -187,7 +188,9 @@ func _paint_window(c: Dictionary) -> void:
 		power,
 		_wall,
 		slot_color(int(c["slot"])),
-		float(c["cad"])
+		float(c["cad"]),
+		fd == null or fd.rpm > 0.0,
+		fd.rounds if fd != null else -1
 	)
 	if not _tex.has(key):
 		_tex[key] = ImageTexture.create_from_image(img)

@@ -36,8 +36,17 @@ static func paint(
 
 
 ## As paint(), with the crank rpm given (rpm < 0: estimate it from successive calls).
+## `firing` and `rounds` are the feed's: with no target its bolts cycle dry, as the sound does.
 static func paint_ex(
-	img: Image, kind: String, phase: float, power: float, t: float, slot: Color, rpm: float
+	img: Image,
+	kind: String,
+	phase: float,
+	power: float,
+	t: float,
+	slot: Color,
+	rpm: float,
+	firing: bool = true,
+	rounds: int = -1
 ) -> void:
 	var k := kind if kind in RATIO else "diesel"
 	var rate := rpm / 60.0 if rpm >= 0.0 else _rate_of(k, slot, phase, t)
@@ -100,7 +109,7 @@ static func paint_ex(
 		"arc":
 			TankMechArc._arc(cv, phase, pw, t, slot, rate)
 		"feed":
-			TankMechFeed._feed(cv, phase, pw, t, slot, rate)
+			TankMechFeed._feed(cv, phase, pw, t, slot, rate, firing, rounds)
 		"repair":
 			TankMechRepair._repair(cv, phase, pw, t, slot, rate)
 	# over power: the whole machine shakes by a pixel

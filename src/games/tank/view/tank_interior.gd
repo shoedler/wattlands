@@ -239,7 +239,9 @@ func _key(u: String, inp: Dictionary) -> Array:
 			]
 		"bow":
 			var revs := float((inp.get("bow", {}) as Dictionary).get("revs", -1.0))
-			return [-1.0 if revs < 0.0 else floorf(revs * 2.0 * 8.0)]
+			return [
+				-1.0 if revs < 0.0 else floorf(revs * float(TankFeedState.ROUNDS_PER_REV) * 4.0)
+			]
 		"repair":
 			var rp: Dictionary = inp.get("repair", {})
 			return [
@@ -250,7 +252,7 @@ func _key(u: String, inp: Dictionary) -> Array:
 			]
 		_:
 			var st: Dictionary = inp.get(u, {})
-			return [_seat_key(st), fl if bool(st.get("on", false)) else 0]
+			return [_seat_key(st), fl if bool(st.get("on", false)) else 0, st.has("dry")]
 
 
 static func _seat_key(st: Dictionary) -> Array:
@@ -277,7 +279,17 @@ func _paint_unit(u: String, inp: Dictionary) -> void:
 			arc_v(rig.rooms["lights"], _ang(l), t, int(l.get("slot", -1)), _on(l))
 		"sec":
 			var s: Dictionary = inp.get("sec", {})
-			beltfeed(rig.rooms["sec"], float(s.get("revs", 0.0)), int(s.get("slot", -1)), _on(s))
+			var feed_revs := float(s.get("revs", 0.0))
+			# Dry (no target) the feed runs at a third of its firing rate, as the bolts and their sound do.
+			if s.has("dry"):
+				feed_revs /= 3.0
+			beltfeed(
+				rig.rooms["sec"],
+				feed_revs,
+				int(s.get("slot", -1)),
+				_on(s),
+				float(s.get("revs", 0.0))
+			)
 		"loader":
 			loader(inp.get("loader_seat", {}), inp.get("loader", {}), t)
 		"bow":
@@ -942,20 +954,22 @@ func arc_v(rr: Rect2, ang: float, t: float, slot: int, on: bool) -> void:
 	pl(Vector2(ra.x + 3, ra.y), Vector2(ra.x + 3, r.position.y), Color("#3a1a10"))
 
 
-## The secondaries' crank-driven twin belt feed: the star wheel turning
-## half a turn per crank revolution, the ammunition box, two belts climbing to the receivers.
-func beltfeed(rr: Rect2, revs_in: float, slot: int, on: bool) -> void:
+## The secondaries' crank-driven twin belt feed: the star wheel turning three quarters of a turn per
+## crank revolution (a tooth for each belt's round), the ammunition box, two belts climbing to the
+## receivers, a cartridge (2 px) per round on each.
+func beltfeed(rr: Rect2, revs_in: float, slot: int, on: bool, crank_in: float = -1.0) -> void:
 	var r := Rect2i(rr)
 	var fy := r.end.y - 2
 	var revs := revs_in if on else 0.0
-	var cc := seat(r.position.x, fy, revs * TAU, slot)
+	var crank := (crank_in if crank_in >= 0.0 else revs_in) if on else 0.0
+	var cc := seat(r.position.x, fy, crank * TAU, slot)
 	var star := Vector2(r.end.x - 7.5, fy - 18.5)
-	chain(cc, star, 2.5, 2.5, revs * 9.0)
+	chain(cc, star, 2.5, 2.5, crank * 9.0)
 	for y in range(floori(star.y) - 5, floori(star.y) + 6):
 		for x in range(floori(star.x) - 5, floori(star.x) + 6):
 			var d := Vector2(x + 0.5, y + 0.5) - star
 			var rho := d.length()
-			var rr2 := 2.5 + 1.8 * maxf(cos(4.0 * (atan2(d.y, d.x) - revs * PI)), 0.0)
+			var rr2 := 2.5 + 1.8 * maxf(cos(4.0 * (atan2(d.y, d.x) - revs * 1.5 * PI)), 0.0)
 			if rho < rr2:
 				p(x, y, BR2 if d.y < -1.0 else BR1)
 			elif rho < rr2 + 0.8:
@@ -964,7 +978,7 @@ func beltfeed(rr: Rect2, revs_in: float, slot: int, on: bool) -> void:
 	for k in 2:
 		var x0 := r.end.x - 8 + k * 3
 		for y in range(r.position.y, fy - 8):
-			var u := fposmod(float(y) + revs * 4.0, 2.0)
+			var u := fposmod(float(y) + revs * float(TankFeedState.ROUNDS_PER_REV), 2.0)
 			p(x0, y, BR2 if u < 1.0 else BR0)
 
 
@@ -1207,22 +1221,24 @@ func breech_window(elev: float, fire_t: float, step: String, k: float) -> void:
 
 
 ## Both bow guns' receivers (the box's window and the one under the lower mount): a belt feeding in,
-## the cocking slide kicking, a glow on each round. `revs` the Secondaries' crank revolutions (2
-## rounds each, alternating guns), < 0 silent.
+## the cocking slide kicking, a glow on each round. `revs` the Secondaries' crank revolutions
+## (ROUNDS_PER_REV rounds each, alternating guns), < 0 silent. The unit paints at 30 Hz at most, so the
+## slide stays back for half a round (every round gets a paint up to 120 rpm) and the belt moves one
+## cartridge a gun's round, which cannot alias.
 func receivers(revs: float) -> void:
 	var on := revs >= 0.0
-	var ph := revs * 2.0 if on else 0.0
+	var ph := revs * float(TankFeedState.ROUNDS_PER_REV) if on else 0.0
 	var wins: Array[Rect2] = [rig.windows["boxwin"], rig.windows["boxwin2"]]
 	for k in 2:
 		var r := Rect2i(wins[k])
 		var rw := Rect2i(r.end.x - 13, r.position.y + r.size.y / 2 - 2, 11, 5)
 		box(rw, ST2, ST3, ST1)
-		var shot := on and fposmod(ph, 1.0) < 0.3 and int(floor(ph)) % 2 == k
+		var shot := on and fposmod(ph, 1.0) < 0.5 and int(floor(ph)) % 2 == k
 		p(rw.position.x + 3 + (2 if shot else 0), rw.position.y + 1, BR2)
 		for j in 10:
-			var u := fposmod(float(j) * 2.0 - ph * 4.0, 20.0)
+			var u := fposmod(float(j) * 2.0 - ph, 20.0)
 			var bxp := r.position.x + 1 + floori(u * float(rw.position.x - r.position.x - 1) / 20.0)
 			p(bxp, rw.position.y + 3, BR2 if j % 2 == 0 else BR0)
 			p(bxp, rw.position.y + 4, ST0)
 		if shot:
-			glow(Vector2(rw.end.x, rw.position.y + 2), 6.0, Color("#ffb060"), 0.7)
+			glow(Vector2(rw.end.x, rw.position.y + 2), 6.0, Color("#ffb060"), 0.4)
