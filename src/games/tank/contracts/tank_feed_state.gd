@@ -7,8 +7,9 @@ extends TankStationState
 ## The rules builder implements the firing (TankBow); this is the state it keeps and the view and
 ## HUD read.
 
-## Rounds per pedal revolution (brief: exactly 2).
-const ROUNDS_PER_REV := 2
+## Rounds per pedal revolution: 3 a gun. The brief said 2; the owner asked for three times the rate
+## at a quarter of the damage on 2026-11-01, so they read as machine guns (docs/decisions/tank.md).
+const ROUNDS_PER_REV := 6
 
 ## [snap] Rounds fired since the session start, both guns. Round k (1-based) fires gun
 ## (k - 1) mod 2 (0 the upper, 1 the lower bow gun), so the last round came from gun

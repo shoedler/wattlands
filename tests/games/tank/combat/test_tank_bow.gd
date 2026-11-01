@@ -1,6 +1,6 @@
 extends GutTest
-## The bow guns (v3: the Secondaries seat, TankBow): exactly 2 rounds per pedal revolution of its
-## rider (2 x cadence a minute), alternating guns, at the nearest near threat 4-200 px off the hull
+## The bow guns (v3: the Secondaries seat, TankBow): exactly 6 rounds per pedal revolution of its
+## rider (6 x cadence a minute), alternating guns, at the nearest near threat 4-200 px off the hull
 ## front (v4: never a far enemy or the Behemoth); damage per round with the armour factors; power in
 ## band sets the slew speed (a round hits once the guns point at the target); barricades cleared by
 ## rounds; kill credit; an empty
@@ -48,21 +48,21 @@ func test_an_empty_secondaries_seat_is_silent() -> void:
 		assert_eq(e.hp, 5000.0)
 
 
-func test_two_rounds_per_pedal_revolution_alternating_guns() -> void:
+func test_six_rounds_per_pedal_revolution_alternating_guns() -> void:
 	var rig := _rig(2)
 	assert_eq(rig.feed().slot, 1, "peer 2 sits on the Secondaries")
 	assert_eq(rig.rider(2).engine, TankIds.ENGINE_FEED)
 	_target(rig, TankIds.ENEMY_RECON, 130.0)
 	rig.run(10.0)
-	assert_between(rig.feed().rounds, 29, 30, "90 rpm: 3 rounds a second")
-	assert_eq(rig.feed().rpm, 180.0, "2 x cadence")
+	assert_between(rig.feed().rounds, 89, 90, "90 rpm: 9 rounds a second")
+	assert_eq(rig.feed().rpm, 540.0, "6 x cadence")
 	assert_eq(rig.feed().last_gun(), (rig.feed().rounds - 1) % 2)
 	assert_eq(rig.feed().fire_tick, rig.state.tick)
 	rig.cadence[2] = 60.0
 	var n := rig.feed().rounds
 	rig.run(10.0)
-	assert_between(rig.feed().rounds - n, 19, 21, "60 rpm: 2 a second")
-	assert_eq(rig.feed().rpm, 120.0)
+	assert_between(rig.feed().rounds - n, 59, 61, "60 rpm: 6 a second")
+	assert_eq(rig.feed().rpm, 360.0)
 	assert_eq(rig.of_type("shot").size(), 0, "rounds raise no shot events")
 
 
@@ -142,6 +142,20 @@ func test_far_enemies_and_the_behemoth_are_not_bow_targets() -> void:
 	boss.run(3.0)
 	assert_eq(boss.feed().rounds, 0)
 	assert_eq(boss.state.boss.bogie_hp[0], boss.state.boss.bogie_max)
+
+
+func test_a_barricade_takes_the_same_damage_it_always_did() -> void:
+	var c := TankFixtures.content()
+	var need := c.num("tanks", "bow.clear_rounds", 0.0)
+	assert_almost_eq(
+		need * c.num("tanks", "bow.damage", 0.0), 18.0, 1e-6, "12 rounds of 1.5 before"
+	)
+
+
+func test_the_guns_deal_three_quarters_of_the_old_damage_a_revolution() -> void:
+	var per_round := TankFixtures.content().num("tanks", "bow.damage", 0.0)
+	var per_rev := float(TankFeedState.ROUNDS_PER_REV) * per_round
+	assert_almost_eq(per_rev, 0.75 * 2.0 * 1.5, 1e-6, "three times the rate, a quarter the damage")
 
 
 func test_rounds_that_hit_clear_a_barricade_in_range() -> void:
