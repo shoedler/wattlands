@@ -76,7 +76,7 @@ const WORKING := {
 const SHUT := {
 	"gun": {"cap_dump": [0.8], "brush_tick": [0.0, 0.3333, 0.6667]},
 	"loader": {"chuff_a": [0.0], "chuff_b": [0.5], "steam_valve": [0.25, 0.75]},
-	"sec": {"bolt_clack": [0.0, 0.1667, 0.3333, 0.5, 0.6667, 0.8333], "link_clink": [0.25, 0.75]},
+	"sec": {"bolt_clack": [0.0, 0.5], "link_clink": [0.25, 0.75]},
 	"repair": {"repair_idle": [0.0]},
 }
 

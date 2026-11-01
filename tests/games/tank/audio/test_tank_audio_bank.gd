@@ -209,15 +209,31 @@ func test_the_arc_sparks_near_the_top_of_the_horns() -> void:
 
 
 func test_the_feed_fires_when_its_bolts_come_home() -> void:
-	# tank_mech_feed.gd: u = fposmod(ph * F_STROKES - 0.5 * k, 1), the shot at u = 0, for k 0 and 1:
-	# a stroke every 1 / ROUNDS_PER_REV of a revolution, one of the two guns' in turn.
-	_assert_art_says("feed", "fposmod(ph * F_STROKES - 0.5 * ")
-	for sound: String in ["bolt_clack", "bow_shot"]:
-		var at := _fractions("feed", sound)
-		assert_eq(at.size(), TankFeedState.ROUNDS_PER_REV, sound)
+	# tank_mech_feed.gd: u = fposmod(ph * strokes - 0.5 * k, 1), the shot at u = 0, for k 0 and 1:
+	# firing, a stroke every 1 / ROUNDS_PER_REV of a revolution, one of the two guns' in turn.
+	_assert_art_says("feed", "fposmod(ph * strokes - 0.5 * ")
+	var firing: Array = _event("feed", "bolt_clack")["at"]
+	var shots := _fractions("feed", "bow_shot")
+	for at: Array in [firing, shots]:
+		assert_eq(at.size(), TankFeedState.ROUNDS_PER_REV)
 		for k in at.size():
 			var want := float(k) / float(TankFeedState.ROUNDS_PER_REV)
-			assert_almost_eq(float(at[k]), want, 0.001, "%s, stroke %d" % [sound, k])
+			assert_almost_eq(float(at[k]), want, 0.001, "stroke %d" % k)
+	assert_eq(float(_event("feed", "bolt_clack")["when"]["min"]), 0.5, "these, while it fires")
+	# Dry (no target): one stroke a gun, a revolution; the picture's strokes = 1.0.
+	_assert_art_says("feed", "F_STROKES if firing else 1.0")
+	var dry: Array = []
+	for ev: Dictionary in _bank.machines["feed"]["events"]:
+		if str(ev["sound"]) == "bolt_clack" and (ev["when"] as Dictionary).has("max"):
+			dry = ev["at"]
+	assert_eq(dry, [0.0, 0.5])
+	assert_eq(float(_event("feed", "casing_tink")["when"]["min"]), 0.5, "no case without a round")
+	# A mate hears two rounds a revolution: two more would lock out their other strokes.
+	var mates: Array = []
+	for ev2: Dictionary in _bank.machines["feed"]["events"]:
+		if str(ev2["sound"]) == "bow_shot" and not bool(ev2.get("lead_only", false)):
+			mates.append_array(ev2["at"])
+	assert_eq(mates, [0.0, 0.5])
 	assert_eq(_fractions("feed", "link_clink"), [0.25, 0.75])
 	assert_eq(_fractions("feed", "casing_tink"), [0.2, 0.7])
 

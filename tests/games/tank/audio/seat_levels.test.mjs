@@ -9,6 +9,7 @@ import { loadBank } from '../../../../tools/audio/lib/bank.mjs';
 import { integratedLufs, loudnessRange, truePeakDb } from '../../../../tools/audio/lib/lufs.mjs';
 import { BankAudio, MIX_RATE, mixdown, simulate } from '../../../../tools/audio/lib/offline_mix.mjs';
 import { previewScenario, scoreBank } from '../../../../tools/audio/lib/score.mjs';
+import { readOf } from './read_over.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const BANK = path.join(REPO, 'assets/tank/audio/audio.json');
@@ -131,4 +132,78 @@ test('the bed reads on its own, inside the Ambience target', () => {
   });
   const lufs = integratedLufs(mixdown(bank, sim, { tail: 0 }).stems.Ambience, MIX_RATE);
   assert.ok(Math.abs(lufs + 32) <= 3, `bed ${lufs.toFixed(2)} LUFS`);
+});
+
+// At an equal cadence the machines' phases stay locked, so a stroke landing inside the 60 ms after a round loses every
+// time. Six rounds a revolution for mates left almost no room: arc_relay and the chuffs went to nothing in a burst.
+const MATES = { dynamo: {}, steam: { pressure_pct: 80, loaded: 0 }, arc: { reach: 0.9 }, feed: { rounds: 12 } };
+
+/** Strokes each mate keeps under a Drive lead, every crank at 90 rpm, each at the phase `draw` gives it. */
+function lockedKept(firing, draw, events = doc.machines.feed.events) {
+  const d = structuredClone(doc);
+  d.machines.feed.events = events;
+  for (const m of Object.keys(MATES)) {
+    const shift = draw();
+    d.machines[m].events = d.machines[m].events.map((e) => ({ ...e, at: e.at.map((a) => (a + shift) % 1) }));
+  }
+  const mates = Object.entries(MATES).map(([m, params]) => ({ id: m, machine: m, lead: false, rpm_scale: 1, params: { ...params, power: 0.95, firing, mate_firing: firing } }));
+  const machines = [{ id: 'diesel', machine: 'diesel', lead: true, params: { speed: 4, power: 1 } }, ...mates];
+  const sim = simulate(new BankAudio(d, DIR), { segments: [{ rpm: 90, s: 12, params: { speed: 4 } }], machines, seed: 3, duration: 12 });
+  const kept = {};
+  for (const e of sim.events) if (e.kind === 'stroke' && !e.thinned && e.machine !== 'diesel') kept[e.machine] = (kept[e.machine] ?? 0) + 1;
+  return kept;
+}
+
+/** The share of random phase draws in which each mate falls silent, and its mean strokes kept. */
+function lockedBurst(firing, events) {
+  let seed = 777;
+  const draw = () => {
+    seed ^= seed << 13;
+    seed ^= seed >>> 17;
+    seed ^= seed << 5;
+    seed >>>= 0;
+    return seed / 4294967296;
+  };
+  const DRAWS = 100;
+  const out = {};
+  for (let i = 0; i < DRAWS; i++) {
+    const kept = lockedKept(firing, draw, events);
+    for (const m of ['steam', 'arc']) {
+      out[m] ??= { silent: 0, kept: 0 };
+      out[m].kept += (kept[m] ?? 0) / DRAWS;
+      if (!kept[m]) out[m].silent += 1 / DRAWS;
+    }
+  }
+  return out;
+}
+
+test("a mate's machines survive a burst at an equal cadence", () => {
+  const fire = lockedBurst(1);
+  const dry = lockedBurst(0);
+  for (const m of ['steam', 'arc']) {
+    assert.ok(fire[m].kept >= 0.6 * dry[m].kept, `${m}: kept ${fire[m].kept.toFixed(1)} in a burst, ${dry[m].kept.toFixed(1)} dry`);
+    assert.ok(fire[m].silent <= 0.3, `${m}: silent in ${(100 * fire[m].silent).toFixed(0)} % of the phases`);
+  }
+});
+
+test("six rounds a revolution for a mate would silence them: the same check fails on it", () => {
+  const six = doc.machines.feed.events.map((e) => (e.sound === 'bow_shot' ? { ...e, lead_only: false } : e));
+  const fire = lockedBurst(1, six);
+  const dry = lockedBurst(0, six);
+  assert.ok(['steam', 'arc'].some((m) => fire[m].kept < 0.6 * dry[m].kept || fire[m].silent > 0.3), JSON.stringify({ fire, dry }));
+});
+
+test("a mate's guns can be picked out under the Drive seat, with no stroke slot spent", () => {
+  const CREW = { dynamo: {}, steam: { pressure_pct: 80, loaded: 1 }, arc: { reach: 0.9 }, feed: { rounds: 12, firing: 1, mate_firing: 1 }, repair: { repairing: 1 } };
+  const SCALE = { dynamo: 0.97, steam: 1.03, arc: 0.94, feed: 1.06, repair: 0.91 };
+  const POWER = { dynamo: 0.9, steam: 1, arc: 0.95, feed: 0.9, repair: 0.8 };
+  const mates = Object.keys(CREW).map((m) => ({ id: m, machine: m, lead: false, rpm_scale: SCALE[m], params: { ...CREW[m], power: POWER[m] } }));
+  const machines = [{ id: 'diesel', machine: 'diesel', lead: true, params: { power: 1 } }, ...mates, { id: 'track', machine: 'track', lead: true, rpm_by: { param: 'speed', ratio: 0.04 } }];
+  const scenario = { segments: [{ rpm: 90, s: 12, params: { speed: 4 } }], machines, seed: 3, duration: 12 };
+  const r = readOf(new BankAudio(doc, DIR), scenario, (s) => s === 'bow_shot' || s === 'bow_far', 1, 11, 0.1);
+  assert.ok(r.db >= -1, `${r.db.toFixed(1)} dB at ${r.hz} Hz`);
+  const loop = doc.machines.feed.loops.find((l) => l.sound === 'bow_far');
+  assert.equal(loop.other, true);
+  assert.equal(loop.when.param, 'mate_firing');
+  assert.ok(!doc.machines.feed.events.some((e) => e.sound === 'bow_far'), 'a loop takes no stroke slot');
 });

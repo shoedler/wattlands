@@ -364,16 +364,42 @@ func test_the_feed_clacks_fires_and_ejects_with_its_rounds() -> void:
 	feed.rpm = 0.0
 	feed.rounds = 0
 	_run("sec", 60.0, 1.0, 4.0)
-	assert_between(_audio.played.count("bolt_clack"), 23, 25, "six per revolution")
+	assert_between(_audio.played.count("bolt_clack"), 7, 9, "dry: two per revolution")
 	assert_does_not_have(_audio.played, "bow_shot", "the guns are silent")
-	assert_does_not_have(_audio.played, "casing_tink", "no rounds yet")
+	assert_does_not_have(_audio.played, "casing_tink", "nothing fired, no case falls")
 	_audio.kit.clear_played()
 	feed.rpm = 120.0
 	feed.rounds = 8
 	_run("sec", 60.0, 1.0, 4.0)
 	assert_between(_audio.played.count("bow_shot"), 23, 25, "six per revolution")
+	assert_between(_audio.played.count("bolt_clack"), 23, 25, "a bolt on each")
 	assert_between(_audio.played.count("casing_tink"), 7, 9)
 	assert_between(_audio.played.count("link_clink"), 7, 9)
+
+
+func test_a_mate_hears_two_rounds_a_revolution_and_the_far_rounds_under_them() -> void:
+	var feed := _state.station(TankIds.ENGINE_FEED) as TankFeedState
+	var other := {"revs": 0.0, "rpm": 90.0, "power": 1.0, "lead": true}
+	feed.rpm = 540.0
+	for _i in roundi(4.0 / DT):
+		var f := _feed("sec", 60.0, 1.0, false)
+		f["drive"] = other
+		_audio.update(_state, DT, 1, f, _travel)
+	assert_between(_audio.played.count("bow_shot"), 7, 9, "two of the six")
+	assert_has(_audio.played, "bow_far", "a mate's guns firing")
+	_audio.kit.stop_all()
+	_audio.kit.clear_played()
+	feed.rpm = 0.0
+	for _i in roundi(2.0 / DT):
+		var f2 := _feed("sec", 60.0, 1.0, false)
+		f2["drive"] = other
+		_audio.update(_state, DT, 1, f2, _travel)
+	assert_does_not_have(_audio.played, "bow_far", "a dry feed is not firing")
+	_audio.kit.stop_all()
+	_audio.kit.clear_played()
+	feed.rpm = 540.0
+	_run("sec", 60.0, 1.0, 2.0)
+	assert_does_not_have(_audio.played, "bow_far", "your own rounds are strokes")
 
 
 func test_the_rivet_hammer_works_only_while_the_hull_needs_it() -> void:
