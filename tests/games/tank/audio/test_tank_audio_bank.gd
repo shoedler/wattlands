@@ -209,10 +209,15 @@ func test_the_arc_sparks_near_the_top_of_the_horns() -> void:
 
 
 func test_the_feed_fires_when_its_bolts_come_home() -> void:
-	# tank_mech_feed.gd: u = fposmod(ph - 0.5 * k, 1), the shot at u = 0, for k 0 and 1.
-	_assert_art_says("feed", "fposmod(ph - 0.5 * ")
-	assert_eq(_fractions("feed", "bolt_clack"), [0.0, 0.5])
-	assert_eq(_fractions("feed", "bow_shot"), [0.0, 0.5])
+	# tank_mech_feed.gd: u = fposmod(ph * F_STROKES - 0.5 * k, 1), the shot at u = 0, for k 0 and 1:
+	# a stroke every 1 / ROUNDS_PER_REV of a revolution, one of the two guns' in turn.
+	_assert_art_says("feed", "fposmod(ph * F_STROKES - 0.5 * ")
+	for sound: String in ["bolt_clack", "bow_shot"]:
+		var at := _fractions("feed", sound)
+		assert_eq(at.size(), TankFeedState.ROUNDS_PER_REV, sound)
+		for k in at.size():
+			var want := float(k) / float(TankFeedState.ROUNDS_PER_REV)
+			assert_almost_eq(float(at[k]), want, 0.001, "%s, stroke %d" % [sound, k])
 	assert_eq(_fractions("feed", "link_clink"), [0.25, 0.75])
 	assert_eq(_fractions("feed", "casing_tink"), [0.2, 0.7])
 

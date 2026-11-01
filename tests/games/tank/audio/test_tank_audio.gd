@@ -364,14 +364,14 @@ func test_the_feed_clacks_fires_and_ejects_with_its_rounds() -> void:
 	feed.rpm = 0.0
 	feed.rounds = 0
 	_run("sec", 60.0, 1.0, 4.0)
-	assert_between(_audio.played.count("bolt_clack"), 7, 9, "two per revolution")
+	assert_between(_audio.played.count("bolt_clack"), 23, 25, "six per revolution")
 	assert_does_not_have(_audio.played, "bow_shot", "the guns are silent")
 	assert_does_not_have(_audio.played, "casing_tink", "no rounds yet")
 	_audio.kit.clear_played()
 	feed.rpm = 120.0
 	feed.rounds = 8
 	_run("sec", 60.0, 1.0, 4.0)
-	assert_between(_audio.played.count("bow_shot"), 7, 9)
+	assert_between(_audio.played.count("bow_shot"), 23, 25, "six per revolution")
 	assert_between(_audio.played.count("casing_tink"), 7, 9)
 	assert_between(_audio.played.count("link_clink"), 7, 9)
 
@@ -573,7 +573,7 @@ func test_only_the_gunners_own_shot_ducks_the_machines_and_the_wind() -> void:
 
 func test_the_bow_guns_rattle_a_burst_not_the_cannon() -> void:
 	_audio.on_cue(TankEvents.SHOT, TankEvents.shot(0, TankIds.SHELL_BOW, 1))
-	_idle(0.3)
+	_idle(0.5)
 	assert_eq(_audio.played.count("bow_shot"), 5, "staggered")
 	assert_does_not_have(_audio.played, "gun_low")
 

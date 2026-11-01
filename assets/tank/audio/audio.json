@@ -118,7 +118,7 @@
       ]},
     "belt_rattle": {"dur": 1.4, "rate": 22050, "ch": 1, "seed": 1178, "loop": true, "xfade_s": 0.3,
       "layers": [
-        {"src": "grains", "rate_hz": 44, "f": [800, 3400], "dur_s": [0.003, 0.012], "g": [0.2, 1.0], "gain": 0.9},
+        {"src": "grains", "rate_hz": 66, "f": [700, 2800], "dur_s": [0.003, 0.012], "g": [0.2, 1.0], "gain": 0.9},
         {"src": "noise", "color": "pink", "gain": 0.12, "fx": [{"bp": {"f": 1300, "q": 0.8}}]}
       ]},
     "repair_compressor": {"dur": 1.6, "rate": 22050, "ch": 1, "seed": 1179, "loop": true, "xfade_s": 0.3,
@@ -223,11 +223,12 @@
         {"src": "noise", "color": "white", "gain": 0.35, "env": {"a": 0.0003, "d": 0.008}, "fx": [{"bp": {"f": 1500, "q": 0.8}}]},
         {"src": "sine", "f": [190, 110], "glide": "exp", "gain": 0.65, "env": {"a": 0.0005, "d": 0.03}}
       ]},
-    "bow_shot": {"dur": 0.13, "rate": 22050, "ch": 1, "seed": 1130, "variants": 5, "locked": true, "room": "iron",
+    "bow_shot": {"dur": 0.07, "rate": 22050, "ch": 1, "seed": 1130, "variants": 5, "locked": true, "room": "iron",
       "per_variant": [{"pitch": 1.0}, {"pitch": 0.97}, {"pitch": 1.03}, {"pitch": 0.94}, {"pitch": 1.06}],
       "layers": [
-        {"src": "noise", "color": "white", "gain": 1.3, "env": {"a": 0.0003, "d": 0.035}, "fx": [{"bp": {"f": 1100, "q": 0.6}}, {"drive": 2.4}]},
-        {"src": "sine", "f": [170, 90], "glide": "exp", "gain": 1.1, "env": {"a": 0.0004, "d": 0.06}}
+        {"src": "noise", "color": "white", "gain": 1.3, "env": {"a": 0.0003, "d": 0.014}, "fx": [{"bp": {"f": 1000, "q": 0.6}}, {"drive": 2.4}]},
+        {"src": "noise", "color": "white", "gain": 0.7, "env": {"a": 0.0002, "d": 0.007}, "fx": [{"hp": {"f": 4500}}]},
+        {"src": "sine", "f": [190, 110], "glide": "exp", "gain": 1.1, "env": {"a": 0.0004, "d": 0.022}}
       ]},
     "link_clink": {"dur": 0.05, "rate": 22050, "ch": 1, "seed": 1131, "variants": 2, "locked": true,
       "per_variant": [{"pitch": 1.0}, {"pitch": 1.04}],
@@ -581,13 +582,13 @@
       ]},
     "feed": {"bus": "Machines", "priority": 5,
       "events": [
-        {"at": [0, 0.5], "sound": "bow_shot", "db": 1, "db_by": [{"param": "power", "points": [[0, -6], [1.2, 0]]}], "pitch_table": [0, -0.012, 0.012, -0.006, 0.008, -0.014, 0.004], "when": {"param": "firing", "min": 0.5}, "priority": 5},
-        {"at": [0, 0.5], "sound": "bolt_clack", "db": 1, "db_by": [{"param": "power", "points": [[0, -8], [1.2, 0]]}], "pitch_table": [0, 0.012, -0.009, 0.005], "lead_only": true, "priority": 5},
+        {"at": [0, 0.1667, 0.3333, 0.5, 0.6667, 0.8333], "sound": "bow_shot", "db": 0, "db_by": [{"param": "power", "points": [[0, -6], [1.2, 0]]}], "pitch_table": [0, -0.012, 0.012, -0.006, 0.008, -0.014, 0.004], "when": {"param": "firing", "min": 0.5}, "priority": 5},
+        {"at": [0, 0.1667, 0.3333, 0.5, 0.6667, 0.8333], "sound": "bolt_clack", "db": -7, "db_by": [{"param": "power", "points": [[0, -8], [1.2, 0]]}], "pitch_table": [0, 0.012, -0.009, 0.005], "lead_only": true, "priority": 5},
         {"at": [0.25, 0.75], "sound": "link_clink", "db": -17, "db_by": [{"param": "power", "points": [[0.3, -12], [1.2, 0]]}], "pitch_table": [0, 0.012, -0.01], "lead_only": true, "priority": 4},
         {"at": [0.2, 0.7], "sound": "casing_tink", "db": -17, "db_by": [{"param": "power", "points": [[0.3, -12], [1.2, 0]]}], "when": {"param": "rounds", "min": 1}, "lead_only": true, "priority": 4}
       ],
       "loops": [
-        {"sound": "belt_rattle", "db": -8, "min_rpm": 8, "pitch_by": [{"param": "rpm", "ratio": 90}], "db_by": [{"param": "power", "points": [[0, -14], [1.2, 0]]}]}
+        {"sound": "belt_rattle", "db": -10, "min_rpm": 8, "pitch_by": [{"param": "rpm", "ratio": 90}], "db_by": [{"param": "power", "points": [[0, -14], [1.2, 0]]}]}
       ]},
     "repair": {"bus": "Machines", "priority": 5,
       "events": [
@@ -644,10 +645,10 @@
     "shot_bow": {"other_db": -6,
       "hits": [
         {"sound": "bow_shot", "db": -11, "bus": "Sfx", "priority": 6},
-        {"sound": "bow_shot", "db": -11, "bus": "Sfx", "priority": 6, "delay_s": 0.06},
-        {"sound": "bow_shot", "db": -11, "bus": "Sfx", "priority": 6, "delay_s": 0.12},
-        {"sound": "bow_shot", "db": -11, "bus": "Sfx", "priority": 6, "delay_s": 0.18},
-        {"sound": "bow_shot", "db": -11, "bus": "Sfx", "priority": 6, "delay_s": 0.24}
+        {"sound": "bow_shot", "db": -11, "bus": "Sfx", "priority": 6, "delay_s": 0.11},
+        {"sound": "bow_shot", "db": -11, "bus": "Sfx", "priority": 6, "delay_s": 0.22},
+        {"sound": "bow_shot", "db": -11, "bus": "Sfx", "priority": 6, "delay_s": 0.33},
+        {"sound": "bow_shot", "db": -11, "bus": "Sfx", "priority": 6, "delay_s": 0.44}
       ]},
     "shot_near_mg": {"hits": [{"sound": "small_mg", "db": -2, "bus": "Sfx", "priority": 6}]},
     "enemy_thump": {"hits": [{"sound": "enemy_thump", "db": 3, "bus": "Sfx", "priority": 6, "delay_var": "delay", "db_var": "range_db", "pitch_var": "thump_pitch"}]},
