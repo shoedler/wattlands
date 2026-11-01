@@ -101,7 +101,7 @@ t (mm:ss) | segment | seat | trainer mode | target W or grade % | power W | cade
 | # | Step | Expected | Result |
 | --- | --- | --- | --- |
 | 26 | A recon car or a tankette bursts from the bushes (crews of 2 or more) | "Ambush: Secondaries". Nothing changes on any trainer | |
-| 27 | Move to the Secondaries | SIM flat. The bow guns fire 2 rounds per pedal revolution (the dial reads 2 x your cadence); in band (76-105% FTP) they slew faster and hit more | |
+| 27 | Move to the Secondaries | SIM flat. The bow guns fire 6 rounds per pedal revolution (the dial reads 6 x your cadence: 540/min at 90 rpm), a fast rattle that follows your legs. It reads as a machine gun: the muzzles flicker, they do not strobe, and the rattle is not ear-piercing. In band (76-105% FTP) they slew faster and hit more | |
 | 28 | Leave the threat alone | It flees; "It got away"; no score penalty, no effort change | |
 | 29 | Its rounds hit the hull | Chip damage. The trainer changes only if a hit reaches the haptic's `min_damage` (step 39) | |
 

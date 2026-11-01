@@ -30,7 +30,7 @@ const ENGINE_STEAM := "steam"
 const ENGINE_BULWARK := "bulwark"
 ## Lights: the arc generator (ERG, the searchlight load); lights the searchlights.
 const ENGINE_ARC := "arc"
-## Secondaries (v3): the crank-driven twin belt feed (SIM flat) of the two bow guns, 2 rounds per
+## Secondaries (v3): the crank-driven twin belt feed (SIM flat) of the two bow guns, 6 rounds per
 ## pedal revolution (TankFeedState).
 const ENGINE_FEED := "feed"
 ## v4: Repairs: the crank-driven rivet hammer and patch press on the upper deck (ERG 55-70 %).
