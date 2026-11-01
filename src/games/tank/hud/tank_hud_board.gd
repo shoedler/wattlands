@@ -7,6 +7,10 @@ extends TankHudCtl
 ## (feed()). The hull plate without its kills (TankHudHull.show_kills = false) sits at "roam_hull"
 ## under it.
 
+## The points' and kills' row: clear of the labels over them and the difficulty tag under them.
+const NUMBER_Y := 16.0
+const TAG_Y := 35.0
+
 ## Seconds left of the ride (<= 0: time up).
 var left_s: float = 0.0
 ## A fight runs past time up.
@@ -77,14 +81,14 @@ func paint() -> void:
 	D.big(self, 6, 16, D.clock(left_s), D.OVER if overtime else D.NUM)
 	D.rect(self, Rect2(88, 6, 1, h - 12), D.FRAME_IN)
 	D.tall(self, 94, 4, tx("TANK_HUD_POINTS"), D.DIM)
-	D.text(self, 94, 21, thousands(points), D.AMBER, 2)
+	D.text(self, 94, NUMBER_Y, thousands(points), D.AMBER, 2)
 	D.rect(self, Rect2(150, 6, 1, h - 12), D.FRAME_IN)
 	D.tall(self, 156, 4, tx("TANK_HUD_KILLS"), D.DIM)
-	D.text(self, 156, 21, str(kills), D.NUM, 2)
+	D.text(self, 156, NUMBER_Y, str(kills), D.NUM, 2)
 	if diff_key != "":
-		D.text_r(self, w - 6.0, 35, tx(diff_key), D.AMBER if hard else D.DIM)
+		D.text_r(self, w - 6.0, TAG_Y, tx(diff_key), D.AMBER if hard else D.DIM)
 	if losses > 0:
-		D.text(self, 94, 35, tx("TANK_HUD_LOSSES", [losses]), D.OVER)
+		D.text(self, 94, TAG_Y, tx("TANK_HUD_LOSSES", [losses]), D.OVER)
 
 
 ## `n` with a thin space every three digits ("12 340").

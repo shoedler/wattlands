@@ -299,15 +299,26 @@ static func _aged(list: Array[Dictionary], dt: float) -> Array[Dictionary]:
 	return keep
 
 
-## Smoke and steam (normal blend, under the foreground).
-func draw_smoke(ci: CanvasItem) -> void:
+## Puts the last puff or wisp behind the vehicles: draw_smoke(ci, true) draws those, on the layer under them.
+func send_under_last(wisp_too: bool) -> void:
+	var rows: Array[Dictionary] = wisps if wisp_too else smoke
+	if not rows.is_empty():
+		rows[rows.size() - 1]["under"] = true
+
+
+## Smoke and steam (normal blend, under the foreground); `under`: only what was sent behind the vehicles, else the rest.
+func draw_smoke(ci: CanvasItem, under: bool = false) -> void:
 	for p in smoke:
+		if bool(p.get("under", false)) != under:
+			continue
 		var k := float(p["age"]) / float(p["life"])
 		var r := lerpf(float(p["r0"]), float(p["r1"]), k)
 		var a := float(p["a"]) * (1.0 - k) * minf(float(p["age"]) * 4.0, 1.0)
 		var c: Color = p["c"]
 		TankDraw.soft_at(ci, p["pos"], r, Color(c.r, c.g, c.b, a))
 	for w in wisps:
+		if bool(w.get("under", false)) != under:
+			continue
 		var kw := float(w["age"]) / float(w["life"])
 		var col: Color = w["c"]
 		col.a = float(w["a"]) * wisp_fade(kw)

@@ -239,6 +239,44 @@ func test_elevation_lifts_the_muzzle_and_the_casemate_stops_at_its_mount() -> vo
 	assert_eq(TankEnemyDraw.clamp_elev(kit.kind("medium"), 30.0), 30.0, "a turret has no such stop")
 
 
+## On a slope the hull tilts and the turret and its gun stay level on the hull's pivot, so its digits keep their rows; a
+## casemate's gun stays on its hull. Flat ground changes nothing.
+func test_a_turret_rides_level_on_a_tilted_hull() -> void:
+	var row := _kit().kind("light")
+	var slope := func(x: float) -> float: return 400.0 + (x - FOOT.x) * 0.1
+	var pose := {"ground": slope}
+	var stage: Transform2D = TankEnemyDraw.hull_pose(row, FOOT, pose)["stage"]
+	assert_ne(stage.get_rotation(), 0.0, "the hull tilts")
+	var top := TankEnemyDraw.level_stage(row, stage)
+	assert_eq(top.get_rotation(), 0.0, "the turret does not")
+	var piv: Vector2 = row["turret"]["pivot"]
+	assert_almost_eq((top * piv).distance_to(stage * piv), 0.0, 1.0, "it stays on the hull's pivot")
+	var flipped: Transform2D = (
+		TankEnemyDraw.hull_pose(row, FOOT, {"ground": slope, "flip": true})["stage"]
+	)
+	var mirror := TankEnemyDraw.level_stage(row, flipped)
+	assert_lt(mirror.x.x, 0.0, "a flip still mirrors it")
+	assert_eq(mirror.x.y, 0.0, "and level")
+	var level := TankEnemyDraw.muzzle(_kit(), "light", FOOT, pose)
+	var bore := TankEnemyDraw.bore(_kit(), "light", FOOT, pose)
+	assert_almost_eq(level.y, bore[0].y, 0.01, "at 0 degrees the bore runs level on the slope")
+	var flat: Transform2D = TankEnemyDraw.hull_pose(row, FOOT, {})["stage"]
+	assert_eq(TankEnemyDraw.level_stage(row, flat), flat, "on the flat it is the hull's stage")
+	var casemate := _kit().kind("destroyer")
+	var tilted: Transform2D = TankEnemyDraw.hull_pose(casemate, FOOT, pose)["stage"]
+	assert_eq(TankEnemyDraw.level_stage(casemate, tilted), tilted, "no turret, no level")
+
+
+## Mid-traverse is no sliver: a slab never draws under half its width.
+func test_a_turret_is_never_a_sliver() -> void:
+	var row := _kit().kind("light")
+	var piv: Vector2 = row["turret"]["pivot"]
+	for sx: float in [0.0, 0.1, 0.34, -0.05, -0.32]:
+		var xf := TankEnemyDraw.turret_xf(row, {"turret_sx": sx})
+		var wide := absf((xf * (piv + Vector2(10, 0))).x - piv.x)
+		assert_almost_eq(wide, 5.0, 0.001, "at %.2f" % sx)
+
+
 func test_turret_squeezes_about_its_pivot() -> void:
 	var row := _kit().kind("light")
 	var piv: Vector2 = row["turret"]["pivot"]
