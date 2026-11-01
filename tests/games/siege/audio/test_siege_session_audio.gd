@@ -257,19 +257,32 @@ func test_accents_are_at_most_one_a_gap_and_the_first_of_a_volley_of_misses_is_o
 	assert_lt(n, 12, "and they stand out from the rest")
 
 
-func test_a_body_in_the_window_takes_the_accent_from_a_miss() -> void:
+func test_every_body_is_an_accent_whatever_the_gap() -> void:
 	var list := _landings_of(SiegeIds.ENEMY_SPEAR, true)
 	var bodies := 0
 	for k in list.size():
 		if list[k]["surface"] != "flesh":
 			continue
 		bodies += 1
-		var taken := false
-		for j in range(maxi(k - 3, 0), k + 1):
-			var close: bool = list[k]["t"] - list[j]["t"] < SiegeShotSounds.ACCENT_GAP_S
-			taken = taken or (close and list[j]["accent"])
-		assert_true(taken, "arrow %d: a body, or an accent just before it" % k)
+		assert_true(list[k]["accent"], "arrow %d struck a body" % k)
 	assert_gt(bodies, 0, "the volley struck it")
+
+
+func test_a_miss_is_no_accent_inside_the_gap_of_a_body() -> void:
+	var list := _landings_of(SiegeIds.ENEMY_SPEAR, true)
+	var body_t: Array[float] = []
+	for imp: Dictionary in list:
+		if imp["surface"] == "flesh":
+			body_t.append(imp["t"])
+	for imp: Dictionary in list:
+		if imp["surface"] == "flesh" or not imp["accent"]:
+			continue
+		for t: float in body_t:
+			# A miss landing ahead of a body waits for it; one after it waits out the gap.
+			assert_false(
+				absf(imp["t"] - t) < SiegeShotSounds.ACCENT_GAP_S - 1.0 / 30.0,
+				"a miss at %.3f, a body at %.3f" % [imp["t"], t]
+			)
 
 
 func test_accents_keep_their_gap_across_volleys() -> void:

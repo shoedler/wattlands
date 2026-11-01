@@ -466,6 +466,40 @@ func test_an_arrow_near_the_camera_is_louder_and_a_volley_spreads_across_the_sen
 	assert_gt(wide, drawn * 2.0, "a few metres in a volley reach another pan step")
 
 
+func _landed_levels(alarm: bool) -> Array[float]:
+	var st := SiegeKit.state("short", 1, 0)
+	_rider_on(st, SiegeIds.STATION_ARROWS)
+	var v := _view(st)
+	var ev := _shot(SiegeIds.SHOT_ARROW)
+	ev["src"] = SiegeIds.STATION_ARROWS
+	ev["tk"] = st.tick
+	v.audio.on_cue(SiegeIds.EV_SHOT, ev)
+	var flight: float = v.audio.last_flight_s
+	# Up to just before the first arrow comes down, which then lands inside the alarm's crowd step.
+	_land(v, flight - 1.0)
+	if alarm:
+		v.audio.on_cue(SiegeIds.EV_LEAK, {})
+		v.audio._alarm_t = 600.0
+	_land(v, 3.0)
+	return _db_of(v, "arrow_dirt")
+
+
+func test_an_alarm_steps_the_crowd_back_and_only_the_crowd() -> void:
+	var quiet := _landed_levels(true)
+	var plain := _landed_levels(false)
+	assert_eq(quiet.size(), plain.size())
+	assert_gt(quiet.size(), 0)
+	for k in quiet.size():
+		assert_almost_eq(quiet[k] - plain[k], SiegeAudio.ALARM_CROWD_DB, 0.01, "arrow %d" % k)
+
+
+func test_a_reach_takes_the_place_of_the_leak_that_comes_with_it() -> void:
+	var v := _solo(0.0)
+	v.audio.on_cue(SiegeIds.EV_REACH, {})
+	v.audio.on_cue(SiegeIds.EV_LEAK, {})
+	assert_eq(_count(v, "reach_alarm"), 1, "two alarms at once took a prompt's margin under +6 LU")
+
+
 func test_an_arrows_level_over_its_cue_has_a_ceiling() -> void:
 	var st := SiegeKit.state("short", 1, 0)
 	_rider_on(st, SiegeIds.STATION_ARROWS)

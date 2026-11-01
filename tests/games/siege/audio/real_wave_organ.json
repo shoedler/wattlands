@@ -1,16 +1,16 @@
 {
   "mix_apart_first_60ms": {
-    "flesh_dirt": 4.81,
-    "wood_dirt": 5.1,
-    "flesh_wood": 4.56,
-    "shield_dirt": 6.1
+    "flesh_dirt": 4.88,
+    "wood_dirt": 5.62,
+    "flesh_wood": 5.39,
+    "shield_dirt": 5.04
   },
   "impacts_per_s": 12.84,
   "kills_per_s": 0.3,
-  "head_episodes_per_min": 43.66,
+  "head_episodes_per_min": 28,
   "a14_ballista": {
     "n": 10,
-    "median": 0.54
+    "median": 0.81
   },
   "arrows": {
     "landed": 2110,
@@ -34,23 +34,23 @@
       "cap": 16,
       "frames_full": 0,
       "max": 10,
-      "mean": 1.09
+      "mean": 1.08
     },
     "coverage": 1
   },
   "fatigue": {
     "lufs_30s": [
-      -15.83,
-      -17.02,
-      -16.34,
-      -16.62,
-      -16.75,
-      -15.57
+      -15.99,
+      -17.19,
+      -16.36,
+      -16.58,
+      -16.79,
+      -15.72
     ],
-    "lufs_30s_spread": 1.45,
+    "lufs_30s_spread": 1.47,
     "lufs_3s_p10_p90": [
-      -18.01,
-      -15.03
+      -18.22,
+      -15.17
     ],
     "arrows_per_s_30s": [
       8,
@@ -67,14 +67,14 @@
     ],
     "envelope_repeat": {
       "lag_s": 1.55,
-      "correlation": 0.2
+      "correlation": 0.18
     },
     "same_file_twice_running": 0
   },
   "landing_contrast": {
-    "ratio": 3.16,
-    "inside_per_s": 2.22,
-    "outside_per_s": 0.7,
+    "ratio": 2.57,
+    "inside_per_s": 2.06,
+    "outside_per_s": 0.8,
     "duty": 0.48,
     "volleys": 181
   },
@@ -82,163 +82,206 @@
     "over": {
       "own_arrow_swarm": {
         "n": 185,
-        "median": 1.27,
-        "p90": 8.11
+        "median": 0.82,
+        "p90": 6.66
       },
       "own_arrow_swarm_full_level": {
         "n": 92,
-        "median": 4.86,
-        "p90": 9.33
+        "median": 4.09,
+        "p90": 7.66
       },
       "other_stone_tumble": {
         "n": 40,
-        "median": -3.44,
-        "p90": 0.68
+        "median": -3.29,
+        "p90": 1.33
       },
       "other_bolt_hiss": {
         "n": 196,
-        "median": -2.93,
-        "p90": 1.2
+        "median": -2.84,
+        "p90": 1.82
       }
     },
-    "ripple_p90_p10": 8.24
+    "ripple_p90_p10": 8.19
   },
-  "sfx_over_machines_1k_2k": 20.05,
+  "sfx_over_machines_1k_2k": 20.22,
   "one_arrow": {
     "all_400_6000": {
       "body": {
         "n": 246,
-        "median": 7.86,
-        "p10": -2.39,
-        "rise": 6.84,
+        "median": 8.31,
+        "p10": -1.86,
+        "rise": 8.49,
+        "rise_accented": 8.49,
+        "rise_plain": 0,
+        "accented": 246,
         "sounds": {
           "arrow_flesh": {
             "n": 100,
-            "median": 9.06,
-            "p10": -1.14
+            "median": 9.8,
+            "p10": -0.9
           },
           "arrow_wood": {
             "n": 146,
-            "median": 6.8,
-            "p10": -2.47
+            "median": 7.73,
+            "p10": -2.55
           }
         }
       },
       "miss": {
         "n": 1864,
-        "median": -5.55,
-        "p10": -12.94,
-        "rise": 1.38,
+        "median": -6.05,
+        "p10": -14.3,
+        "rise": 1.35,
+        "rise_accented": 1.79,
+        "rise_plain": 1.25,
+        "accented": 300,
         "sounds": {
           "arrow_dirt": {
             "n": 1862,
-            "median": -5.55,
-            "p10": -12.94
+            "median": -6.06,
+            "p10": -14.3
           },
           "arrow_water": {
             "n": 2,
-            "median": -2.46,
-            "p10": -2.46
+            "median": -1.98,
+            "p10": -1.98
           }
         }
       },
-      "arbitrary_rise": -0.79
+      "arbitrary_rise": -0.86
     },
     "low_400_1000": {
       "body": {
         "n": 246,
-        "median": 6.18,
-        "p10": -3.85,
-        "rise": 6.25,
+        "median": 3.26,
+        "p10": -3.81,
+        "rise": 6.14,
+        "rise_accented": 6.14,
+        "rise_plain": 0,
+        "accented": 246,
         "sounds": {
           "arrow_flesh": {
             "n": 100,
-            "median": 12.4,
-            "p10": -1.52
+            "median": 10.44,
+            "p10": -1.77
           },
           "arrow_wood": {
             "n": 146,
-            "median": 4.23,
-            "p10": -4.53
+            "median": 1.8,
+            "p10": -5.51
           }
         }
       },
       "miss": {
         "n": 1864,
-        "median": -4.43,
-        "p10": -10.77,
-        "rise": 1.69,
+        "median": -5.11,
+        "p10": -11.95,
+        "rise": 1.65,
+        "rise_accented": 2.29,
+        "rise_plain": 1.53,
+        "accented": 300,
         "sounds": {
           "arrow_dirt": {
             "n": 1862,
-            "median": -4.43,
-            "p10": -10.77
+            "median": -5.11,
+            "p10": -11.95
           },
           "arrow_water": {
             "n": 2,
-            "median": -0.45,
-            "p10": -0.45
+            "median": -0.36,
+            "p10": -0.36
           }
         }
       },
-      "arbitrary_rise": -0.96
+      "arbitrary_rise": -0.93
     },
     "high_2400_6000": {
       "body": {
         "n": 246,
-        "median": -0.91,
-        "p10": -5.94,
-        "rise": 3.21,
+        "median": 0.98,
+        "p10": -7.33,
+        "rise": 4.69,
+        "rise_accented": 4.69,
+        "rise_plain": 0,
+        "accented": 246,
         "sounds": {
           "arrow_flesh": {
             "n": 100,
-            "median": -1.28,
-            "p10": -5.91
+            "median": -1.56,
+            "p10": -10.27
           },
           "arrow_wood": {
             "n": 146,
-            "median": -0.91,
-            "p10": -6.08
+            "median": 2.09,
+            "p10": -4.56
           }
         }
       },
       "miss": {
         "n": 1864,
-        "median": -3.2,
-        "p10": -7.34,
-        "rise": 2.05,
+        "median": -3.47,
+        "p10": -8.7,
+        "rise": 2.18,
+        "rise_accented": 2.9,
+        "rise_plain": 2.04,
+        "accented": 300,
         "sounds": {
           "arrow_dirt": {
             "n": 1862,
-            "median": -3.2,
-            "p10": -7.32
+            "median": -3.47,
+            "p10": -8.67
           },
           "arrow_water": {
             "n": 2,
-            "median": -32.09,
-            "p10": -32.09
+            "median": -33.37,
+            "p10": -33.37
           }
         }
       },
-      "arbitrary_rise": -0.45
+      "arbitrary_rise": -0.34
     }
   },
-  "seconds": 180.01,
-  "lufs": -16.32,
-  "lra": 3.35,
-  "ear_band_share": -13.35,
-  "ear_band_worst": -2.77,
-  "ear_band_a_share": -8.94,
-  "top_band_share": -36.07,
-  "sfx_lufs": -18.24,
-  "sfx_movement_1k_4k": {
-    "p10": -35.54,
-    "p50": -30.38,
-    "p90": -25.09,
-    "spread": 10.45
+  "events": {
+    "reach_alarm": [
+      {
+        "t": 103.31,
+        "db": -7,
+        "rise": 0.09,
+        "best_octave": 5.58,
+        "arrows_around": 10
+      },
+      {
+        "t": 107.92,
+        "db": -7,
+        "rise": -0.39,
+        "best_octave": 4.55,
+        "arrows_around": 4
+      },
+      {
+        "t": 142.91,
+        "db": -7,
+        "rise": 1.93,
+        "best_octave": 6.51,
+        "arrows_around": 10
+      }
+    ]
   },
-  "prompt_margin_worst": 7.42,
-  "bank_sha": "14af3fcc69d086731abc9a70563ee07c5ac6028b7def4b8f10dbe5375c8bd23b",
+  "seconds": 180.01,
+  "lufs": -16.4,
+  "lra": 3.32,
+  "ear_band_share": -12.91,
+  "ear_band_worst": 0.52,
+  "ear_band_a_share": -8.46,
+  "top_band_share": -36.21,
+  "sfx_lufs": -18.36,
+  "sfx_movement_1k_4k": {
+    "p10": -35.8,
+    "p50": -30.61,
+    "p90": -25.2,
+    "spread": 10.59
+  },
+  "prompt_margin_worst": 7.35,
+  "bank_sha": "91c8b3ca0acd1c0e996e904a3cd3a1f8a10f4e85e43c13b2acf3c621e492bda5",
   "driver": "WASAPI",
   "shots": 416,
   "flight_starts": 416,

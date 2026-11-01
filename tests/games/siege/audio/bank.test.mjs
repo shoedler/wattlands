@@ -322,12 +322,12 @@ test('a body at full level stays under the master head on its own', () => {
 });
 
 const REAL = ['organ', 'auto'].map((k) => [k, JSON.parse(fs.readFileSync(new URL(`./real_wave_${k}.json`, import.meta.url), 'utf8'))]);
-const ALL_REAL = [...REAL, ['app', JSON.parse(fs.readFileSync(new URL('./real_wave_app.json', import.meta.url), 'utf8'))]];
+const ALL_REAL = [...REAL, ...['app', 'wave3'].map((k) => [k, JSON.parse(fs.readFileSync(new URL(`./real_wave_${k}.json`, import.meta.url), 'utf8'))])];
 /** rc.2's bank, on the same driver and sessions, as played. The rows below must fail these: rc.2 is what the owner rejected. */
 const RC2 = {
-  organ: { coverage: 0.154, contrast: 1.5, body_over_miss: -1.71 },
-  auto: { coverage: 0.081, contrast: 1.15, body_over_miss: 4.3 },
-  app: { coverage: 0.127, contrast: 1.24, body_over_miss: -4.41 },
+  organ: { coverage: 0.15, contrast: 1.35, body_over_miss: -0.86 },
+  auto: { coverage: 0.08, contrast: 1.06, body_over_miss: 5.5 },
+  app: { coverage: 0.13, contrast: 1.29, body_over_miss: -4.79 },
 };
 const ROWS = doc.preview.checks.real_wave;
 
@@ -350,6 +350,9 @@ for (const [name, wave] of ALL_REAL) {
     assert.ok(one.body.median - one.miss.median >= ROWS.body_over_miss, `body ${one.body.median}, miss ${one.miss.median}`);
     assert.ok(wave.ear_band_share <= -12, `2-8 kHz ${wave.ear_band_share} dB`);
     assert.ok(wave.prompt_margin_worst >= 6, `warning ${wave.prompt_margin_worst} LU`);
+    assert.ok(wave.lufs <= -16, `${wave.lufs} LUFS`);
+    assert.equal(one.body.accented, one.body.n, 'every body is an accent');
+    for (const a of wave.events?.reach_alarm ?? []) assert.ok(a.best_octave >= 3, `an alarm at ${a.t} s rises ${a.best_octave} dB in its best octave`);
   });
 }
 

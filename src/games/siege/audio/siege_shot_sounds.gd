@@ -11,8 +11,8 @@ extends RefCounted
 ##
 ##   arrows      each lands alone and is heard alone, at its own land_t and where it comes down: the nearest body
 ##               within hit_r + its radius, else the ground. A shield bearer's block comes from the same hash stream as
-##               the host's. Twelve arrows land in about 340 ms, faster than anyone counts, so one in every ACCENT_GAP_S
-##               at most is an accent: a body if one lands in that window, else the first to land.
+##               the host's. Twelve arrows land in about 340 ms, faster than anyone counts, so every arrow on a body
+##               is an accent, and at most one miss in ACCENT_GAP_S: the first to land, unless a body is due inside it.
 ##   bolts       fly frame by frame: each body the path passes. The ballista's bolt goes on through them as long as it
 ##               has damage left, a Scorpion's stops at the first; a bolt that reaches the ground ends there.
 ##   stones      land once: the ground under them, and whatever stands within the splash.
@@ -242,21 +242,24 @@ func _arrows(f: Flying, t: float, out: Array[Dictionary]) -> void:
 		out.append(impact)
 
 
-## Whether this arrow is the accent of its moment. The first to land waits for a body due inside the gap, as things
-## stand: the body has the better claim, and a miss then takes the next window instead. All volleys share the gap.
+## Whether this arrow is an accent. A body always is: half of them used to lose their accent to the gap, and those read
+## as the crowd. A miss is one only if no accent came in the gap and no body is due inside it, as things stand. All
+## volleys share that gap.
 func _take_accent(f: Flying, j: int, on_body: bool) -> bool:
 	var land_s := f.start_s + f.replay.land_t[j]
+	if on_body:
+		_accent_free_s = maxf(_accent_free_s, land_s + ACCENT_GAP_S)
+		return true
 	if land_s < _accent_free_s:
 		return false
-	if not on_body:
-		var k := f.next_k
-		while k < f.order.size():
-			var other := f.order[k]
-			if f.replay.land_t[other] - f.replay.land_t[j] >= ACCENT_GAP_S:
-				break
-			if _nearest(f.replay.landing(other), f.hit_r) != null:
-				return false
-			k += 1
+	var k := f.next_k
+	while k < f.order.size():
+		var other := f.order[k]
+		if f.replay.land_t[other] - f.replay.land_t[j] >= ACCENT_GAP_S:
+			break
+		if _nearest(f.replay.landing(other), f.hit_r) != null:
+			return false
+		k += 1
 	_accent_free_s = land_s + ACCENT_GAP_S
 	return true
 

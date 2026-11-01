@@ -43,6 +43,10 @@ const KILL_EVERY_S := 1.5
 const WOOD_PITCH: Array[float] = [1.0, 0.95, 1.06, 0.97, 1.04, 0.94, 1.02]
 ## A ram's battering is one leak per whole HP: the alarm answers the first, not each.
 const LEAK_ALARM_EVERY_S := 3.0
+## An alarm is what a rider acts on, and it rings at about 660 Hz, where the arrows' crowd sits: the crowd steps back
+## for its first strokes. On top of the arrow's own level, and only the arrows.
+const ALARM_CROWD_DB := -6.0
+const ALARM_CROWD_S := 0.7
 const MAX_SHOT_SOUNDS_PER_TICK := 3
 ## A shot's flight sound never runs longer than the host flies anything.
 const FLIGHT_MIN_S := 0.1
@@ -63,9 +67,9 @@ const ARROW_DB_STEP := 0.7548776662
 ## The file of each arrow: never the one before it on that surface, otherwise out of order. A strict rotation came back
 ## on a near-twin in about two thirds of misses.
 const ARROW_FILE_STEP := 0.4142135624
-## The ear counts 3 or 4 events a second, and twelve arrows land in about 340 ms. An accent gives it those: at most one
-## arrow in SiegeShotSounds.ACCENT_GAP_S, this much over the rest.
-const ARROW_ACCENT_DB := 4.0
+## The ear counts 3 or 4 events a second, and twelve arrows land in about 340 ms. An accent gives it those: every arrow
+## on a body and at most one miss in SiegeShotSounds.ACCENT_GAP_S, this much over the rest.
+const ARROW_ACCENT_DB := 6.0
 ## Near the camera louder, far quieter: this much either way, over this many art pixels from where on the screen the
 ## organ's arrows land on average (the road 40 to 115 m from it runs at about y 340 to 510).
 const ARROW_DEPTH_DB := 3.0
@@ -73,7 +77,7 @@ const ARROW_DEPTH_MID_PX := 430.0
 const ARROW_DEPTH_PX := 90.0
 ## An arrow's level over its cue never passes this, whatever accent and depth add: a body near the camera that is also
 ## an accent would otherwise go over the top of the master by itself.
-const ARROW_LVL_MAX_DB := 3.0
+const ARROW_LVL_MAX_DB := 2.0
 ## A volley comes down in a few metres, about one pan step of the road's side of the screen: the volley's place is a
 ## little wider than the picture and each arrow's distance from it much wider, or all twelve share one send.
 const ARROW_PAN_WIDEN := 1.3
@@ -114,6 +118,7 @@ var _kill_t: float = 0.0
 var _wood_n: int = 0
 var _arrow_n: int = 0
 var _arrow_file: Dictionary = {}
+var _alarm_t: float = 0.0
 var _view: SiegeView = null
 var _coin_t: float = 0.0
 var _leak_t: float = 0.0
@@ -190,6 +195,7 @@ func update(state: SiegeState, dt: float, p_local_peer: int, view: SiegeView) ->
 	var me := state.rider(local_peer)
 	_local_slot = me.slot if me != null else -1
 	_leak_t = maxf(_leak_t - dt, 0.0)
+	_alarm_t = maxf(_alarm_t - dt, 0.0)
 	_other_impact_t = maxf(_other_impact_t - dt, 0.0)
 	_kill_t = maxf(_kill_t - dt, 0.0)
 	_view = view
@@ -297,7 +303,13 @@ func on_cue(kind: String, data: Dictionary) -> void:
 		SiegeIds.EV_LEAK:
 			if _leak_t <= 0.0:
 				_leak_t = LEAK_ALARM_EVERY_S
+				_alarm_t = ALARM_CROWD_S
 				kit.cue(cue_name)
+		SiegeIds.EV_REACH:
+			# It rings for the leak that comes with it: two alarms at once took a prompt's margin under +6 LU.
+			_leak_t = LEAK_ALARM_EVERY_S
+			_alarm_t = ALARM_CROWD_S
+			kit.cue(cue_name)
 		SiegeIds.EV_ROUTE, SiegeIds.EV_BUY, SiegeIds.EV_OVERDRIVE:
 			kit.cue(cue_name, {}, int(data.get("slot", -1)) == _local_slot)
 		_:
@@ -393,9 +405,10 @@ func _arrow_landing(cue_name: String, impact: Dictionary, lead: bool) -> void:
 	_arrow_n += 1
 	var vars := {
 		"pan": _arrow_pan(impact["at"], impact["mid"]),
-		"lvl": minf(lvl, ARROW_LVL_MAX_DB),
+		"lvl": minf(lvl, ARROW_LVL_MAX_DB) + (ALARM_CROWD_DB if _alarm_t > 0.0 else 0.0),
 		"pv": spread.x,
 		"vr": file,
+		"acc": 1.0 if bool(impact["accent"]) else 0.0,
 	}
 	kit.cue(cue_name, vars, lead)
 
