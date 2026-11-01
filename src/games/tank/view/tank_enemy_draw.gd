@@ -24,6 +24,10 @@ const HAZE_MAX := 0.5
 const FLASH := Color(1.0, 1.0, 0.9)
 const SLIT := Color(0.5, 0.88, 0.82)
 const SLIT_CORE := Color(0.85, 1.0, 0.96)
+## How a slit burns behind its lid: low, a cold signal and no LED.
+const SLIT_SPILL := 0.12
+const SLIT_GLASS := 0.35
+const SLIT_HEART := 0.6
 ## The warmth beside the cold slits, so the enemy lives in our tank's night: engine vents, a hatch's lit crack, the
 ## exhaust's glow and the Behemoth's furnace. Light only: the atlas stays cold.
 const WARM := Color(1.0, 0.5, 0.18)
@@ -59,6 +63,8 @@ const FIRE_BODY := 0.7
 const FAR_WHEEL := Color(0.5, 0.55, 0.52)
 ## The mean of an enemy's albedo: how much a part's tint must lift to read as hazed.
 const ALBEDO := Color(0.1, 0.115, 0.1)
+## The narrowest a turret draws, as a share of its width.
+const TURRET_SX_MIN := 0.5
 ## Hull rotations under this stay flat: nearest sampling of a hair's tilt only makes the rows jag.
 const ROT_SNAP := 0.012
 ## The hull's bob over the wheels: rows of bob, and its period in px of travel.
@@ -104,7 +110,8 @@ static func draw(
 	if veil.a > 0.0:
 		ci.draw_texture_rect_region(tex, _at(Vector2.ZERO, row["sil"]), row["sil"], veil)
 	var txf := turret_xf(row, pose)
-	_set_xf(ci, xf * _gun_xf(row, pose, txf))
+	var top := level_stage(row, xf)
+	_set_xf(ci, top * _gun_xf(row, pose, txf))
 	var g: Dictionary = row["gun"]
 	var grect: Rect2 = g["rect"]
 	var gat := Rect2(-(g["origin"] as Vector2), grect.size)
@@ -113,7 +120,7 @@ static func draw(
 		ci.draw_texture_rect_region(tex, gat, g["sil"], veil)
 	if row.has("turret"):
 		var t: Dictionary = row["turret"]
-		_set_xf(ci, xf * txf)
+		_set_xf(ci, top * txf)
 		ci.draw_texture_rect_region(tex, _at(t["at"], t["rect"]), t["rect"], tint)
 		if veil.a > 0.0:
 			ci.draw_texture_rect_region(tex, _at(t["at"], t["sil"]), t["sil"], veil)
@@ -125,6 +132,7 @@ static func _halo(
 	ci: CanvasItem, tex: Texture2D, row: Dictionary, foot: Vector2, pose: Dictionary, a: float
 ) -> void:
 	var xf: Transform2D = hull_pose(row, foot, pose)["stage"]
+	var top := level_stage(row, xf)
 	var txf := turret_xf(row, pose)
 	var col := Color(HALO.r, HALO.g, HALO.b, a)
 	var g: Dictionary = row["gun"]
@@ -135,11 +143,11 @@ static func _halo(
 		var shift := Transform2D(0.0, d)
 		_set_xf(ci, shift * xf)
 		ci.draw_texture_rect_region(tex, _at(Vector2.ZERO, row["sil"]), row["sil"], col)
-		_set_xf(ci, shift * xf * gxf)
+		_set_xf(ci, shift * top * gxf)
 		ci.draw_texture_rect_region(tex, gat, gsil, col)
 		if row.has("turret"):
 			var t: Dictionary = row["turret"]
-			_set_xf(ci, shift * xf * txf)
+			_set_xf(ci, shift * top * txf)
 			ci.draw_texture_rect_region(tex, _at(t["at"], t["sil"]), t["sil"], col)
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
 
@@ -157,15 +165,17 @@ static func draw_light(
 	var k := light_k(pose)
 	var hull := hull_pose(row, foot, pose)
 	var xf: Transform2D = hull["stage"]
-	var txf := xf * turret_xf(row, pose)
+	var txf := level_stage(row, xf) * turret_xf(row, pose)
 	for s: Array in row.get("slits", []):
 		var on_turret := s.size() > 3 and int(s[3]) == 1
 		_set_xf(ci, txf if on_turret else xf)
 		var r := Rect2(float(s[0]), float(s[1]), float(s[2]), 1.0)
-		ci.draw_rect(r.grow_individual(1.0, 1.0, 1.0, 1.0), SLIT * (0.16 * k))
-		ci.draw_rect(r, SLIT * (0.55 * k))
+		# its light spills on the sill, never on the lid: the lid stays dark over the glass
+		ci.draw_rect(r.grow_individual(1.0, 0.0, 1.0, 1.0), SLIT * (SLIT_SPILL * k))
+		ci.draw_rect(r, SLIT * (SLIT_GLASS * k))
 		ci.draw_rect(
-			Rect2(r.position.x + floorf(r.size.x * 0.5), r.position.y, 1.0, 1.0), SLIT_CORE * k
+			Rect2(r.position.x + floorf(r.size.x * 0.5), r.position.y, 1.0, 1.0),
+			SLIT_CORE * (SLIT_HEART * k)
 		)
 	_warm_lights(ci, kit.texture(), row, xf, txf, k, float(pose.get("time", 0.0)))
 	_set_xf(ci, xf)
@@ -318,7 +328,7 @@ static func muzzle(kit: TankEnemyKit, kind: String, foot: Vector2, pose: Diction
 	var g: Dictionary = row["gun"]
 	var txf := turret_xf(row, pose)
 	var gxf := _gun_xf(row, pose, txf)
-	return (hull["stage"] as Transform2D) * (gxf * Vector2(float(g["len"]), 0.0))
+	return level_stage(row, hull["stage"]) * (gxf * Vector2(float(g["len"]), 0.0))
 
 
 ## The gun's bore as drawn: [breech, muzzle] on the stage (the far panel's firing mark runs along it).
@@ -330,7 +340,7 @@ static func bore(
 	if not row.has("gun"):
 		return [mz + Vector2(10, 0), mz]
 	var stage: Transform2D = hull_pose(row, foot, pose)["stage"]
-	return [stage * _gun_xf(row, pose, turret_xf(row, pose)) * Vector2.ZERO, mz]
+	return [level_stage(row, stage) * _gun_xf(row, pose, turret_xf(row, pose)) * Vector2.ZERO, mz]
 
 
 ## A sprite point of the kind's hull on the stage: V's exhaust anchor (row "exhaust"), the Behemoth's bow
@@ -414,11 +424,26 @@ static func hull_pose(row: Dictionary, foot: Vector2, pose: Dictionary) -> Dicti
 	return {"stage": _mirror(foot) * xf2 if flip else xf2, "wheels": wc2}
 
 
-## The turret's transform (sprite px): mirrored and squeezed about its pivot (TankBody.turret_xf).
+## What the turret and its gun stand on: the hull's stage with its tilt taken out about the turret's pivot, on whole
+## px. A turret rides level: nearest sampling of a tilted slab makes its digits stair-step. A casemate's gun has no
+## turret and stays on the hull.
+static func level_stage(row: Dictionary, stage: Transform2D) -> Transform2D:
+	if not row.has("turret") or is_zero_approx(stage.x.y):
+		return stage
+	var side := signf(stage.x.x)
+	var piv: Vector2 = row["turret"]["pivot"]
+	return Transform2D(
+		Vector2(side, 0.0), Vector2(0.0, 1.0), (stage * piv - Vector2(side * piv.x, piv.y)).round()
+	)
+
+
+## The turret's transform (sprite px): mirrored and squeezed about its pivot (TankBody.turret_xf). Mid-traverse it is
+## never squeezed past half: a thinner slab is a sliver, not a turret. The game only draws it at +1 or -1.
 static func turret_xf(row: Dictionary, pose: Dictionary) -> Transform2D:
 	if not row.has("turret"):
 		return Transform2D.IDENTITY
 	var sx := float(pose.get("turret_sx", 1.0))
+	sx = (-1.0 if sx < 0.0 else 1.0) * maxf(absf(sx), TURRET_SX_MIN)
 	var px := float((row["turret"]["pivot"] as Vector2).x)
 	return Transform2D(Vector2(sx, 0), Vector2(0, 1), Vector2(px * (1.0 - sx), 0))
 
