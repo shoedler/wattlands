@@ -18,6 +18,42 @@ const D_CYCLE: Array[float] = [0.0, 480.0, 240.0]
 const D_SPA := Vector2(92, 45)
 const D_SPB := Vector2(103, 50)
 const D_LAMP := 68
+## What moves the pistons onto the strokes, in crank degrees. The diesel's fire strokes in audio.json sit on the flapper
+## (test_tank_audio_bank.gd), and _diesel's `since` wraps at 200; D_THROW and D_CYCLE put a firing top at 240.
+const D_STROKE_LEAD := 40.0
+## How long a bore stays lit from its firing top, in crank degrees.
+const D_LIT_DEG := 90.0
+
+
+## The crank, in degrees, of the pistons on this card and in the cutaway on the tank (TankInterior.diesel_open) at `ph`
+## crank revolutions: a firing top lands on a fire stroke and an overlap top on an inlet stroke.
+static func stroke_crank_deg(ph: float) -> float:
+	return ph * float(RATIO["diesel"]) * 360.0 + D_STROKE_LEAD
+
+
+## Bore i's throw from its top at `crank` degrees, 0 to 360.
+static func throw_deg(crank: float, i: int) -> float:
+	return fposmod(crank + D_THROW[i], 360.0)
+
+
+## Bore i's place in its four strokes at `crank` degrees, 0 to 720: 0 is its firing top, 360 its overlap top.
+static func cycle_deg(crank: float, i: int) -> float:
+	return fposmod(crank + D_CYCLE[i], 720.0)
+
+
+## Whether bore i has just fired at `crank` degrees. An overlap top never lights it.
+static func bore_lit(crank: float, i: int) -> bool:
+	return cycle_deg(crank, i) < D_LIT_DEG
+
+
+## The bores that have just fired at `ph` crank revolutions, one bit each.
+static func lit_bores(ph: float) -> int:
+	var crank := stroke_crank_deg(ph)
+	var out := 0
+	for i in D_THROW.size():
+		if bore_lit(crank, i):
+			out |= 1 << i
+	return out
 
 
 static func _diesel_static(cv: Cv) -> void:
@@ -123,6 +159,7 @@ static func _diesel(cv: Cv, ph: float, pw: float, t: float, slot: Color, rate: f
 	var under := _under(pw)
 	var e := ph * float(RATIO["diesel"])
 	var th := e * TAU
+	var crank := stroke_crank_deg(ph)
 	_lamp(cv, D_LAMP, pw, t, slot)
 	# manifold and heads glow with heat (hot near the exhaust ports)
 	var mglow := clampf(heat * 1.35 - 0.45, 0.0, 1.0)
@@ -141,7 +178,7 @@ static func _diesel(cv: Cv, ph: float, pw: float, t: float, slot: Color, rate: f
 				for y in range(18, 23, 2):
 					cv.e(x, y, Color(0.95, 0.24, 0.05), hg * (0.55 + 0.45 * _h(float(x * 3 + y))))
 		# rocker on its post, tilting with the valve events
-		var cyc := fposmod(e * 360.0 + D_CYCLE[i], 720.0)
+		var cyc := cycle_deg(crank, i)
 		var tilt := 0
 		if cyc > 540.0 and cyc < 700.0:
 			tilt = 1
@@ -157,7 +194,7 @@ static func _diesel(cv: Cv, ph: float, pw: float, t: float, slot: Color, rate: f
 	# crank throws, con-rods, pistons; the bore lights up after each firing
 	for i in 3:
 		var cx4 := float(D_CX[i])
-		var a := th + deg_to_rad(D_THROW[i])
+		var a := deg_to_rad(throw_deg(crank, i))
 		var pin := Vector2(cx4 + D_R * sin(a), D_CY - D_R * cos(a))
 		var py := D_CY - (D_R * cos(a) + sqrt(D_L * D_L - D_R * D_R * sin(a) * sin(a)))
 		var cw := Vector2(cx4, D_CY) - (pin - Vector2(cx4, D_CY)) * 0.6
@@ -167,9 +204,8 @@ static func _diesel(cv: Cv, ph: float, pw: float, t: float, slot: Color, rate: f
 		cv.disc_f(pin, 1.6, STEEL[3])
 		cv.p(roundi(pin.x), roundi(pin.y), BRASS[4])
 		var top := roundi(py) - 3
-		var cyc2 := fposmod(e * 360.0 + D_CYCLE[i], 720.0)
-		if cyc2 < 90.0:
-			var k := (1.0 - cyc2 / 90.0) * (0.3 + 0.9 * heat)
+		if bore_lit(crank, i):
+			var k := (1.0 - cycle_deg(crank, i) / D_LIT_DEG) * (0.3 + 0.9 * heat)
 			for y in range(23, top):
 				for x in range(int(cx4) - 4, int(cx4) + 4):
 					var c := Color(1.0, 0.85, 0.5).lerp(Color(1.0, 0.38, 0.08), float(y - 23) / 9.0)
