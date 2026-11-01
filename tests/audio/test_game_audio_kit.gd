@@ -682,6 +682,18 @@ func test_a_stolen_voice_is_counted_by_the_pool_and_priority_it_was_taken_from()
 	assert_eq(kit.stolen, {"Sfx:%d" % GameAudioKit.CUE_PRIORITY: 1})
 
 
+func test_a_hit_may_name_its_file_and_otherwise_takes_the_round_robin() -> void:
+	var kit := _flight_kit(false)
+	kit._bank.cues["pick"] = {"hits": [{"sound": "bang", "variant_var": "vr"}]}
+	var before: int = kit._variant.get("bang", 0)
+	kit.cue("pick", {"vr": 1})
+	assert_eq(int(kit._variant.get("bang", 0)), before, "the round robin stays where it was")
+	kit.cue("pick")
+	assert_eq(int(kit._variant.get("bang", 0)), before + 1, "no var: the round robin")
+	assert_eq(kit.variants_of("bang"), kit._bank.variants("bang"))
+	assert_eq(kit.variants_of("no such sound"), 1)
+
+
 func test_a_delayed_flight_starts_when_its_delay_is_over() -> void:
 	var kit := _flight_kit(false)
 	var c: Dictionary = kit._bank.cues["fly"]

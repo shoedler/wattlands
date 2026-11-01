@@ -159,7 +159,8 @@ export function simulate(bank, scenario) {
       const rr = cueRr.get(h.sound) ?? 0;
       cueRr.set(h.sound, rr + 1);
       const pan = h.pan_var ? Number(vars[h.pan_var] ?? 0) : 0;
-      const v = { sound: h.sound, variant: rr % Math.max(1, bank.variants(h.sound)), t: t + delay, db, pitch, bus: h.bus ?? 'Sfx', priority: h.priority ?? 6, lead, cue: c.cue, pan, crowd: h.crowd === true && (mix.crowd_voices ?? 0) > 0 };
+      const chosen = h.variant_var && vars[h.variant_var] !== undefined ? Number(vars[h.variant_var]) : rr;
+      const v = { sound: h.sound, variant: chosen % Math.max(1, bank.variants(h.sound)), t: t + delay, db, pitch, bus: h.bus ?? 'Sfx', priority: h.priority ?? 6, lead, cue: c.cue, pan, crowd: h.crowd === true && (mix.crowd_voices ?? 0) > 0 };
       if (h.flight) {
         const panTo = h.flight.pan_to_var ? Number(vars[h.flight.pan_to_var] ?? pan) : pan;
         const dur = Math.max(0.05, h.flight.dur_var ? Number(vars[h.flight.dur_var] ?? h.flight.dur_s ?? 1) : (h.flight.dur_s ?? 1));

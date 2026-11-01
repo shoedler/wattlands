@@ -319,6 +319,51 @@ test('P4 hears the flights too: an impact under a loud Sfx bus does not pass', (
   assert.match(String(row(card(doc), 'P4').value), /missing never_played/);
 });
 
+test('P4 leaves crowd hits out of its medians, and no other hit', () => {
+  const doc = structuredClone(fixture);
+  doc.mix = { ...doc.mix, crowd_voices: 16 };
+  doc.sounds.air = { dur: 1, rate: 22050, ch: 1, seed: 9, loop: true, compress: 'pcm', layers: [{ src: 'noise', color: 'white', gain: 1, fx: [{ bp: { f: 2000, q: 0.7 } }] }] };
+  doc.sounds.tap = { dur: 0.1, rate: 22050, ch: 1, seed: 11, layers: [{ src: 'noise', color: 'white', env: { a: 0.001, d: 0.09 }, gain: 1, fx: [{ bp: { f: 2000, q: 0.7 } }] }] };
+  doc.sounds.thud = { dur: 0.1, rate: 22050, ch: 1, seed: 12, layers: [{ src: 'noise', color: 'white', env: { a: 0.001, d: 0.09 }, gain: 1, fx: [{ bp: { f: 2000, q: 0.7 } }] }] };
+  doc.cues.flies = { hits: [{ sound: 'air', db: -18, flight: { dur_var: 'f' } }] };
+  doc.cues.small = { hits: [{ sound: 'tap', db: -30, crowd: true }] };
+  doc.cues.big = { hits: [{ sound: 'thud', db: 6 }] };
+  doc.preview.events = [...doc.preview.events, { t: 3, cue: 'flies', vars: { f: 3 } }, { t: 4, cue: 'big' }, { t: 4.2, cue: 'small' }, { t: 4.4, cue: 'small' }, { t: 4.6, cue: 'small' }];
+  doc.preview.checks = { ...doc.preview.checks, projectiles: { shots: ['flies'], surfaces: { dirt: ['small', 'big'] } } };
+  const withBig = row(card(doc), 'P4');
+  assert.equal(withBig.pass, true, `three quiet crowd hits do not take the median down: ${withBig.note}`);
+  doc.cues.small.hits[0].crowd = false;
+  assert.equal(row(card(doc), 'P4').pass, false, 'the same hits, not a crowd');
+});
+
+function rowsFrom(t, reports, spec = { coverage: 0.95, contrast: 2, body_over_miss: 6 }) {
+  const dir = tempDir(t);
+  const names = reports.map((r, i) => {
+    fs.writeFileSync(path.join(dir, `r${i}.json`), JSON.stringify(r));
+    return `r${i}.json`;
+  });
+  const doc = structuredClone(fixture);
+  doc.preview.checks = { ...doc.preview.checks, real_wave: { reports: names, ...spec } };
+  return scoreBank(doc, null, { shared, root: dir });
+}
+
+const report = (coverage, contrast, body, miss) => ({ arrows: { coverage }, landing_contrast: { ratio: contrast }, one_arrow: { all_400_6000: { body: { median: body }, miss: { median: miss } } } });
+
+test('R1-R3 read the tracked reports, every one of them', (t) => {
+  const good = report(1, 3, 5, -7);
+  const pass = (c, id) => row(c, id).pass;
+  assert.equal(pass(rowsFrom(t, [good, good]), 'R1'), true);
+  assert.equal(pass(rowsFrom(t, [good, good]), 'R2'), true);
+  assert.equal(pass(rowsFrom(t, [good, good]), 'R3'), true);
+  assert.equal(pass(rowsFrom(t, [good, report(0.15, 3, 5, -7)]), 'R1'), false, 'one arrow in seven');
+  assert.equal(pass(rowsFrom(t, [good, report(1, 1.5, 5, -7)]), 'R2'), false, 'no more onsets where arrows land');
+  assert.equal(pass(rowsFrom(t, [good, report(1, 3, 5, 2)]), 'R3'), false, 'a body no louder than a miss');
+});
+
+test('without checks.real_wave R1-R3 say so', () => {
+  assert.equal(row(card(structuredClone(fixture)), 'R1').value, 'n/a');
+});
+
 test('P6 holds the 2-8 kHz of the master where a bank asks', () => {
   const doc = structuredClone(fixture);
   doc.preview.checks = { ...doc.preview.checks, projectiles: { shots: [], surfaces: {} }, ear_band: { limit: -60 } };

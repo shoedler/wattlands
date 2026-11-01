@@ -383,6 +383,11 @@ func entry_loop(id: String) -> LayeredLoop:
 	return slot.loops.loop if slot != null else null
 
 
+## How many files a sound has; 1 for an unknown one or with no bank.
+func variants_of(sound_id: String) -> int:
+	return _bank.variants(sound_id) if _bank != null and _bank.sounds.has(sound_id) else 1
+
+
 ## Flights in the air (tests, tools).
 func flights_live() -> int:
 	return _flights.size()
@@ -589,7 +594,9 @@ func _cue_hit(hit: Dictionary, vars: Dictionary, trim: float, lead: bool) -> voi
 	var id := str(hit.get("sound", ""))
 	var bus := str(hit.get("bus", AudioBuses.SFX))
 	var priority := int(hit.get("priority", CUE_PRIORITY))
-	var variant := _next_variant(id)
+	# A game may pick the file itself (a shuffle, say); the kit's round robin otherwise.
+	var variant := int(_var(vars, hit.get("variant_var", ""), -1.0))
+	variant = _next_variant(id) if variant < 0 else variant
 	var pan := _var(vars, hit.get("pan_var", ""), 0.0)
 	var crowd := bool(hit.get("crowd", false))
 	var flight: Flight = null

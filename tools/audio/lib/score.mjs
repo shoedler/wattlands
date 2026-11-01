@@ -484,7 +484,7 @@ function projectileRows(bank, p, sim, mix, rows) {
     P1: 'flight sounds started per shot: 1 for every weapon',
     P2: 'a flight sound lasts its flight',
     P3: `a flight's loudest 250 ms is >= +${P_FLIGHT_MARGIN_DB} dB over the wheels and the bed, ${P_FLIGHT_BAND.join('-')} Hz (not over other flights: P8)`,
-    P4: `every impact cue is in the preview, each surface's median impact >= +${P_IMPACT_MARGIN_DB} dB over everything else that plays, ${P_IMPACT_BAND.join('-')} Hz`,
+    P4: `every impact cue is in the preview, each surface's median impact, crowd hits aside, >= +${P_IMPACT_MARGIN_DB} dB over everything else that plays, ${P_IMPACT_BAND.join('-')} Hz`,
     P5: `surfaces differ: spectra >= ${P_SURFACE_APART_DB} dB apart`,
     P6: `2-8 kHz of the master <= ${p.checks?.ear_band?.limit ?? '?'} dB of its total`,
     P7: `flights differ: spectra at their pitch >= ${P_FLIGHTS_APART_DB} dB apart`,
@@ -538,7 +538,9 @@ function projectileRows(bank, p, sim, mix, rows) {
   const medians = [];
   for (const [surface, cues] of surfaces) {
     const overs = [];
-    for (const v of sim.voices.filter((x) => cues.includes(x.cue) && x.sound === bank.doc.cues[x.cue].hits[0].sound)) {
+    // A crowd hit is not in these medians: "everything else" holds the rest of its crowd, and with nothing else playing
+    // a miss among misses reads -0.3 dB at any level. checks.real_wave holds the crowd instead.
+    for (const v of sim.voices.filter((x) => cues.includes(x.cue) && !x.crowd && x.sound === bank.doc.cues[x.cue].hits[0].sound)) {
       overs.push(voiceOverRest(bank, v, everything, P_IMPACT_BAND, 0.05));
     }
     overs.sort((x, y) => x - y);
@@ -630,6 +632,32 @@ function projectileRows(bank, p, sim, mix, rows) {
   }
   if (flightShapes.length < 2) rows.push({ id: 'P7', pass: true, value: 'n/a', target: 'fewer than two flights' });
   else rows.push({ id: 'P7', pass: flightsApart >= P_FLIGHTS_APART_DB, value: round(flightsApart), target: targets.P7, note: flightsWhat });
+}
+
+/**
+ * R1-R3, for a bank whose preview says checks.real_wave: {reports: [path from the repo root...], coverage, contrast,
+ * body_over_miss}: what a crowd of hits does in recordings of the real game (tools/audio/live_report.mjs). A preview is
+ * written by hand and these three failed on a game the preview passed.
+ */
+function realWaveRows(p, root, rows) {
+  const spec = p.checks?.real_wave;
+  const targets = {
+    R1: `voices started per arrow landed >= ${spec?.coverage}`,
+    R2: `strong onsets a second inside landing windows over outside >= ${spec?.contrast}, read from the master`,
+    R3: `a body over a miss in the same mix >= +${spec?.body_over_miss} dB`,
+  };
+  if (!spec || !root) {
+    for (const id of Object.keys(targets)) rows.push({ id, pass: true, value: 'n/a', target: 'preview.checks.real_wave not set' });
+    return;
+  }
+  const reports = spec.reports.map((f) => ({ f: path.basename(f, '.json'), r: JSON.parse(fs.readFileSync(path.join(root, f), 'utf8')) }));
+  const row = (id, read, limit) => {
+    const values = reports.map(({ f, r }) => ({ f, v: read(r) }));
+    rows.push({ id, pass: values.every((x) => x.v >= limit), value: values.map((x) => `${x.f} ${round(x.v)}`).join(', '), target: targets[id] });
+  };
+  row('R1', (r) => r.arrows.coverage, spec.coverage);
+  row('R2', (r) => r.landing_contrast.ratio, spec.contrast);
+  row('R3', (r) => r.one_arrow.all_400_6000.body.median - r.one_arrow.all_400_6000.miss.median, spec.body_over_miss);
 }
 
 // --- The card ---
@@ -1019,6 +1047,7 @@ export function scoreBank(doc, dir, { shared, root = null, rpms = null, stems = 
   rows.push({ id: 'A15', pass: clipPct <= 0.1, value: `${round(clipPct, 3)} %`, target: 'clipped before the limiter <= 0.1 %' });
 
   projectileRows(bank, p, sim, mix, rows);
+  realWaveRows(p, root, rows);
 
   rows.push({ id: 'D8', pass: true, value: 'external', target: 'event coverage: the game GUT test' });
   rows.push({ id: 'D10', pass: true, value: 'external', target: 'commit cost: a bench' });

@@ -8,7 +8,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { bandFilter, bandShareDb } from './lib/dsp.mjs';
+import { bandFilter, bandShareDb, fft } from './lib/dsp.mjs';
 import { earBand, onsetShape, shapeApart } from './lib/ear_band.mjs';
 import { integratedLufs, loudnessRange, momentaryMaxLufs } from './lib/lufs.mjs';
 import { SAFETY_DUCK } from './lib/offline_mix.mjs';
@@ -306,6 +306,109 @@ export function fatigueFigures(master, m, rate, live, sets = ARROW_SOUNDS) {
   };
 }
 
+const ONSET_HOP_S = 0.005;
+const ONSET_WIN_S = 0.02;
+
+/**
+ * The master's onsets, per 5 ms frame: over the third octaves 250-8000 Hz, the rise of the log level over 15 ms against
+ * the 50 ms before it, less 1 dB, the rises added up. Heard rather than modelled: it knows nothing of what played.
+ */
+export function onsetTrack(m, rate) {
+  const nw = Math.floor(ONSET_WIN_S * rate);
+  const nh = Math.floor(ONSET_HOP_S * rate);
+  const nfft = Math.max(1024, nw);
+  const hann = Float64Array.from({ length: nw }, (_, i) => 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / nw));
+  const norm = hann.reduce((a, b) => a + b, 0) ** 2;
+  const centres = Array.from({ length: 16 }, (_, i) => 250 * 2 ** (i / 3));
+  const bins = centres.map((c) => {
+    const lo = (c / 2 ** (1 / 6)) * (nfft / rate);
+    const hi = c * 2 ** (1 / 6) * (nfft / rate);
+    return [Math.ceil(lo), Math.max(Math.ceil(lo) + 1, Math.ceil(hi))];
+  });
+  const frames = Math.max(0, Math.floor((m.length - nw) / nh) + 1);
+  const hopTrue = nh / rate;
+  const out = new Float64Array(Math.round(frames * (hopTrue / ONSET_HOP_S)));
+  const L = centres.map(() => new Float64Array(frames));
+  const re = new Float64Array(nfft);
+  const im = new Float64Array(nfft);
+  for (let k = 0; k < frames; k++) {
+    re.fill(0);
+    im.fill(0);
+    for (let i = 0; i < nw; i++) re[i] = m[k * nh + i] * hann[i];
+    fft(re, im);
+    for (let b = 0; b < bins.length; b++) {
+      let p = 0;
+      for (let q = bins[b][0]; q < bins[b][1]; q++) p += re[q] * re[q] + im[q] * im[q];
+      L[b][k] = 10 * Math.log10(Math.max(p / norm, 1e-9));
+    }
+  }
+  const raw = new Float64Array(frames);
+  for (const level of L) {
+    const sum = new Float64Array(frames + 1);
+    for (let i = 0; i < frames; i++) sum[i + 1] = sum[i] + level[i];
+    const mean = (a, b) => {
+      const from = Math.max(0, a);
+      const to = Math.min(frames, b);
+      return to > from ? (sum[to] - sum[from]) / (to - from) : level[Math.min(Math.max(a, 0), frames - 1)];
+    };
+    for (let i = 0; i < frames; i++) raw[i] += Math.max(mean(i - 1, i + 2) - mean(i - 13, i - 3) - 1, 0);
+  }
+  for (let k = 0; k < out.length; k++) out[k] = raw[Math.min(Math.round((k * ONSET_HOP_S) / hopTrue), frames - 1)];
+  return out;
+}
+
+/** The peaks of a track at or over `height`, at least `distance` frames apart, the highest kept first. */
+function strongPeaks(track, height, distance) {
+  const candidates = [];
+  for (let i = 1; i < track.length - 1; i++) {
+    if (track[i] >= height && track[i] > track[i - 1] && track[i] >= track[i + 1]) candidates.push(i);
+  }
+  candidates.sort((a, b) => track[b] - track[a]);
+  const taken = new Uint8Array(track.length);
+  const out = [];
+  for (const i of candidates) {
+    if (taken[i]) continue;
+    out.push(i);
+    for (let k = Math.max(0, i - distance + 1); k < Math.min(track.length, i + distance); k++) taken[k] = 1;
+  }
+  return out.sort((a, b) => a - b);
+}
+
+/**
+ * Strong onsets a second inside landing windows, -200 to +300 ms around each flight's end, over those outside. Strong:
+ * over the p90 of the same track at arbitrary moments. A rider who can hear volleys land gets a figure well over 1.
+ */
+export function landingContrast(m, rate, live, sound = 'arrow_swarm') {
+  const track = onsetTrack(m, rate);
+  const seconds = m.length / rate;
+  const arbitrary = [];
+  for (let k = 0; k < 4000; k++) {
+    const i = Math.floor((3 + ((seconds - 6) * k) / 4000) / ONSET_HOP_S);
+    let best = 0;
+    for (let j = i - 6; j < i + 6; j++) best = Math.max(best, track[j] ?? 0);
+    arbitrary.push(best);
+  }
+  const threshold = pct(arbitrary, 0.9);
+  const peaks = strongPeaks(track, threshold, 6);
+  const inside = new Uint8Array(track.length);
+  let volleys = 0;
+  for (const f of live.flight_log ?? []) {
+    if (f[1] !== sound) continue;
+    const t = f[0] + f[2];
+    if (t <= 3 || t >= seconds - 1) continue;
+    volleys++;
+    const at = Math.floor(t / ONSET_HOP_S);
+    inside.fill(1, Math.max(0, at - 40), Math.min(track.length, at + 60));
+  }
+  let frames = 0;
+  for (const v of inside) frames += v;
+  let hits = 0;
+  for (const p of peaks) hits += inside[p];
+  const inRate = hits / Math.max(frames * ONSET_HOP_S, 1e-9);
+  const outRate = (peaks.length - hits) / Math.max((track.length - frames) * ONSET_HOP_S, 1e-9);
+  return { ratio: round(inRate / Math.max(outRate, 1e-9)), inside_per_s: round(inRate), outside_per_s: round(outRate), duty: round(frames / track.length), volleys };
+}
+
 /** Every arrow that landed, against the sounds it got and the players that took them. */
 function arrowCounts(live, sets = ARROW_SOUNDS) {
   const sounds = [...sets.body, ...sets.miss];
@@ -329,6 +432,7 @@ function arrowCounts(live, sets = ARROW_SOUNDS) {
     crowd_voiceless: live.crowd_voiceless ?? 0,
     stolen: live.stolen ?? {},
     crowd_voices: live.voices?.Crowd ?? null,
+    coverage: (live.arrows?.landed ?? 0) > 0 ? round(sum(started, sounds) / live.arrows.landed) : 0,
   };
 }
 
@@ -368,6 +472,7 @@ function liveFigures(base, master, m, doc, dir, live) {
   out.a14_ballista = a14Read(m, rate, startsOf(['ballista_twang']));
   out.arrows = arrowCounts(live);
   out.fatigue = fatigueFigures(master, m, rate, live);
+  out.landing_contrast = landingContrast(m, rate, live);
   const dirSounds = dir;
   if (doc && dirSounds) {
     out.flights_1k_2k4 = flightFigures(m, rate, doc, dirSounds, live, 1000, 2400);

@@ -114,6 +114,19 @@ test('a crowd hit has its own pool: it takes nothing from Sfx, and steals only i
   assert.ok(small[0].end <= small[2].t + 1e-9, 'the oldest of the crowd was cut');
 });
 
+test('a hit may name its file with variant_var, as the kit does', () => {
+  const b = bank({
+    sounds: { two: { dur: 0.05, seed: 3, variants: 2, layers: [{ src: 'noise' }] } },
+    cues: { pick: { hits: [{ sound: 'two', variant_var: 'vr' }] } },
+  });
+  const sim = simulate(b, {
+    segments: [{ rpm: 0, s: 1, params: {} }],
+    machines: [],
+    cues: [{ t: 0, cue: 'pick', vars: { vr: 1 } }, { t: 0.2, cue: 'pick', vars: { vr: 1 } }, { t: 0.4, cue: 'pick' }],
+  });
+  assert.deepEqual(sim.voices.map((v) => v.variant), [1, 1, 0]);
+});
+
 test('without crowd_voices a crowd hit is any other hit of its bus', () => {
   const b = bank({ cues: { small: { hits: [{ sound: 'tick', crowd: true }] } } });
   const sim = simulate(b, { segments: [{ rpm: 0, s: 1, params: {} }], machines: [], cues: [{ t: 0, cue: 'small' }] });
