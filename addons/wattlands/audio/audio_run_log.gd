@@ -1,13 +1,13 @@
 class_name AudioRunLog
 extends Node
 ## What the players of a real run took, for a run nothing else can look inside: an exported exe runs no outside script,
-## and the owner plays the exe. With --audio-log=<path> a kit attaches one of these. It reads the kit's pools once a frame,
-## as tools/audio/live_mix.gd does, and writes <path> as JSON every WRITE_EVERY_S and when it leaves the tree:
+## and the owner plays the exe. With --audio-log=<path> a kit attaches one of these. It reads the kit's pools once a
+## frame, as tools/audio/live_mix.gd does, and writes <path> as JSON every WRITE_EVERY_S and when it leaves the tree:
 ##   exported: whether this is an export template; driver, silent, seconds;
 ##   starts: by file, how many players took it, how many still played a frame later, on which buses;
 ##   voiceless, crowd_voiceless, flight_starts, stolen: the kit's own counts.
-## --audio-capture also writes <path without .json>_master.wav, Master before its volume and limiter. --mute-master takes
-## Master to -80 dB: the captures sit before the volume, so an automated run on a real driver stays unheard.
+## --audio-capture also writes <path without .json>_master.wav, Master before its volume and limiter. --mute-master
+## takes Master to -80 dB: the captures sit before the volume, so an automated run on a real driver stays unheard.
 
 const WRITE_EVERY_S := 10.0
 const MUTED_DB := -80.0
