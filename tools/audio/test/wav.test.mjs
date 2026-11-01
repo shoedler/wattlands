@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { decodeWav, deinterleave, encodeWav } from '../lib/wav.mjs';
+import { decodeWav, deinterleave, encodeWav, readCapture } from '../lib/wav.mjs';
 
 test('a WAV round-trips, canonical header', () => {
   const s = Int16Array.from([0, 16, -16, 32752, -32752, 8]);
@@ -34,4 +34,32 @@ test('deinterleave splits and scales', () => {
   const [l, r] = deinterleave(Int16Array.from([16384, -16384, 0, 8192]), 2);
   assert.deepEqual([...l], [0.5, 0]);
   assert.deepEqual([...r], [-0.5, 0.25]);
+});
+
+test('a capture reads as PCM16 or float32, and float keeps what is over full scale', () => {
+  const head = Buffer.alloc(44);
+  head.write('RIFF', 0, 'ascii');
+  head.writeUInt32LE(36 + 8, 4);
+  head.write('WAVEfmt ', 8, 'ascii');
+  head.writeUInt32LE(16, 16);
+  head.writeUInt16LE(3, 20);
+  head.writeUInt16LE(2, 22);
+  head.writeUInt32LE(48000, 24);
+  head.writeUInt32LE(48000 * 8, 28);
+  head.writeUInt16LE(8, 32);
+  head.writeUInt16LE(32, 34);
+  head.write('data', 36, 'ascii');
+  head.writeUInt32LE(8, 40);
+  const data = Buffer.alloc(8);
+  data.writeFloatLE(1.5, 0);
+  data.writeFloatLE(-0.25, 4);
+  const c = readCapture(Buffer.concat([head, data]));
+  assert.equal(c.rate, 48000);
+  assert.equal(c.x[0][0], 1.5);
+  assert.equal(c.x[1][0], -0.25);
+  const pcm = readCapture(encodeWav(Int16Array.from([16384, -16384]), { rate: 22050, ch: 2 }));
+  assert.equal(pcm.x[0][0], 0.5);
+  assert.equal(pcm.x[1][0], -0.5);
+  head.writeUInt16LE(7, 20);
+  assert.throws(() => readCapture(Buffer.concat([head, data])));
 });

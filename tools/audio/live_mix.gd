@@ -5,14 +5,16 @@ extends SceneTree
 ##       --game=siege --content=short --bots=3 --seed=1 --skip-s=60 --run-s=240 --out=build/audio_live/siege
 ## --audio-driver Dummy keeps the speakers out of it: Godot still mixes in real time, and an AudioEffectCapture at the
 ## head of each bus takes what reaches it. Master's capture is the whole mix with the ducks in, before the limiter; the
-## others sit before their bus volume, so they are the bus without its ducks. --skip-s runs that much sim in the first
-## frames, before anything is recorded. Writes <out>.json and <out>_<bus>.wav (stereo 16-bit):
+## others sit before their bus volume, so they are the bus without its ducks. <out>_limited.wav is Master after its
+## limiter, what a rider hears. --skip-s runs that much sim in the first frames, before anything is recorded. Writes
+## <out>.json and <out>_<bus>.wav (stereo 32-bit float: a capture must not clip what the limiter would have caught):
 ##   cues: every game `cue` the view would hear, by kind; shots by shot kind, projectiles counted;
 ##   played: every start the kit recorded, by sound, with the level it asked for;
 ##   voices: per pool the most and the mean playing at once, frames at the cap; voiceless, thinned, stolen;
 ##   flight_log: each flight as it started: [time, sound, seconds, db, 1 if the rider's own, pitch];
 ##   voice_starts: what really reached a player, read off the pools once a frame, by file: starts, how many were still
 ##   playing a frame later, the buses and the player level; lost if a player was re-granted inside one frame;
+##   start_log: each of those: [time, file, bus, level, pitch, the cue's tag_var];
 ##   arrows: arrows landed and struck by SiegeShotSounds and by the host's station.hits (Siege only).
 ## --app runs the app itself: the main scene, its autoloads, a solo quick start on the session screen with a mock
 ## trainer, the same screen a rider sees. Without it the session is GameSimRunner's, with --bots riders.
@@ -22,9 +24,9 @@ extends SceneTree
 ## A window opens, because a headless kit stays silent by design (GameAudioKit._quiet_run).
 
 const BUSES: Array[String] = ["Master", "Machines", "Ambience", "Sfx", "UI"]
+const LIMITED := "Limited"
 const SIM_DT := 0.05
 const SETTLE_FRAMES := 30
-const PEAK := 32767.0
 const MUTED_DB := -80.0
 
 var _runner: GameSimRunner = null
@@ -45,7 +47,9 @@ var _recording: bool = false
 var _started: bool = false
 var _done: bool = false
 var _captures: Dictionary = {}
-var _samples: Dictionary = {}
+var _chunks: Dictionary = {}
+var _frames_captured: int = 0
+var _limited: AudioEffectCapture = null
 var _cues: Dictionary = {}
 var _shots: Dictionary = {}
 var _played: Dictionary = {}
@@ -261,7 +265,13 @@ func _add_captures() -> void:
 		cap.buffer_length = 2.0
 		AudioServer.add_bus_effect(i, cap, 0)
 		_captures[bus] = cap
-		_samples[bus] = PackedByteArray()
+		_chunks[bus] = [] as Array[PackedByteArray]
+	# Master's limiter is on its bus already, so a capture added last hears what comes out of it.
+	_limited = AudioEffectCapture.new()
+	_limited.buffer_length = 2.0
+	AudioServer.add_bus_effect(0, _limited)
+	_captures[LIMITED] = _limited
+	_chunks[LIMITED] = [] as Array[PackedByteArray]
 
 
 func _drain_captures() -> void:
@@ -270,14 +280,9 @@ func _drain_captures() -> void:
 		var n := cap.get_frames_available()
 		if n <= 0:
 			continue
-		var frames := cap.get_buffer(n)
-		var out: PackedByteArray = _samples[bus]
-		var at := out.size()
-		out.resize(at + n * 4)
-		for k in n:
-			out.encode_s16(at + k * 4, int(clampf(frames[k].x, -1.0, 1.0) * PEAK))
-			out.encode_s16(at + k * 4 + 2, int(clampf(frames[k].y, -1.0, 1.0) * PEAK))
-		_samples[bus] = out
+		(_chunks[bus] as Array[PackedByteArray]).append(cap.get_buffer(n).to_byte_array())
+		if bus == "Master":
+			_frames_captured += n
 
 
 func _drain_played() -> void:
@@ -310,8 +315,7 @@ func _drain_played() -> void:
 ## Where the recording has got to. The log uses this and not the frame clock: a capture starts a mix step or two after
 ## its frame, and a log 50 ms off puts every onset in the wrong frame of a level plot.
 func _captured_s() -> float:
-	var bytes: PackedByteArray = _samples.get("Master", PackedByteArray())
-	return snappedf(float(bytes.size()) / 4.0 / AudioServer.get_mix_rate(), 0.001)
+	return snappedf(float(_frames_captured) / AudioServer.get_mix_rate(), 0.001)
 
 
 func _count_voices() -> void:
@@ -385,7 +389,20 @@ func _count_starts() -> void:
 			s["db_max"] = maxf(float(s["db_max"]), v.player.volume_db)
 			_voice_starts[stem] = s
 			_fresh.append([v, stem])
-			_start_log.append([_captured_s(), stem, bus, snappedf(v.player.volume_db, 0.1)])
+			var tag: Variant = v.get("tag")
+			(
+				_start_log
+				. append(
+					[
+						_captured_s(),
+						stem,
+						bus,
+						snappedf(v.player.volume_db, 0.1),
+						snappedf(v.player.pitch_scale, 0.001),
+						int(tag) if tag != null else 0,
+					]
+				)
+			)
 	var db := AudioServer.get_bus_volume_db(sfx)
 	_bus_db["n"] = int(_bus_db.get("n", 0)) + 1
 	_bus_db["sfx_min"] = minf(float(_bus_db.get("sfx_min", 99.0)), db)
@@ -425,8 +442,8 @@ func _finish() -> void:
 	_count_starts()
 	var rate := int(AudioServer.get_mix_rate())
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_out.get_base_dir()))
-	for bus: String in _samples:
-		_write_wav("%s_%s.wav" % [_out, bus.to_lower()], _samples[bus], rate)
+	for bus: String in _chunks:
+		_write_wav("%s_%s.wav" % [_out, bus.to_lower()], _chunks[bus], rate)
 	var voices := {}
 	for key: String in _pool_max:
 		voices[key] = {
@@ -481,22 +498,26 @@ func _finish() -> void:
 	quit(0)
 
 
-func _write_wav(path: String, data: PackedByteArray, rate: int) -> void:
+func _write_wav(path: String, chunks: Array[PackedByteArray], rate: int) -> void:
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
 		push_warning("live_mix: cannot write %s" % path)
 		return
+	var size := 0
+	for c in chunks:
+		size += c.size()
 	f.store_buffer("RIFF".to_ascii_buffer())
-	f.store_32(36 + data.size())
+	f.store_32(36 + size)
 	f.store_buffer("WAVEfmt ".to_ascii_buffer())
 	f.store_32(16)
-	f.store_16(1)
+	f.store_16(3)
 	f.store_16(2)
 	f.store_32(rate)
-	f.store_32(rate * 4)
-	f.store_16(4)
-	f.store_16(16)
+	f.store_32(rate * 8)
+	f.store_16(8)
+	f.store_16(32)
 	f.store_buffer("data".to_ascii_buffer())
-	f.store_32(data.size())
-	f.store_buffer(data)
+	f.store_32(size)
+	for c in chunks:
+		f.store_buffer(c)
 	f.close()

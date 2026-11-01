@@ -694,6 +694,15 @@ func test_a_hit_may_name_its_file_and_otherwise_takes_the_round_robin() -> void:
 	assert_eq(kit.variants_of("no such sound"), 1)
 
 
+func test_a_hit_may_tag_its_voice_for_a_recording_to_read() -> void:
+	var kit := _crowd_kit(2)
+	kit._bank.cues["tagged"] = {"hits": [{"sound": "bang", "crowd": true, "tag_var": "acc"}]}
+	kit.cue("tagged", {"acc": 1.0})
+	assert_eq(kit._pools[GameAudioKit.CROWD][0].tag, 1)
+	kit.cue("tick_crowd")
+	assert_eq(kit._pools[GameAudioKit.CROWD][1].tag, 0, "no tag_var, no tag")
+
+
 func test_a_delayed_flight_starts_when_its_delay_is_over() -> void:
 	var kit := _flight_kit(false)
 	var c: Dictionary = kit._bank.cues["fly"]

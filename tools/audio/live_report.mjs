@@ -12,15 +12,15 @@ import { bandFilter, bandShareDb, fft } from './lib/dsp.mjs';
 import { earBand, onsetShape, shapeApart } from './lib/ear_band.mjs';
 import { integratedLufs, loudnessRange, momentaryMaxLufs } from './lib/lufs.mjs';
 import { SAFETY_DUCK } from './lib/offline_mix.mjs';
-import { decodeWav, deinterleave } from './lib/wav.mjs';
+import { decodeWav, deinterleave, readCapture } from './lib/wav.mjs';
 
 const round = (v) => Math.round(v * 100) / 100;
 /** The warning prompt's momentary level at HudLayer's voice (the A2 row reads it from the bank). */
 const WARNING_AS_PLAYED = -16.23;
 
 function load(base, bus) {
-  const w = decodeWav(fs.readFileSync(`${base}_${bus}.wav`));
-  return { rate: w.rate, x: deinterleave(w.samples, w.ch) };
+  const w = readCapture(fs.readFileSync(`${base}_${bus}.wav`));
+  return { rate: w.rate, x: w.x };
 }
 
 function mono(x) {
@@ -191,29 +191,31 @@ function median(values) {
   return round(pct(values, 0.5));
 }
 
-/** A sound's first ONE_ARROW_S in a band, all variants, as power at 0 dB on the mix's scale. */
-function fileBandPower(doc, dir, sound, lo, hi) {
-  const n = doc.sounds[sound]?.variants ?? 1;
-  let sum = 0;
-  for (let k = 0; k < n; k++) {
-    const stem = n > 1 ? `${sound}_${k + 1}` : sound;
-    const w = decodeWav(fs.readFileSync(`${dir}/${stem}.wav`));
-    const x = deinterleave(w.samples, w.ch)[0];
-    const y = bandFilter(x, lo, hi, w.rate);
-    const span = Math.min(y.length, Math.round(ONE_ARROW_S * w.rate));
-    let e = 0;
-    for (let i = 0; i < span; i++) e += y[i] * y[i];
-    sum += e / Math.round(ONE_ARROW_S * w.rate);
-  }
-  return sum / n;
+/** A file's first `seconds` in a band, as power at 0 dB on the mix's scale. */
+function fileBandPower(dir, stem, lo, hi, seconds = ONE_ARROW_S) {
+  const w = decodeWav(fs.readFileSync(`${dir}/${stem}.wav`));
+  const y = bandFilter(deinterleave(w.samples, w.ch)[0], lo, hi, w.rate);
+  const span = Math.min(y.length, Math.round(seconds * w.rate));
+  let e = 0;
+  for (let i = 0; i < span; i++) e += y[i] * y[i];
+  return e / Math.round(seconds * w.rate);
+}
+
+/** What a panned send of Sfx gives a mono voice in each channel: AudioEffectPanner, with its name read off the bus. */
+export function panGains(bus) {
+  const pan = Number(String(bus).match(/[+-]\d+\.\d+$/)?.[0] ?? 0);
+  const lvol = Math.min(Math.max(1 - pan, 0), 1);
+  const rvol = Math.min(Math.max(1 + pan, 0), 1);
+  return [lvol + (1 - rvol), rvol + (1 - lvol)];
 }
 
 /**
  * One arrow over the mix at the level the code plays it: the file at its logged level against the master in the same
  * 50 ms, less the file, so it holds in a crowd of other arrows. `rise` needs no model: the master's own 50 ms against the
- * 180 ms before it, beside what an arbitrary moment reads. The medians hear every arrow that landed there.
+ * 180 ms before it, beside what an arbitrary moment reads. The medians hear every arrow that landed there. Each is read
+ * in the channel its pan puts it in, from the players' own log: a voice on the left stands out on the left.
  */
-export function oneArrow(m, rate, doc, dir, log, sets = ARROW_SOUNDS) {
+export function oneArrow(x, rate, dir, starts, sets = ARROW_SOUNDS) {
   const out = {};
   const span = Math.round(ONE_ARROW_S * rate);
   const before = Math.round(0.2 * rate);
@@ -226,31 +228,43 @@ export function oneArrow(m, rate, doc, dir, log, sets = ARROW_SOUNDS) {
     return e / Math.max(1, to - from);
   };
   for (const [band, [lo, hi]] of Object.entries(ONE_ARROW_BANDS)) {
-    const y = bandFilter(m, lo, hi, rate);
+    const y = x.map((c) => bandFilter(c, lo, hi, rate));
+    const files = new Map();
+    const fileOf = (stem) => {
+      if (!files.has(stem)) files.set(stem, fileBandPower(dir, stem, lo, hi));
+      return files.get(stem);
+    };
     const row = {};
     for (const [group, sounds] of Object.entries(sets)) {
       const overs = [];
       const rises = [];
       const per = {};
+      const accents = { yes: [], no: [] };
       for (const sound of sounds) {
-        if (!doc.sounds[sound]) continue;
-        const file = fileBandPower(doc, dir, sound, lo, hi);
         const mine = [];
-        for (const [t, id, dbv] of log) {
-          if (id !== sound) continue;
+        for (const s of starts) {
+          const [t, stem, bus, dbv, , tag] = s;
+          if (stem.replace(/_\d+$/, '') !== sound) continue;
+          const gains = panGains(bus);
+          const c = gains[0] >= gains[1] ? 0 : 1;
           const at = Math.round(t * rate);
-          const own = file * 10 ** (dbv / 10);
-          const all = power(y, at, span);
+          const own = fileOf(stem) * 10 ** (dbv / 10) * gains[c] * gains[c];
+          const all = power(y[c], at, span);
           mine.push(db10(own / Math.max(all - own, all * 0.02)));
-          rises.push(db10(all) - db10(power(y, at - before, before - gap)));
+          const rise = db10(all) - db10(power(y[c], at - before, before - gap));
+          rises.push(rise);
+          (tag ? accents.yes : accents.no).push(rise);
         }
         if (mine.length > 0) per[sound] = { n: mine.length, median: median(mine), p10: round(pct(mine, 0.1)) };
         overs.push(...mine);
       }
-      row[group] = { n: overs.length, median: median(overs), p10: round(pct(overs, 0.1)), rise: median(rises), sounds: per };
+      row[group] = { n: overs.length, median: median(overs), p10: round(pct(overs, 0.1)), rise: median(rises), rise_accented: median(accents.yes), rise_plain: median(accents.no), accented: accents.yes.length, sounds: per };
     }
     const arbitrary = [];
-    for (let at = before; at + span < y.length; at += Math.round(0.37 * rate)) arbitrary.push(db10(power(y, at, span)) - db10(power(y, at - before, before - gap)));
+    for (let at = before; at + span < y[0].length; at += Math.round(0.37 * rate)) {
+      const c = at % 2;
+      arbitrary.push(db10(power(y[c], at, span)) - db10(power(y[c], at - before, before - gap)));
+    }
     row.arbitrary_rise = median(arbitrary);
     out[band] = row;
   }
@@ -287,13 +301,21 @@ export function fatigueFigures(master, m, rate, live, sets = ARROW_SOUNDS) {
       bestLag = lag;
     }
   }
-  const stems = (live.start_log ?? []).filter((e) => all.has(String(e[1]).replace(/_\d+$/, ''))).map((e) => e[1]);
+  // The log reads the pools once a frame, so inside one frame its order isn't the order they started in. A repeat is only
+  // certain from a frame with one start of a surface to the next with one.
+  const frames = new Map();
+  for (const e of live.start_log ?? []) {
+    const sound = String(e[1]).replace(/_\d+$/, '');
+    if (!all.has(sound)) continue;
+    const key = `${sound}@${e[0]}`;
+    frames.set(key, [...(frames.get(key) ?? []), e[1]]);
+  }
   let twice = 0;
   const last = {};
-  for (const stem of stems) {
-    const sound = stem.replace(/_\d+$/, '');
-    if (last[sound] === stem) twice++;
-    last[sound] = stem;
+  for (const [key, list] of frames) {
+    const sound = key.split('@')[0];
+    if (list.length === 1 && last[sound] === list[0]) twice++;
+    last[sound] = list.length === 1 ? list[0] : null;
   }
   return {
     lufs_30s: lufs30,
@@ -409,6 +431,42 @@ export function landingContrast(m, rate, live, sound = 'arrow_swarm') {
   return { ratio: round(inRate / Math.max(outRate, 1e-9)), inside_per_s: round(inRate), outside_per_s: round(outRate), duty: round(frames / track.length), volleys };
 }
 
+/** The prompts of a battle a rider acts on or waits for. */
+export const EVENT_SOUNDS = ['horn_wave', 'horn_push', 'horn_rush', 'wave_end_bell', 'tower_dock', 'reach_alarm', 'gate_crash', 'gate_restored'];
+const EVENT_S = 0.3;
+const EVENT_OCTAVES = [[250, 500], [500, 1000], [1000, 2000], [2000, 4000], [4000, 8000]];
+
+/**
+ * Each start of those over the mix: the master's own rise, its first 300 ms against the 500 ms before it, whole and in its
+ * best octave, and the arrows that land inside it. A long sound with a slow attack reads low on the first: read the second.
+ */
+export function eventFigures(x, rate, starts, sets = ARROW_SOUNDS) {
+  const m = mono(x);
+  const out = {};
+  const span = Math.round(EVENT_S * rate);
+  const before = Math.round(0.5 * rate);
+  const level = (y, a, n) => {
+    let e = 0;
+    const from = Math.max(0, a);
+    const to = Math.min(y.length, a + n);
+    for (let i = from; i < to; i++) e += y[i] * y[i];
+    return db10(e / Math.max(1, to - from));
+  };
+  const bands = EVENT_OCTAVES.map(([lo, hi]) => bandFilter(m, lo, hi, rate));
+  const arrows = new Set([...sets.body, ...sets.miss]);
+  const landings = starts.filter((s) => arrows.has(s[1].replace(/_\d+$/, ''))).map((s) => s[0]);
+  for (const sound of EVENT_SOUNDS) {
+    const list = starts.filter((s) => s[1].replace(/_\d+$/, '') === sound && s[0] > 0.6);
+    if (list.length === 0) continue;
+    out[sound] = list.map(([t, , , dbv]) => {
+      const at = Math.round(t * rate);
+      const best = Math.max(...bands.map((y) => level(y, at, span) - level(y, at - before, before)));
+      return { t: round(t), db: dbv, rise: round(level(m, at, span) - level(m, at - before, before)), best_octave: round(best), arrows_around: landings.filter((l) => l >= t - 0.1 && l < t + EVENT_S).length };
+    });
+  }
+  return out;
+}
+
 /** Every arrow that landed, against the sounds it got and the players that took them. */
 function arrowCounts(live, sets = ARROW_SOUNDS) {
   const sounds = [...sets.body, ...sets.miss];
@@ -436,7 +494,21 @@ function arrowCounts(live, sets = ARROW_SOUNDS) {
   };
 }
 
-function liveFigures(base, master, m, doc, dir, live) {
+/** How often the head of the mix goes over the limiter's ceiling. Linked: a moment over on both channels counts once. */
+export function headEpisodes(x, rate) {
+  const ceiling = 10 ** (-1 / 20);
+  let over = 0;
+  let last = -Infinity;
+  for (let i = 0; i < x[0].length; i++) {
+    if (Math.abs(x[0][i]) > ceiling || (x[1] && Math.abs(x[1][i]) > ceiling)) {
+      if (i / rate - last > 0.05) over++;
+      last = i / rate;
+    }
+  }
+  return over;
+}
+
+function liveFigures(base, master, m, doc, dir, live, sets = ARROW_SOUNDS) {
   const rate = master.rate;
   const log = live.played_log ?? [];
   const startsOf = (ids) => log.filter((e) => ids.includes(e[1])).map((e) => e[0]);
@@ -457,21 +529,10 @@ function liveFigures(base, master, m, doc, dir, live) {
   const impacts = log.filter((e) => IMPACT_SOUNDS.has(e[1]));
   out.impacts_per_s = round(impacts.length / seconds);
   out.kills_per_s = round(log.filter((e) => e[1] === 'kill_thud').length / seconds);
-  let over = 0;
-  let last = -Infinity;
-  const ceiling = 10 ** (-1 / 20);
-  for (const ch of master.x) {
-    for (let i = 0; i < ch.length; i++) {
-      if (Math.abs(ch[i]) > ceiling) {
-        if (i / rate - last > 0.05) over++;
-        last = i / rate;
-      }
-    }
-  }
-  out.head_episodes_per_min = round((over / seconds) * 60);
+  out.head_episodes_per_min = round((headEpisodes(master.x, rate) / seconds) * 60);
   out.a14_ballista = a14Read(m, rate, startsOf(['ballista_twang']));
-  out.arrows = arrowCounts(live);
-  out.fatigue = fatigueFigures(master, m, rate, live);
+  out.arrows = arrowCounts(live, sets);
+  out.fatigue = fatigueFigures(master, m, rate, live, sets);
   out.landing_contrast = landingContrast(m, rate, live);
   const dirSounds = dir;
   if (doc && dirSounds) {
@@ -479,19 +540,20 @@ function liveFigures(base, master, m, doc, dir, live) {
     const sfx = mono(load(base, 'sfx').x);
     const machines = mono(load(base, 'machines').x);
     out.sfx_over_machines_1k_2k = busOver(sfx, machines, rate, 1000, 2000);
-    out.one_arrow = oneArrow(m, rate, doc, dirSounds, log);
+    out.one_arrow = oneArrow(master.x, rate, dirSounds, live.start_log ?? [], sets);
+    out.events = eventFigures(master.x, rate, live.start_log ?? [], sets);
   }
   return out;
 }
 
-export function report(base, doc = null, dir = null) {
+export function report(base, doc = null, dir = null, sets = ARROW_SOUNDS) {
   const master = load(base, 'master');
   const sfx = load(base, 'sfx');
   const m = mono(master.x);
   const e = earBand(m, undefined, master.rate);
   const live = JSON.parse(fs.readFileSync(`${base}.json`, 'utf8'));
   return {
-    ...liveFigures(base, master, m, doc, dir, live),
+    ...liveFigures(base, master, m, doc, dir, live, sets),
     seconds: round(m.length / master.rate),
     lufs: round(integratedLufs(master.x, master.rate)),
     lra: round(loudnessRange(master.x, master.rate)),

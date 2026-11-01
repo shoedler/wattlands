@@ -84,6 +84,7 @@ class Voice:
 	var lead: bool = true
 	var started: float = 0.0
 	var serial: int = 0  ## counts the voice's grants, so a flight can tell that it was stolen
+	var tag: int = 0  ## what the cue's tag_var said, for a recording to read; 0 without one
 
 
 ## One projectile in the air: a looping voice whose level, pitch and side follow the flight, and which ends with it.
@@ -614,7 +615,10 @@ func _cue_hit(hit: Dictionary, vars: Dictionary, trim: float, lead: bool) -> voi
 		if flight != null:
 			_start_flight(flight)
 		else:
+			_granted = null
 			_fire(id, variant, db, pitch, bus, priority, lead, pan, crowd)
+			if _granted != null:
+				_granted.tag = int(_var(vars, hit.get("tag_var", ""), 0.0))
 		return
 	var entry := {
 		"left": delay,
@@ -929,6 +933,7 @@ func _voice(bus: String, priority: int, lead: bool, crowd: bool = false) -> Audi
 	chosen.lead = lead
 	chosen.started = _t
 	chosen.serial += 1
+	chosen.tag = 0
 	chosen.player.stream_paused = false
 	_granted = chosen
 	return chosen.player
