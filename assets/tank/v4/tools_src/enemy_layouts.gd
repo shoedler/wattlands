@@ -1,13 +1,17 @@
 extends RefCounted
-## The enemy faction's layouts (SPEC_TANK 5.2), one per kind, in the format of the v3 generator's
-## Tank.layout_enemy(): "enemy": true, "parts" (armour polygons Hull.build plates and rivets), "details",
-## "gun", "gear". Sprite px, y down; a far kind's bow is at the left, a near kind's at the right.
-## Beside the v3 keys: "faces", "turret_parts" and "turret_details" (the block that traverses, baked on
-## its own), "front_parts" (skirts over the track), "slits" and "lamps" ([x, y, w, on_turret]), "pivot_x",
-## "exhaust", "arches" (recon), "bogies" (Behemoth), "fires" ([x, flame height], where the wreck burns),
-## "night_low" (the row the night's fall ends on, for a hull all above its running gear; default the ground).
-## A cast part takes rivets only on the seams it lists.
-## Faction look: wedge bows, hooded slits, tall cupolas, slab skirts on hangers. Cold grey-green only.
+## The Foundry Pact's layouts (SPEC_TANK 5.2), one per kind. Sprite px, y down; a far kind's bow is at the left, a near
+## kind's at the right. Painted by enemy_paint.gd, read by enemy_bake.gd.
+## "enemy": true, "parts" (armour polygons, in enemy_paint.part's keys), "details", "gun", "gear". Beside them: "faces",
+## "turret_parts" and "turret_details" (the block that traverses, baked on its own), "front_parts" and "front_details"
+## (skirts over the track), "slits" and "lamps" ([x, y, w, on_turret]), "pivot_x", "exhaust", "arches" (recon), "bogies"
+## (Behemoth), "fires" ([x, flame height], where the wreck burns), "night_low" (the row the value's fall ends on, for a
+## hull all above its running gear; default the ground), "bands", "turret_bands" and "paint" (enemy_paint.canvas),
+## "rivets", "front_rivets" and "turret_rivets" ([x0, x1, y] rows), "rivet_cols", "streak_every", "moon_share", "mud"
+## (false: a box of four rows has no low third), "turret_boost".
+##
+## Faction look: sealed factory slab. Flat-topped decks, straight facets, welded seams, no windows, long guns, stowage.
+## Field grey with hard stepped bands of dark yellow. Rivets only on skirts, hatches, mantlets and access plates.
+## The mark is the Pact's own diamond; the numbers use only 0, 1 and 8, because a turret's traverse and `flip` mirror them.
 
 
 static func P(a: Array) -> PackedVector2Array:
@@ -17,10 +21,28 @@ static func P(a: Array) -> PackedVector2Array:
 	return o
 
 
+## One plated part: every plate boundary comes from the layout's seams, never a seeded split.
+static func plate(poly: Array, keys: Dictionary = {}) -> Dictionary:
+	var part := {"poly": P(poly), "split": false}
+	part.merge(keys)
+	return part
+
+
 static func wheels(n: int, x0: float, dx: float, y: float, r: float) -> Array:
 	var o: Array = []
 	for i in n:
 		o.append({"x": x0 + dx * i, "y": y, "r": r})
+	return o
+
+
+## A finger joint's top edge, left to right: 2 px notches every 4 px, `depth` rows deep.
+static func fingers(x0: int, x1: int, y: int, depth: int = 2) -> Array:
+	var o: Array = []
+	var x := x0
+	while x + 4 <= x1:
+		o.append_array([x, y, x + 2, y, x + 2, y + depth, x + 4, y + depth])
+		x += 4
+	o.append_array([x, y])
 	return o
 
 
@@ -36,7 +58,7 @@ static func all() -> Dictionary:
 	}
 
 
-# --- tankette: a square riveted box, a short stepped nose under the MG, a tall drum, faces right -----------
+# --- tankette: a square welded box, a stepped nose with one facet under the MG, a flat drum, faces right ---------
 # The box's lower corners stand clear of the belt's curve and the MG runs out over the nose, past the whole hull.
 
 
@@ -48,40 +70,29 @@ static func tankette() -> Dictionary:
 		"ground": 23.0,
 		"faces": 1,
 		"pitch": 4.0,
+		"bands": [[14, 21, 0]],
+		"moon_share": 0.5,
+		"mud": false,
+		"streak_every": 18,
 		"parts":
 		[
-			{
-				"poly": P([2, 11, 2, 5, 40, 5, 40, 11]),
-				"seams_x": [9, 38],
-				"seams_y": [6],
-				"split": false,
-				"seed": 71,
-				"rivet": 7
-			},
-			{
-				"poly": P([40, 11, 40, 7, 48, 7, 48, 11]),
-				"split": false,
-				"seed": 73,
-				"tone": 0.1,
-				"rivet": 7
-			},
+			plate([2, 11, 2, 5, 40, 5, 40, 11], {"seams_x": [21], "seed": 71, "step": 1}),
+			plate([40, 11, 40, 7, 46, 7, 48, 9, 48, 11], {"seed": 73, "step": 1, "paint": 0}),
 		],
 		"details":
 		[
-			{"kind": "louvre", "rect": Rect2i(4, 7, 4, 2)},
+			{"kind": "can", "rect": Rect2i(3, 5, 3, 3)},
+			{"kind": "louvre", "rect": Rect2i(3, 9, 4, 1)},
+			{"kind": "mark", "at": Vector2i(8, 7), "size": 3},
 		],
+		"rivets": [[15, 38, 9]],
 		"turret_parts":
 		[
-			{
-				"poly": P([21, 7, 21, 2, 23, 0, 34, 0, 36, 2, 36, 7]),
-				"seams_y": [2],
-				"cast": true,
-				"seed": 72,
-				"tone": 0.06,
-				"rivet": 7
-			},
+			plate([21, 7, 21, 1, 22, 0, 35, 0, 36, 1, 36, 7], {"seed": 72}),
 		],
 		"turret_details": [],
+		"turret_rivets": [[24, 34, 3]],
+		"turret_boost": 1.8,
 		"pivot_x": 28.0,
 		"slits": [[43, 9, 3, 0]],
 		"lamps": [],
@@ -102,7 +113,7 @@ static func tankette() -> Dictionary:
 	}
 
 
-# --- recon: the six-wheeled armoured car, sloped plates, bedstead aerial, faces right -------------------
+# --- recon: a six-wheeled faceted coffin, creased nose to tail, a bedstead aerial, faces right -----------------
 
 
 static func recon() -> Dictionary:
@@ -119,30 +130,36 @@ static func recon() -> Dictionary:
 		"ground": 33.0,
 		"faces": 1,
 		"night_low": 48,
+		"bands": [[35, 52, -1]],
+		"moon_share": 0.5,
+		"streak_every": 18,
 		"parts":
 		[
-			{
-				"poly": P([2, 15, 8, 9, 50, 9, 60, 11, 74, 18, 76, 23, 72, 27, 5, 27, 2, 22]),
-				"seams_x": [20, 36, 52],
-				"seams_y": [17],
-				"split": false,
-				"seed": 81,
-				"rivet": 7
-			},
-			{
-				"poly": P([52, 10, 60, 11, 66, 14, 60, 15, 52, 14]),
-				"seed": 82,
-				"tone": 0.1,
-				"split": false,
-				"rivet": 7
-			},
+			plate(
+				[2, 17, 9, 9, 54, 9, 76, 17, 76, 22, 71, 27, 7, 27],
+				{"seams_x": [16, 33, 54], "seams_y": [17], "row_steps": [0, -1], "seed": 81}
+			),
 		],
 		"details":
 		[
-			{"kind": "louvre", "rect": Rect2i(6, 12, 9, 3)},
-			{"kind": "hatch", "rect": Rect2i(40, 17, 8, 8), "lit": false},
-			{"kind": "rail", "a": Vector2i(6, 4), "b": Vector2i(30, 4)},
+			{"kind": "louvre", "rect": Rect2i(5, 13, 9, 3)},
+			{"kind": "hatch", "rect": Rect2i(40, 18, 9, 8), "lit": false},
+			{"kind": "digits", "at": Vector2i(19, 11), "text": "18"},
+			{"kind": "access", "rect": Rect2i(27, 11, 14, 6)},
+			{"kind": "rail", "a": Vector2i(6, 4), "b": Vector2i(30, 4), "drop": 0},
 			{"kind": "bar", "at": Vector2i(8, 8), "w": 2},
+		],
+		"rivets":
+		[
+			[27, 40, 11],
+			[27, 40, 15],
+			[3, 8, 18],
+			[55, 60, 12],
+			[56, 68, 14],
+			[50, 54, 19],
+			[36, 39, 19],
+			[36, 39, 24],
+			[50, 54, 24]
 		],
 		"arches":
 		[
@@ -154,25 +171,15 @@ static func recon() -> Dictionary:
 		"spare": {"c": Vector2(46, 13), "r": 3.5},
 		"turret_parts":
 		[
-			{
-				"poly": P([34, 9, 34, 4, 37, 1, 50, 1, 54, 4, 54, 9]),
-				"seams_y": [3],
-				"cast": true,
-				"seed": 83,
-				"tone": 0.16,
-				"rivet": 7
-			},
-			{
-				"poly": P([50, 4, 54, 4, 56, 6, 54, 8, 50, 8]),
-				"cast": true,
-				"seed": 84,
-				"tone": 0.02
-			},
+			plate([34, 9, 34, 4, 37, 1, 50, 1, 53, 4, 53, 9], {"seed": 83}),
+			plate([50, 3, 54, 3, 56, 5, 56, 7, 54, 9, 50, 9], {"cast": true, "seed": 84}),
 		],
 		"turret_details": [],
+		"turret_rivets": [[35, 48, 7]],
+		"turret_boost": 1.45,
 		"pivot_x": 44.0,
 		"fires": [[44, 9]],
-		"slits": [[66, 17, 4, 0], [41, 3, 4, 1]],
+		"slits": [[66, 18, 4, 0], [41, 3, 4, 1]],
 		"lamps": [[74, 21]],
 		"gun": {"trunnion": Vector2(52.0, 6.0), "len": 22.0, "style": "cannon"},
 		"exhaust": Vector2(3, 18),
@@ -181,7 +188,7 @@ static func recon() -> Dictionary:
 	}
 
 
-# --- light: a tall narrow turret far forward, a tail stepping down behind it, the top run bare, faces left --
+# --- light: a tall narrow turret far forward, a tail stepping down behind it, the top run bare, faces left ---------
 
 
 static func light() -> Dictionary:
@@ -193,39 +200,39 @@ static func light() -> Dictionary:
 		"faces": -1,
 		"pitch": 4.0,
 		"night_low": 32,
+		"bands": [[17, 30, 1], [58, 80, 1]],
+		"moon_share": 0.55,
+		"streak_every": 24,
 		"parts":
 		[
-			{
-				"poly": P([5, 21, 18, 10, 56, 10, 60, 14, 80, 14, 90, 19, 91, 22, 7, 22]),
-				"seams_x": [24, 44, 62, 76],
-				"seams_y": [15],
-				"split": false,
-				"seed": 18,
-				"rivet": 7,
-				"contrast": 1.5
-			},
+			plate(
+				[5, 21, 16, 10, 56, 10, 56, 14, 80, 14, 80, 18, 90, 18, 91, 22, 7, 22],
+				{"seams_x": [28, 56, 68], "seams_y": [16], "row_steps": [1, -1], "col_steps": [0, 1, -1, 1], "row_weld": false, "seed": 18}
+			),
 		],
 		"details":
 		[
-			{"kind": "hatch", "rect": Rect2i(58, 15, 8, 5)},
-			{"kind": "louvre", "rect": Rect2i(72, 16, 10, 3)},
-			{"kind": "antenna", "at": Vector2i(84, 18), "h": 15},
+			{"kind": "access", "rect": Rect2i(24, 16, 18, 6)},
+			{"kind": "hatch", "rect": Rect2i(46, 15, 8, 6)},
+			{"kind": "can", "rect": Rect2i(70, 9, 3, 5)},
+			{"kind": "can", "rect": Rect2i(74, 9, 4, 5)},
+			{"kind": "louvre", "rect": Rect2i(60, 16, 10, 3)},
+			{"kind": "antenna", "at": Vector2i(87, 19), "h": 15},
 		],
+		"rivets": [[20, 54, 13], [58, 78, 20], [74, 88, 20]],
 		"turret_parts":
 		[
-			{
-				"poly": P([33, 10, 34, 3, 37, 0, 49, 0, 52, 3, 54, 10]),
-				"seams_y": [4],
-				"cast": true,
-				"seed": 12,
-				"tone": 0.02,
-				"rivet": 7
-			},
-			{"poly": P([28, 2, 34, 1, 35, 9, 29, 8]), "cast": true, "seed": 13, "tone": 0.0},
+			plate([33, 10, 33, 2, 35, 0, 52, 0, 54, 2, 54, 10], {"seed": 12}),
+			plate([28, 2, 33, 1, 34, 9, 29, 8], {"cast": true, "seed": 13}),
 		],
-		"turret_details": [],
+		"turret_details":
+		[
+			{"kind": "digits", "at": Vector2i(43, 4), "text": "81"},
+		],
+		"turret_rivets": [[35, 42, 8], [48, 52, 8], [47, 52, 3]],
+		"turret_boost": 1.25,
 		"pivot_x": 43.0,
-		"slits": [[13, 16, 4, 0], [38, 2, 4, 1]],
+		"slits": [[12, 18, 4, 0], [38, 2, 4, 1]],
 		"lamps": [],
 		"gun": {"trunnion": Vector2(30.0, 5.0), "len": 34.0, "style": "cannon"},
 		"exhaust": Vector2(90, 16),
@@ -244,7 +251,7 @@ static func light() -> Dictionary:
 	}
 
 
-# --- medium: box on box: a wide flat turret laden with racks, slab skirts hiding the top run, faces left ------
+# --- medium: a straight glacis, a flat deck, a wide low turret with its bin, a row of slab skirts, faces left ------
 
 
 static func medium() -> Dictionary:
@@ -255,90 +262,75 @@ static func medium() -> Dictionary:
 		"ground": 54.0,
 		"faces": -1,
 		"pitch": 4.0,
+		"bands": [[46, 66, 2], [100, 120, 2]],
+		"turret_bands": [[52, 74, 2]],
+		"moon_share": 0.66,
+		"streak_every": 24,
 		"parts":
 		[
-			{
-				"poly": P([4, 36, 10, 22, 116, 20, 122, 24, 124, 36, 121, 44, 8, 44]),
-				"seams_x": [38, 62, 86, 104],
-				"seams_y": [24],
-				"seed": 21,
-				"rivet": 8
-			},
-			{
-				"poly": P([104, 21, 120, 24, 121, 27, 104, 27]),
-				"seed": 22,
-				"tone": 0.08,
-				"split": false,
-				"rivet": 8
-			},
+			plate(
+				[4, 36, 30, 20, 122, 20, 124, 36, 121, 44, 8, 44],
+				{"seams_x": [38, 62, 86, 104], "seams_y": [28], "row_weld": false, "seed": 21}
+			),
+			plate(
+				[5, 36, 30, 20, 38, 20, 38, 28, 22, 36, 12, 42],
+				{"seed": 22, "step": 1, "paint": 0}
+			),
 		],
 		"details":
 		[
-			{"kind": "box", "rect": Rect2i(100, 15, 14, 6)},
+			{"kind": "box", "rect": Rect2i(100, 14, 14, 6)},
+			{"kind": "access", "rect": Rect2i(42, 22, 20, 6)},
 			{"kind": "louvre", "rect": Rect2i(106, 24, 11, 3)},
-			{"kind": "links", "a": Vector2(10, 33), "b": Vector2(21, 26), "n": 3},
+			{"kind": "links", "a": Vector2(11, 33), "b": Vector2(24, 25), "n": 3},
 		],
+		"rivets": [[64, 80, 24], [84, 100, 24], [40, 100, 31], [40, 100, 38], [104, 120, 31], [104, 120, 38]],
 		"front_parts":
 		[
-			{
-				"poly": P([22, 28, 52, 28, 52, 41, 22, 41]),
-				"seed": 23,
-				"tone": -0.02,
-				"split": false,
-				"seams_x": [37],
-				"rivet": 8,
-				"front": true
-			},
-			{
-				"poly": P([54, 28, 80, 28, 80, 41, 54, 41]),
-				"seed": 24,
-				"tone": 0.03,
-				"split": false,
-				"seams_x": [67],
-				"rivet": 8,
-				"front": true
-			},
-			{
-				"poly": P([82, 28, 110, 28, 110, 41, 82, 41]),
-				"seed": 25,
-				"tone": -0.05,
-				"split": false,
-				"seams_x": [96],
-				"rivet": 8,
-				"front": true
-			},
+			plate(
+				[22, 28, 52, 28, 52, 41, 22, 41],
+				{"seed": 23, "seams_x": [37], "front": true}
+			),
+			plate(
+				[54, 28, 80, 28, 80, 41, 54, 41],
+				{"seed": 24, "seams_x": [72], "front": true}
+			),
+			plate(
+				[82, 28, 110, 28, 110, 38, 106, 41, 82, 41],
+				{"seed": 25, "seams_x": [96], "front": true}
+			),
 		],
-		"front_details": [],
+		"front_details":
+		[
+			{"kind": "mark", "at": Vector2i(61, 31), "size": 5},
+		],
+		"front_rivets":
+		[
+			[24, 50, 30],
+			[73, 78, 30],
+			[56, 60, 30],
+			[84, 108, 30],
+			[84, 104, 38]
+		],
 		"turret_parts":
 		[
-			{
-				"poly": P([38, 21, 38, 8, 41, 5, 92, 5, 95, 8, 96, 21]),
-				"seams_x": [56, 76],
-				"seams_y": [11],
-				"seed": 26,
-				"tone": 0.05,
-				"rivet": 8
-			},
-			{"poly": P([31, 8, 38, 7, 38, 19, 31, 18]), "cast": true, "seed": 27, "tone": 0.02},
-			{
-				"poly": P([96, 7, 107, 7, 107, 17, 96, 17]),
-				"seed": 29,
-				"tone": -0.06,
-				"split": false,
-				"rivet": 8
-			},
+			plate(
+				[38, 21, 38, 12, 41, 9, 92, 9, 95, 12, 96, 21],
+				{"seams_x": [56, 76], "seams_y": [14], "seed": 26}
+			),
+			plate([31, 10, 38, 9, 38, 19, 31, 18], {"cast": true, "seed": 27}),
+			plate([96, 9, 107, 9, 107, 18, 96, 18], {"seed": 29, "paint": 1}),
 		],
 		"turret_details":
 		[
-			{"kind": "box", "rect": Rect2i(46, 1, 12, 4)},
-			{"kind": "box", "rect": Rect2i(60, 2, 8, 3)},
-			{"kind": "box", "rect": Rect2i(80, 0, 12, 5)},
-			{"kind": "bar", "at": Vector2i(44, 16), "w": 18},
-			{"kind": "rail", "a": Vector2i(96, 5), "b": Vector2i(107, 5)},
-			{"kind": "hatch", "rect": Rect2i(80, 12, 9, 7)},
+			{"kind": "access", "rect": Rect2i(40, 14, 14, 7)},
+			{"kind": "digits", "at": Vector2i(61, 15), "text": "808"},
+			{"kind": "hatch", "rect": Rect2i(79, 14, 12, 7)},
+			{"kind": "bar", "at": Vector2i(58, 11), "w": 16},
 		],
+		"turret_rivets": [[98, 106, 11], [98, 106, 16], [56, 92, 12], [41, 92, 20], [32, 36, 12], [32, 36, 15]],
 		"pivot_x": 66.0,
-		"slits": [[13, 25, 5, 0], [72, 25, 5, 0], [44, 8, 5, 1]],
+		"slits": [[27, 26, 4, 0], [68, 22, 4, 0], [44, 12, 4, 1]],
 		"lamps": [],
 		"gun": {"trunnion": Vector2(33.0, 13.0), "len": 46.0, "style": "cannon"},
 		"exhaust": Vector2(122, 28),
@@ -362,10 +354,15 @@ static func medium() -> Dictionary:
 	}
 
 
-# --- heavy: a stepped slab superstructure, a two-tier turret, a great muzzle brake, faces left ---------------
+# --- heavy: near-vertical slabs, finger-jointed corners, one flat turret tier, a great muzzle brake, faces left -----
 
 
 static func heavy() -> Dictionary:
+	var poly: Array = [6, 56, 10, 28]
+	poly.append_array(fingers(10, 26, 26))
+	poly.append_array([144, 26])
+	poly.append_array(fingers(144, 160, 26))
+	poly.append_array([160, 28, 164, 56])
 	return {
 		"name": "heavy",
 		"enemy": true,
@@ -373,101 +370,70 @@ static func heavy() -> Dictionary:
 		"ground": 68.0,
 		"faces": -1,
 		"pitch": 5.0,
+		"bands": [[30, 58, 2], [112, 140, 2]],
+		"turret_bands": [[92, 116, 2]],
+		"moon_share": 0.66,
+		"streak_every": 34,
 		"parts":
 		[
-			{
-				"poly": P([4, 46, 18, 36, 152, 36, 162, 40, 165, 48, 162, 56, 8, 56]),
-				"seams_x": [42, 70, 98, 126, 146],
-				"seams_y": [40],
-				"seed": 31,
-				"rivet": 8
-			},
-			{
-				"poly": P([24, 36, 38, 26, 150, 26, 150, 36]),
-				"seams_x": [58, 88, 118],
-				"seed": 32,
-				"tone": 0.08,
-				"split": false,
-				"rivet": 8
-			},
+			plate(
+				poly,
+				{"seams_x": [70, 126], "seams_y": [37], "row_weld": false, "seed": 31}
+			),
 		],
 		"details":
 		[
-			{"kind": "hatch", "rect": Rect2i(44, 28, 10, 6)},
-			{"kind": "louvre", "rect": Rect2i(130, 29, 13, 4)},
+			{"kind": "access", "rect": Rect2i(13, 30, 26, 7)},
+			{"kind": "hatch", "rect": Rect2i(44, 28, 12, 7)},
+			{"kind": "louvre", "rect": Rect2i(130, 29, 13, 3)},
 			{"kind": "stack", "x": 156, "y0": 15, "y1": 37},
-			{"kind": "soot", "rect": Rect2i(148, 36, 14, 8)},
+			{"kind": "soot", "rect": Rect2i(148, 30, 14, 8)},
 			{"kind": "shovel", "at": Vector2i(62, 31)},
 			{"kind": "pick", "at": Vector2i(90, 31)},
+			{"kind": "cable", "a": Vector2i(62, 35), "b": Vector2i(104, 35)},
+		],
+		"rivets":
+		[
+			[60, 150, 40],
+			[26, 150, 47],
+			[60, 150, 54]
 		],
 		"front_parts":
 		[
-			{
-				"poly": P([24, 37, 56, 37, 56, 52, 24, 52]),
-				"seed": 33,
-				"tone": 0.0,
-				"split": false,
-				"seams_x": [40],
-				"rivet": 8,
-				"front": true
-			},
-			{
-				"poly": P([58, 37, 92, 37, 92, 52, 58, 52]),
-				"seed": 44,
-				"tone": 0.04,
-				"split": false,
-				"seams_x": [75],
-				"rivet": 8,
-				"front": true
-			},
-			{
-				"poly": P([94, 37, 126, 37, 126, 52, 94, 52]),
-				"seed": 35,
-				"tone": -0.04,
-				"split": false,
-				"seams_x": [110],
-				"rivet": 8,
-				"front": true
-			},
-			{
-				"poly": P([128, 37, 150, 37, 150, 52, 128, 52]),
-				"seed": 36,
-				"tone": 0.02,
-				"split": false,
-				"rivet": 8,
-				"front": true
-			},
+			plate([24, 37, 57, 37, 57, 52, 24, 52], {"seed": 33, "front": true}),
+			plate([56, 37, 93, 37, 93, 52, 56, 52], {"seed": 44, "front": true}),
+			plate([92, 37, 127, 37, 127, 52, 92, 52], {"seed": 35, "front": true}),
+			plate([126, 37, 150, 37, 150, 52, 126, 52], {"seed": 36, "front": true}),
+		],
+		"front_rivets":
+		[
+			[26, 54, 40],
+			[26, 54, 49],
+			[60, 90, 40],
+			[60, 90, 49],
+			[96, 124, 40],
+			[96, 124, 49],
+			[130, 148, 40],
+			[130, 148, 49]
 		],
 		"turret_parts":
 		[
-			{
-				"poly": P([60, 27, 60, 16, 130, 16, 132, 27]),
-				"seams_x": [80, 106],
-				"seed": 37,
-				"tone": 0.03,
-				"split": false,
-				"rivet": 8
-			},
-			{
-				"poly": P([72, 16, 73, 7, 76, 5, 114, 5, 118, 8, 120, 16]),
-				"seams_x": [94],
-				"seed": 40,
-				"tone": 0.07,
-				"split": false,
-				"rivet": 8
-			},
-			{
-				"poly": P([50, 8, 60, 6, 61, 24, 50, 21]),
-				"cast": true,
-				"bolts": true,
-				"seed": 38,
-				"tone": 0.03
-			},
-			{"poly": P([96, 5, 97, 0, 108, 0, 109, 5]), "cast": true, "seed": 39, "tone": 0.12},
+			plate(
+				[60, 27, 60, 6, 62, 4, 130, 4, 132, 6, 132, 27],
+				{"seams_x": [80, 106], "seams_y": [11], "seed": 37}
+			),
+			plate([50, 8, 60, 6, 61, 24, 50, 21], {"cast": true, "seed": 38}),
 		],
-		"turret_details": [{"kind": "vent", "at": Vector2i(112, 11)}],
+		"turret_details":
+		[
+			{"kind": "access", "rect": Rect2i(62, 15, 18, 10)},
+			{"kind": "access", "rect": Rect2i(108, 15, 22, 10)},
+			{"kind": "digits", "at": Vector2i(88, 16), "text": "101"},
+			{"kind": "vent", "at": Vector2i(122, 11)},
+		],
+		"turret_rivets": [[52, 58, 10], [52, 58, 19], [82, 104, 24], [62, 128, 12]],
 		"pivot_x": 96.0,
-		"slits": [[31, 33, 6, 0], [104, 31, 5, 0], [78, 8, 6, 1], [100, 2, 5, 1]],
+		"slits": [[31, 33, 4, 0], [116, 31, 4, 0], [70, 10, 4, 1], [100, 10, 4, 1]],
 		"lamps": [],
 		"gun": {"trunnion": Vector2(52.0, 15.0), "len": 66.0, "style": "big"},
 		"exhaust": Vector2(156, 13),
@@ -492,7 +458,7 @@ static func heavy() -> Dictionary:
 	}
 
 
-# --- destroyer: a low slab casemate, the gun in the bow plate, net stowage, faces left ---------------------
+# --- destroyer: a low casemate, one unbroken wedge, the gun out of a cast boar's head in the bow, faces left -------
 
 
 static func destroyer() -> Dictionary:
@@ -503,36 +469,43 @@ static func destroyer() -> Dictionary:
 		"ground": 50.0,
 		"faces": -1,
 		"pitch": 4.0,
+		"paint": 1,
+		"bands": [[60, 72, 2]],
+		"moon_share": 0.66,
+		"streak_every": 30,
 		"parts":
 		[
-			{
-				"poly": P([4, 29, 34, 12, 108, 11, 140, 22, 146, 28, 144, 30, 8, 30]),
-				"seams_x": [52, 78, 104, 124],
-				"seams_y": [24],
-				"seed": 41,
-				"rivet": 8
-			},
-			{
-				"poly": P([8, 28, 34, 13, 48, 13, 48, 26, 18, 30]),
-				"seed": 42,
-				"tone": 0.12,
-				"split": false,
-				"rivet": 8
-			},
+			plate(
+				[4, 29, 34, 11, 108, 11, 130, 24, 146, 24, 146, 28, 144, 30, 8, 30],
+				{"seams_x": [52, 78, 104, 124], "seams_y": [24], "row_weld": false, "seed": 41}
+			),
+			plate(
+				[8, 28, 34, 13, 48, 13, 48, 26, 18, 30],
+				{"seed": 42, "step": 1}
+			),
 		],
 		"details":
 		[
-			{"kind": "hatch", "rect": Rect2i(58, 15, 11, 8)},
-			{"kind": "periscope", "at": Vector2i(52, 12)},
-			{"kind": "periscope", "at": Vector2i(82, 11)},
-			{"kind": "louvre", "rect": Rect2i(122, 24, 14, 3)},
-			{"kind": "vent", "at": Vector2i(112, 19)},
-			{"kind": "cable", "a": Vector2i(54, 26), "b": Vector2i(118, 26)},
+			{"kind": "hatch", "rect": Rect2i(54, 14, 12, 8)},
+			{"kind": "louvre", "rect": Rect2i(132, 25, 9, 3)},
+			{"kind": "vent", "at": Vector2i(122, 21)},
+			{"kind": "cable", "a": Vector2i(94, 26), "b": Vector2i(124, 26)},
+			{"kind": "mark", "at": Vector2i(109, 16), "size": 5},
 		],
+		"rivets":
+		[
+			[50, 72, 13],
+			[36, 46, 16],
+			[10, 28, 28],
+			[30, 50, 28],
+			[92, 128, 23],
+			[52, 92, 28],
+			[96, 128, 28]
+		],
+		"rivet_cols": [[50, 16, 28]],
 		"net": {"rect": Rect2i(74, 16, 34, 6)},
 		"mount": {"c": Vector2(28, 25), "r": 7.0},
-		"glint": Vector2i(44, 19),
-		"slits": [[36, 18, 5, 0], [92, 15, 5, 0]],
+		"slits": [[36, 19, 4, 0], [68, 15, 4, 0]],
 		"lamps": [],
 		"gun":
 		{"trunnion": Vector2(28.0, 25.0), "len": 60.0, "style": "brake", "elev": [-2.0, 16.0]},
@@ -557,7 +530,7 @@ static func destroyer() -> Dictionary:
 	}
 
 
-# --- behemoth: the multi-deck fortress on three bogies, faces left ----------------------------------------
+# --- behemoth: three flat decks with 45 degree ends on three bogies, a factory that walks, faces left ---------------
 
 
 static func behemoth() -> Dictionary:
@@ -586,162 +559,110 @@ static func behemoth() -> Dictionary:
 		"ground": 144.0,
 		"faces": -1,
 		"pitch": 6.0,
+		"bands": [[64, 104, 3], [176, 216, 3]],
+		"turret_bands": [[150, 186, 0]],
+		"moon_share": 0.72,
+		"streak_every": 20,
 		"parts":
 		[
-			# the lower deck, a long wedge
-			{
-				"poly": P([4, 104, 30, 74, 276, 74, 296, 88, 298, 112, 294, 124, 10, 124]),
-				"seams_x": [52, 92, 132, 172, 212, 252],
-				"seams_y": [90, 106],
-				"seed": 51,
-				"rivet": 8
-			},
+			# the lower deck, slabs at least 40 px wide, each a step from its neighbour
+			plate(
+				[4, 104, 34, 74, 276, 74, 296, 94, 298, 112, 294, 124, 10, 124],
+				{
+					"seams_x": [52, 92, 132, 172, 212, 252],
+					"seams_y": [98],
+					"row_weld": false,
+					"col_steps": [0, 1, 0, -1],
+					"seed": 51
+				}
+			),
 			# the bow wedge
-			{
-				"poly": P([6, 102, 30, 76, 50, 76, 50, 94, 18, 110]),
-				"seed": 52,
-				"tone": 0.1,
-				"split": false,
-				"rivet": 8
-			},
-			# the upper deck
-			{
-				"poly": P([40, 74, 60, 50, 244, 50, 268, 74]),
-				"seams_x": [84, 128, 172, 216],
-				"seams_y": [62],
-				"seed": 53,
-				"tone": 0.03,
-				"rivet": 8
-			},
-			# the stern casemate
-			{
-				"poly": P([226, 50, 232, 36, 262, 36, 268, 50, 268, 66, 226, 66]),
-				"seams_x": [246],
-				"split": false,
-				"seed": 54,
-				"tone": 0.06,
-				"rivet": 8
-			},
-			# buttress plates down the lower deck
-			{
-				"poly": P([72, 76, 80, 76, 80, 122, 72, 122]),
-				"seed": 59,
-				"tone": 0.14,
-				"split": false,
-				"rivet": 8
-			},
-			{
-				"poly": P([150, 76, 158, 76, 158, 122, 150, 122]),
-				"seed": 60,
-				"tone": 0.14,
-				"split": false,
-				"rivet": 8
-			},
-			{
-				"poly": P([232, 76, 240, 76, 240, 122, 232, 122]),
-				"seed": 61,
-				"tone": 0.14,
-				"split": false,
-				"rivet": 8
-			},
-			# a sponson mid deck, its gun a stub
-			{
-				"poly": P([92, 84, 98, 80, 128, 80, 132, 84, 132, 92, 92, 92]),
-				"seed": 62,
-				"tone": 0.1,
-				"split": false,
-				"seams_x": [112],
-				"rivet": 8
-			},
-			# the stern gun house on the upper deck
-			{
-				"poly": P([72, 50, 74, 40, 80, 36, 100, 36, 104, 40, 106, 50]),
-				"cast": true,
-				"seed": 63,
-				"tone": 0.07
-			},
+			plate([6, 102, 34, 74, 50, 74, 50, 94, 18, 110], {"seed": 52, "step": 1}),
+			# the middle deck
+			plate(
+				[40, 74, 64, 50, 244, 50, 268, 74],
+				{"seams_x": [84, 128, 172, 216], "seams_y": [62], "col_steps": [1, 0], "seed": 53}
+			),
+			# the stern casemate, the third deck
+			plate(
+				[226, 66, 226, 50, 240, 36, 256, 36, 270, 50, 270, 66],
+				{"seams_x": [246], "seed": 54, "step": 1}
+			),
+			# buttresses down the lower deck
+			plate([72, 76, 80, 76, 80, 122, 72, 122], {"seed": 59, "step": 2, "paint": 0}),
+			plate([150, 76, 158, 76, 158, 122, 150, 122], {"seed": 60, "step": 2, "paint": 0}),
+			plate([232, 76, 240, 76, 240, 122, 232, 122], {"seed": 61, "step": 2, "paint": 0}),
+			# a sponson mid deck
+			plate(
+				[92, 84, 98, 80, 128, 80, 132, 84, 132, 92, 92, 92],
+				{"seed": 62, "step": 1, "seams_x": [112]}
+			),
+			# the gun house on the middle deck
+			plate([72, 50, 72, 40, 76, 36, 94, 36, 96, 40, 96, 50], {"seed": 63, "step": 1}),
 			# the bow sponson
-			{
-				"poly": P([12, 84, 28, 80, 40, 80, 40, 98, 24, 98, 12, 94]),
-				"cast": true,
-				"bolts": true,
-				"seed": 55,
-				"tone": 0.08
-			},
+			plate([12, 84, 28, 80, 40, 80, 40, 98, 24, 98, 12, 94], {"cast": true, "seed": 55}),
 		],
 		"details":
 		[
-			{"kind": "hatch", "rect": Rect2i(60, 78, 14, 10)},
+			{"kind": "hatch", "rect": Rect2i(58, 78, 13, 10)},
 			{"kind": "hatch", "rect": Rect2i(186, 78, 14, 10)},
-			{"kind": "hatch", "rect": Rect2i(94, 54, 12, 7)},
-			{"kind": "louvre", "rect": Rect2i(268, 78, 20, 6)},
-			{"kind": "louvre", "rect": Rect2i(206, 94, 22, 4)},
-			{"kind": "vent", "at": Vector2i(150, 56)},
+			{"kind": "hatch", "rect": Rect2i(100, 53, 12, 8)},
+			{"kind": "access", "rect": Rect2i(134, 77, 15, 11)},
+			{"kind": "access", "rect": Rect2i(202, 77, 28, 11)},
+			{"kind": "access", "rect": Rect2i(242, 77, 24, 11)},
+			{"kind": "access", "rect": Rect2i(134, 52, 56, 9)},
+			{"kind": "louvre", "rect": Rect2i(268, 78, 20, 3)},
+			{"kind": "louvre", "rect": Rect2i(206, 94, 22, 3)},
 			{"kind": "vent", "at": Vector2i(200, 56)},
-			{"kind": "rail", "a": Vector2i(60, 47), "b": Vector2i(108, 47)},
-			{"kind": "rail", "a": Vector2i(34, 72), "b": Vector2i(58, 72)},
+			{"kind": "rail", "a": Vector2i(56, 66), "b": Vector2i(248, 66), "drop": 6, "every": 12},
 			{"kind": "stack", "x": 240, "y0": 14, "y1": 37},
 			{"kind": "stack", "x": 254, "y0": 20, "y1": 37},
-			{"kind": "soot", "rect": Rect2i(232, 36, 30, 10)},
-			{"kind": "cable", "a": Vector2i(160, 88), "b": Vector2i(226, 88)},
-			{"kind": "box", "rect": Rect2i(164, 94, 22, 8)},
-			{"kind": "links", "a": Vector2(192, 98), "b": Vector2(226, 98), "n": 6},
+			{"kind": "soot", "rect": Rect2i(232, 38, 30, 10)},
+			{"kind": "cable", "a": Vector2i(160, 92), "b": Vector2i(202, 92)},
+			{"kind": "box", "rect": Rect2i(164, 96, 22, 8)},
+			{"kind": "links", "a": Vector2(192, 101), "b": Vector2(228, 101), "n": 6},
 			{"kind": "antenna", "at": Vector2i(248, 36), "h": 30},
+		],
+		"rivets":
+		[
+			[14, 288, 109],
+			[12, 290, 121],
+			[52, 148, 92],
+			[84, 130, 57],
+			[194, 224, 57],
+			[50, 290, 101],
+			[160, 240, 84],
 		],
 		"turret_parts":
 		[
-			{
-				"poly": P([110, 50, 112, 28, 124, 14, 200, 14, 216, 26, 220, 50]),
-				"seams_x": [150, 186],
-				"seams_y": [30],
-				"seed": 56,
-				"tone": 0.06,
-				"rivet": 8,
-				"contrast": 0.45
-			},
-			{
-				"poly": P([96, 18, 112, 14, 114, 44, 96, 40]),
-				"cast": true,
-				"bolts": true,
-				"seed": 57,
-				"tone": 0.03
-			},
-			{"poly": P([162, 14, 164, 2, 186, 2, 188, 14]), "cast": true, "seed": 58, "tone": 0.12},
+			plate(
+				[112, 50, 112, 28, 126, 14, 200, 14, 216, 30, 220, 50],
+				{"seams_x": [150, 186], "seams_y": [30], "seed": 56}
+			),
+			plate([96, 18, 112, 14, 114, 44, 96, 40], {"cast": true, "seed": 57}),
+			plate([162, 14, 164, 2, 186, 2, 188, 14], {"seed": 58}),
+			plate([216, 26, 232, 26, 232, 46, 219, 46], {"seed": 64, "paint": 1, "step": -1}),
 		],
 		"turret_details":
 		[
-			{"kind": "vent", "at": Vector2i(206, 22)},
-			{"kind": "hatch", "rect": Rect2i(192, 32, 12, 9)},
-			{"kind": "hatch_top", "at": Vector2i(148, 14), "w": 9},
-			{"kind": "bar", "at": Vector2i(122, 42), "w": 26},
+			{"kind": "mark", "at": Vector2i(140, 32), "size": 9},
+			{"kind": "digits", "at": Vector2i(156, 34), "text": "808", "tall": 7},
+			{"kind": "hatch", "rect": Rect2i(192, 33, 14, 10)},
+			{"kind": "vent", "at": Vector2i(206, 26)},
+			{"kind": "access", "rect": Rect2i(116, 31, 22, 16)},
+			{"kind": "bar", "at": Vector2i(122, 28), "w": 24},
 		],
+		"turret_rivets":
+		[[100, 110, 22], [100, 110, 36], [142, 186, 46], [150, 184, 18], [218, 230, 30]],
 		"pivot_x": 165.0,
 		"slits":
 		[
-			[18, 96, 7, 0],
-			[62, 64, 7, 0],
-			[130, 66, 7, 0],
-			[212, 66, 7, 0],
-			[124, 22, 8, 1],
-			[168, 6, 6, 1]
-		],
-		"ports":
-		[
-			[88, 108],
-			[100, 108],
-			[112, 108],
-			[124, 108],
-			[136, 108],
-			[168, 108],
-			[180, 108],
-			[192, 108],
-			[204, 108],
-			[216, 108],
-			[150, 66],
-			[162, 66],
-			[174, 66],
-			[186, 66],
-			[198, 66],
+			[18, 96, 4, 0],
+			[66, 56, 4, 0],
+			[120, 58, 4, 0],
+			[208, 60, 4, 0],
+			[124, 22, 4, 1],
+			[170, 6, 4, 1]
 		],
 		"lamps": [],
 		"furnace": Rect2i(244, 96, 22, 8),
