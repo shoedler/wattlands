@@ -192,7 +192,8 @@ func test_every_arrow_lands_at_its_own_moment_and_place() -> void:
 
 
 ## Ends each crowd voice when its sound has run its length on the sim clock. This test steps many times faster than
-## the mixer plays, so on the mixer's clock nothing would finish and a pool of any size would fill. since: voice -> sim t.
+## the mixer plays, so on the mixer's clock nothing would finish and a pool of any size would fill.
+## since: voice -> sim t.
 func _finish_crowd_on_sim_clock(crowd: Array, since: Dictionary, t: float) -> void:
 	for v: GameAudioKit.Voice in crowd:
 		if not v.player.playing:
