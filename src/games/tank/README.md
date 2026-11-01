@@ -25,7 +25,7 @@ Every phase is a FIT lap. Advances, holding actions and the boss are open-ended:
 | Gun | dynamo | ERG, the capacitor bank | Lays, chambers and fires the main gun. The bank pays for stabilizing and elevation, and the ERG target climbs as it drains |
 | Loader | steam | SIM flat + boiler grade | Builds shells into a ready rack of 3. Surge in the 5 s window after a stow overpressures the shell for double damage |
 | Lights | arc | ERG, the searchlight load | In band the searchlights are lit: the gun reaches its full range at normal dispersion. Dark: shorter reach, wider dispersion |
-| Secondaries | feed | SIM flat | Two bow machine guns, exactly 6 rounds per pedal revolution (540 a minute at 90 rpm), 0.375 damage a round, at near threats and barricades. In-band power speeds their slew |
+| Secondaries | feed | SIM flat | Two bow machine guns, exactly 6 rounds per pedal revolution (540 a minute at 90 rpm), 0.375 damage a round, at near threats and barricades, which are scaled to this rate: at 90 rpm a recon (22.5 HP) takes about 6.7 s, a tankette (13.5 HP) and a barricade (36 rounds) 4 s. In-band power speeds their slew |
 | Repairs | repair | ERG, the repair load | Rebuilds the hull per joule in band, only below its maximum. A crank-driven rivet hammer strikes once per revolution and a press closes on each patch. Upper deck |
 
 An empty seat does nothing. A crew of n starts on Drive, Gun, Loader, Lights (the first n); a solo rider is seated by the solo loop.
@@ -80,16 +80,15 @@ The targets are what the sim matrix checks (S14-S17 and `TankBalanceTargets`). M
 | Compliant crew | Easy | Normal | Hard |
 | --- | --- | --- | --- |
 | `ashfall_road`, crews 1-4 | 12 of 12 won, no losses, A or S | 24 of 24 won, no losses, A or S | 17 of 24 won, 1-3 losses (one run in 24 has 3), C to A |
-| `ambush_15`, crews 1, 3, 4 | not in the matrix | 17 of 18 won, no losses, B to S | **0 of 18 won**, 1-3 losses, D to B |
+| `ambush_15`, crews 1, 3, 4 | not in the matrix | 17 of 18 won, no losses, B to S | **1 of 18 won**, 1-3 losses, D to B |
 
 `ambush_15` starts short of plates (`hull_hp` 90, `checkpoint_hp` 20, against the tank's 150 and 30), on every difficulty.
 
 Open shortfalls against the targets, none of them touching effort, plans or safety:
 
 - **T1 was widened for crew 2.** On `ashfall_road` a crew of two may hold a gun line up to 180 s, the brief's own 90% gun-line limit, against 160 s for every other crew. Its holds reach 175 s (seed 3, stage 2) and 168 s (seed 4, stage 3), neither at its 180 s `max_s`: one rider shuttles between Gun and Loader while the other repairs, and every tuning step that fixed one seed moved the miss to another seed or took crew 2's Hard losses under target. The ruling is in `docs/decisions/tank.md`.
-- **Hard `ambush_15` is not winnable by the Autopilot.** The target asks for 1-2 losses, which holds, but no compliant crew killed the Behemoth in 18 runs and 6 of them graded D, under the C the target table asks for. Bots did better: 1 human + 3 bots and 2 + 2 win 2 of 8 runs (seeds 1-4; 4 of 8 before the Secondaries became machine guns), against the Autopilot crew's 1 of 9 at seeds 1-3. Whether a human who evades can win is not known until someone rides it.
+- **Hard `ambush_15` is all but unwinnable for the Autopilot.** The target asks for 1-2 losses, which holds, but a compliant crew killed the Behemoth in 1 run of 18 (crew 4, seed 3) and 8 of them graded D, under the C the target table asks for. Bots did better: 1 human + 3 bots and 2 + 2 win 3 of 8 runs (seeds 1-4), so Hard is easier with bots filling the seats than with a full Autopilot crew. Whether a human who evades can win is not known until someone rides it.
 - Normal cost no compliant crew a tank at all, the low end of its 0-1 target.
-- **The Secondaries as machine guns kill fewer near threats (2026-11-01, S1 is red on it).** 0.75 of the old damage a second is more than it sounds: a recon's 30 HP takes 8.9 s at 90 rpm, and by its dashes and pauses it reaches `flee_px` about 10 s after it bursts out, some of them spent manning the seat and laying the guns. Crews 3-4 at seeds 1-3 kill 47-50 % on Normal (was 75-79 %) and 29-33 % on Hard (was 57-60 %); crew 4 seed 2 at 5 of 14 misses T8's 40 %. Wins and tank losses hardly move. Crew 2 seed 3's third holding action now reaches its 180 s `max_s` (it was its second at 175 s), which misses T1. The table above is older than this. Nothing was retuned: the owner asked for these numbers, and the ruling is in `docs/decisions/tank.md`.
 
 **TANK LOST.** The crew is towed back (`hull.tow_s`: no movement, no fire, nothing spawns, a flat grade for Drive), then the stage restarts from its start with its enemies back and part of the hull (`restart_hp_frac`). Rules only: same plan phase, same clock, no directive, no replan, no lap. Riders keep pedalling and the HUD says KEEP RIDING. `max_s` still cuts the phase, so a failed stage may be skipped when its time runs out. Each loss costs survival score and caps the grade at A. In free roam the field clears and the tank drives on, at the breakdown's points. A rider in rescue, AFK or dropped holds the hull at 1 HP on every difficulty (`TankHullRules.protected`, BRIEF 4.6.3), as do a won stage and every phase but WORK.
 
