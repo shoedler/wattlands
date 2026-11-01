@@ -202,6 +202,7 @@ func setup_bank(bank: AudioBank, p_seed: int) -> bool:
 		for id: String in bank.sounds:
 			for v in bank.variants(id):
 				bank.stream(id, v)
+	AudioRunLog.attach_if_asked(self)
 	return true
 
 

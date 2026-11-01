@@ -162,6 +162,8 @@ tools/godot.sh --path . --timeout=600 --audio-driver Dummy -s tools/audio/live_m
 
 With `--app` it runs the app itself instead of `GameSimRunner`: the main scene, the autoloads and a solo quick start on the real session screen, with a mock trainer. Either way the JSON has `voice_starts`: what each player really took, by file, its buses and level, read off the pools once a frame. A window opens, because a headless kit is silent by design; the Dummy driver keeps the speakers out of it, in real time. `node tools/audio/live_report.mjs build/audio_live/<name> [--bank=<audio.json>] [--out=<file>]` reads the recording: LUFS, LRA, the 2-8 kHz share, the top band and how the Sfx bus moves. Do this when a sound is heard not to be there. A preview's Sfx and its Machines sum to a passing LUFS whether or not the part you asked about can be heard over the rest.
 
+An exported exe runs no outside script, and the owner plays the exe. `AudioRunLog` looks inside one: `--audio-log=<path>` (after the `--`, with a real or `--mock-trainer` run) writes what each player took, by file and bus, and whether this is an export template; `--audio-capture` adds `<path>_master.wav`, Master before its volume; `--mute-master` keeps a real driver unheard. `node tools/export_windows.mjs --smoke` also reads the PCK and says how many of each game's bank sounds it holds, and fails if a sound is lost.
+
 ## What no number here can say
 
 Whether a diesel reads as a diesel or a gull as a gull, whether an hour of it is pleasant, the balance on real speakers over a real trainer and fan, driver latency on a real device, and how it feels against your own feet. The critics check coherence, not beauty. Those stay open until someone listens to `build/audio_preview/*.mp3` and rides.
