@@ -60,6 +60,24 @@ const ARROW_PITCH_SPREAD := 0.07
 const ARROW_DB_SPREAD := 2.5
 const ARROW_PITCH_STEP := 0.6180339887
 const ARROW_DB_STEP := 0.7548776662
+## The file of each arrow: never the one before it on that surface, otherwise out of order. A strict rotation came back
+## on a near-twin in about two thirds of misses.
+const ARROW_FILE_STEP := 0.4142135624
+## The ear counts 3 or 4 events a second, and twelve arrows land in about 340 ms. An accent gives it those: at most one
+## arrow in SiegeShotSounds.ACCENT_GAP_S, this much over the rest.
+const ARROW_ACCENT_DB := 4.0
+## Near the camera louder, far quieter: this much either way, over this many art pixels from where on the screen the
+## organ's arrows land on average (the road 40 to 115 m from it runs at about y 340 to 510).
+const ARROW_DEPTH_DB := 3.0
+const ARROW_DEPTH_MID_PX := 430.0
+const ARROW_DEPTH_PX := 90.0
+## An arrow's level over its cue never passes this, whatever accent and depth add: a body near the camera that is also
+## an accent would otherwise go over the top of the master by itself.
+const ARROW_LVL_MAX_DB := 3.0
+## A volley comes down in a few metres, about one pan step of the road's side of the screen: the volley's place is a
+## little wider than the picture and each arrow's distance from it much wider, or all twelve share one send.
+const ARROW_PAN_WIDEN := 1.3
+const ARROW_PAN_SCATTER := 7.0
 ## Gate hits answer what the gate lost since the last one, at most once a ram stroke, so the sound
 ## doesn't depend on the tick the damage came in: a host's fractions and a client's whole HP read
 ## the same. They and the hooves grow with the damage and the horses, up to these.
@@ -95,6 +113,7 @@ var _other_impact_t: float = 0.0
 var _kill_t: float = 0.0
 var _wood_n: int = 0
 var _arrow_n: int = 0
+var _arrow_file: Dictionary = {}
 var _view: SiegeView = null
 var _coin_t: float = 0.0
 var _leak_t: float = 0.0
@@ -352,9 +371,7 @@ func _landings(state: SiegeState, view: SiegeView) -> void:
 		var cue_name := "hit_%s_%s" % [weapon, impact["surface"]]
 		var pan := _pan(impact["at"])
 		if weapon == SiegeShotSounds.WEAPON_ARROW:
-			var spread := arrow_spread(_arrow_n)
-			_arrow_n += 1
-			kit.cue(cue_name, {"pan": pan, "lvl": spread.y, "pv": spread.x}, lead)
+			_arrow_landing(cue_name, impact, lead)
 			continue
 		# A stone is an event whoever threw it.
 		if not lead and weapon != SiegeShotSounds.WEAPON_STONE:
@@ -364,6 +381,44 @@ func _landings(state: SiegeState, view: SiegeView) -> void:
 		var pv: float = WOOD_PITCH[_wood_n % WOOD_PITCH.size()]
 		_wood_n += 1
 		kit.cue(cue_name, {"pan": pan, "lvl": 0.0, "pv": pv}, lead)
+
+
+func _arrow_landing(cue_name: String, impact: Dictionary, lead: bool) -> void:
+	var spread := arrow_spread(_arrow_n)
+	var lvl := spread.y + _arrow_depth_db(impact["at"])
+	lvl += ARROW_ACCENT_DB if bool(impact["accent"]) else 0.0
+	var sound := "arrow_%s" % impact["surface"]
+	var file := next_file(_arrow_file.get(sound, 0), _arrow_n, kit.variants_of(sound))
+	_arrow_file[sound] = file
+	_arrow_n += 1
+	var vars := {
+		"pan": _arrow_pan(impact["at"], impact["mid"]),
+		"lvl": minf(lvl, ARROW_LVL_MAX_DB),
+		"pv": spread.x,
+		"vr": file,
+	}
+	kit.cue(cue_name, vars, lead)
+
+
+## Which of a sound's `count` files plays after `was`: any other, chosen by n.
+static func next_file(was: int, n: int, count: int) -> int:
+	if count <= 1:
+		return 0
+	var step := 1 + floori(fposmod(float(n) * ARROW_FILE_STEP, 1.0) * float(count - 1))
+	return posmod(was + step, count)
+
+
+func _arrow_depth_db(at: Vector3) -> float:
+	if _view == null or _view.bank == null:
+		return 0.0
+	var near := (_view.bank.to_art(at).y - ARROW_DEPTH_MID_PX) / ARROW_DEPTH_PX
+	return clampf(near, -1.0, 1.0) * ARROW_DEPTH_DB
+
+
+func _arrow_pan(at: Vector3, mid: Vector3) -> float:
+	var middle := _pan(mid)
+	var pan := middle * ARROW_PAN_WIDEN + (_pan(at) - middle) * ARROW_PAN_SCATTER
+	return clampf(pan, -AudioBuses.PAN_MAX, AudioBuses.PAN_MAX)
 
 
 ## The nth arrow's pitch (x) and level in dB (y).

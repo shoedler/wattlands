@@ -220,6 +220,93 @@ func test_arrows_play_on_their_own_pool_and_take_nothing_from_the_rest() -> void
 	kit.stop_all()
 
 
+## A volley over one body and nothing else, stepped as a view does. {t, accent, surface} per arrow, in landing order.
+func _landings_of(enemy_type: int, at_landing: bool) -> Array[Dictionary]:
+	var st := SiegeKit.state("short", 1, 0)
+	var sounds := SiegeShotSounds.new()
+	sounds.content = st.content
+	sounds.path = st.path
+	var o: Array[int] = [8000, 12000, 1500]
+	var v: Array[int] = [12000, 15000, 9000]
+	var ev := SiegeEvents.shot(0, SiegeIds.STATION_ARROWS, SiegeIds.SHOT_ARROW, o, v, 12, 77)
+	sounds.add(ev, 0.0)
+	var r := sounds.flying[0].replay
+	var e := SiegeKit.enemy(st, enemy_type, 100.0)
+	e.pos = r.landing(sounds.flying[0].order[6]) if at_landing else Vector3(-500.0, -500.0, 0.0)
+	var out: Array[Dictionary] = []
+	var t := 0.0
+	while out.size() < 12 and t < 12.0:
+		t += 1.0 / 60.0
+		for imp: Dictionary in sounds.step(t, st.enemies):
+			out.append({"t": t, "accent": bool(imp["accent"]), "surface": imp["surface"]})
+	return out
+
+
+func test_accents_are_at_most_one_a_gap_and_the_first_of_a_volley_of_misses_is_one() -> void:
+	var list := _landings_of(SiegeIds.ENEMY_SPEAR, false)
+	assert_eq(list.size(), 12)
+	assert_true(list[0]["accent"], "the earliest landing")
+	var last := -INF
+	var n := 0
+	for imp: Dictionary in list:
+		if imp["accent"]:
+			n += 1
+			assert_gte(imp["t"] - last, SiegeShotSounds.ACCENT_GAP_S - 1.0 / 60.0, "apart")
+			last = imp["t"]
+	assert_gt(n, 1, "a volley has several")
+	assert_lt(n, 12, "and they stand out from the rest")
+
+
+func test_a_body_in_the_window_takes_the_accent_from_a_miss() -> void:
+	var list := _landings_of(SiegeIds.ENEMY_SPEAR, true)
+	var bodies := 0
+	for k in list.size():
+		if list[k]["surface"] != "flesh":
+			continue
+		bodies += 1
+		var taken := false
+		for j in range(maxi(k - 3, 0), k + 1):
+			var close: bool = list[k]["t"] - list[j]["t"] < SiegeShotSounds.ACCENT_GAP_S
+			taken = taken or (close and list[j]["accent"])
+		assert_true(taken, "arrow %d: a body, or an accent just before it" % k)
+	assert_gt(bodies, 0, "the volley struck it")
+
+
+func test_accents_keep_their_gap_across_volleys() -> void:
+	var st := SiegeKit.state("short", 1, 0)
+	var sounds := SiegeShotSounds.new()
+	sounds.content = st.content
+	sounds.path = st.path
+	var o: Array[int] = [8000, 12000, 1500]
+	var v: Array[int] = [12000, 15000, 9000]
+	for k in 2:
+		var ev := SiegeEvents.shot(
+			0, SiegeIds.STATION_ARROWS, SiegeIds.SHOT_ARROW, o, v, 12, 70 + k
+		)
+		sounds.add(ev, 0.02 * k)
+	var last := -INF
+	var t := 0.0
+	while t < 12.0:
+		t += 1.0 / 60.0
+		for imp: Dictionary in sounds.step(t, st.enemies):
+			if imp["accent"]:
+				assert_gte(t - last, SiegeShotSounds.ACCENT_GAP_S - 1.0 / 60.0)
+				last = t
+
+
+func test_no_file_twice_running_and_the_order_is_not_a_rotation() -> void:
+	var was := 0
+	var steps := {}
+	for n in 2000:
+		var file := SiegeAudio.next_file(was, n, 4)
+		assert_ne(file, was, "arrow %d" % n)
+		assert_between(file, 0, 3)
+		steps[posmod(file - was, 4)] = true
+		was = file
+	assert_eq(steps.size(), 3, "every other file can follow")
+	assert_eq(SiegeAudio.next_file(0, 7, 1), 0, "one file is that file")
+
+
 static func _landing_file(file: String) -> bool:
 	for id: String in ARROW_FILES:
 		if file.begins_with(id):
@@ -474,9 +561,11 @@ func test_each_arrow_has_a_small_pitch_and_level_of_its_own() -> void:
 func test_an_hour_of_arrows_does_not_repeat_itself() -> void:
 	var last := {}
 	var closest := 1 << 30
+	var file := 0
 	for n in 14 * 3600:
 		var s := SiegeAudio.arrow_spread(n)
-		var key := Vector3i(n % 4, roundi(s.x / 0.002), roundi(s.y / 0.25))
+		file = SiegeAudio.next_file(file, n, 4)
+		var key := Vector3i(file, roundi(s.x / 0.002), roundi(s.y / 0.25))
 		if last.has(key):
 			closest = mini(closest, n - int(last[key]))
 		last[key] = n

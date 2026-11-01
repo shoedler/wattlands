@@ -11,7 +11,8 @@ extends RefCounted
 ##
 ##   arrows      each lands alone and is heard alone, at its own land_t and where it comes down: the nearest body
 ##               within hit_r + its radius, else the ground. A shield bearer's block comes from the same hash stream as
-##               the host's.
+##               the host's. Twelve arrows land in about 340 ms, faster than anyone counts, so one in every ACCENT_GAP_S
+##               at most is an accent: a body if one lands in that window, else the first to land.
 ##   bolts       fly frame by frame: each body the path passes. The ballista's bolt goes on through them as long as it
 ##               has damage left, a Scorpion's stops at the first; a bolt that reaches the ground ends there.
 ##   stones      land once: the ground under them, and whatever stands within the splash.
@@ -36,6 +37,7 @@ const MOAT_OUT_M := 14.0
 const BRIDGE_X_M := 44.0
 const BRIDGE_HALF_M := 3.5
 const RECENT_S := 0.3
+const ACCENT_GAP_S := 0.15
 
 
 ## An enemy as last seen alive.
@@ -62,6 +64,9 @@ class Flying:
 	var swept_to: PackedFloat32Array = PackedFloat32Array()
 	var hit_ids: Dictionary = {}
 	var lead: bool = true
+	var order: PackedInt32Array = PackedInt32Array()  ## arrows: indices by landing time
+	var next_k: int = 0  ## arrows: the next of `order` to land
+	var mid: Vector3 = Vector3.ZERO  ## arrows: the middle of where the volley comes down
 	var struck_any: bool = false
 
 
@@ -73,6 +78,7 @@ var flying: Array[Flying] = []
 var landed_count: Dictionary = {}
 var struck_count: Dictionary = {}
 
+var _accent_free_s: float = -INF
 var _seen: Dictionary = {}
 var _bodies: Array[Body] = []
 
@@ -100,6 +106,9 @@ func add(ev: Dictionary, start_s: float, level: int = 0, lead: bool = true) -> D
 	f.left = r.n
 	if r.kind == SiegeIds.SHOT_ARROW:
 		f.blocks = _blocks(r, float(def.get("testudo_block", 0.7)))
+		f.order = _by_landing(r)
+		for j in r.n:
+			f.mid += r.landing(j) / float(r.n)
 	flying.append(f)
 	var sum := 0.0
 	for j in r.n:
@@ -148,7 +157,8 @@ func last_seen(enemy_id: int) -> Variant:
 	return b.pos if b != null else null
 
 
-## The impacts due by `now_s`, oldest shot first: {weapon, surface, at, lead}.
+## The impacts due by `now_s`, oldest shot first: {weapon, surface, at, lead}. An arrow's also says `accent`, and `mid`,
+## the middle of its volley's landing.
 func step(now_s: float, enemies: Array[SiegeEnemyState]) -> Array[Dictionary]:
 	track(now_s, enemies)
 	var out: Array[Dictionary] = []
@@ -211,23 +221,52 @@ static func _blocks(r: SiegeV2ShotReplay, chance: float) -> PackedByteArray:
 
 
 func _arrows(f: Flying, t: float, out: Array[Dictionary]) -> void:
-	for j in f.replay.n:
-		if f.landed[j] != 0 or t < f.replay.land_t[j]:
-			continue
+	while f.next_k < f.order.size() and t >= f.replay.land_t[f.order[f.next_k]]:
+		var j := f.order[f.next_k]
+		f.next_k += 1
 		f.landed[j] = 1
 		f.left -= 1
 		_count(landed_count, f.weapon)
 		var at := f.replay.landing(j)
 		var body := _nearest(at, f.hit_r)
-		if body == null:
-			out.append(_impact(f, ground_at(at), at))
-			continue
-		var surface := surface_of(body.type)
-		if body.type == SiegeIds.ENEMY_SHIELD and f.blocks[j] == 0:
-			surface = SURFACE_FLESH
-		if not (body.type == SiegeIds.ENEMY_SHIELD and f.blocks[j] != 0):
-			_count(struck_count, f.weapon)
-		out.append(_impact(f, surface, at))
+		var surface := ground_at(at)
+		if body != null:
+			surface = surface_of(body.type)
+			if body.type == SiegeIds.ENEMY_SHIELD and f.blocks[j] == 0:
+				surface = SURFACE_FLESH
+			if not (body.type == SiegeIds.ENEMY_SHIELD and f.blocks[j] != 0):
+				_count(struck_count, f.weapon)
+		var impact := _impact(f, surface, at)
+		impact["accent"] = _take_accent(f, j, body != null)
+		impact["mid"] = f.mid
+		out.append(impact)
+
+
+## Whether this arrow is the accent of its moment. The first to land waits for a body due inside the gap, as things
+## stand: the body has the better claim, and a miss then takes the next window instead. All volleys share the gap.
+func _take_accent(f: Flying, j: int, on_body: bool) -> bool:
+	var land_s := f.start_s + f.replay.land_t[j]
+	if land_s < _accent_free_s:
+		return false
+	if not on_body:
+		var k := f.next_k
+		while k < f.order.size():
+			var other := f.order[k]
+			if f.replay.land_t[other] - f.replay.land_t[j] >= ACCENT_GAP_S:
+				break
+			if _nearest(f.replay.landing(other), f.hit_r) != null:
+				return false
+			k += 1
+	_accent_free_s = land_s + ACCENT_GAP_S
+	return true
+
+
+static func _by_landing(r: SiegeV2ShotReplay) -> PackedInt32Array:
+	var list: Array[int] = []
+	for j in r.n:
+		list.append(j)
+	list.sort_custom(func(a: int, b: int) -> bool: return r.land_t[a] < r.land_t[b])
+	return PackedInt32Array(list)
 
 
 func _stone(f: Flying, t: float, out: Array[Dictionary]) -> void:

@@ -1,0 +1,233 @@
+{
+  "mix_apart_first_60ms": {
+    "flesh_dirt": 4.26,
+    "wood_dirt": 4.46,
+    "flesh_wood": 5.45,
+    "shield_dirt": null
+  },
+  "impacts_per_s": 5.1,
+  "kills_per_s": 0.15,
+  "head_episodes_per_min": 27,
+  "a14_ballista": {
+    "n": 5,
+    "median": 13.77
+  },
+  "arrows": {
+    "landed": 876,
+    "struck_by_ear": 114,
+    "station_hits": 106,
+    "sounds_asked": 876,
+    "sounds_started": 876,
+    "body_sounds": 114,
+    "miss_sounds": 762,
+    "by_sound": {
+      "arrow_dirt": 762,
+      "arrow_flesh": 94,
+      "arrow_wood": 20
+    },
+    "crowd_voiceless": 0,
+    "stolen": {},
+    "crowd_voices": {
+      "cap": 16,
+      "frames_full": 0,
+      "max": 8,
+      "mean": 0.45
+    },
+    "coverage": 1
+  },
+  "fatigue": {
+    "lufs_30s": [
+      -20.14,
+      -19.01,
+      -20.1,
+      -20.02,
+      -18.54,
+      -19.75
+    ],
+    "lufs_30s_spread": 1.6,
+    "lufs_3s_p10_p90": [
+      -21.96,
+      -17.59
+    ],
+    "arrows_per_s_30s": [
+      0.8,
+      4.4,
+      5.2,
+      6,
+      6.4,
+      6.33
+    ],
+    "gap_ms_p10_p50_p90": [
+      0,
+      32,
+      139
+    ],
+    "envelope_repeat": {
+      "lag_s": 1.85,
+      "correlation": 0.36
+    },
+    "same_file_twice_running": 0
+  },
+  "landing_contrast": {
+    "ratio": 6.83,
+    "inside_per_s": 4.25,
+    "outside_per_s": 0.62,
+    "duty": 0.21,
+    "volleys": 78
+  },
+  "flights_1k_2k4": {
+    "over": {
+      "own_bolt_hiss": {
+        "n": 10,
+        "median": 17.88,
+        "p90": 18.99
+      },
+      "own_bolt_hiss_full_level": {
+        "n": 10,
+        "median": 17.88,
+        "p90": 18.99
+      },
+      "own_arrow_swarm": {
+        "n": 82,
+        "median": 10.4,
+        "p90": 17.26
+      },
+      "own_arrow_swarm_full_level": {
+        "n": 41,
+        "median": 12.4,
+        "p90": 17.39
+      },
+      "other_bolt_hiss": {
+        "n": 34,
+        "median": 17.06,
+        "p90": 17.84
+      }
+    },
+    "ripple_p90_p10": 24.72
+  },
+  "sfx_over_machines_1k_2k": 17.81,
+  "one_arrow": {
+    "all_400_6000": {
+      "body": {
+        "n": 114,
+        "median": 8.8,
+        "p10": 0.06,
+        "rise": 10.77,
+        "sounds": {
+          "arrow_flesh": {
+            "n": 94,
+            "median": 8.48,
+            "p10": 0
+          },
+          "arrow_wood": {
+            "n": 20,
+            "median": 8.84,
+            "p10": 0.54
+          }
+        }
+      },
+      "miss": {
+        "n": 762,
+        "median": -3.4,
+        "p10": -14.03,
+        "rise": 1.86,
+        "sounds": {
+          "arrow_dirt": {
+            "n": 762,
+            "median": -3.4,
+            "p10": -14.03
+          }
+        }
+      },
+      "arbitrary_rise": -0.79
+    },
+    "low_400_1000": {
+      "body": {
+        "n": 114,
+        "median": 9.87,
+        "p10": -0.37,
+        "rise": 11.03,
+        "sounds": {
+          "arrow_flesh": {
+            "n": 94,
+            "median": 11.48,
+            "p10": -0.37
+          },
+          "arrow_wood": {
+            "n": 20,
+            "median": 3.34,
+            "p10": -0.48
+          }
+        }
+      },
+      "miss": {
+        "n": 762,
+        "median": -2.69,
+        "p10": -13.5,
+        "rise": 2.53,
+        "sounds": {
+          "arrow_dirt": {
+            "n": 762,
+            "median": -2.69,
+            "p10": -13.5
+          }
+        }
+      },
+      "arbitrary_rise": -1.31
+    },
+    "high_2400_6000": {
+      "body": {
+        "n": 114,
+        "median": 0.59,
+        "p10": -5.1,
+        "rise": 2.85,
+        "sounds": {
+          "arrow_flesh": {
+            "n": 94,
+            "median": 1.41,
+            "p10": -5.17
+          },
+          "arrow_wood": {
+            "n": 20,
+            "median": -1.26,
+            "p10": -4.72
+          }
+        }
+      },
+      "miss": {
+        "n": 762,
+        "median": -1.49,
+        "p10": -6.11,
+        "rise": 1.86,
+        "sounds": {
+          "arrow_dirt": {
+            "n": 762,
+            "median": -1.49,
+            "p10": -6.11
+          }
+        }
+      },
+      "arbitrary_rise": -0.09
+    }
+  },
+  "seconds": 180.02,
+  "lufs": -19.54,
+  "lra": 5.06,
+  "ear_band_share": -13.31,
+  "ear_band_worst": 1.91,
+  "ear_band_a_share": -8.73,
+  "top_band_share": -34.38,
+  "sfx_lufs": -19.95,
+  "sfx_movement_1k_4k": {
+    "p10": -57,
+    "p50": -39.28,
+    "p90": -28.32,
+    "spread": 28.67
+  },
+  "prompt_margin_worst": 9.05,
+  "bank_sha": "14af3fcc69d086731abc9a70563ee07c5ac6028b7def4b8f10dbe5375c8bd23b",
+  "driver": "WASAPI",
+  "shots": 116,
+  "flight_starts": 116,
+  "voiceless": 0
+}

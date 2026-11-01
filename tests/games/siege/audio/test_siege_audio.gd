@@ -442,6 +442,45 @@ func test_every_arrow_sounds_and_another_riders_are_quieter() -> void:
 	)
 
 
+func test_an_arrow_near_the_camera_is_louder_and_a_volley_spreads_across_the_sends() -> void:
+	var st := SiegeKit.state("short", 1, 0)
+	var v := _view(st)
+	v.update(FRAME)
+	var a: SiegeAudio = v.audio
+	var mid_y := SiegeAudio.ARROW_DEPTH_MID_PX
+	var at := func(y: float) -> Vector3:
+		# A point of the ground at that art y, near the middle of the art's width.
+		var t := (y - v.bank.to_art(Vector3.ZERO).y) / (v.bank.cam_k)
+		return Vector3(t, t, 0.0)
+	assert_almost_eq(a._arrow_depth_db(at.call(mid_y)), 0.0, 0.05, "where they land on average")
+	var near: float = a._arrow_depth_db(at.call(mid_y + SiegeAudio.ARROW_DEPTH_PX))
+	var far: float = a._arrow_depth_db(at.call(mid_y - SiegeAudio.ARROW_DEPTH_PX))
+	assert_almost_eq(near, SiegeAudio.ARROW_DEPTH_DB, 0.05)
+	assert_almost_eq(far, -SiegeAudio.ARROW_DEPTH_DB, 0.05)
+	assert_almost_eq(
+		a._arrow_depth_db(at.call(mid_y + 900.0)), SiegeAudio.ARROW_DEPTH_DB, 0.01, "no further"
+	)
+	var mid := Vector3(-30.0, 40.0, 0.0)
+	var wide := absf(a._arrow_pan(mid + Vector3(2.0, -2.0, 0.0), mid) - a._arrow_pan(mid, mid))
+	var drawn := absf(a._pan(mid + Vector3(2.0, -2.0, 0.0)) - a._pan(mid))
+	assert_gt(wide, drawn * 2.0, "a few metres in a volley reach another pan step")
+
+
+func test_an_arrows_level_over_its_cue_has_a_ceiling() -> void:
+	var st := SiegeKit.state("short", 1, 0)
+	_rider_on(st, SiegeIds.STATION_ARROWS)
+	var v := _view(st)
+	var ev := _shot(SiegeIds.SHOT_ARROW)
+	ev["src"] = SiegeIds.STATION_ARROWS
+	ev["tk"] = st.tick
+	v.audio.on_cue(SiegeIds.EV_SHOT, ev)
+	_land(v, v.audio.last_flight_s + 1.5)
+	var bank := AudioBank.load_bank(SiegeAudio.BANK_PATH)
+	var cue_db := float(bank.cues["hit_arrow_dirt"]["hits"][0]["db"])
+	for db: float in _db_of(v, "arrow_dirt"):
+		assert_lte(db - cue_db, SiegeAudio.ARROW_LVL_MAX_DB + 0.001)
+
+
 func test_no_two_arrows_running_play_one_file_and_each_takes_its_own_pitch() -> void:
 	var bank := AudioBank.load_bank(SiegeAudio.BANK_PATH)
 	for surface: String in ["dirt", "water", "flesh", "wood", "shield"]:
@@ -451,6 +490,7 @@ func test_no_two_arrows_running_play_one_file_and_each_takes_its_own_pitch() -> 
 		assert_eq(str(hit.get("pitch_var", "")), "pv", surface)
 		assert_eq(str(hit.get("db_var", "")), "lvl", surface)
 		assert_eq(str(hit.get("pan_var", "")), "pan", surface)
+		assert_eq(str(hit.get("variant_var", "")), "vr", surface)
 		assert_true(bool(hit.get("crowd", false)), "%s: on the crowd's pool" % surface)
 
 

@@ -231,7 +231,7 @@ So one body stands about 12 to 13 dB over one miss in the same mix, which is wha
 
 D9: 4.486 MB of 4.5. Nothing else was cut: the old `arrow_dirt` (2 x 0.42 s) and `arrow_water` (0.5 s) paid for all of it, and bolts and Scorpions in the moat play `stone_splash`, a bit up, no new bytes.
 
-**P4 does not hold, and no level can make it.** P4 asks each surface's median impact for +3 dB over everything else, and "everything else" includes the other arrows of the volley. Real arrows land a median 22 ms apart, inside P4's 50 ms. With everything in the mix silenced but the misses, a miss reads -0.30 dB over the other misses, at any level, because they all move together. With the whole mix it reads dirt -7.71 and water -3.66; flesh +5.06, wood +5.5 and shield +4.6 pass. The limit stands, the row is red, and the scorecard gate fails on it. It is the lead's call. A proposal: P4 holds what isn't a crowd (`crowd: true` hits leave the row's medians, and the rest of the row stays as it is), and a new row holds the crowd where it matters: a body at least +6 dB over a miss in the same mix (it reads 12), and each surface's median crowd hit audible as a group. Lifting the ground instead fails as well: at cue -5 it read -3.72 and took P8 to +2.47, under its limit.
+**P4 did not hold for a crowd, and no level could make it** (the ruling is in the next entry). P4 asks each surface's median impact for +3 dB over everything else, and "everything else" includes the other arrows of the volley. Real arrows land a median 22 ms apart, inside P4's 50 ms. With everything in the mix silenced but the misses, a miss reads -0.30 dB over the other misses, at any level, because they all move together. Lifting the ground failed as well: at cue -5 it read -3.72 and took P8 to +2.47, under its limit.
 
 P6 and A1's LRA, the other two rows the lead expected to go, hold: -12.04 against -12 (thin: there is no room for more sand) and LRA 13.16 against 4-14. A1's true peak reads -1.02 against -1, also thin.
 
@@ -245,3 +245,66 @@ P6 and A1's LRA, the other two rows the lead expected to go, hold: -12.04 agains
 - `tests/games/siege/audio/bank.test.mjs` holds the 30 s spread to 2.5 LU, the repeat to under 0.6 and no file twice running, on the tracked recordings.
 
 **Unverified.** All of it is mock-trainer, muted, on this PC: no speakers, no real trainer, no fan, no exported exe, and no client over a network. A client's arrows land by its own replay and its own snapshots, and that was not recorded.
+
+## 2026-11-01 Heard one by one: rulings after a critic, accents, depth, and rows that fail on rc.2
+
+An audio critic read the recordings above. The fix stood, but "would the owner notice" was unproved: voice by voice nothing had got stronger than rc.2's. rc.2's hits were not masked (`hit_flesh` +11 to +18, `hit_wood` +17 to +22 over an arrow-free mix): they were missing. Clearly audible arrow sounds rose only 1.3-1.5x at the organ and solo. Twelve arrows land in 344 ms, about 31 a second, above any counting rate, so a landing likely reads as one rattle with the occasional body. rc.2's patter stood about 5 dB over the rest in 4-8 kHz and the first version's volley median -2.0. Solo, volleys fly 3.87 s at 1.9 s apart, so each landing falls on the next volley's flight peak, a +13.7 dB lock. The lead's rulings follow.
+
+**P4: crowd hits leave its medians.** The lead's ruling. P4's "everything else" contains the other arrows, and -0.30 dB is the ceiling with only misses playing, so the row could not pass at any level and said nothing about anyone hearing them. Everything that is not `crowd: true` stays held to +3 dB as before, which took work: see below. My first proposal (a body over a miss, "audible as a group") was rejected: a ratio passes in silence, and the second reads the same on rc.2.
+
+**New rows, from the tracked real-wave reports, on the card as R1-R3 and in `bank.test.mjs`.** Each fails on rc.2's bank, re-recorded on WASAPI in the same sessions. Organ / autopilot / solo app:
+
+| Row | Limit | rc.2 (WASAPI) | Final |
+|---|---|---|---|
+| R1 voices started per arrow landed (at most: rc.2's sounds are shared with other weapons) | >= 0.95 | 0.15 / 0.08 / 0.13 | 1.00 / 1.00 / 1.00 |
+| R2 strong onsets a second inside landing windows over outside, from the master alone | >= 2.0 | 1.50 / 1.15 / 1.24 | 3.16 / 2.22 / 6.83 |
+| R3 a body over a miss in the same mix | >= +6 dB | -1.71 / +4.30 / -4.41 | +13.41 / +12.68 / +12.20 |
+
+R2 is the critic's measure, ported to `live_report.mjs`, which reads his recordings within a few hundredths to 0.45 of his script (rc.2 1.17 / 1.19 / 1.37 against his 1.19 / 1.13 / 1.26 on the Dummy recordings; the first version 2.50 / 1.32 / 3.78 against 2.36 / 1.29 / 3.33). He proposed 1.5. rc.2's organ reads exactly 1.50 on WASAPI, which would pass, and the rows must fail on rc.2, so the limit is 2.0. That is tighter, not looser.
+
+**Decisions, what each is for.**
+
+- `arrow_dirt` per the critic's candidate: 100 ms, body at 520 Hz, a longer decay, a low-pass at 1.1 kHz after the drive. Sand gain 1.0 and not his 0.72: at his the ground and the bodies read too alike on P9 and A8's top band fell under its floor, and his own candidate failed A1. Cue -9.8.
+- Flight contour per the candidate, peak at 40 % of the way with pitch following, so the flight is past before its arrows land. It lowers the flight at the landing by a modelled -8.3 dB solo, -2.7 on the organ, -3.6 elsewhere. **The swoosh goes better with the picture, not worse.** With the organ's real numbers (40 degrees, k 0.006, 30-45 m/s) the arc's highest point, in the world and on screen, comes at 38-41 % of the flight, because drag slows the way down. The peak at 50 % was late, about 0.38 s at a flight of 3.6 s, and the new one sits on the top of the arc. A frame sequence (`tools/screenshot` at 440-443.5 s) shows volleys as specks over the road at this size: nothing there contradicts it, and no eye can read 0.38 s from it, so this rests on the numbers.
+- Another rider's arrows: `other_db` -2 on bodies, -3 on misses, from -5. The lead withdrew his earlier acceptance of them sitting lower, because the owner's complaint outranks it.
+- Accents, because the owner said "individually" and 3 or 4 distinct events a second is what can be heard as individual. The critic's measure can't justify this; the lead asked for it anyway. At most one arrow per 150 ms, across all volleys, plays +4 dB: a body if one lands in that window, else the earliest landing. That is about 3 in a volley. The gap started at 90 ms, about 4 in a volley and a third of all arrows, and took A2's Sfx to -9.19 against -11. Accent +4 held at 150 ms, and +5 and +6 were not tried: the rows were at their limits at +4. An arrow's level over its cue is capped at +3 dB, so an accent that is also near the camera gets the cap, not +7.
+- Depth: +-3 dB by where the arrow lands on screen, near louder, around art y 430 and +-90 px: the road in the organ's reach runs from about y 340 to 510. Centred on the middle of the screen, as I first wrote it, almost every arrow got +3 dB and the organ's wave read -15.88 LUFS, over the limit of -16.
+- Pan: a volley's place 1.3 times as wide as the picture and each arrow's distance from it 7 times. One send's share falls from 72 % to 52, 54 and 41 %.
+- Rotation: `variant_var` on a cue hit lets a game name the file (small and additive, in the kit and the offline mix). `SiegeAudio.next_file` never plays the same file twice running on a surface and otherwise does not keep an order. By my reading (the same file, pitch within 1 %, level within 0.5 dB, within 3 s, 14 arrows a second) a near-twin falls from 91 % of misses to 45 %. The critic read 66 % by his. That is still a lot: 42 arrows in 3 s on 4 files, a 14 % pitch range and a 2.5 dB level range can't avoid it. An hour's soonest return at 0.2 % and 0.25 dB is 322 arrows, about 23 s, median 2207.
+- `arrow_flesh` variants have their own layers: bodies at 640, 720, 800 and 1120 Hz, cracks at 3.5-5.4 kHz, one with a low thump. Their spectra are 5.0 to 11.2 dB apart (he read 1.8-2.3).
+
+**What this cost elsewhere.** The levels below are not arrows, and they move because of them. The rows that hold are all held, none loosened.
+
+- `tower_dock` -6 (from -4) and `wave_end_bell` -5.5 (from -4): A2's Sfx peak and A1's true peak in a mix with arrows landing on them. Nobody has heard these two at these levels.
+- `hit_stone_dirt` -1 (from 0): the same reason.
+- With crowd hits out of P4's medians, the other hits needed to clear +3 on their own in a louder crowd: `hit_bolt_dirt` and `hit_scorpion_dirt` +1.5 (from 0); `hit_bolt_shield` and `hit_stone_shield` -2.5 (from -3), `hit_scorpion_shield` -3.5 (from -4); bolts, stones and Scorpions in the moat +0.5, -0.5 and -2.5 on `stone_splash`.
+- `arrow_shield` is thinner above 5 kHz, which was what pushed A1 over. In the card's preview it took 35 % of the mix's 2-4 kHz with only 14 arrows, at a 2 % share. The real waves show 0.1 %, so the preview now plays 0.5 %. A wave that really has many blocks is still unmeasured, and it would press on the ear band.
+
+**Numbers.** rc.2 re-recorded on WASAPI, then final. Organ / autopilot / solo app:
+
+| | rc.2 | Final |
+|---|---|---|
+| Arrows landed | 2110 / 2076 / 874 | 2110 / 2076 / 874 |
+| Arrow sounds on a player, at most for rc.2 | 324 / 168 / 111 | 2110 / 2076 / 874 |
+| Dropped, cut by another arrow | 0 | 0 / 0 / 0 |
+| Crowd voices, most at once of 16 | n/a | 10 / 9 / 8 |
+| A body over the rest of the mix, first 50 ms, 400-6000 Hz, median | +5.5 / +4.3 / +8.6 | +7.9 / +5.2 / +8.8 |
+| ... flesh, wood | | +9.1 +6.8 / +8.8 +3.4 / +8.5 +8.8 |
+| ... p10 | +1.5 / 0.0 / +5.4 | -2.4 / -2.8 / +0.1 |
+| A body's rise in the master, against an arbitrary moment | +8.0 / +6.9 / +13.9 | +7.6 / +6.8 / +11.6 |
+| A miss over the rest (rc.2: its patter) | +7.2 / none / +13.1 | -5.6 / -7.5 / -3.4 |
+| 2-8 kHz of the master, limit -12 | -12.41 / -15.07 / -12.36 | -13.35 / -14.59 / -13.31 |
+| LUFS, limit -20 to -16 on the first two | -17.76 / -17.84 / -21.36 | -16.32 / -16.60 / -19.54 |
+| LRA | 1.58 / 3.34 / 2.22 | 3.35 / 4.13 / 5.06 |
+| Worst prompt margin, +6 needed | | +7.42 / +8.33 / see `real_wave_app.json` |
+| Own flight over everything, 1-2.4 kHz, +3 needed | | +4.86 (organ) |
+
+Third wave, rider on the organ: 2257 landed, 2257 on players, none dropped, 9 voices at most, ear band -12.81, -16.45 LUFS, R2 2.88.
+
+So against rc.2: the median body is stronger at the organ and for another rider's arrows (+2.3 and +0.9 dB, over a mix that now holds every other arrow), level solo, and its p10 is lower by 3 to 5 dB, because a body with no accent, or a far one, sits lower in the crowd. An accent with a body has what rc.2's one sound had and more.
+
+The price is 1.3 to 1.8 LU: the wave reads -16.32 against the limit of -16 and is the loudest this game has been. The prompt's margin fell by 3 LU and is still +7.4.
+
+**Fatigue, by measurement only.** 30 s level spread 1.45, 1.93, 1.60 LU (rc.2 0.93, 0.96, 1.08). 3 s loudness on the organ -18.0 to -15.0 (rc.2 -18.65 to -17.2): the wave moves more, because accents come and go. The envelope's best repeat in 30 s is 0.20 at 1.55 s on the organ, 0.26 at 0.8 s with the rider elsewhere, 0.36 at 1.85 s solo (rc.2 0.21, 0.38, 0.32). Nobody has heard this for an hour.
+
+**The exported exe.** The owner plays the exe, and nothing had recorded one. See the report of this branch and `tools/export_windows.mjs --smoke`, which now says how many of each game's bank sounds resolve in the PCK.
