@@ -434,7 +434,7 @@ static func heavy() -> Dictionary:
 		[
 			{"kind": "access", "rect": Rect2i(62, 15, 18, 10)},
 			{"kind": "access", "rect": Rect2i(108, 15, 22, 10)},
-			{"kind": "digits", "at": Vector2i(88, 16), "text": "101"},
+			{"kind": "digits", "at": Vector2i(88, 16), "text": "110"},
 			{"kind": "vent", "at": Vector2i(122, 11)},
 		],
 		"turret_rivets": [[52, 58, 10], [52, 58, 19], [82, 104, 24], [62, 128, 12]],

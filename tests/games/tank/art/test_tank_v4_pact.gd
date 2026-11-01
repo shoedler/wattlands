@@ -295,7 +295,8 @@ func _stencils(lay: Dictionary) -> Array:
 
 
 ## Number codes the far right uses, read in both directions: `flip` and a turret's traverse mirror a number's order.
-const FORBIDDEN_CODES: Array[String] = ["18", "81", "88"]
+## 101 is no code: it was the number of a real SS heavy tank battalion, and the heavy is Tiger-like.
+const FORBIDDEN_CODES: Array[String] = ["18", "81", "88", "101"]
 
 
 static func _codes_in(text: String) -> Array[String]:
@@ -312,6 +313,8 @@ func test_no_number_is_a_code() -> void:
 	)
 	assert_eq(_codes_in("081"), ["18", "81"] as Array[String], "inside a longer one too")
 	assert_eq(_codes_in("88"), ["88"] as Array[String])
+	assert_eq(_codes_in("101"), ["101"] as Array[String], "the same read mirrored")
+	assert_eq(_codes_in("1011"), ["101"] as Array[String], "and inside a longer one, either way")
 	assert_eq(_codes_in("808"), [] as Array[String])
 	var lay: Dictionary = load(LAYOUTS).all()
 	var seen := 0
@@ -436,7 +439,7 @@ func test_each_kind_wears_its_marks() -> void:
 		"recon": [0, "10"],
 		"light": [0, "80"],
 		"medium": [5, "808"],
-		"heavy": [0, "101"],
+		"heavy": [0, "110"],
 		"destroyer": [5, ""],
 		"behemoth": [9, "808"],
 	}

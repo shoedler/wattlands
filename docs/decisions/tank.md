@@ -611,3 +611,10 @@ Short ADRs for the tank game: date, decision, alternatives, reason. Game session
 - Not done: spacing between near threats. Their positions come from the rules (`x_px`), so the recon can still stand in front of the tankette, as in `near_ambush` and `bow_duel`. Only the draw order and the tankette's deck rim changed.
 - Alternatives: other digits (2-7 and 9 do not mirror onto themselves); a pip kept on the small marks (it makes a checker); redrawing the 4-tooth sprocket with 5 teeth (fails the pitch test, and r and pitch are fixed).
 - Reason: the owner ruled out anything that could pass for real insignia, on a tank painted field grey and dark yellow.
+
+## 2026-11-01: the enemies' art: the coordinator's rulings on the marks
+
+- Decision: the heavy's "101" becomes "110". schwere SS-Panzer-Abteilung 101 was a real unit (from memory, unchecked against a source), and the heavy is Tiger-like. `test_no_number_is_a_code` refuses 101 in both directions beside 18, 81 and 88.
+- Decision: the hollow diamond stays. It is an invented generic shape. It resembles the rhombus German armour used as a map sign, which matters more on a field-grey and dark-yellow tank. The owner can overrule it.
+- Alternatives: "100" for the heavy, which also fits the digits and holds no code; another shape for the mark.
+- Reason: the owner ruled out anything that could pass for real insignia. A number that names a real SS unit is out; a plain geometric shape with no pip or cross is kept, with its resemblance on record.
