@@ -6,8 +6,8 @@ extends RefCounted
 ## (skirts over the track), "slits" and "lamps" ([x, y, w, on_turret]), "pivot_x", "exhaust", "arches" (recon), "bogies"
 ## (Behemoth), "fires" ([x, flame height], where the wreck burns), "night_low" (the row the value's fall ends on, for a
 ## hull all above its running gear; default the ground), "bands", "turret_bands" and "paint" (enemy_paint.canvas),
-## "rivets", "front_rivets" and "turret_rivets" ([x0, x1, y] rows), "rivet_cols", "streak_every", "moon_share", "mud"
-## (false: a box of four rows has no low third), "turret_boost".
+## "rivets", "front_rivets" and "turret_rivets" ([x0, x1, y] rows), "rivet_cols", "streak_every", "moon_share", "moon_hot"
+## (the bright step all along), "mud" (false: a box of four rows has no low third), "turret_boost", "turret_band_step".
 ##
 ## Faction look: sealed factory slab. Flat-topped decks, straight facets, welded seams, no windows, long guns, stowage.
 ## Field grey with hard stepped bands of dark yellow. Rivets only on skirts, hatches, mantlets and access plates.
@@ -72,6 +72,7 @@ static func tankette() -> Dictionary:
 		"pitch": 4.0,
 		"bands": [[14, 21, 0]],
 		"moon_share": 0.5,
+		"moon_hot": true,
 		"mud": false,
 		"streak_every": 18,
 		"parts":
@@ -131,23 +132,22 @@ static func recon() -> Dictionary:
 		"faces": 1,
 		"night_low": 48,
 		"bands": [[35, 52, -1]],
-		"moon_share": 0.5,
+		"moon_share": 0.42,
 		"streak_every": 18,
 		"parts":
 		[
 			plate(
 				[2, 17, 9, 9, 54, 9, 76, 17, 76, 22, 71, 27, 7, 27],
-				{"seams_x": [16, 33, 54], "seams_y": [17], "row_steps": [0, -1], "seed": 81}
+				{"seams_x": [16, 33, 54], "seams_y": [17], "row_steps": [0, -1], "row_weld": false, "seed": 81}
 			),
 		],
 		"details":
 		[
 			{"kind": "louvre", "rect": Rect2i(5, 13, 9, 3)},
 			{"kind": "hatch", "rect": Rect2i(40, 18, 9, 8), "lit": false},
-			{"kind": "digits", "at": Vector2i(19, 11), "text": "18"},
-			{"kind": "access", "rect": Rect2i(27, 11, 14, 6)},
+			{"kind": "digits", "at": Vector2i(19, 11), "text": "10"},
+			{"kind": "access", "rect": Rect2i(27, 11, 14, 6), "rows": false},
 			{"kind": "rail", "a": Vector2i(6, 4), "b": Vector2i(30, 4), "drop": 0},
-			{"kind": "bar", "at": Vector2i(8, 8), "w": 2},
 		],
 		"rivets":
 		[
@@ -155,6 +155,9 @@ static func recon() -> Dictionary:
 			[27, 40, 15],
 			[3, 8, 18],
 			[55, 60, 12],
+			[10, 16, 11],
+			[36, 39, 21],
+			[50, 54, 21],
 			[56, 68, 14],
 			[50, 54, 19],
 			[36, 39, 19],
@@ -171,7 +174,10 @@ static func recon() -> Dictionary:
 		"spare": {"c": Vector2(46, 13), "r": 3.5},
 		"turret_parts":
 		[
-			plate([34, 9, 34, 4, 37, 1, 50, 1, 53, 4, 53, 9], {"seed": 83}),
+			plate(
+				[34, 9, 34, 4, 37, 1, 50, 1, 53, 4, 53, 9],
+				{"seed": 83, "seams_y": [4], "row_steps": [1, 0], "row_weld": false}
+			),
 			plate([50, 3, 54, 3, 56, 5, 56, 7, 54, 9, 50, 9], {"cast": true, "seed": 84}),
 		],
 		"turret_details": [],
@@ -179,7 +185,7 @@ static func recon() -> Dictionary:
 		"turret_boost": 1.45,
 		"pivot_x": 44.0,
 		"fires": [[44, 9]],
-		"slits": [[66, 18, 4, 0], [41, 3, 4, 1]],
+		"slits": [[66, 18, 4, 0], [40, 5, 4, 1]],
 		"lamps": [[74, 21]],
 		"gun": {"trunnion": Vector2(52.0, 6.0), "len": 22.0, "style": "cannon"},
 		"exhaust": Vector2(3, 18),
@@ -202,7 +208,7 @@ static func light() -> Dictionary:
 		"night_low": 32,
 		"bands": [[17, 30, 1], [58, 80, 1]],
 		"moon_share": 0.55,
-		"streak_every": 24,
+		"streak_every": 30,
 		"parts":
 		[
 			plate(
@@ -227,12 +233,12 @@ static func light() -> Dictionary:
 		],
 		"turret_details":
 		[
-			{"kind": "digits", "at": Vector2i(43, 4), "text": "81"},
+			{"kind": "digits", "at": Vector2i(44, 4), "text": "80"},
 		],
 		"turret_rivets": [[35, 42, 8], [48, 52, 8], [47, 52, 3]],
 		"turret_boost": 1.25,
 		"pivot_x": 43.0,
-		"slits": [[12, 18, 4, 0], [38, 2, 4, 1]],
+		"slits": [[12, 18, 4, 0], [37, 4, 4, 1]],
 		"lamps": [],
 		"gun": {"trunnion": Vector2(30.0, 5.0), "len": 34.0, "style": "cannon"},
 		"exhaust": Vector2(90, 16),
@@ -316,7 +322,7 @@ static func medium() -> Dictionary:
 		[
 			plate(
 				[38, 21, 38, 12, 41, 9, 92, 9, 95, 12, 96, 21],
-				{"seams_x": [56, 76], "seams_y": [14], "seed": 26}
+				{"seams_x": [56, 76], "seams_y": [14], "row_weld": false, "seed": 26}
 			),
 			plate([31, 10, 38, 9, 38, 19, 31, 18], {"cast": true, "seed": 27}),
 			plate([96, 9, 107, 9, 107, 18, 96, 18], {"seed": 29, "paint": 1}),
@@ -420,7 +426,7 @@ static func heavy() -> Dictionary:
 		[
 			plate(
 				[60, 27, 60, 6, 62, 4, 130, 4, 132, 6, 132, 27],
-				{"seams_x": [80, 106], "seams_y": [11], "seed": 37}
+				{"seams_x": [80, 106], "seams_y": [11], "row_weld": false, "seed": 37}
 			),
 			plate([50, 8, 60, 6, 61, 24, 50, 21], {"cast": true, "seed": 38}),
 		],
@@ -472,7 +478,7 @@ static func destroyer() -> Dictionary:
 		"paint": 1,
 		"bands": [[60, 72, 2]],
 		"moon_share": 0.66,
-		"streak_every": 30,
+		"streak_every": 44,
 		"parts":
 		[
 			plate(
@@ -560,7 +566,8 @@ static func behemoth() -> Dictionary:
 		"faces": -1,
 		"pitch": 6.0,
 		"bands": [[64, 104, 3], [176, 216, 3]],
-		"turret_bands": [[150, 186, 0]],
+		"turret_bands": [[154, 192, 1]],
+		"turret_band_step": -1,
 		"moon_share": 0.72,
 		"streak_every": 20,
 		"parts":
@@ -581,7 +588,13 @@ static func behemoth() -> Dictionary:
 			# the middle deck
 			plate(
 				[40, 74, 64, 50, 244, 50, 268, 74],
-				{"seams_x": [84, 128, 172, 216], "seams_y": [62], "col_steps": [1, 0], "seed": 53}
+				{
+					"seams_x": [84, 128, 172, 216],
+					"seams_y": [62],
+					"col_steps": [0, -1],
+					"row_weld": false,
+					"seed": 53
+				}
 			),
 			# the stern casemate, the third deck
 			plate(
@@ -637,7 +650,7 @@ static func behemoth() -> Dictionary:
 		[
 			plate(
 				[112, 50, 112, 28, 126, 14, 200, 14, 216, 30, 220, 50],
-				{"seams_x": [150, 186], "seams_y": [30], "seed": 56}
+				{"seams_x": [150, 186], "seams_y": [30], "row_weld": false, "seed": 56}
 			),
 			plate([96, 18, 112, 14, 114, 44, 96, 40], {"cast": true, "seed": 57}),
 			plate([162, 14, 164, 2, 186, 2, 188, 14], {"seed": 58}),
@@ -659,8 +672,6 @@ static func behemoth() -> Dictionary:
 		[
 			[18, 96, 4, 0],
 			[66, 56, 4, 0],
-			[120, 58, 4, 0],
-			[208, 60, 4, 0],
 			[124, 22, 4, 1],
 			[170, 6, 4, 1]
 		],

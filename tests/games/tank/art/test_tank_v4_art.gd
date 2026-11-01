@@ -620,7 +620,7 @@ func test_the_slits_are_the_tables_and_stand_on_the_armour() -> void:
 		"medium": [3, 0],
 		"heavy": [4, 0],
 		"destroyer": [2, 0],
-		"behemoth": [6, 0],
+		"behemoth": [4, 0],
 	}
 	for k: String in table:
 		var row := _kit.kind(k)

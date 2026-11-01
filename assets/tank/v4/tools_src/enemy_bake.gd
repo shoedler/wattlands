@@ -61,6 +61,8 @@ const GASH_TILT := 35.0
 const BOGIE_K := 0.56
 ## A sprocket has one tooth to this many shoes, so each tooth sits in a gap of the belt.
 const SHOES_PER_TOOTH := 2.0
+## A sprocket under this radius is a plain drum.
+const SPROCKET_PLAIN_R := 6.0
 ## The glow's sprite on the atlas: a soft round falloff, nothing at its edge.
 const GLOW_SIZE := 64
 ## How much a burnt pixel must stand off its neighbours (L, 0..255) to keep a seam or a lip.
@@ -195,7 +197,7 @@ func _hull_image(L: Dictionary) -> Dictionary:
 	_skirt_hangers(img, front)
 	for d: Dictionary in L["details"]:
 		Paint.detail(cv, d)
-	Paint.moon(cv, float(L.get("moon_share", 0.66)))
+	Paint.moon(cv, float(L.get("moon_share", 0.66)), bool(L.get("moon_hot", false)))
 	Paint.chips(cv, 44)
 	for row: Array in L.get("rivets", []):
 		Paint.rivet_row(cv, row)
@@ -232,6 +234,7 @@ func _turret_image(L: Dictionary) -> Image:
 	var seed := int((parts[0] as Dictionary)["seed"]) + 9
 	var boost := float(L.get("turret_boost", Paint.TURRET_BOOST))
 	var cv := Paint.canvas(sz, _span(L), L.get("turret_bands", []), int(L.get("paint", 0)), boost, seed)
+	cv["band_step"] = int(L.get("turret_band_step", 0))
 	for part: Dictionary in parts:
 		Paint.part(cv, part)
 	Paint.streaks(cv, int(L.get("streak_every", 12)) + 4)
@@ -386,9 +389,9 @@ func _net(img: Image, L: Dictionary) -> void:
 				continue
 			var v := float(y - r.position.y) / r.size.y
 			var col: Color = Y[2] if v < 0.3 else (Y[1] if v < 0.7 else Y[0])
-			if (x - r.position.x) % 12 == 4:
+			if (x - r.position.x) % 16 == 4:
 				col = G[3]
-			elif (x - r.position.x) % 12 == 5:
+			elif (x - r.position.x) % 16 == 5:
 				col = OUTLINE
 			Px.put(img, x, y, col)
 	for x2 in range(r.position.x, r.end.x):
@@ -532,7 +535,8 @@ func _is_glass(c: Color) -> bool:
 	)
 
 
-## The slits on a picture: a hood above, the glass with its bright core.
+## The slits on a picture, each seated in a recess in its plate: the plate a step or two down round it, a sill catching
+## the light under it, a 1 px dark lid and cheeks on the glass, so it reads as a vision block and not an LED.
 func _slits(img: Image, L: Dictionary, layer: Variant) -> void:
 	var want := int(layer) if not (layer is bool) else 0
 	for s: Array in L.get("slits", []):
@@ -541,11 +545,11 @@ func _slits(img: Image, L: Dictionary, layer: Variant) -> void:
 		var x := int(s[0])
 		var y := int(s[1])
 		var w := int(s[2])
-		Px.rect(img, Rect2i(x - 1, y - 2, w + 2, 1), G[3])
+		_recess(img, Rect2i(x - 2, y - 2, w + 4, 5))
 		Px.rect(img, Rect2i(x - 1, y - 1, w + 2, 1), OUTLINE)
+		Px.rect(img, Rect2i(x - 1, y, w + 2, 1), OUTLINE)
 		Px.rect(img, Rect2i(x, y, w, 1), SLIT_GLOW)
 		Px.rect(img, Rect2i(x + w / 2, y, maxi(w / 3, 1), 1), SLIT_CORE)
-		Px.rect(img, Rect2i(x - 1, y + 1, w + 2, 1), OUTLINE)
 	for lamp: Array in L.get("lamps", []):
 		if want != 0:
 			continue
@@ -555,6 +559,17 @@ func _slits(img: Image, L: Dictionary, layer: Variant) -> void:
 		Px.rect(img, Rect2i(lx - 2, ly - 1, 4, 4), OUTLINE)
 		Px.rect(img, Rect2i(lx - 1, ly, 3, 2), SLIT_GLOW)
 		Px.put(img, lx + 1, ly, SLIT_CORE)
+
+
+## A recess in a plate: its paint two steps down, its bottom row (the sill) a step up.
+func _recess(img: Image, r: Rect2i) -> void:
+	for y in range(r.position.y, r.end.y):
+		for x in range(r.position.x, r.end.x):
+			if not Px.inside(img, x, y):
+				continue
+			var c := img.get_pixel(x, y)
+			if Paint.is_paint(c):
+				img.set_pixel(x, y, Paint.shift(c, 1 if y == r.end.y - 1 else -2))
 
 
 # --- gun ---------------------------------------------------------------------------------------------------
@@ -714,7 +729,8 @@ func _gear_row(row: Dictionary, L: Dictionary) -> void:
 		if g.has("idler"):
 			var idl: Dictionary = g["idler"]
 			out["idler"] = {"c": _v(idl["c"]), "r": idl["r"]}
-			sheets["idler"] = _sheet("idler", float(idl["r"]), 12, TAU / 4.0)
+			var ir := float(idl["r"])
+			sheets["idler"] = _sheet("idler", ir, 12, TAU / float(_idler_holes(ir)))
 		var rl: Array = g.get("rollers", [])
 		if L.has("bogies"):
 			rl = (L["bogies"][0] as Dictionary)["rollers"]
@@ -755,6 +771,11 @@ func _teeth_of(r: float, pitch: float) -> int:
 	return maxi(roundi(TAU * (r + 0.5) / (SHOES_PER_TOOTH * pitch)), 3)
 
 
+## An idler's holes: never four, whose web turns as a cross on a sprite this small.
+func _idler_holes(r: float) -> int:
+	return 5 if r >= 5.0 else 3
+
+
 ## The small wheels' own drawing (Gear.draw_wheel is tuned for the tank's 12 px and up; at 4-10 px its
 ## bolt ring reads as a glyph): a tyre, a lit rim, a dished web with holes that show the turn, a hub. kind: road,
 ## sprocket, idler, roller. Lit from the top left, as everything is.
@@ -765,7 +786,7 @@ func _wheel(img: Image, c: Vector2, r: float, ang: float, kind: String, teeth: i
 	var ext := r + 1.0
 	var holes := 6 if r > 5.0 else 3
 	if kind == "idler":
-		holes = 4
+		holes = _idler_holes(r)
 	for y in range(floori(c.y - ext) - 1, ceili(c.y + ext) + 1):
 		for x in range(floori(c.x - ext) - 1, ceili(c.x + ext) + 1):
 			var d := Vector2(x + 0.5, y + 0.5) - c
@@ -829,6 +850,12 @@ func _sprocket(img: Image, c: Vector2, r: float, ang: float, teeth: int) -> void
 					col = COLD[1]
 			elif rho > r - 0.8:
 				col = COLD[2]
+			elif r < SPROCKET_PLAIN_R:
+				# too small for a web: its hub ring and drum would meet in a cross. A plain dished drum, a hub
+				if (d + Vector2(0.9, 1.1)).length() < hub * 0.75:
+					col = COLD[13]
+				else:
+					col = COLD[8] if lit > 0.3 else (COLD[6] if lit > -0.4 else COLD[3])
 			elif rho > r - 2.2:
 				col = COLD[10] if lit > 0.3 else (COLD[6] if lit > -0.4 else COLD[3])
 			elif rho < hub:

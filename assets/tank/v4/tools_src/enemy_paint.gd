@@ -55,6 +55,8 @@ const TURRET_BOOST := 1.3
 ## A rivet's pace along its row, about 7 px, and how a stepped paint band leans.
 const RIVET_PACE := 7
 const BAND_STEP_ROWS := 4
+const BAND_CHIP_ROWS := 3
+const BAND_CHIP := 2
 ## The stencil digits, only those a mirror leaves alone: a turret's traverse and a flip mirror them.
 const DIGITS_3X5 := {
 	"0": ["###", "#.#", "#.#", "#.#", "###"],
@@ -132,17 +134,33 @@ static func canvas(
 		"bands": bands,
 		"paint": paint,
 		"boost": boost,
+		"band_step": 0,
 		"seed": seed,
 	}
 
 
 static func paint_at(cv: Dictionary, x: int, y: int) -> int:
 	var main := int(cv["paint"])
-	for b: Array in cv["bands"]:
+	return (PAINT_GREY if main == PAINT_YELLOW else PAINT_YELLOW) if in_band(cv, x, y) else main
+
+
+## True in one of the canvas's bands. Each band's edge leans in hard steps and is chipped every BAND_CHIP_ROWS, on its
+## own hash at each side, so no edge runs straight and no two edges match.
+static func in_band(cv: Dictionary, x: int, y: int) -> bool:
+	var row := floori(float(y) / BAND_CHIP_ROWS)
+	for i in (cv["bands"] as Array).size():
+		var b: Array = cv["bands"][i]
 		var off := int(b[2]) * floori(float(y) / BAND_STEP_ROWS)
-		if x >= int(b[0]) + off and x < int(b[1]) + off:
-			return PAINT_GREY if main == PAINT_YELLOW else PAINT_YELLOW
-	return main
+		var left := int(b[0]) + off + _chip(row, i * 2, int(cv["seed"]))
+		var right := int(b[1]) + off + _chip(row, i * 2 + 1, int(cv["seed"]))
+		if x >= left and x < right:
+			return true
+	return false
+
+
+## A band edge's chip at a run of rows: -BAND_CHIP..BAND_CHIP px, on nothing regular, so it never reads as a zig-zag.
+static func _chip(row: int, edge: int, seed: int) -> int:
+	return roundi((Px.h2(row, edge, seed + 37) - 0.5) * 2.0 * BAND_CHIP)
 
 
 static func value_at(cv: Dictionary, y: int) -> float:
@@ -200,6 +218,8 @@ static func part(cv: Dictionary, p: Dictionary) -> void:
 				var paint := int(p["paint"]) if p.has("paint") else paint_at(cv, x, y)
 				var col := snap(paint, l)
 				var d := extra
+				if int(cv["band_step"]) != 0 and not p.has("paint") and in_band(cv, x, y):
+					d += int(cv["band_step"])
 				if _is_edge(own, w, h, x, y):
 					img.set_pixel(x, y, OUTLINE)
 					ids[y * w + x] = -1
@@ -357,8 +377,8 @@ static func streak_of(c: Color) -> Color:
 
 
 ## The moon: a cold rim under the outline on a top edge with open sky over it, in long broken runs, its bright step only
-## on a level edge. `share` of the edge takes it.
-static func moon(cv: Dictionary, share: float = 0.66) -> void:
+## on a level edge (`hot_all`: everywhere). `share` of the edge takes it.
+static func moon(cv: Dictionary, share: float = 0.66, hot_all: bool = false) -> void:
 	var img: Image = cv["img"]
 	var src := img.duplicate() as Image
 	var w := src.get_width()
@@ -378,7 +398,7 @@ static func moon(cv: Dictionary, share: float = 0.66) -> void:
 			if not _flat_run(src, x, y):
 				continue
 			var level := _level_edge(src, x, y)
-			var hot := level and Px.h2(x / 3, y, 7) > 0.55
+			var hot := hot_all or (level and Px.h2(x / 3, y, 7) > 0.55)
 			_moon_px(img, src, x, y + 1, MOON[1] if hot else MOON[0])
 	_no_lone_moon(img)
 
@@ -511,7 +531,7 @@ static func detail(cv: Dictionary, d: Dictionary) -> void:
 		"hatch":
 			_hatch(cv, d["rect"])
 		"access":
-			_access(cv, d["rect"])
+			_access(cv, d["rect"], bool(d.get("rows", true)))
 		"louvre":
 			_louvre(cv, d["rect"])
 		"box":
@@ -564,8 +584,9 @@ static func _hatch(cv: Dictionary, r: Rect2i) -> void:
 		rivet_row(cv, [r.position.x + 2, r.end.x - 3, r.end.y - 3])
 
 
-## A bolted access plate: a dark line round it, its own top lit, a row of heads along its top and its bottom.
-static func _access(cv: Dictionary, r: Rect2i) -> void:
+## A bolted access plate: a dark line round it, its own top lit, a row of heads along its top and its bottom (`rows`
+## false: the layout's own rivet rows bolt it).
+static func _access(cv: Dictionary, r: Rect2i, rows: bool) -> void:
 	var img: Image = cv["img"]
 	for y in range(r.position.y, r.end.y):
 		for x in range(r.position.x, r.end.x):
@@ -575,6 +596,8 @@ static func _access(cv: Dictionary, r: Rect2i) -> void:
 			var low := y == r.end.y - 1 or x == r.end.x - 1
 			var lit := y == r.position.y or x == r.position.x
 			img.set_pixel(x, y, shift(c, -1 if low else (1 if lit else 0)))
+	if not rows:
+		return
 	rivet_row(cv, [r.position.x + 2, r.end.x - 3, r.position.y + 2])
 	if r.size.y >= 7:
 		rivet_row(cv, [r.position.x + 3, r.end.x - 3, r.end.y - 3])
@@ -704,8 +727,7 @@ static func _cable(img: Image, a: Vector2i, b: Vector2i) -> void:
 		Px.put(img, x, a.y, GREY[4] if (x - a.x) % 4 < 2 else GREY[2])
 		Px.put(img, x, a.y + 1, OUTLINE)
 	for x2 in range(a.x + 6, b.x - 4, 18):
-		Px.rect(img, Rect2i(x2, a.y - 1, 2, 3), GREY[3])
-		Px.put(img, x2 + 1, a.y + 1, OUTLINE)
+		Px.rect(img, Rect2i(x2, a.y - 1, 2, 2), GREY[3])
 	for e: int in [a.x - 3, b.x + 1]:
 		Px.rect(img, Rect2i(e, a.y - 1, 3, 3), GREY[3])
 		Px.put(img, e + 1, a.y, OUTLINE)
@@ -718,15 +740,15 @@ static func _shovel(img: Image, a: Vector2i) -> void:
 	Px.rect(img, Rect2i(a.x + 16, a.y - 1, 4, 3), GREY[4])
 	Px.put(img, a.x - 1, a.y, OUTLINE)
 	for k: int in [4, 12]:
-		Px.rect(img, Rect2i(a.x + k, a.y - 1, 1, 3), GREY[3])
+		Px.rect(img, Rect2i(a.x + k, a.y, 2, 1), GREY[3])
 
 
 static func _pick(img: Image, a: Vector2i) -> void:
-	Px.line(img, a + Vector2i(0, 1), a + Vector2i(18, 1), OUTLINE)
-	Px.line(img, a, a + Vector2i(17, 0), GRIME[1])
-	Px.line(img, a + Vector2i(15, -3), a + Vector2i(19, 3), OUTLINE)
-	Px.line(img, a + Vector2i(16, -3), a + Vector2i(18, 2), GREY[4])
-	Px.rect(img, Rect2i(a.x + 5, a.y - 1, 1, 3), GREY[3])
+	Px.line(img, a + Vector2i(0, 1), a + Vector2i(17, 1), OUTLINE)
+	Px.line(img, a, a + Vector2i(16, 0), GRIME[1])
+	Px.line(img, a + Vector2i(17, -4), a + Vector2i(19, 4), OUTLINE)
+	Px.line(img, a + Vector2i(18, -3), a + Vector2i(20, 3), GREY[4])
+	Px.rect(img, Rect2i(a.x + 5, a.y, 2, 1), GREY[3])
 
 
 static func _bar(img: Image, a: Vector2i, w: int) -> void:
@@ -734,8 +756,8 @@ static func _bar(img: Image, a: Vector2i, w: int) -> void:
 	Px.line(img, a, a + Vector2i(w, 0), GREY[3])
 
 
-## The Pact's mark: a hollow bone diamond on a dark plate. `size` 3: no pip, on 5 x 3. 5: a centre pip, on 7 x 7.
-## 9: a heavier pip, on 11 x 11. `at` is the plate's top left.
+## The Pact's mark: a hollow bone diamond on a dark plate, its centre always the plate, so no cross can form in it. `size`
+## 3 on a plate of 5 x 3, 5 on 7 x 7, 9 on 11 x 11. `at` is the plate's top left.
 static func _mark(img: Image, at: Vector2i, size: int) -> void:
 	var r := size / 2
 	# the little one, on a box of four open rows, has no room for a plate above and below it
@@ -744,9 +766,7 @@ static func _mark(img: Image, at: Vector2i, size: int) -> void:
 	var c := at + Vector2i(r + 1, r + pad_y)
 	for dy in range(-r, r + 1):
 		for dx in range(-r, r + 1):
-			var m := absi(dx) + absi(dy)
-			var pip := (size == 5 and m == 0) or (size >= 9 and m <= 1)
-			if m == r or pip:
+			if absi(dx) + absi(dy) == r:
 				Px.put(img, c.x + dx, c.y + dy, BONE)
 
 

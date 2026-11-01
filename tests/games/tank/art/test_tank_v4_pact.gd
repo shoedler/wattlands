@@ -5,6 +5,7 @@ extends GutTest
 ## of them is here: the medium's hull on the atlas, no block of warm light, the marks clear of every light.
 
 const LAYOUTS := "res://assets/tank/v4/tools_src/enemy_layouts.gd"
+const PAINT := "res://assets/tank/v4/tools_src/enemy_paint.gd"
 const SLIT_CORE := Color("#d8fff4")
 const SLIT_GLOW := Color("#7fe0d0")
 const GLASS_DARK := Color("#0f1a1c")
@@ -261,6 +262,15 @@ func test_the_fixed_points_did_not_move() -> void:
 	assert_eq([int(lamp[0]), int(lamp[1])], [74, 21], "the recon's lamp")
 
 
+## A wheel with four holes turns its web into a cross on a sprite this small.
+func test_no_idler_turns_on_four_holes() -> void:
+	for k: String in TankEnemyKit.SIZES:
+		var sheets: Dictionary = _kit.kind(k)["sheets"]
+		if sheets.has("idler"):
+			var holes := TAU / float(sheets["idler"]["period"])
+			assert_ne(roundi(holes), 4, "%s: its idler" % k)
+
+
 # --- the marks ----------------------------------------------------------------------------------------------------
 
 
@@ -284,9 +294,127 @@ func _stencils(lay: Dictionary) -> Array:
 	return out
 
 
+## Number codes the far right uses, read in both directions: `flip` and a turret's traverse mirror a number's order.
+const FORBIDDEN_CODES: Array[String] = ["18", "81", "88"]
+
+
+static func _codes_in(text: String) -> Array[String]:
+	var out: Array[String] = []
+	for code in FORBIDDEN_CODES:
+		if text.contains(code) or text.reverse().contains(code):
+			out.append(code)
+	return out
+
+
+func test_no_number_is_a_code() -> void:
+	assert_eq(
+		_codes_in("18"), ["18", "81"] as Array[String], "the check itself: 18 reads both ways"
+	)
+	assert_eq(_codes_in("081"), ["18", "81"] as Array[String], "inside a longer one too")
+	assert_eq(_codes_in("88"), ["88"] as Array[String])
+	assert_eq(_codes_in("808"), [] as Array[String])
+	var lay: Dictionary = load(LAYOUTS).all()
+	var seen := 0
+	for k: String in lay:
+		for e: Array in _stencils(lay[k]):
+			var d: Dictionary = e[1]
+			if str(d["kind"]) == "digits":
+				seen += 1
+				assert_eq(_codes_in(str(d["text"])), [] as Array[String], "%s: %s" % [k, d["text"]])
+	assert_gte(seen, 5, "every number on the kit was read")
+
+
+## What a stencil's rect holds on the atlas as bone, in sprite px of its picture: [rows of "#" and "."].
+func _bone_rows(k: String, key: String, box: Rect2i) -> Array[String]:
+	var row := _kit.kind(k)
+	var at := Vector2i.ZERO
+	var pic := Rect2i(row["base"])
+	if key == "front_details":
+		pic = Rect2i(row["front"])
+	elif key == "turret_details":
+		pic = Rect2i(row["turret"]["rect"])
+		at = Vector2i(row["turret"]["at"] as Vector2)
+	var out: Array[String] = []
+	for y in box.size.y:
+		var line := ""
+		for x in box.size.x:
+			var q := pic.position + box.position - at + Vector2i(x, y)
+			line += "#" if _atlas.get_pixelv(q).is_equal_approx(BONE) else "."
+		out.append(line)
+	return out
+
+
+## Reads digit glyphs off bone rows, left to right, a clear column between them.
+static func _read_digits(rows: Array[String], table: Dictionary) -> String:
+	var wide := (rows[0] as String).length()
+	var one: int = (table["0"][0] as String).length()
+	var text := ""
+	var x := 0
+	while x + one <= wide:
+		var glyph: Array = []
+		for r in rows:
+			glyph.append(r.substr(x, one))
+		var found := "?"
+		for ch: String in table:
+			if table[ch] == glyph:
+				found = ch
+		text += found
+		x += one + 1
+	return text
+
+
+## The drawn number, as painted and as a flip or a traverse shows it: the pixels themselves, read back mirrored.
+func test_a_mirrored_number_reads_as_no_code() -> void:
+	var paint: Variant = load(PAINT)
+	var lay: Dictionary = load(LAYOUTS).all()
+	for k: String in lay:
+		for e: Array in _stencils(lay[k]):
+			var d: Dictionary = e[1]
+			if str(d["kind"]) != "digits":
+				continue
+			var table: Dictionary = (
+				paint.DIGITS_5X7 if int(d.get("tall", 5)) == 7 else paint.DIGITS_3X5
+			)
+			var rows := _bone_rows(k, e[0], _mark_rect(d))
+			assert_eq(_read_digits(rows, table), str(d["text"]), "%s: as painted" % k)
+			var mirrored: Array[String] = []
+			for r in rows:
+				mirrored.append(r.reverse())
+			var flipped := _read_digits(mirrored, table)
+			assert_eq(flipped, str(d["text"]).reverse(), "%s: as a flip shows it" % k)
+			assert_eq(
+				_codes_in(flipped), [] as Array[String], "%s: flipped reads %s" % [k, flipped]
+			)
+
+
+## No cross: the centre of every mark is the plate behind it, at every size, and the diamond is hollow all through.
+func test_a_mark_is_a_hollow_diamond() -> void:
+	var lay: Dictionary = load(LAYOUTS).all()
+	var seen := 0
+	for k: String in lay:
+		for e: Array in _stencils(lay[k]):
+			var d: Dictionary = e[1]
+			if str(d["kind"]) != "mark":
+				continue
+			seen += 1
+			var size := int(d["size"])
+			var at: Vector2i = d["at"]
+			var pad_y := 0 if size == 3 else 1
+			var rows := _bone_rows(k, e[0], Rect2i(at, Vector2i(size + 2, size + pad_y * 2)))
+			var r := size / 2
+			for y in rows.size():
+				for x in (rows[y] as String).length():
+					var m := absi(x - r - 1) + absi(y - r - pad_y)
+					var bone := (rows[y] as String)[x] == "#"
+					assert_eq(
+						bone, m == r, "%s: mark px (%d, %d): only its ring is bone" % [k, x, y]
+					)
+	assert_eq(seen, 4, "tankette, medium, destroyer, Behemoth")
+
+
 ## Only 0, 1 and 8: a turret's traverse and `flip` mirror them, and each reads the same mirrored.
 func test_the_numbers_survive_a_mirror() -> void:
-	var paint: Variant = load("res://assets/tank/v4/tools_src/enemy_paint.gd")
+	var paint: Variant = load(PAINT)
 	for table: Dictionary in [paint.DIGITS_3X5, paint.DIGITS_5X7]:
 		assert_eq(table.keys(), ["0", "1", "8"], "the digits a mirror leaves alone")
 		for ch: String in table:
@@ -305,8 +433,8 @@ func test_the_numbers_survive_a_mirror() -> void:
 func test_each_kind_wears_its_marks() -> void:
 	var want := {
 		"tankette": [3, ""],
-		"recon": [0, "18"],
-		"light": [0, "81"],
+		"recon": [0, "10"],
+		"light": [0, "80"],
 		"medium": [5, "808"],
 		"heavy": [0, "101"],
 		"destroyer": [5, ""],
@@ -337,7 +465,7 @@ func test_the_marks_are_clear_of_every_light() -> void:
 			for s: Array in one["slits"]:
 				if (int(s[3]) == 1) != on_turret:
 					continue
-				var glass := Rect2i(int(s[0]) - 1, int(s[1]) - 2, int(s[2]) + 2, 4)
+				var glass := Rect2i(int(s[0]) - 2, int(s[1]) - 2, int(s[2]) + 4, 5)
 				assert_false(box.intersects(glass), "%s: %s on a slit" % [k, box])
 			for d: Dictionary in one.get(e[0], []):
 				if str(d["kind"]) in ["louvre", "hatch"]:
