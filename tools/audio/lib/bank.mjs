@@ -114,6 +114,12 @@ export function validateBank(doc) {
     (c.hits ?? []).forEach((h, i) => {
       if (!sounds[h.sound]) out.push(`cues.${cid}.hits[${i}].sound: "${h.sound}" is not in sounds`);
       busOk(`cues.${cid}.hits[${i}]`, h.bus);
+      if (h.flight !== undefined) {
+        if (sounds[h.sound] && sounds[h.sound].loop !== true) out.push(`cues.${cid}.hits[${i}].flight: "${h.sound}" is not a loop`);
+        for (const key of ['gain', 'pitch']) {
+          if (h.flight[key] !== undefined && !Array.isArray(h.flight[key])) out.push(`cues.${cid}.hits[${i}].flight.${key}: needs a list of [u, value] points`);
+        }
+      }
     });
     (c.duck ?? []).forEach((d, i) => {
       busOk(`cues.${cid}.duck[${i}]`, d.bus);

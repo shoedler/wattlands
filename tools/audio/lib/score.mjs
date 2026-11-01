@@ -6,10 +6,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { allFiles, bankWavBytes, loadBank } from './bank.mjs';
-import { bandShareDb, fft, gainToDb, powerSpectrum } from './dsp.mjs';
+import { bandFilter, bandShareDb, fft, gainToDb, powerSpectrum } from './dsp.mjs';
 import { integratedLufs, loudnessRange, momentaryMaxLufs, momentaryTrack, truePeakDb } from './lufs.mjs';
-import { BankAudio, MIX_RATE, PROMPT_VOICE_DB, STROKE_HORIZON_S, mixdown, segmentsLength, simulate } from './offline_mix.mjs';
-import { curvePasses } from './pattern.mjs';
+import { earBand, onsetShape, shapeApart } from './ear_band.mjs';
+import { BankAudio, MIX_RATE, PROMPT_VOICE_DB, STROKE_HORIZON_S, mixdown, renderVoice, segmentsLength, simulate } from './offline_mix.mjs';
+import { curveEval, curvePasses } from './pattern.mjs';
 
 /** Repo WAV caps in MB (SPEC 3.4). */
 export const WAV_CAPS_MB = { tank: 7.0, fishing: 4.5, siege: 4.5, workout: 4.0, _shared: 0.3 };
@@ -394,19 +395,297 @@ function averageShape(bank, ids) {
   return thirdOctaveShape(sum, rate, size);
 }
 
+// --- Projectiles ---
+
+const P_FLIGHT_MARGIN_DB = 3;
+const P_IMPACT_MARGIN_DB = 3;
+const P_SURFACE_APART_DB = 3;
+const P_FLIGHTS_APART_DB = 3;
+const P_PEAK_OVER_ALL_DB = 3;
+const P_MIX_APART_DB = 3;
+const P_FLIGHT_BAND = [800, 6000];
+const P_IMPACT_BAND = [400, 6000];
+
+/** A voice's loudest `span` s in a band, against the (already band-limited) background in the same moment: dB over it. */
+function voiceOverBackground(bank, v, background, band, span) {
+  const x = bandFilter(renderVoice(bank, v), band[0], band[1], MIX_RATE);
+  const at = Math.max(0, Math.round(v.t * MIX_RATE));
+  const win = Math.min(Math.round(span * MIX_RATE), x.length);
+  let best = -Infinity;
+  let bestAt = 0;
+  for (let a = 0; a + win <= x.length; a += Math.max(1, Math.round(win / 2))) {
+    const level = rmsDb(x, a, a + win);
+    if (level > best) {
+      best = level;
+      bestAt = a;
+    }
+  }
+  return best - rmsDb(background, at + bestAt, Math.min(background.length, at + bestAt + win));
+}
+
+/** The same against everything else that is playing: `whole` is the unfiltered mix of the voice's bus and the rest, the voice in it. */
+function voiceOverRest(bank, v, whole, band, span) {
+  const voice = renderVoice(bank, v);
+  const at = Math.max(0, Math.round(v.t * MIX_RATE));
+  const lead = Math.round(0.05 * MIX_RATE);
+  const from = Math.max(0, at - lead);
+  const to = Math.min(whole.length, at + voice.length);
+  const rest = Float64Array.from(whole.subarray(from, to));
+  for (let i = 0; i < voice.length && at - from + i < rest.length; i++) rest[at - from + i] -= voice[i];
+  const back = bandFilter(rest, band[0], band[1], MIX_RATE);
+  const x = bandFilter(voice, band[0], band[1], MIX_RATE);
+  const win = Math.min(Math.round(span * MIX_RATE), x.length);
+  let best = -Infinity;
+  let bestAt = 0;
+  for (let a = 0; a + win <= x.length; a += Math.max(1, Math.round(win / 2))) {
+    const level = rmsDb(x, a, a + win);
+    if (level > best) {
+      best = level;
+      bestAt = a;
+    }
+  }
+  return best - rmsDb(back, at - from + bestAt, Math.min(back.length, at - from + bestAt + win));
+}
+
+function median(sorted) {
+  const n = sorted.length;
+  if (n === 0) return -Infinity;
+  return n % 2 === 1 ? sorted[(n - 1) / 2] : 0.5 * (sorted[n / 2 - 1] + sorted[n / 2]);
+}
+
+/** A flight's own loop as it plays, at the pitch its curve is at halfway: what a rider hears mid-air. */
+function flightShape(bank, hit) {
+  const f = bank.file(hit.sound, 0);
+  const p = (hit.pitch ?? 1) * (hit.flight.pitch ? curveEval({ param: 'u', points: hit.flight.pitch }, { u: 0.5 }) : 1);
+  const size = 2048;
+  const power = powerSpectrum(f.data[0], size);
+  // A pitch moves every bin up by p: read the spectrum at the bin the shifted one came from.
+  const moved = new Float64Array(power.length);
+  for (let k = 0; k < power.length; k++) {
+    const from = k / p;
+    const i = Math.floor(from);
+    moved[k] = i + 1 < power.length ? power[i] + (power[i + 1] - power[i]) * (from - i) : 0;
+  }
+  return thirdOctaveShape(moved, f.rate, size);
+}
+
+function shapeDistance(a, b) {
+  return Math.sqrt(a.reduce((acc, v, k) => acc + (v - b[k]) * (v - b[k]), 0) / a.length);
+}
+
+/**
+ * P1-P9, for a bank whose preview says preview.checks.projectiles: {shots: [cue...], surfaces: {name: [cue...]}}. An
+ * offline card passed a game nobody could hear arrows in, because nothing asked whether a shot had a sound that lasted
+ * its flight, or whether that sound stood out of the mix. These ask.
+ */
+function projectileRows(bank, p, sim, mix, rows) {
+  const spec = p.checks?.projectiles;
+  const targets = {
+    P1: 'flight sounds started per shot: 1 for every weapon',
+    P2: 'a flight sound lasts its flight',
+    P3: `a flight's loudest 250 ms is >= +${P_FLIGHT_MARGIN_DB} dB over the wheels and the bed, ${P_FLIGHT_BAND.join('-')} Hz (not over other flights: P8)`,
+    P4: `every impact cue is in the preview, each surface's median impact >= +${P_IMPACT_MARGIN_DB} dB over everything else that plays, ${P_IMPACT_BAND.join('-')} Hz`,
+    P5: `surfaces differ: spectra >= ${P_SURFACE_APART_DB} dB apart`,
+    P6: `2-8 kHz of the master <= ${p.checks?.ear_band?.limit ?? '?'} dB of its total`,
+    P7: `flights differ: spectra at their pitch >= ${P_FLIGHTS_APART_DB} dB apart`,
+    P8: `the rider's own flight at full level, its loudest 250 ms over everything else, flights too, in its band: median >= +${P_PEAK_OVER_ALL_DB} dB`,
+    P9: `in the mix, first 60 ms of an impact: a target >= ${P_MIX_APART_DB} dB apart from the ground`,
+  };
+  if (!spec) {
+    for (const id of Object.keys(targets)) rows.push({ id, pass: true, value: 'n/a', target: 'preview.checks.projectiles not set' });
+    return;
+  }
+  const events = p.events ?? [];
+  const perShot = spec.shots.map((cue) => {
+    const shots = events.filter((e) => e.cue === cue).length;
+    const flights = sim.voices.filter((v) => v.cue === cue && v.flight).length;
+    return { cue, shots, flights, ratio: shots > 0 ? flights / shots : 0 };
+  });
+  rows.push({ id: 'P1', pass: perShot.every((s) => s.ratio === 1), value: perShot.map((s) => `${s.cue} ${s.flights}/${s.shots}`).join(', '), target: targets.P1 });
+  const flights = sim.voices.filter((v) => v.flight && spec.shots.includes(v.cue));
+  let shortest = flights.length > 0 ? Infinity : 0;
+  for (const v of flights) shortest = Math.min(shortest, (v.end - v.t) / v.flight.dur);
+  rows.push({ id: 'P2', pass: shortest >= 0.99, value: round(shortest), target: targets.P2 });
+
+  const n = mix.n;
+  const whole = new Float64Array(n);
+  for (const bus of ['Machines', 'Ambience']) {
+    const stem = mono(mix.stems[bus]);
+    for (let i = 0; i < n; i++) whole[i] += stem[i];
+  }
+  const flightBack = bandFilter(whole, P_FLIGHT_BAND[0], P_FLIGHT_BAND[1], MIX_RATE);
+  // An impact has to rise out of the flights as well as the wheel.
+  const everything = Float64Array.from(whole);
+  const sfxStem = mono(mix.stems.Sfx);
+  for (let i = 0; i < n; i++) everything[i] += sfxStem[i];
+  let quiet = Infinity;
+  let quietWhat = '';
+  for (const v of flights) {
+    const over = voiceOverBackground(bank, v, flightBack, P_FLIGHT_BAND, 0.25);
+    if (over < quiet) {
+      quiet = over;
+      quietWhat = `${v.sound} at ${round(v.t, 1)} s`;
+    }
+  }
+  rows.push({ id: 'P3', pass: quiet >= P_FLIGHT_MARGIN_DB, value: `+${round(quiet)} dB`, target: targets.P3, note: quietWhat });
+
+  const surfaces = Object.entries(spec.surfaces);
+  const missing = surfaces.flatMap(([, cues]) => cues).filter((cue) => !events.some((e) => e.cue === cue));
+  // Per surface the median impact: a stroke of the wheel can land on any one of them, and that is no fault of the sound.
+  let quietHit = Infinity;
+  let quietHitWhat = '';
+  let worstOne = Infinity;
+  for (const [surface, cues] of surfaces) {
+    const overs = [];
+    for (const v of sim.voices.filter((x) => cues.includes(x.cue) && x.sound === bank.doc.cues[x.cue].hits[0].sound)) {
+      overs.push(voiceOverRest(bank, v, everything, P_IMPACT_BAND, 0.05));
+    }
+    overs.sort((x, y) => x - y);
+    const mid = median(overs);
+    if (overs.length > 0) worstOne = Math.min(worstOne, overs[0]);
+    if (mid < quietHit) {
+      quietHit = mid;
+      quietHitWhat = surface;
+    }
+  }
+  rows.push({
+    id: 'P4',
+    pass: missing.length === 0 && quietHit >= P_IMPACT_MARGIN_DB,
+    value: missing.length > 0 ? `missing ${missing.join(', ')}` : `${surfaces.length} surfaces, quietest median +${round(quietHit)} dB`,
+    target: targets.P4,
+    note: `${quietHitWhat}; the worst single impact +${round(worstOne)} dB`,
+  });
+  const shapes = surfaces.map(([surface, cues]) => {
+    const sounds = cues.map((c) => bank.doc.cues[c]?.hits?.[0]?.sound).filter(Boolean);
+    return { surface, shape: averageShape(bank, sounds) };
+  });
+  let closest = Infinity;
+  let closestWhat = '';
+  for (let i = 0; i < shapes.length; i++) {
+    for (let j = i + 1; j < shapes.length; j++) {
+      const a = shapes[i].shape;
+      const b = shapes[j].shape;
+      const d = Math.sqrt(a.reduce((acc, v, k) => acc + (v - b[k]) * (v - b[k]), 0) / a.length);
+      if (d < closest) {
+        closest = d;
+        closestWhat = `${shapes[i].surface} and ${shapes[j].surface}`;
+      }
+    }
+  }
+  rows.push({ id: 'P5', pass: closest >= P_SURFACE_APART_DB, value: round(closest), target: targets.P5, note: closestWhat });
+
+  const limit = p.checks?.ear_band?.limit;
+  if (limit === undefined) rows.push({ id: 'P6', pass: true, value: 'n/a', target: 'preview.checks.ear_band not set' });
+  else {
+    const e = earBand(mono(mix.master));
+    rows.push({ id: 'P6', pass: e.share <= limit, value: round(e.share), target: targets.P6, note: `loudest frame ${round(e.worst)}` });
+  }
+
+  const own = spec.own_flight;
+  if (!own) rows.push({ id: 'P8', pass: true, value: 'n/a', target: 'preview.checks.projectiles.own_flight not set' });
+  else {
+    const mine = sim.voices.filter((v) => v.flight && v.cue === own.cue && v.lead);
+    const top = Math.max(-200, ...mine.map((v) => v.db));
+    const overs = mine.filter((v) => v.db >= top - 1).map((v) => voiceOverRest(bank, v, everything, own.band, 0.25)).sort((x, y) => x - y);
+    const mid = median(overs);
+    rows.push({ id: 'P8', pass: mid >= P_PEAK_OVER_ALL_DB, value: `${mid >= 0 ? '+' : ''}${round(mid)} dB`, target: `${targets.P8}, ${own.band.join('-')} Hz`, note: `${overs.length} flights of ${own.cue}` });
+  }
+
+  const ground = spec.surfaces.dirt;
+  const masterMono = mono(mix.master);
+  const starts = (cues) => sim.voices.filter((v) => cues.includes(v.cue) && v.sound === bank.doc.cues[v.cue].hits[0].sound).map((v) => v.t);
+  if (!ground) rows.push({ id: 'P9', pass: true, value: 'n/a', target: 'no dirt surface' });
+  else {
+    const groundShape = onsetShape(masterMono, starts(ground));
+    let nearest = Infinity;
+    let nearestWhat = '';
+    const parts = [];
+    for (const [surface, cues] of surfaces) {
+      if (surface === 'dirt' || surface === 'water') continue;
+      const d = shapeApart(onsetShape(masterMono, starts(cues)), groundShape);
+      if (d === null) continue;
+      parts.push(`${surface} ${round(d)}`);
+      if (d < nearest) {
+        nearest = d;
+        nearestWhat = surface;
+      }
+    }
+    rows.push({ id: 'P9', pass: nearest >= P_MIX_APART_DB, value: parts.join(', '), target: targets.P9, note: `nearest: ${nearestWhat}` });
+  }
+
+  const flightHits = spec.shots.flatMap((cue) => (bank.doc.cues[cue]?.hits ?? []).filter((h) => h.flight).map((h) => ({ cue, hit: h })));
+  const flightShapes = flightHits.map(({ cue, hit }) => ({ cue, shape: flightShape(bank, hit) }));
+  let flightsApart = Infinity;
+  let flightsWhat = '';
+  for (let i = 0; i < flightShapes.length; i++) {
+    for (let j = i + 1; j < flightShapes.length; j++) {
+      const d = shapeDistance(flightShapes[i].shape, flightShapes[j].shape);
+      if (d < flightsApart) {
+        flightsApart = d;
+        flightsWhat = `${flightShapes[i].cue} and ${flightShapes[j].cue}`;
+      }
+    }
+  }
+  if (flightShapes.length < 2) rows.push({ id: 'P7', pass: true, value: 'n/a', target: 'fewer than two flights' });
+  else rows.push({ id: 'P7', pass: flightsApart >= P_FLIGHTS_APART_DB, value: round(flightsApart), target: targets.P7, note: flightsWhat });
+}
+
 // --- The card ---
 
+/** A curve's highest value, or 1 for none. */
+function curvesMax(curves) {
+  return (curves ?? []).reduce((acc, c) => acc * Math.max(...(c.points ?? [[0, 1]]).map((pt) => pt[1])), 1);
+}
+
+/**
+ * Each sound's highest pitch at runtime, from every place the bank plays it: a loop's pitch_by, a stroke's pitch_table, a
+ * spot's range, a cue hit's pitch with its flight's curve and the largest value its pitch_var takes in the preview.
+ */
+export function runtimePitches(doc) {
+  const out = new Map();
+  const up = (id, p) => out.set(id, Math.max(out.get(id) ?? 1, p));
+  for (const m of Object.values(doc.machines ?? {})) {
+    for (const ev of m.events ?? []) up(ev.sound, Math.min(1.2, (ev.pitch ?? 1) * (1 + Math.max(0, ...(ev.pitch_table ?? [0])))));
+    for (const l of m.loops ?? []) up(l.sound, curvesMax(l.pitch_by));
+  }
+  for (const l of Object.values(doc.loops ?? {})) for (const layer of l.layers ?? []) up(layer.sound, curvesMax(layer.pitch_by));
+  for (const b of Object.values(doc.beds ?? {})) {
+    for (const layer of b.layers ?? []) up(layer.sound, curvesMax(layer.pitch_by));
+    for (const s of b.spots ?? []) up(s.sound, Array.isArray(s.pitch) ? s.pitch[1] : (s.pitch ?? 1));
+  }
+  const vars = new Map();
+  for (const e of doc.preview?.events ?? []) {
+    for (const [k, v] of Object.entries(e.vars ?? {})) vars.set(k, Math.max(vars.get(k) ?? 1, Number(v) || 1));
+  }
+  for (const c of Object.values(doc.cues ?? {})) {
+    for (const h of c.hits ?? []) {
+      const bend = h.flight?.pitch ? Math.max(...h.flight.pitch.map((pt) => pt[1])) : 1;
+      up(h.sound, (h.pitch ?? 1) * bend * (h.pitch_var ? (vars.get(h.pitch_var) ?? 1) : 1));
+    }
+  }
+  return out;
+}
+
 function fixedRows(doc, dir, rows, root) {
-  // A9, A11: every file of the bank.
+  // A9, A11: every file of the bank. A17 reads A9 where a file plays: a pitch of 1.4 moves 7 kHz up over 9.8.
   let worstA9 = -Infinity;
   let worstA9File = '';
+  let worstA17 = -Infinity;
+  let worstA17File = '';
   let worstA11 = 0;
   let worstA11File = '';
   const bank = new BankAudio(doc, dir);
+  const pitches = runtimePitches(doc);
   for (const f of allFiles(doc)) {
     const a = bank.file(f.id, f.variant);
     if (a.rate === 22050) {
+      const top = 9800 / (pitches.get(f.id) ?? 1);
       for (const x of a.data) {
+        const pitched = bandShareDb(x, a.rate, top, 11026);
+        if (pitched > worstA17) {
+          worstA17 = pitched;
+          worstA17File = f.stem;
+        }
         const share = bandShareDb(x, a.rate, 9800, 11026);
         if (share > worstA9) {
           worstA9 = share;
@@ -430,6 +709,15 @@ function fixedRows(doc, dir, rows, root) {
     }
   }
   rows.push({ id: 'A9', pass: worstA9 <= -32, value: round(worstA9), target: '>9.8 kHz <= -32 dB', note: worstA9File });
+  // Reported for every bank; held where the bank asks, so a game whose engine loop climbs an octave is not failed by a row it never met.
+  const a17Held = doc.preview?.checks?.a17 === true;
+  rows.push({
+    id: 'A17',
+    pass: !a17Held || worstA17 <= -32,
+    value: round(worstA17),
+    target: a17Held ? '>9.8 kHz at runtime pitch <= -32 dB' : '>9.8 kHz at runtime pitch: reported, preview.checks.a17 holds it to -32 dB',
+    note: worstA17File,
+  });
   rows.push({ id: 'A11', pass: worstA11 <= 3, value: round(worstA11), target: 'loop seam <= 3x median step', note: worstA11File });
   if (root && WAV_CAPS_MB[doc.game] !== undefined) {
     const mb = bankWavBytes(path.join(root, 'assets', doc.game, 'audio', 'audio.json')) / 1e6;
@@ -697,14 +985,19 @@ export function scoreBank(doc, dir, { shared, root = null, rpms = null, stems = 
 
   // A14: the shot's 1-4 kHz over the 500 ms before it.
   if (checks.a14) {
-    const ev = (p.events ?? []).find((e) => e.cue === checks.a14.cue);
-    if (!ev) rows.push({ id: 'A14', pass: false, value: 'no such event', target: `preview.events has no ${checks.a14.cue}` });
+    // Every firing of the cue, its median: one shot placed in a quiet moment says nothing about a wave.
+    const evs = (p.events ?? []).filter((e) => e.cue === checks.a14.cue);
+    if (evs.length === 0) rows.push({ id: 'A14', pass: false, value: 'no such event', target: `preview.events has no ${checks.a14.cue}` });
     else {
       const m = mono(mix.master);
-      const at = Math.round(ev.t * mixRate);
-      const before = bandDb(m.subarray(Math.max(0, at - Math.round(0.5 * mixRate)), at), 1000, 4000);
-      const after = bandDb(m.subarray(at, at + Math.round(0.25 * mixRate)), 1000, 4000);
-      rows.push({ id: 'A14', pass: after - before >= 6, value: `+${round(after - before)} dB`, target: 'event 1-4 kHz >= +6 dB over the background' });
+      const reads = evs.map((ev) => {
+        const at = Math.round(ev.t * mixRate);
+        const before = bandDb(m.subarray(Math.max(0, at - Math.round(0.5 * mixRate)), at), 1000, 4000);
+        const after = bandDb(m.subarray(at, at + Math.round(0.25 * mixRate)), 1000, 4000);
+        return after - before;
+      }).sort((x, y) => x - y);
+      const mid = median(reads);
+      rows.push({ id: 'A14', pass: mid >= 6, value: `+${round(mid)} dB`, target: 'event 1-4 kHz >= +6 dB over the background, median of its firings', note: `${reads.length} firings` });
     }
   } else rows.push({ id: 'A14', pass: true, value: 'n/a', target: 'preview.checks.a14 not set' });
 
@@ -716,6 +1009,8 @@ export function scoreBank(doc, dir, { shared, root = null, rpms = null, stems = 
   }
   const clipPct = (100 * clipped) / Math.max(1, sumN);
   rows.push({ id: 'A15', pass: clipPct <= 0.1, value: `${round(clipPct, 3)} %`, target: 'clipped before the limiter <= 0.1 %' });
+
+  projectileRows(bank, p, sim, mix, rows);
 
   rows.push({ id: 'D8', pass: true, value: 'external', target: 'event coverage: the game GUT test' });
   rows.push({ id: 'D10', pass: true, value: 'external', target: 'commit cost: a bench' });

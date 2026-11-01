@@ -2,12 +2,13 @@
 // (the walkers' frames and the art's phases), and the fatigue rule, which the scorecard doesn't read.
 
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { loadBank, validateBank } from '../../../../tools/audio/lib/bank.mjs';
-import { biquad, rbj } from '../../../../tools/audio/lib/dsp.mjs';
+import { bandFilter, biquad, rbj } from '../../../../tools/audio/lib/dsp.mjs';
 import { renderSound } from '../../../../tools/audio/lib/recipe.mjs';
 import { momentaryMaxLufs } from '../../../../tools/audio/lib/lufs.mjs';
 import { BankAudio, MIX_RATE, mixdown, simulate } from '../../../../tools/audio/lib/offline_mix.mjs';
@@ -19,24 +20,34 @@ const doc = loadBank(BANK);
 
 const VARIANTS = {
   pawl_click: 3,
-  wheel_creak: 5,
   tread_step: 4,
+  axle_knock: 2,
   mine_pick: 3,
-  ballista_twang: 3,
+  ballista_twang: 2,
   scorpion_snap: 3,
-  stone_impact: 3,
-  arrow_whistle: 6,
+  stone_impact: 2,
+  arrow_swarm: 3,
+  bolt_hiss: 3,
+  arrow_release: 2,
+  arrow_dirt: 2,
+  bolt_dirt: 2,
+  bolt_wood: 2,
+  hit_flesh: 3,
+  hit_wood: 3,
+  hit_shield: 3,
   gate_hit: 4,
   hooves: 4,
   kill_thud: 4,
   crow: 3,
 };
 const SINGLES = [
-  'timber_groan', 'junction_clatter', 'pump_stroke', 'tar_bubble', 'tar_pour', 'tar_hiss', 'bolt_whoosh', 'onager_release',
-  'stone_whoosh', 'arrow_release', 'arrow_patter', 'horn_wave', 'horn_push', 'horn_rush', 'wave_end_bell', 'gate_crash',
-  'gate_restored', 'ram_thud', 'tower_creak', 'reach_alarm', 'lever_route', 'coin_clink', 'hammer_buy', 'overdrive_on',
-  'overdrive_off', 'overdrive_no', 'wind_hill_lo', 'wind_hill_hi', 'crowd_far', 'banner_flap', 'lark',
+  'wheel_rumble', 'wheel_rumble_far', 'wheel_load', 'junction_clatter', 'pump_stroke', 'tar_bubble', 'tar_pour', 'tar_hiss',
+  'onager_release', 'stone_tumble', 'stone_wood', 'stone_splash', 'arrow_water', 'horn_wave', 'horn_push', 'horn_rush',
+  'wave_end_bell', 'gate_crash', 'gate_restored', 'ram_thud', 'tower_creak', 'reach_alarm', 'lever_route', 'coin_clink',
+  'hammer_buy', 'overdrive_on', 'overdrive_off', 'overdrive_no', 'wind_hill_lo', 'wind_hill_hi', 'crowd_far', 'banner_flap', 'lark',
 ];
+const WEAPONS = ['bolt', 'stone', 'arrow', 'scorpion'];
+const SURFACES = ['dirt', 'water', 'flesh', 'wood', 'shield'];
 
 test('the bank is valid', () => {
   assert.deepEqual(validateBank(doc), []);
@@ -51,7 +62,7 @@ test('the wheel strokes fall where the walkers plant their feet', () => {
   const at = Object.fromEntries(doc.machines.treadwheel.events.map((e) => [e.sound, e.at]));
   assert.deepEqual(at.pawl_click, [0, 0.5]);
   assert.deepEqual(at.tread_step, [0, 0.5]);
-  assert.deepEqual(at.wheel_creak, [0.25]);
+  assert.deepEqual(at.axle_knock, [0.75]);
   const step = doc.machines.treadwheel.events.find((e) => e.sound === 'tread_step');
   assert.equal(step.lead_only, true);
 });
@@ -61,16 +72,48 @@ test('the mine picks twice a cycle, the pump strokes once', () => {
   assert.deepEqual(doc.machines.pump.events[0].at, [0]);
 });
 
-test('other riders hear only the groan of a wheel', () => {
+test('other riders hear only a far rumble of a wheel, and yours is not that sound', () => {
   const others = doc.machines.treadwheel.loops.filter((l) => l.other === true);
-  assert.deepEqual(others.map((l) => l.sound), ['timber_groan']);
+  assert.deepEqual(others.map((l) => l.sound), ['wheel_rumble_far']);
+  assert.ok(doc.machines.treadwheel.loops.every((l) => l.when?.param === 'far'), 'each layer says whose it is');
+  assert.ok(doc.preview.others.find((o) => o.machine === 'treadwheel').params.far === 1, 'the preview rides another rider so');
 });
 
-test('a volley is three staggered whistles and a delayed patter', () => {
-  const hits = doc.cues.shot_arrow.hits;
-  assert.deepEqual(hits.filter((h) => h.sound === 'arrow_whistle').map((h) => h.delay_s ?? 0), [0, 0.07, 0.15]);
-  assert.equal(hits.find((h) => h.sound === 'arrow_patter').delay_var, 'flight_s');
-  assert.equal(doc.cues.shot_stone.hits.find((h) => h.sound === 'stone_impact').delay_var, 'flight_s');
+test('nothing of the wheel follows the cadence in pitch: two riders a little apart would flange', () => {
+  for (const l of doc.machines.treadwheel.loops) assert.equal(l.pitch_by, undefined, l.sound);
+  assert.equal(doc.loops.junction_clatter.layers[0].pitch_by, undefined);
+});
+
+test('the wheel holds no tone: its strokes and loops have no oscillator, chirp or drive', () => {
+  const sounds = [...doc.machines.treadwheel.events.map((e) => e.sound), ...doc.machines.treadwheel.loops.map((l) => l.sound), 'junction_clatter', 'tower_creak'];
+  for (const id of sounds) {
+    for (const l of doc.sounds[id].layers) {
+      assert.ok(['noise', 'modal', 'grains'].includes(l.src), `${id}: ${l.src}`);
+      for (const fx of l.fx ?? []) assert.equal(fx.drive, undefined, id);
+    }
+  }
+});
+
+test('every weapon has a release and a flight that follows the shot, on its side of the screen', () => {
+  for (const w of WEAPONS) {
+    const hits = doc.cues[`shot_${w}`].hits;
+    const flight = hits.find((h) => h.flight);
+    assert.ok(flight, `${w}: a flight`);
+    assert.equal(doc.sounds[flight.sound].loop, true, `${w}: its flight is a loop`);
+    assert.equal(flight.flight.dur_var, 'flight_s');
+    assert.equal(flight.pan_var, 'pan0');
+    assert.equal(flight.flight.pan_to_var, 'pan1');
+    assert.ok(hits.some((h) => !h.flight && (h.delay_s ?? 0) === 0), `${w}: a release`);
+  }
+});
+
+test('the volley flights never overlap one noise: three variants, one a volley', () => {
+  assert.equal(doc.sounds.arrow_swarm.variants, 3);
+  assert.equal(doc.sounds.bolt_hiss.variants, 3);
+});
+
+test('every weapon has an impact for every surface', () => {
+  for (const w of WEAPONS) for (const s of SURFACES) assert.ok(doc.cues[`hit_${w}_${s}`]?.hits?.length > 0, `${w} ${s}`);
 });
 
 test('a breach ducks everything but UI and Master; a stone ducks the machines', () => {
@@ -134,20 +177,126 @@ test('each stroke rings out inside what the dead stop allows', () => {
   }
 });
 
-test('a volley whistles, a rack of the organ does not', () => {
-  const sounds = (cue) => doc.cues[cue].hits.map((h) => h.sound);
-  assert.ok(sounds('shot_arrow').includes('arrow_whistle'));
-  assert.deepEqual(sounds('shot_arrow_rack'), ['arrow_release', 'arrow_patter']);
+/** A train of one contour every `gap` s over a `flight` s flight: how far the sum of their power moves, in dB. */
+function ripple(points, gap, flight = 4) {
+  const at = (u) => {
+    if (u < 0 || u > 1) return -200;
+    for (let i = 1; i < points.length; i++) {
+      if (u <= points[i][0]) return points[i - 1][1] + ((points[i][1] - points[i - 1][1]) * (u - points[i - 1][0])) / (points[i][0] - points[i - 1][0]);
+    }
+    return points[points.length - 1][1];
+  };
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (let t = 0; t < gap; t += 0.01) {
+    let sum = 0;
+    for (let k = 0; k < 12; k++) sum += 10 ** (at((t + k * gap) / flight) / 10);
+    const db = 10 * Math.log10(sum);
+    lo = Math.min(lo, db);
+    hi = Math.max(hi, db);
+  }
+  return hi - lo;
+}
+
+test('volleys read as separate volleys at the organ\'s real rate: the flight is a pass, not a bed', () => {
+  const gain = doc.cues.shot_arrow.hits.find((h) => h.flight).flight.gain;
+  assert.ok(ripple(gain, 0.87) >= 3.5, `0.87 s: ${ripple(gain, 0.87).toFixed(1)} dB`);
+  assert.ok(ripple(gain, 1.5) >= 9, `1.5 s: ${ripple(gain, 1.5).toFixed(1)} dB`);
+  assert.ok(ripple(gain, 2.3) >= 14, `2.3 s: ${ripple(gain, 2.3).toFixed(1)} dB`);
 });
 
-test('D5 sees the worst: a whistling volley sits in the prompt window, and the preview shows the organ at its rate', () => {
-  const events = doc.preview.events;
-  const volley = events.filter((e) => e.cue === 'shot_arrow' || e.cue === 'shot_arrow_rack').map((e) => e.t).sort((a, b) => a - b);
-  assert.ok(events.some((e) => e.cue === 'shot_arrow' && e.t >= 30 && e.t < 30.6), 'a volley in 30.0..30.6 s');
-  const run = volley.filter((t) => t >= 25.5 && t <= 34.5);
-  assert.equal(run.length, 7);
-  run.slice(1).forEach((t, i) => assert.equal(t - run[i], 1.5));
+test('every hit cue is on the card, and another rider\'s shots are under your own without dropping out', () => {
+  const listed = Object.values(doc.preview.checks.projectiles.surfaces).flat().sort();
+  const hits = Object.keys(doc.cues).filter((c) => c.startsWith('hit_')).sort();
+  assert.deepEqual(listed, hits);
+  for (const c of [...hits, 'shot_bolt', 'shot_stone', 'shot_arrow', 'shot_scorpion']) {
+    assert.ok(doc.cues[c].other_db >= -6 && doc.cues[c].other_db <= -4, `${c}: ${doc.cues[c].other_db}`);
+  }
 });
+
+test('a miss is under a hit: the patter is quieter than a body at the same level of the mix', () => {
+  const bank = new BankAudio(doc, path.dirname(BANK));
+  const loudest = (id, db) => {
+    const x = bandFilter(bank.file(id, 0).data[0], 400, 6000, 22050);
+    const n = Math.round(0.05 * 22050);
+    let best = -300;
+    for (let a = 0; a + n <= x.length; a += 40) {
+      let e = 0;
+      for (let i = 0; i < n; i++) e += x[a + i] * x[a + i];
+      best = Math.max(best, 10 * Math.log10(e / n + 1e-30));
+    }
+    return best + db;
+  };
+  const db = (cue) => doc.cues[cue].hits[0].db;
+  assert.ok(loudest('arrow_dirt', db('hit_arrow_dirt')) <= loudest('hit_flesh', db('hit_arrow_flesh')) - 1.5);
+  assert.ok(loudest('arrow_dirt', db('hit_arrow_dirt')) <= loudest('hit_wood', db('hit_arrow_wood')) - 1.5);
+});
+
+test('what a rider must hear of the gate cannot lose its voice to a flight', () => {
+  for (const c of ['gate_hit', 'ram_thud', 'leak']) assert.equal(doc.cues[c].hits[0].priority, 8, c);
+});
+
+test('the Scorpion is not the arrow\'s flight at another pitch', () => {
+  const pitch = doc.cues.shot_scorpion.hits.find((h) => h.flight).pitch ?? 1;
+  assert.ok(pitch < 1.3, `pitch ${pitch}`);
+  assert.notEqual(doc.cues.shot_scorpion.hits.find((h) => h.flight).sound, doc.cues.shot_arrow.hits.find((h) => h.flight).sound);
+});
+
+test('D5 sees the worst: a volley sits in the prompt window, and the preview fires the organ at its real rate', () => {
+  const events = doc.preview.events;
+  const volley = events.filter((e) => e.cue === 'shot_arrow').map((e) => e.t).sort((a, b) => a - b);
+  assert.ok(events.some((e) => e.cue === 'shot_arrow' && e.t >= 30 && e.t < 31.2), 'a volley in the second before 31.2 s');
+  const run = volley.filter((t) => t >= 5 && t < 55);
+  assert.ok(run.length / 50 >= 0.9, `${(run.length / 50).toFixed(2)} volleys a second`);
+});
+
+test('the preview plays levels the adapter can give: every other volley under', () => {
+  const levels = doc.preview.events.filter((x) => x.cue === 'shot_arrow').map((x) => x.vars.lvl);
+  assert.deepEqual([...new Set(levels)].sort((x, y) => x - y), [-6, 0]);
+  levels.forEach((v, i) => assert.equal(v, i % 2 === 1 ? -6 : 0, `volley ${i}`));
+});
+
+test('A14 is a waiver, with its numbers, and not a pass', () => {
+  assert.match(doc.preview.waive.A14, /median/i);
+  assert.ok(doc.preview.events.filter((e) => e.cue === doc.preview.checks.a14.cue).length >= 3, 'a median of real firings');
+});
+
+test('a stone on bodies is the bodies first: the ground 9 dB under', () => {
+  const hits = doc.cues.hit_stone_flesh.hits;
+  assert.equal(hits[0].sound, 'hit_flesh');
+  assert.equal(hits[1].sound, 'stone_impact');
+  assert.equal(hits[0].db - hits[1].db, 9);
+});
+
+test('a body at full level stays under the master head on its own', () => {
+  for (const c of ['hit_arrow_flesh', 'hit_scorpion_flesh', 'hit_bolt_flesh', 'hit_stone_flesh']) {
+    assert.ok(doc.cues[c].hits[0].db <= -2.5, c);
+  }
+});
+
+const REAL = ['organ', 'auto'].map((k) => [k, JSON.parse(fs.readFileSync(new URL(`./real_wave_${k}.json`, import.meta.url), 'utf8'))]);
+
+for (const [name, wave] of REAL) {
+  test(`the real wave, rider ${name}: holds what the preview can only estimate`, () => {
+    const sha = crypto.createHash('sha256').update(fs.readFileSync(BANK)).digest('hex');
+    assert.equal(wave.bank_sha, sha, 'the bank has moved on: record it again, tools/audio/live_report.mjs');
+    assert.ok(wave.seconds >= 150, 'a real wave, not a sample');
+    assert.equal(wave.flight_starts, wave.shots, 'one flight per shot');
+    assert.ok(wave.ear_band_share <= -12, `2-8 kHz ${wave.ear_band_share} dB of the master, Tank's limit -12`);
+    assert.ok(wave.lufs >= -20 && wave.lufs <= -16, `${wave.lufs} LUFS`);
+    assert.ok(wave.top_band_share <= -32, `above 9.8 kHz ${wave.top_band_share} dB`);
+    assert.ok(wave.prompt_margin_worst >= 6, `warning ${wave.prompt_margin_worst} LU over the wave at its worst`);
+    const a = wave.mix_apart_first_60ms;
+    for (const k of ['flesh_dirt', 'wood_dirt']) assert.ok(a[k] >= 3, `${k} ${a[k]} dB in the mix`);
+    if (name === 'organ') {
+      assert.ok(a.shield_dirt >= 3, `shield_dirt ${a.shield_dirt} dB in the mix`);
+      const own = wave.flights_1k_2k4.over.own_arrow_swarm_full_level;
+      assert.ok(own.n >= 50, 'flights from the log');
+      assert.ok(own.median >= 3, `your arrow's peak +${own.median} dB over everything, 1-2.4 kHz`);
+    }
+    assert.ok(wave.impacts_per_s + wave.kills_per_s <= 2.5, `${wave.impacts_per_s} impacts and ${wave.kills_per_s} kills a second`);
+  });
+}
 
 test('the preview ends the junction at the stop, as the adapter does', () => {
   const stop = doc.preview.segments.filter((s) => s.rpm > 0).reduce((a, s) => a + s.s, 0);
@@ -162,7 +311,7 @@ test('a safety prompt clears +6 LU over each horn, a volley and a docking tower 
   const base = previewScenario(doc, {});
   const quiet = (base.cues ?? []).filter((c) => c.t < 44);
   const at = 50;
-  const vars = { flight_s: 0.3, p: 1, p0: 1, p1: 0.97, p2: 1.03 };
+  const vars = { flight_s: 3.5, p: 1, pan0: 0.1, pan1: -0.5, lvl: 0 };
   for (const cue of ['rush', 'push', 'wave_start', 'overdrive_on', 'shot_arrow', 'dock']) {
     for (const after of [0.05, 0.2, 0.4]) {
       const t = at + after;
@@ -229,7 +378,7 @@ function promptMargins(bank, shared, scenario, t0, rpm, name) {
 function ridingScenario(base, rpm, p, others) {
   const riders = [];
   for (let i = 0; i < others; i++) {
-    riders.push({ id: `o${i}`, machine: 'treadwheel', lead: false, rpm_scale: 0.97 - i * 0.02, params: { p_eff: p, walkers: 2 } });
+    riders.push({ id: `o${i}`, machine: 'treadwheel', lead: false, rpm_scale: 0.97 - i * 0.02, params: { p_eff: p, walkers: 2, far: 1 } });
   }
   return {
     ...base,
@@ -275,5 +424,5 @@ test('the recipes render as the files on disk say', () => {
   const r = renderSound('pawl_click', doc.sounds.pawl_click, 1, { game: 'siege' });
   assert.equal(manifest.pawl_click_2.frames, r.frames);
   assert.equal(manifest.pawl_click_2.locked, true);
-  assert.equal(manifest.timber_groan.loop, true);
+  assert.equal(manifest.wheel_rumble.loop, true);
 });

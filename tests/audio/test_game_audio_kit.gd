@@ -502,3 +502,148 @@ func test_exit_tree_stops_all() -> void:
 	remove_child(kit)
 	assert_eq(kit.loops_in_use(), 0)
 	kit.free()
+
+
+# --- Flights and sides ---------------------------------------------------------------------------
+
+
+## A bank with one flight cue: a looping `wind`, over `flight_s`, from pan0 to pan1.
+func _flight_kit(loud: bool) -> GameAudioKit:
+	var kit := GameAudioKit.new()
+	kit.force_audio = loud
+	add_child_autofree(kit)
+	var bank := AudioBank.load_bank(BANK)
+	bank.cues["fly"] = {
+		"hits":
+		[
+			{
+				"sound": "wind",
+				"db": -10.0,
+				"pan_var": "pan0",
+				"flight":
+				{
+					"dur_var": "flight_s",
+					"pan_to_var": "pan1",
+					"gain": [[0.0, -20.0], [0.5, 0.0], [1.0, -6.0]],
+					"pitch": [[0.0, 1.2], [1.0, 0.8]],
+				}
+			}
+		]
+	}
+	if loud:
+		for id: String in bank.sounds:
+			for v in bank.variants(id):
+				var s := SfxSynth.tone("sine", 200.0, 1.0)
+				s.loop_mode = AudioStreamWAV.LOOP_FORWARD
+				s.loop_end = 1000
+				bank.set_stream(id, v, s)
+	assert_true(kit.setup_bank(bank, 1))
+	return kit
+
+
+func _commit_for(kit: GameAudioKit, seconds: float) -> void:
+	for _i in roundi(seconds / DT):
+		kit.commit(DT)
+
+
+func test_a_flight_runs_for_the_time_it_was_given_silent_or_not() -> void:
+	var kit := _flight_kit(false)
+	kit.cue("fly", {"flight_s": 2.0, "pan0": -0.5, "pan1": 0.5})
+	assert_eq(kit.flight_starts, 1)
+	assert_eq(kit.flights_live(), 1)
+	_commit_for(kit, 1.9)
+	assert_eq(kit.flights_live(), 1, "still in the air")
+	_commit_for(kit, 0.2)
+	assert_eq(kit.flights_live(), 0, "landed")
+
+
+func test_a_flights_level_pitch_and_side_follow_it_and_its_player_stops_at_the_end() -> void:
+	var kit := _flight_kit(true)
+	kit.cue("fly", {"flight_s": 1.0, "pan0": -0.5, "pan1": 0.5})
+	var f: GameAudioKit.Flight = kit._flights[0]
+	var player: AudioStreamPlayer = f.voice.player
+	assert_true(player.playing)
+	assert_eq(
+		str(player.bus), AudioBuses.pan_bus(AudioBuses.SFX, -0.5), "starts on the launch's side"
+	)
+	assert_almost_eq(player.volume_db, -30.0, 0.5, "from the start of its curve")
+	assert_almost_eq(player.pitch_scale, 1.2, 0.01)
+	_commit_for(kit, 0.5)
+	assert_almost_eq(player.volume_db, -10.0, 1.0, "the top of the curve")
+	assert_eq(str(player.bus), AudioBuses.SFX, "over the middle of the screen")
+	assert_almost_eq(player.pitch_scale, 1.0, 0.02)
+	_commit_for(kit, 0.4)
+	assert_eq(
+		str(player.bus), AudioBuses.pan_bus(AudioBuses.SFX, 0.5), "and comes down on the other side"
+	)
+	_commit_for(kit, 0.2)
+	assert_eq(kit.flights_live(), 0)
+	assert_false(player.playing, "a looping voice ends with its flight")
+
+
+func test_a_pause_holds_a_flight_and_a_resume_runs_it_on() -> void:
+	var kit := _flight_kit(true)
+	kit.cue("fly", {"flight_s": 1.0})
+	var player: AudioStreamPlayer = kit._flights[0].voice.player
+	_commit_for(kit, 0.2)
+	kit._on_paused_changed(true, "test")
+	_commit_for(kit, 5.0)
+	assert_eq(kit.flights_live(), 1)
+	assert_true(player.stream_paused)
+	kit._on_paused_changed(false, "")
+	_commit_for(kit, 0.1)
+	assert_false(player.stream_paused)
+	_commit_for(kit, 1.0)
+	assert_eq(kit.flights_live(), 0)
+
+
+func test_a_stolen_flight_lets_go_of_its_player() -> void:
+	var kit := _flight_kit(true)
+	kit._bank.mix["sfx_voices"] = 1
+	kit.cue("fly", {"flight_s": 5.0})
+	assert_eq(kit.flights_live(), 1)
+	kit.sound("bang")
+	kit.commit(DT)
+	assert_eq(kit.flights_live(), 0, "the newer voice of its priority took it")
+	assert_eq(kit.voiceless, 0)
+
+
+func test_a_flight_with_a_high_priority_keeps_its_voice() -> void:
+	var kit := _flight_kit(true)
+	kit._bank.mix["sfx_voices"] = 1
+	var c: Dictionary = kit._bank.cues["fly"]
+	(c["hits"][0] as Dictionary)["priority"] = 8
+	kit.cue("fly", {"flight_s": 5.0})
+	kit.sound("bang")
+	kit.commit(DT)
+	assert_eq(kit.flights_live(), 1, "a lower priority cannot take it")
+	assert_eq(kit.voiceless, 1, "and finds no voice")
+
+
+func test_a_delayed_flight_starts_when_its_delay_is_over() -> void:
+	var kit := _flight_kit(false)
+	var c: Dictionary = kit._bank.cues["fly"]
+	(c["hits"][0] as Dictionary)["delay_s"] = 0.2
+	kit.cue("fly", {"flight_s": 1.0})
+	assert_eq(kit.flight_starts, 0)
+	_commit_for(kit, 0.25)
+	assert_eq(kit.flight_starts, 1)
+
+
+func test_a_bank_may_not_fly_a_sound_that_is_no_loop() -> void:
+	var doc: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(BANK))
+	doc["cues"]["bad"] = {"hits": [{"sound": "bang", "flight": {"dur_s": 1.0}}]}
+	var errors := AudioBank.validate(doc)
+	assert_eq(errors.size(), 1)
+	assert_string_contains(errors[0], "flight")
+
+
+func test_a_panned_voice_plays_through_a_send_of_sfx() -> void:
+	var kit := _loud_kit()
+	kit._fire("bang", 0, -10.0, 1.0, AudioBuses.SFX, 6, true, -0.5)
+	var bus := AudioBuses.pan_bus(AudioBuses.SFX, -0.5)
+	var found := false
+	for c in kit.get_children():
+		if c is AudioStreamPlayer and str(c.bus) == bus:
+			found = true
+	assert_true(found, "on the left send")

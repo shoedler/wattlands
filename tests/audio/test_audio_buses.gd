@@ -28,6 +28,25 @@ func _limiters() -> int:
 	return n
 
 
+func test_every_panned_send_goes_through_sfx_with_its_own_panner() -> void:
+	for q: float in [-0.75, -0.5, -0.25, 0.25, 0.5, 0.75]:
+		var name := AudioBuses.pan_bus(AudioBuses.SFX, q)
+		assert_ne(name, AudioBuses.SFX, "%f" % q)
+		var i := AudioServer.get_bus_index(name)
+		assert_gt(i, AudioServer.get_bus_index(AudioBuses.SFX), "Godot only sends to a lower index")
+		assert_eq(AudioServer.get_bus_send(i), StringName(AudioBuses.SFX), name)
+		var panner := AudioServer.get_bus_effect(i, 0) as AudioEffectPanner
+		assert_not_null(panner, name)
+		assert_almost_eq(panner.pan, q, 0.001)
+
+
+func test_the_middle_and_other_buses_have_no_send() -> void:
+	assert_eq(AudioBuses.pan_bus(AudioBuses.SFX, 0.0), AudioBuses.SFX)
+	assert_eq(AudioBuses.pan_bus(AudioBuses.SFX, 0.1), AudioBuses.SFX)
+	assert_eq(AudioBuses.pan_bus(AudioBuses.MACHINES, -0.5), AudioBuses.MACHINES)
+	assert_eq(AudioBuses.pan_bus(AudioBuses.SFX, -3.0), AudioBuses.pan_bus(AudioBuses.SFX, -0.75))
+
+
 func test_ensure_is_idempotent() -> void:
 	var count := AudioServer.bus_count
 	AudioBuses.ensure()

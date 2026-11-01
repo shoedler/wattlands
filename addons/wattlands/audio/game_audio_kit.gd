@@ -31,6 +31,7 @@ const PAUSE_BED_DB := -9.0
 const PAUSE_BED_DB_PER_S := 30.0
 const BED_FADE_IN_FROM_DB := -30.0
 const BED_FADE_DB_PER_S := 40.0
+const FLIGHT_MIN_S := 0.05
 ## Tests read these. Record even when silent.
 var silent: bool = true  ## headless, or --sim-speed != 1, or no bank
 var force_audio: bool = false  ## the jitter bench only; set before setup()
@@ -42,6 +43,7 @@ var played_db: Array[float] = []
 var played_t: Array[float] = []  ## kit time the attack is due
 var thinned: int = 0
 var voiceless: int = 0  ## strokes and events that found no voice to start on (a full pool, nothing it may steal)
+var flight_starts: int = 0  ## flight hits started (the cue hit that says "flight"), voiced or not
 
 var _bank: AudioBank = null
 var _seed: int = 0
@@ -56,6 +58,7 @@ var _old_beds: Array[BedSlot] = []
 var _bed_params: Dictionary = {}
 var _bed_pause_db: float = 0.0
 var _pending: Array[Dictionary] = []
+var _flights: Array[Flight] = []
 var _variant: Dictionary = {}
 var _warned: Dictionary = {}
 var _last_other_t: float = -INF
@@ -65,6 +68,7 @@ var _loop_free: Array[AudioStreamPlayer] = []
 var _loop_count: int = 0
 var _frame_lock: FrameClockLock = FrameClockLock.new()
 var _last_commit_us: int = -1
+var _granted: Voice = null  ## the voice _voice() last handed out
 
 
 ## One player in a voice pool.
@@ -73,6 +77,39 @@ class Voice:
 	var priority: int = 0
 	var lead: bool = true
 	var started: float = 0.0
+	var serial: int = 0  ## counts the voice's grants, so a flight can tell that it was stolen
+
+
+## One projectile in the air: a looping voice whose level, pitch and side follow the flight, and which ends with it.
+class Flight:
+	var sound: String
+	var variant: int = 0
+	var voice: Voice = null
+	var serial: int = 0
+	var dur: float = 1.0
+	var t: float = 0.0
+	var db: float = 0.0
+	var pitch: float = 1.0
+	var pan_from: float = 0.0
+	var pan_to: float = 0.0
+	var bus: String = AudioBuses.SFX
+	var priority: int = 0
+	var lead: bool = true
+	var gain_curve: Dictionary = {}
+	var pitch_curve: Dictionary = {}
+
+	## Level (dB) at this moment of the flight.
+	func level_db() -> float:
+		return db + AudioCurve.eval(gain_curve, {"u": t / dur})
+
+	func pitch_now() -> float:
+		if pitch_curve.is_empty():
+			return pitch
+		return pitch * AudioCurve.eval(pitch_curve, {"u": t / dur})
+
+	## Side of the screen at this moment.
+	func pan_now() -> float:
+		return lerpf(pan_from, pan_to, clampf(t / dur, 0.0, 1.0))
 
 
 ## The layers of one machine, one `loops` entry or one bed, and the pool slots they hold.
@@ -284,6 +321,7 @@ func commit_timed(dt: float, real_dt: float) -> void:
 	_start_strokes(strokes)
 	_commit_entries(dt)
 	_run_pending(dt)
+	_update_flights(dt)
 	_update_beds(dt)
 
 
@@ -312,6 +350,7 @@ func stop_all() -> void:
 	_bed_id = ""
 	_old_beds.clear()
 	_pending.clear()
+	_flights.clear()
 
 
 ## Seconds the views run ahead of the clock strokes are timed on, this frame (tests, the bench).
@@ -335,6 +374,11 @@ func machine_loop(instance: String) -> LayeredLoop:
 func entry_loop(id: String) -> LayeredLoop:
 	var slot: EntrySlot = _entries.get(id)
 	return slot.loops.loop if slot != null else null
+
+
+## Flights in the air (tests, tools).
+func flights_live() -> int:
+	return _flights.size()
 
 
 ## The running bed, null when there is none (tests).
@@ -493,20 +537,28 @@ func _start_plain(
 	bus: String,
 	priority: int,
 	lead: bool,
+	pan: float = 0.0,
 ) -> void:
 	var player := _voice(bus, priority, lead)
 	if player == null:
 		voiceless += 1
 		return
 	player.stream = stream
-	player.bus = bus
+	player.bus = AudioBuses.pan_bus(bus, pan)
 	player.volume_db = db
 	player.pitch_scale = clampf(pitch, PITCH_MIN, PITCH_MAX)
 	player.play(0.0)
 
 
 func _fire(
-	id: String, variant: int, db: float, pitch: float, bus: String, priority: int, lead: bool
+	id: String,
+	variant: int,
+	db: float,
+	pitch: float,
+	bus: String,
+	priority: int,
+	lead: bool,
+	pan: float = 0.0
 ) -> void:
 	_record(id, db, _t)
 	if silent:
@@ -517,7 +569,7 @@ func _fire(
 	if _bank.is_locked(id):
 		_start_locked(stream, 0.0, db, pitch, bus, priority, lead)
 	else:
-		_start_plain(stream, db, pitch, bus, priority, lead)
+		_start_plain(stream, db, pitch, bus, priority, lead, pan)
 
 
 func _cue_hit(hit: Dictionary, vars: Dictionary, trim: float, lead: bool) -> void:
@@ -528,8 +580,22 @@ func _cue_hit(hit: Dictionary, vars: Dictionary, trim: float, lead: bool) -> voi
 	var bus := str(hit.get("bus", AudioBuses.SFX))
 	var priority := int(hit.get("priority", CUE_PRIORITY))
 	var variant := _next_variant(id)
+	var pan := _var(vars, hit.get("pan_var", ""), 0.0)
+	var flight: Flight = null
+	if hit.has("flight"):
+		flight = _new_flight(hit["flight"], vars, pan)
+		flight.sound = id
+		flight.variant = variant
+		flight.db = db
+		flight.pitch = pitch
+		flight.bus = bus
+		flight.priority = priority
+		flight.lead = lead
 	if delay <= 0.0:
-		_fire(id, variant, db, pitch, bus, priority, lead)
+		if flight != null:
+			_start_flight(flight)
+		else:
+			_fire(id, variant, db, pitch, bus, priority, lead, pan)
 		return
 	var entry := {
 		"left": delay,
@@ -540,8 +606,76 @@ func _cue_hit(hit: Dictionary, vars: Dictionary, trim: float, lead: bool) -> voi
 		"bus": bus,
 		"priority": priority,
 		"lead": lead,
+		"pan": pan,
 	}
+	if flight != null:
+		entry["flight"] = flight
 	_pending.append(entry)
+
+
+## A hit's "flight": {dur_var, pan_to_var, gain, pitch}, the two curves over u, 0 at the launch and 1 at the landing.
+func _new_flight(spec: Dictionary, vars: Dictionary, pan: float) -> Flight:
+	var f := Flight.new()
+	f.dur = maxf(_var(vars, spec.get("dur_var", ""), float(spec.get("dur_s", 1.0))), FLIGHT_MIN_S)
+	f.pan_from = pan
+	f.pan_to = _var(vars, spec.get("pan_to_var", ""), pan)
+	f.gain_curve = {"param": "u", "points": spec.get("gain", [[0.0, 0.0]])}
+	if spec.has("pitch"):
+		f.pitch_curve = {"param": "u", "points": spec["pitch"]}
+	return f
+
+
+func _start_flight(f: Flight) -> void:
+	flight_starts += 1
+	_record(f.sound, f.db, _t)
+	_flights.append(f)
+	if silent:
+		return
+	var stream := _bank.stream(f.sound, f.variant)
+	if stream == null:
+		return
+	var player := _voice(f.bus, f.priority, f.lead)
+	if player == null:
+		voiceless += 1
+		_flights.erase(f)
+		return
+	f.voice = _granted
+	f.serial = _granted.serial
+	player.stream = stream
+	player.bus = AudioBuses.pan_bus(f.bus, f.pan_now())
+	player.volume_db = f.level_db()
+	player.pitch_scale = clampf(f.pitch_now(), PITCH_MIN, PITCH_MAX)
+	player.play(0.0)
+
+
+## Each flight's level, pitch and side, once a frame. A pause holds them where they are, silent; a flight ends at its
+## landing or when a louder voice took its player.
+func _update_flights(dt: float) -> void:
+	if _flights.is_empty():
+		return
+	var keep: Array[Flight] = []
+	for f: Flight in _flights:
+		var player: AudioStreamPlayer = f.voice.player if f.voice != null else null
+		if f.voice != null and f.voice.serial != f.serial:
+			continue
+		if player != null:
+			player.stream_paused = _paused
+		if _paused:
+			keep.append(f)
+			continue
+		f.t += dt
+		if f.t >= f.dur:
+			if player != null:
+				player.stop()
+			continue
+		keep.append(f)
+		if player != null:
+			player.volume_db = f.level_db()
+			player.pitch_scale = clampf(f.pitch_now(), PITCH_MIN, PITCH_MAX)
+			var bus := AudioBuses.pan_bus(f.bus, f.pan_now())
+			if player.bus != StringName(bus):
+				player.bus = bus
+	_flights = keep
 
 
 func _var(vars: Dictionary, key: Variant, fallback: float) -> float:
@@ -569,6 +703,9 @@ func _run_pending(dt: float) -> void:
 		if float(p["left"]) > 0.0:
 			keep.append(p)
 			continue
+		if p.has("flight"):
+			_start_flight(p["flight"])
+			continue
 		_fire(
 			p["sound"],
 			p["variant"],
@@ -577,6 +714,7 @@ func _run_pending(dt: float) -> void:
 			p["bus"],
 			p["priority"],
 			p["lead"],
+			float(p.get("pan", 0.0)),
 		)
 	_pending = keep
 
@@ -764,6 +902,9 @@ func _voice(bus: String, priority: int, lead: bool) -> AudioStreamPlayer:
 	chosen.priority = priority
 	chosen.lead = lead
 	chosen.started = _t
+	chosen.serial += 1
+	chosen.player.stream_paused = false
+	_granted = chosen
 	return chosen.player
 
 

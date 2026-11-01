@@ -17,6 +17,10 @@ const SETTING_KEYS := {
 	UI: "bus_ui_db",
 }
 const LIMITER_CEILING_DB := -1.0
+## Sends of Sfx that place a voice left or right of the screen's middle: a panner, then the Sfx bus, so the Settings
+## slider and every duck still reach them. A bank's voice picks one with pan_bus(); a moving voice changes send.
+const PAN_STEP := 0.25
+const PAN_MAX := 0.75
 
 static var _user: Dictionary = {}
 static var _ducks: Array[Dictionary] = []
@@ -31,6 +35,7 @@ static func ensure() -> void:
 		var i := AudioServer.bus_count - 1
 		AudioServer.set_bus_name(i, bus)
 		AudioServer.set_bus_send(i, MASTER)
+	_ensure_pan_sends()
 	var master := AudioServer.get_bus_index(MASTER)
 	for e in AudioServer.get_bus_effect_count(master):
 		if AudioServer.get_bus_effect(master, e) is AudioEffectHardLimiter:
@@ -38,6 +43,38 @@ static func ensure() -> void:
 	var limiter := AudioEffectHardLimiter.new()
 	limiter.ceiling_db = LIMITER_CEILING_DB
 	AudioServer.add_bus_effect(master, limiter)
+
+
+## The bus a voice on `bus` plays through at `pan` (-1 left .. 1 right), to the nearest PAN_STEP and at most PAN_MAX
+## either way. Only Sfx has sends: any other bus, and the middle, is the bus itself.
+static func pan_bus(bus: String, pan: float) -> String:
+	if bus != SFX:
+		return bus
+	var q := snappedf(clampf(pan, -PAN_MAX, PAN_MAX), PAN_STEP)
+	return SFX if is_zero_approx(q) else _pan_name(q)
+
+
+static func _pan_name(q: float) -> String:
+	return "%s%+.2f" % [SFX, q]
+
+
+## After the four buses: a send must go to a bus with a lower index, or Godot takes it to Master.
+static func _ensure_pan_sends() -> void:
+	var steps := roundi(PAN_MAX / PAN_STEP)
+	for k in range(-steps, steps + 1):
+		if k == 0:
+			continue
+		var q := k * PAN_STEP
+		var name := _pan_name(q)
+		if AudioServer.get_bus_index(name) >= 0:
+			continue
+		AudioServer.add_bus()
+		var i := AudioServer.bus_count - 1
+		AudioServer.set_bus_name(i, name)
+		AudioServer.set_bus_send(i, SFX)
+		var panner := AudioEffectPanner.new()
+		panner.pan = q
+		AudioServer.add_bus_effect(i, panner)
 
 
 static func set_user_db(bus: String, db: float) -> void:

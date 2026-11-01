@@ -67,6 +67,19 @@ A layer runs: source, `env`, `fx` in order, `gain`, placed at `at`. With no `dur
 
 Final chain of every sound, in order: sum, room, band, loop wrap or a 2 ms tail fade, norm, family crush, pre-roll, 16-bit.
 
+A cue's hit can sit left or right of the screen with `pan_var` (the name of a `vars` entry, -1 left to 1 right): the voice plays through one of `AudioBuses`' panned sends of Sfx, the nearest of seven steps out to 0.75, and those feed Sfx, so its slider and ducks still reach it. Only Sfx has sends.
+
+A hit with `flight` runs a loop for as long as a projectile is in the air, however long the file is:
+
+```jsonc
+{"sound": "arrow_swarm", "db": -5.5, "pan_var": "pan0", "priority": 7,
+ "flight": {"dur_var": "flight_s", "pan_to_var": "pan1",
+            "gain": [[0, -22], [0.45, 0], [1, -16]],  // dB over the flight, 0 at the launch and 1 at the landing
+            "pitch": [[0, 1.14], [1, 0.84]]}}         // multiplies the hit's pitch; left out, it holds
+```
+
+`GameAudioKit` moves the voice's level, pitch and send once a frame and stops it at the landing. A pause holds it, silent, with the rest of the battle. Give a flight sound variants when flights overlap: two voices of one noise, a little apart, sweep a comb through each other, and that reads as a jet flanger, not as two arrows. The kit plays a new variant per hit. The impact is the game's to fire at the landing, when it knows what was there.
+
 The rest of the bank (`mix`, `machines`, `loops`, `beds`, `cues`) is the runtime contract: `docs/GAME_SDK.md`, and `tools/audio/test/fixtures/engine_bank.json` is a complete worked example. A new primitive or a change in `tools/audio/lib/` is a request to the lead, not a game's edit.
 
 ## Files
@@ -120,6 +133,9 @@ How a row reads the audio, where the name alone doesn't say:
 - A3: spectral flux, stdev over mean plus 2 % of the frame magnitude, from the second revolution on, with a 2048 window. A steady drone reads near 0.2, and an engine with strokes above 1.
 - A5: the correlation of a 4 ms envelope between successive revolutions.
 - A12: the bed's 50 ms envelope, autocorrelated at each layer's own length. A second layer of a co-prime length and the spots are what bring it down.
+- P1-P9, for a bank whose preview says `checks.projectiles: {shots: [cue...], surfaces: {name: [cue...]}}`: P1 flight sounds started per shot, 1 for every weapon. P2 a flight voice lasts its flight, none cut short by a pool. P3 a flight's loudest 250 ms over Machines and Ambience in the same moment, in 800-6000 Hz, at least +3 dB at the preview's worst. P4 every impact cue the bank lists is in the preview, and each surface's median impact, the cue's first hit, is at least +3 dB in its loudest 50 ms at 400-6000 Hz over everything else that plays, flights included; the median because a stroke of the wheel can land on any one of them, and the note names the worst single one. P5 the surfaces' spectra are at least 3 dB apart. P6, with `checks.ear_band: {limit}`, is the master's share in 2-8 kHz (`lib/ear_band.mjs`: Tank's mix limit is -12, the reading an owner rejected -6.3). P7 the flights' spectra at their mid-flight pitch are at least 3 dB apart. P8, with `checks.projectiles.own_flight: {cue, band}`, is the rider's own flight at full level over everything else, other flights too, in that band: median at least +3 dB. P3 doesn't count other flights, and a mix can pass P3 and still be haze. P9 is a target against the ground in the mix, in the first 60 ms of an impact: at least 3 dB apart, where P5 only reads the files. These exist because Siege's arrows passed every other row and a person could not hear them: the mix passed, and nothing asked about the arrows. A preview only answers them if it fires at the game's real rate and real levels: `tools/audio/live_mix.gd` says what those are.
+- A17 is A9 where a file plays: above 9.8 kHz divided by the highest pitch the bank gives it (`runtimePitches`). Every bank reports it; `checks.a17: true` holds a bank to -32 dB.
+- A14: the median of every firing of `checks.a14.cue`: a shot placed in a quiet moment says nothing about a wave.
 - A16: at least 3 different spot sounds in 60 s, and no 2 different spots within 2 s. A spot whose own gap can be under 2 s (cricket trains) is a texture and counts only toward the 3. Spots run on independent timers, so one seed passing says little: a bed's optional `spot_min_gap_s` (2.2 is enough, a little over the row's 2 s) makes it hold on every seed, by holding a due detail back until that long after the last one's last burst. A texture neither waits nor holds others up.
 
 ## Stroke timing
@@ -129,6 +145,17 @@ A game's view integrates its crank from the frame delta and hands the kit `revs`
 The strokes do not. `FrameClockLock`, one per kit, keeps the frame clock's distance from real time (`commit` reads `Time.get_ticks_usec`) less a 20 s mean of it, the `lead_s`. A machine's strokes are planned at `revs - rpm / 60 * lead_s`, so they run on real time, 16 ms or so at most from the crank on screen. Nothing is integrated per machine, so nothing can drift, and a jump in `revs` passes straight through. With smoothing off, or a display at its nominal rate, the lead is 0. Past 40 ms the frames and real time have really parted (a gap between commits), and the lock follows the frames at once.
 
 A silent kit reads no clock: its real time is the delta, its lead 0, its strokes exactly on `revs`, so headless runs stay deterministic. The preview has no frame clock to correct and runs the same way. `tools/audio/jitter_bench.gd` measures it all on the real driver; `tests/audio/test_frame_clock_lock.gd` holds the stops, jumps, sprints and pauses to it with a simulated frame clock.
+
+## What a real session plays
+
+The scorecard reads a preview someone wrote. `tools/audio/live_mix.gd` records what the game does: the real host, module, view and kit, on the real audio server, with a capture at the head of each bus. It writes every cue, every start the kit recorded, voices per pool and each bus to a WAV.
+
+```
+tools/godot.sh --path . --timeout=600 --audio-driver Dummy -s tools/audio/live_mix.gd -- \
+    --game=<id> --content=<id> --bots=3 --seed=1 --skip-s=430 --run-s=240 --out=build/audio_live/<name>
+```
+
+A window opens, because a headless kit is silent by design; the Dummy driver keeps the speakers out of it, in real time. `node tools/audio/live_report.mjs build/audio_live/<name> [--bank=<audio.json>] [--out=<file>]` reads the recording: LUFS, LRA, the 2-8 kHz share, the top band and how the Sfx bus moves. Do this when a sound is heard not to be there. A preview's Sfx and its Machines sum to a passing LUFS whether or not the part you asked about can be heard over the rest.
 
 ## What no number here can say
 

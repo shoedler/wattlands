@@ -5,90 +5,64 @@
           "machine_voices": 16, "sfx_voices": 16, "spot_voices": 6, "max_loop_players": 24},
   "sounds": {
     "pawl_click": {
-      "dur": 0.13, "rate": 22050, "ch": 1, "seed": 3101, "variants": 3, "locked": true, "room": "wood",
+      "dur": 0.09, "rate": 22050, "ch": 1, "seed": 3101, "variants": 3, "locked": true,
       "per_variant": [{"pitch": 1.0, "norm": {"peak": -6}}, {"pitch": 0.94, "norm": {"peak": -7.5}}, {"pitch": 1.07, "norm": {"peak": -6.8}}],
       "layers": [
-        {"src": "noise", "color": "white", "gain": 0.8, "env": {"a": 0.0003, "d": 0.005}, "fx": [{"bp": {"f": 1400, "q": 0.9}}]},
-        {"src": "noise", "color": "white", "gain": 0.5, "env": {"a": 0.0003, "d": 0.014}, "fx": [{"hp": {"f": 3200}}]},
-        {"src": "modal", "f": [640, 1370, 2240], "t60": [0.08, 0.045, 0.022], "g": [1.0, 0.55, 0.16], "gain": 0.95},
-        {"src": "modal", "f": [210, 355], "t60": [0.09, 0.06], "g": [1.0, 0.7], "gain": 0.42},
-        {"src": "modal", "f": [820, 1180], "t60": [0.03, 0.02], "g": [0.7, 0.3], "gain": 0.34, "at": 0.026}
-      ]
-    },
-    "wheel_creak": {
-      "dur": 0.32, "rate": 22050, "ch": 1, "seed": 3102, "variants": 5, "locked": true, "room": "wood",
-      "per_variant": [
-        {"pitch": 1.0, "norm": {"peak": -6}},
-        {"pitch": 0.97, "norm": {"peak": -8.5}, "dur": 0.2, "layers": [
-          {"src": "noise", "color": "white", "gain": 0.75, "env": {"a": 0.0003, "d": 0.005}, "fx": [{"bp": {"f": 1250, "q": 1.0}}]},
-          {"src": "chirp", "wave": "tri", "points": [[0, 700], [0.12, 520]], "dur": 0.16, "vibrato": {"hz": 41, "cents": 60},
-           "env": {"a": 0.003, "h": 0.02, "d": 0.13}, "gain": 0.42, "fx": [{"drive": 1.6}, {"lp": {"f": 1900, "q": 0.7}}]},
-          {"src": "chirp", "points": [[0, 210], [0.14, 165]], "dur": 0.16, "env": {"a": 0.004, "d": 0.14}, "gain": 0.2}
-        ]},
-        {"pitch": 1.03, "norm": {"peak": -7.5}},
-        {"pitch": 0.955, "norm": {"peak": -10.5}, "layers": [
-          {"src": "noise", "color": "white", "gain": 0.75, "env": {"a": 0.0003, "d": 0.005}, "fx": [{"bp": {"f": 1100, "q": 1.0}}]},
-          {"src": "chirp", "wave": "tri", "points": [[0, 500], [0.05, 610], [0.1, 540], [0.18, 650], [0.32, 470]], "vibrato": {"hz": 29, "cents": 85},
-           "env": {"a": 0.004, "h": 0.1, "d": 0.2}, "gain": 0.42, "fx": [{"drive": 1.8}, {"lp": {"f": 1700, "q": 0.7}}]},
-          {"src": "chirp", "points": [[0, 160], [0.14, 225], [0.32, 150]], "env": {"a": 0.005, "h": 0.05, "d": 0.2}, "gain": 0.22}
-        ]},
-        {"pitch": 1.045, "norm": {"peak": -8}}
-      ],
-      "layers": [
-        {"src": "noise", "color": "white", "gain": 0.75, "env": {"a": 0.0003, "d": 0.005}, "fx": [{"bp": {"f": 1250, "q": 1.0}}]},
-        {"src": "chirp", "wave": "tri", "points": [[0, 540], [0.08, 760], [0.19, 690], [0.32, 520]], "vibrato": {"hz": 34, "cents": 70},
-         "env": {"a": 0.004, "h": 0.05, "d": 0.26}, "gain": 0.42, "fx": [{"drive": 1.6}, {"lp": {"f": 1900, "q": 0.7}}]},
-        {"src": "chirp", "points": [[0, 1090], [0.08, 1530], [0.19, 1390], [0.32, 1050]], "vibrato": {"hz": 34, "cents": 70},
-         "env": {"a": 0.004, "h": 0.03, "d": 0.2}, "gain": 0.1},
-        {"src": "chirp", "points": [[0, 180], [0.1, 240], [0.32, 170]], "env": {"a": 0.005, "h": 0.03, "d": 0.2}, "gain": 0.2},
-        {"src": "noise", "color": "white", "gain": 0.02, "env": {"a": 0.006, "h": 0.04, "d": 0.2}, "fx": [{"hp": {"f": 3200}}, {"trem": {"hz": 34, "depth": 0.6}}]}
+        {"src": "noise", "color": "pink", "gain": 0.5, "env": {"a": 0.0004, "d": 0.005}, "fx": [{"bp": {"f": 1300, "q": 0.8}}]},
+        {"src": "modal", "f": [430, 860], "t60": [0.035, 0.02], "g": [1.0, 0.45], "gain": 0.9},
+        {"src": "modal", "f": [205], "t60": [0.05], "g": [1.0], "gain": 0.45}
       ]
     },
     "tread_step": {
-      "dur": 0.15, "rate": 22050, "ch": 1, "seed": 3103, "variants": 4, "locked": true, "room": "wood",
-      "per_variant": [{"pitch": 1.0, "norm": {"peak": -6}}, {"pitch": 0.92, "norm": {"peak": -8}}, {"pitch": 1.08, "norm": {"peak": -7}}, {"pitch": 0.97, "norm": {"peak": -9}}],
+      "dur": 0.17, "rate": 22050, "ch": 1, "seed": 3103, "variants": 4, "locked": true,
+      "per_variant": [{"pitch": 1.0, "norm": {"peak": -6}}, {"pitch": 0.93, "norm": {"peak": -7.5}}, {"pitch": 1.07, "norm": {"peak": -7}}, {"pitch": 0.97, "norm": {"peak": -8.5}}],
       "layers": [
-        {"src": "sine", "f": [150, 96], "glide": "exp", "glide_s": 0.06, "env": {"a": 0.0008, "d": 0.08}, "gain": 0.7},
-        {"src": "noise", "color": "pink", "gain": 0.7, "env": {"a": 0.0008, "d": 0.04}, "fx": [{"lp": {"f": 900}}]},
-        {"src": "modal", "f": [276, 452, 790], "t60": [0.08, 0.05, 0.03], "g": [1.0, 0.7, 0.3], "gain": 0.6},
-        {"src": "noise", "color": "pink", "gain": 0.18, "at": 0.03, "dur": 0.07, "env": {"a": 0.006, "d": 0.06}, "fx": [{"bp": {"f": 1700, "q": 0.7}}]}
+        {"src": "noise", "color": "brown", "gain": 0.8, "env": {"a": 0.002, "d": 0.06}, "fx": [{"lp": {"f": 380}}]},
+        {"src": "modal", "f": [112, 171, 263, 372], "t60": [0.1, 0.08, 0.05, 0.03], "g": [1.0, 0.8, 0.5, 0.18], "gain": 0.85},
+        {"src": "noise", "color": "pink", "gain": 0.2, "env": {"a": 0.001, "d": 0.016}, "fx": [{"bp": {"f": 700, "q": 0.6}}]},
+        {"src": "noise", "color": "brown", "gain": 0.4, "at": 0.05, "dur": 0.08, "env": {"a": 0.008, "d": 0.06}, "fx": [{"lp": {"f": 520}}]}
       ]
     },
     "axle_knock": {
-      "dur": 0.18, "rate": 22050, "ch": 1, "seed": 3104, "variants": 2, "locked": true, "room": "wood",
-      "per_variant": [{"pitch": 1.0, "norm": {"peak": -6}}, {"pitch": 0.93, "norm": {"peak": -9}}],
+      "dur": 0.2, "rate": 22050, "ch": 1, "seed": 3104, "variants": 2, "locked": true,
+      "per_variant": [{"pitch": 1.0, "norm": {"peak": -6}}, {"pitch": 0.94, "norm": {"peak": -8}}],
       "layers": [
-        {"src": "modal", "f": [124, 198, 311, 545], "t60": [0.16, 0.12, 0.08, 0.04], "g": [1.0, 0.85, 0.6, 0.3], "gain": 1.0},
-        {"src": "noise", "color": "white", "gain": 0.34, "env": {"a": 0.0004, "d": 0.006}, "fx": [{"lp": {"f": 1500}}]}
+        {"src": "modal", "f": [88, 141, 219, 340], "t60": [0.18, 0.13, 0.08, 0.04], "g": [1.0, 0.8, 0.5, 0.2], "gain": 1.0},
+        {"src": "noise", "color": "brown", "gain": 0.7, "env": {"a": 0.001, "d": 0.03}, "fx": [{"lp": {"f": 700}}]}
       ]
     },
-    "timber_groan": {
-      "dur": 3.7, "rate": 22050, "ch": 1, "seed": 3105, "loop": true, "xfade_s": 0.3, "compress": "pcm", "room": "wood",
+    "wheel_rumble": {
+      "dur": 2.6, "rate": 11025, "ch": 1, "seed": 3105, "loop": true, "xfade_s": 0.35, "compress": "pcm",
       "layers": [
-        {"src": "chirp", "wave": "saw", "points": [[0, 73], [0.7, 81], [1.3, 70], [2.1, 75], [2.6, 68], [3.3, 79], [4.0, 73]], "vibrato": {"hz": 7.3, "cents": 25}, "gain": 0.14, "fx": [{"hp": {"f": 60}}, {"lp": {"f": 480, "q": 0.9}}]},
-        {"src": "chirp", "wave": "tri", "points": [[0, 214], [0.4, 262], [1.25, 202], [1.7, 251], [2.45, 196], [3.05, 240], [3.6, 205], [4.0, 214]], "vibrato": {"hz": 19, "cents": 40}, "gain": 0.26,
-         "fx": [{"drive": 1.8}, {"bp": {"f": 700, "q": 1.4}}]},
-        {"src": "noise", "color": "pink", "gain": 0.3, "fx": [{"bp": {"f": 880, "q": 0.7}}]},
-        {"src": "noise", "color": "white", "gain": 0.024, "fx": [{"hp": {"f": 2500}}]},
-        {"src": "grains", "rate_hz": 7, "f": [320, 980], "dur_s": [0.015, 0.04], "g": [0.3, 1.0], "gain": 0.3}
+        {"src": "noise", "color": "brown", "gain": 1.0,
+         "fx": [{"hp": {"f": 62}}, {"lp": {"f": 200, "q": 0.6}}, {"gain_env": {"points": [[0, 0.8], [0.45, 1.0], [0.9, 0.7], [1.5, 0.95], [2.0, 0.72], [2.6, 0.8], [2.95, 1.0]]}}]},
+        {"src": "noise", "color": "pink", "gain": 0.22, "fx": [{"bp": {"f": 300, "q": 0.6}}, {"gain_env": {"points": [[0, 0.7], [0.7, 1.0], [1.3, 0.6], [2.2, 0.95], [2.95, 0.7]]}}]},
+        {"src": "grains", "rate_hz": 6, "f": [58, 135], "dur_s": [0.06, 0.16], "g": [0.3, 1.0], "gain": 0.5}
       ]
     },
-    "timber_strain": {
-      "dur": 1.3, "rate": 22050, "ch": 1, "seed": 3147, "loop": true, "xfade_s": 0.2, "compress": "pcm", "room": "wood",
+    "wheel_rumble_far": {
+      "dur": 2.3, "rate": 11025, "ch": 1, "seed": 3149, "loop": true, "xfade_s": 0.3, "compress": "pcm",
       "layers": [
-        {"src": "noise", "color": "white", "gain": 0.45, "fx": [{"bp": {"f": [[0, 2100], [0.5, 2900], [0.9, 2300], [1.5, 2100]], "q": 1.3}}]},
-        {"src": "noise", "color": "white", "gain": 0.3, "fx": [{"hp": {"f": 3200}}]},
-        {"src": "grains", "rate_hz": 16, "f": [1300, 3400], "dur_s": [0.008, 0.028], "g": [0.3, 1.0], "gain": 0.5},
-        {"src": "chirp", "wave": "tri", "points": [[0, 840], [0.45, 1120], [0.8, 900], [1.2, 1060], [1.5, 840]], "vibrato": {"hz": 23, "cents": 45}, "gain": 0.12, "fx": [{"drive": 2.0}]}
+        {"src": "noise", "color": "brown", "gain": 1.0,
+         "fx": [{"hp": {"f": 60}}, {"lp": {"f": 240, "q": 0.6}}, {"gain_env": {"points": [[0, 0.75], [0.6, 1.0], [1.2, 0.7], [1.9, 0.95], [2.3, 0.75], [2.6, 1.0]]}}]},
+        {"src": "grains", "rate_hz": 5, "f": [70, 150], "dur_s": [0.05, 0.12], "g": [0.3, 0.9], "gain": 0.35}
+      ]
+    },
+    "wheel_load": {
+      "dur": 1.9, "rate": 22050, "ch": 1, "seed": 3147, "loop": true, "xfade_s": 0.3, "compress": "pcm",
+      "layers": [
+        {"src": "noise", "color": "pink", "gain": 0.8, "fx": [{"hp": {"f": 420}}, {"lp": {"f": 1500, "q": 0.6}},
+          {"gain_env": {"points": [[0, 0.7], [0.4, 1.0], [0.9, 0.55], [1.4, 0.95], [1.9, 0.7], [2.2, 1.0]]}}]},
+        {"src": "grains", "kind": "noise", "rate_hz": 11, "f": [500, 1600], "dur_s": [0.01, 0.035], "g": [0.25, 0.9], "gain": 0.35},
+        {"src": "noise", "color": "white", "gain": 0.015, "fx": [{"hp": {"f": 2600}}]}
       ]
     },
     "junction_clatter": {
-      "dur": 1.5, "rate": 22050, "ch": 1, "seed": 3106, "loop": true, "xfade_s": 0.1, "compress": "pcm", "room": "wood",
+      "dur": 1.5, "rate": 22050, "ch": 1, "seed": 3106, "loop": true, "xfade_s": 0.1, "compress": "pcm",
       "layers": [
-        {"src": "pulse", "f": 24, "duty": 0.06, "gain": 0.8, "fx": [{"bp": {"f": 560, "q": 3.0}}, {"peak": {"f": 1240, "q": 4.0, "db": 6}}]},
-        {"src": "pulse", "f": 16, "duty": 0.05, "gain": 0.55, "fx": [{"bp": {"f": 210, "q": 2.5}}]},
-        {"src": "grains", "rate_hz": 18, "f": [420, 1500], "dur_s": [0.006, 0.02], "g": [0.2, 0.8], "gain": 0.4},
-        {"src": "noise", "color": "brown", "gain": 0.3, "fx": [{"lp": {"f": 300}}]}
+        {"src": "grains", "rate_hz": 13, "f": [170, 560], "dur_s": [0.012, 0.032], "g": [0.25, 1.0], "gain": 0.9},
+        {"src": "grains", "kind": "noise", "rate_hz": 9, "f": [400, 1300], "dur_s": [0.004, 0.014], "g": [0.2, 0.8], "gain": 0.45},
+        {"src": "noise", "color": "brown", "gain": 0.32, "fx": [{"lp": {"f": 260}}]}
       ]
     },
     "mine_pick": {
@@ -134,21 +108,21 @@
       ]
     },
     "ballista_twang": {
-      "dur": 0.62, "rate": 22050, "ch": 1, "seed": 3112, "variants": 3, "room": "wood",
-      "per_variant": [{"pitch": 1.0}, {"pitch": 0.95}, {"pitch": 1.05}],
+      "dur": 0.5, "rate": 22050, "ch": 1, "seed": 3112, "variants": 2, "room": "wood",
+      "per_variant": [{"pitch": 1.0}, {"pitch": 0.94}],
       "layers": [
-        {"src": "noise", "color": "white", "gain": 0.7, "env": {"a": 0.0003, "d": 0.012}, "fx": [{"hp": {"f": 2600}}]},
-        {"src": "pluck", "f": 108, "decay": 0.42, "bright": 0.92, "gain": 1.0, "fx": [{"drive": 1.6}]},
-        {"src": "pluck", "f": 218.5, "decay": 0.26, "bright": 0.95, "gain": 0.55},
-        {"src": "pluck", "f": 661, "decay": 0.1, "bright": 0.9, "gain": 0.26},
-        {"src": "modal", "f": [168, 402, 955], "t60": [0.16, 0.09, 0.04], "g": [1.0, 0.6, 0.25], "gain": 0.75}
+        {"src": "noise", "color": "white", "gain": 1.4, "env": {"a": 0.0003, "d": 0.18}, "fx": [{"bp": {"f": 1700, "q": 0.7}}]},
+        {"src": "pluck", "f": 1310, "decay": 0.16, "bright": 0.95, "gain": 0.5},
+        {"src": "pluck", "f": 108, "decay": 0.34, "bright": 0.92, "gain": 1.0, "fx": [{"drive": 1.6}]},
+        {"src": "pluck", "f": 218.5, "decay": 0.2, "bright": 0.95, "gain": 0.5},
+        {"src": "modal", "f": [168, 402, 955], "t60": [0.16, 0.09, 0.04], "g": [1.0, 0.6, 0.25], "gain": 0.85}
       ]
     },
-    "bolt_whoosh": {
-      "dur": 0.42, "rate": 22050, "ch": 1, "seed": 3113,
+    "bolt_hiss": {
+      "dur": 0.71, "rate": 22050, "ch": 1, "seed": 3113, "variants": 3, "loop": true, "xfade_s": 0.15, "compress": "pcm", "band": [120, 5500],
       "layers": [
-        {"src": "noise", "color": "white", "gain": 1.0, "env": {"points": [[0, 0], [0.05, 1.0], [0.16, 0.65], [0.42, 0]]}, "fx": [{"bp": {"f": [[0, 2100], [0.42, 620]], "q": 1.1}}]},
-        {"src": "noise", "color": "pink", "gain": 0.6, "env": {"points": [[0, 0], [0.06, 1.0], [0.42, 0]]}, "fx": [{"lp": {"f": 700}}]}
+        {"src": "noise", "color": "white", "gain": 1.0, "fx": [{"bp": {"f": 1150, "q": 0.9}}, {"lp": {"f": 1800, "q": 0.7}}, {"trem": {"hz": 29, "depth": 0.3}}]},
+        {"src": "noise", "color": "pink", "gain": 0.45, "fx": [{"bp": {"f": 520, "q": 0.8}}]}
       ]
     },
     "scorpion_snap": {
@@ -170,50 +144,119 @@
         {"src": "modal", "f": [118, 214, 386, 730], "t60": [0.6, 0.42, 0.24, 0.1], "g": [1.0, 0.8, 0.45, 0.2], "gain": 0.7, "at": 0.085}
       ]
     },
-    "stone_whoosh": {
-      "dur": 0.8, "rate": 22050, "ch": 1, "seed": 3116,
+    "stone_tumble": {
+      "dur": 1.3, "rate": 22050, "ch": 1, "seed": 3116, "loop": true, "xfade_s": 0.15, "compress": "pcm", "band": [60, 5000],
       "layers": [
-        {"src": "noise", "color": "pink", "gain": 1.0, "env": {"points": [[0, 0], [0.18, 1.0], [0.8, 0]]},
-         "fx": [{"bp": {"f": [[0, 620], [0.8, 210]], "q": 1.0}}, {"trem": {"hz": 8.5, "depth": 0.7}}]}
+        {"src": "noise", "color": "pink", "gain": 1.0, "fx": [{"bp": {"f": 900, "q": 0.75}}, {"trem": {"hz": 6.923, "depth": 0.9}}]},
+        {"src": "noise", "color": "brown", "gain": 0.5, "fx": [{"bp": {"f": 300, "q": 0.8}}, {"trem": {"hz": 6.923, "depth": 0.7}}]}
       ]
     },
     "stone_impact": {
-      "dur": 1.0, "rate": 22050, "ch": 1, "seed": 3117, "variants": 3, "room": "open",
+      "dur": 0.85, "rate": 22050, "ch": 1, "seed": 3117, "variants": 2, "room": "open", "band": [40, 4500], "norm": {"peak": -1.5},
+      "per_variant": [{"pitch": 1.0}, {"pitch": 0.9}],
+      "layers": [
+        {"src": "sine", "f": [94, 36], "glide": "exp", "glide_s": 0.18, "env": {"a": 0.001, "d": 0.45}, "gain": 0.4},
+        {"src": "noise", "color": "pink", "gain": 1.7, "env": {"a": 0.0005, "d": 0.2}, "fx": [{"bp": {"f": 1000, "q": 0.5}}]},
+        {"src": "noise", "color": "brown", "gain": 0.9, "env": {"a": 0.001, "d": 0.24}, "fx": [{"lp": {"f": 900}}]},
+        {"src": "grains", "kind": "noise", "rate_hz": 46, "f": [400, 2000], "dur_s": [0.006, 0.03], "g": [0.1, 0.5], "gain": 0.6, "at": 0.02, "env": {"a": 0.002, "d": 0.65}, "fx": [{"lp": {"f": 5000}}]}
+      ]
+    },
+    "stone_wood": {
+      "dur": 0.7, "rate": 22050, "ch": 1, "seed": 3150, "room": "wood",
+      "layers": [
+        {"src": "modal", "f": [98, 176, 310, 620, 1040], "t60": [0.5, 0.34, 0.2, 0.09, 0.05], "g": [1.0, 0.85, 0.6, 0.35, 0.2], "gain": 1.0},
+        {"src": "noise", "color": "brown", "gain": 1.1, "env": {"a": 0.001, "d": 0.16}, "fx": [{"lp": {"f": 700}}]},
+        {"src": "noise", "color": "white", "gain": 0.5, "env": {"a": 0.0004, "d": 0.03}, "fx": [{"bp": {"f": 1900, "q": 0.7}}]},
+        {"src": "grains", "kind": "noise", "rate_hz": 44, "f": [700, 3400], "dur_s": [0.004, 0.02], "g": [0.2, 0.8], "gain": 0.7, "at": 0.03, "env": {"a": 0.003, "d": 0.5}}
+      ]
+    },
+    "stone_splash": {
+      "dur": 0.9, "rate": 22050, "ch": 1, "seed": 3151, "room": "open",
+      "layers": [
+        {"src": "sine", "f": [190, 62], "glide": "exp", "glide_s": 0.12, "env": {"a": 0.002, "d": 0.16}, "gain": 0.9},
+        {"src": "noise", "color": "white", "gain": 0.8, "env": {"a": 0.012, "d": 0.5}, "fx": [{"bp": {"f": [[0, 900], [0.9, 3400]], "q": 0.7}}]},
+        {"src": "grains", "rate_hz": 30, "f": [300, 1200], "sweep": 1.7, "dur_s": [0.015, 0.06], "g": [0.2, 0.9], "gain": 0.7, "at": 0.06, "env": {"a": 0.03, "d": 0.65}}
+      ]
+    },
+    "bolt_dirt": {
+      "dur": 0.32, "rate": 22050, "ch": 1, "seed": 3152, "variants": 2, "room": "open", "band": [60, 6000],
+      "per_variant": [{"pitch": 1.0}, {"pitch": 0.9}],
+      "layers": [
+        {"src": "sine", "f": [170, 70], "glide": "exp", "glide_s": 0.06, "env": {"a": 0.001, "d": 0.09}, "gain": 0.35},
+        {"src": "noise", "color": "brown", "gain": 0.5, "env": {"a": 0.001, "d": 0.1}, "fx": [{"lp": {"f": 480}}]},
+        {"src": "noise", "color": "white", "gain": 0.95, "env": {"a": 0.001, "d": 0.12}, "fx": [{"bp": {"f": 4100, "q": 1.2}}]},
+        {"src": "grains", "kind": "noise", "rate_hz": 80, "f": [3400, 5200], "dur_s": [0.003, 0.012], "g": [0.2, 0.9], "gain": 0.7, "at": 0.008, "env": {"a": 0.002, "d": 0.24}, "fx": [{"hp": {"f": 3200}}]}
+      ]
+    },
+    "bolt_wood": {
+      "dur": 0.4, "rate": 22050, "ch": 1, "seed": 3153, "variants": 2, "room": "wood",
+      "per_variant": [{"pitch": 1.0}, {"pitch": 0.92}],
+      "layers": [
+        {"src": "modal", "f": [205, 372, 680, 1240], "t60": [0.24, 0.16, 0.09, 0.05], "g": [1.0, 0.85, 0.55, 0.3], "gain": 1.0},
+        {"src": "noise", "color": "white", "gain": 0.75, "env": {"a": 0.0004, "d": 0.008}, "fx": [{"bp": {"f": 2200, "q": 0.8}}]},
+        {"src": "grains", "kind": "noise", "rate_hz": 44, "f": [900, 3600], "dur_s": [0.003, 0.012], "g": [0.2, 0.8], "gain": 0.5, "at": 0.008, "env": {"a": 0.002, "d": 0.26}}
+      ]
+    },
+    "hit_flesh": {
+      "dur": 0.15, "rate": 22050, "ch": 1, "seed": 3154, "variants": 3, "band": [60, 2400], "norm": {"peak": -0.5},
       "per_variant": [{"pitch": 1.0}, {"pitch": 0.9}, {"pitch": 1.12}],
       "layers": [
-        {"src": "sine", "f": [94, 36], "glide": "exp", "glide_s": 0.18, "env": {"a": 0.001, "d": 0.5}, "gain": 1.0},
-        {"src": "noise", "color": "white", "gain": 0.6, "env": {"a": 0.0005, "d": 0.05}, "fx": [{"bp": {"f": 1800, "q": 0.6}}]},
-        {"src": "noise", "color": "white", "gain": 0.4, "env": {"a": 0.0005, "d": 0.28}, "fx": [{"hp": {"f": 3400}}, {"trem": {"hz": 17, "depth": 0.7}}]},
-        {"src": "noise", "color": "brown", "gain": 1.2, "env": {"a": 0.001, "d": 0.24}, "fx": [{"lp": {"f": 900}}]},
-        {"src": "grains", "kind": "noise", "rate_hz": 46, "f": [400, 2000], "dur_s": [0.006, 0.03], "g": [0.1, 0.5], "gain": 0.5, "at": 0.02, "env": {"a": 0.002, "d": 0.75}, "fx": [{"lp": {"f": 6500}}]}
+        {"src": "noise", "color": "pink", "gain": 1.5, "env": {"a": 0.0006, "d": 0.11}, "fx": [{"bp": {"f": 1050, "q": 0.6}}, {"drive": 3.0}]},
+        {"src": "noise", "color": "brown", "gain": 0.5, "env": {"a": 0.0008, "d": 0.03}, "fx": [{"lp": {"f": 1400}}]},
+        {"src": "sine", "f": [210, 100], "glide": "exp", "glide_s": 0.04, "env": {"a": 0.001, "d": 0.05}, "gain": 0.3}
+      ]
+    },
+    "hit_wood": {
+      "dur": 0.17, "rate": 22050, "ch": 1, "seed": 3155, "variants": 3, "norm": {"peak": -1.5},
+      "per_variant": [{"pitch": 1.0}, {"pitch": 0.92}, {"pitch": 1.1}],
+      "layers": [
+        {"src": "modal", "f": [660, 1160, 1930], "t60": [0.075, 0.05, 0.028], "g": [1.0, 0.7, 0.35], "gain": 0.9},
+        {"src": "noise", "color": "white", "gain": 0.55, "env": {"a": 0.0003, "d": 0.004}, "fx": [{"bp": {"f": 2500, "q": 0.8}}]},
+        {"src": "modal", "f": [172], "t60": [0.1], "g": [1.0], "gain": 0.3}
+      ]
+    },
+    "hit_shield": {
+      "dur": 0.26, "rate": 22050, "ch": 1, "seed": 3156, "variants": 3, "band": [200, 6500], "norm": {"peak": -2},
+      "per_variant": [{"pitch": 1.0}, {"pitch": 0.94}, {"pitch": 1.06}],
+      "layers": [
+        {"src": "modal", "f": [1870, 2960, 4210, 5450], "t60": [0.24, 0.18, 0.11, 0.06], "g": [1.0, 0.85, 0.6, 0.3], "gain": 1.0},
+        {"src": "modal", "f": [410, 740], "t60": [0.04, 0.025], "g": [1.0, 0.5], "gain": 0.3},
+        {"src": "noise", "color": "white", "gain": 0.5, "env": {"a": 0.0003, "d": 0.004}, "fx": [{"hp": {"f": 2800}}]}
       ]
     },
     "arrow_release": {
-      "dur": 0.28, "rate": 22050, "ch": 1, "seed": 3118, "room": "wood",
+      "dur": 0.3, "rate": 22050, "ch": 1, "seed": 3118, "variants": 2, "room": "wood", "band": [60, 7500],
+      "per_variant": [{"pitch": 1.0}, {"pitch": 0.94}],
       "layers": [
-        {"src": "grains", "rate_hz": 130, "f": [260, 880], "sweep": 0.7, "dur_s": [0.012, 0.03], "g": [0.3, 1.0], "gain": 0.7, "dur": 0.11},
-        {"src": "modal", "f": [340, 760, 1490], "t60": [0.07, 0.04, 0.02], "g": [1.0, 0.6, 0.3], "gain": 0.7},
-        {"src": "noise", "color": "white", "gain": 0.34, "env": {"a": 0.003, "d": 0.2}, "fx": [{"bp": {"f": 2400, "q": 0.8}}]}
+        {"src": "grains", "kind": "noise", "rate_hz": 90, "f": [1300, 4200], "dur_s": [0.002, 0.008], "g": [0.4, 1.0], "gain": 1.0, "dur": 0.15},
+        {"src": "grains", "rate_hz": 90, "f": [320, 980], "dur_s": [0.006, 0.016], "g": [0.3, 1.0], "gain": 0.55, "dur": 0.15},
+        {"src": "modal", "f": [230, 420, 760], "t60": [0.09, 0.06, 0.03], "g": [1.0, 0.7, 0.3], "gain": 0.8},
+        {"src": "noise", "color": "pink", "gain": 0.35, "env": {"a": 0.002, "d": 0.11}, "fx": [{"bp": {"f": 2100, "q": 0.7}}]}
       ]
     },
-    "arrow_whistle": {
-      "dur": 0.78, "rate": 22050, "ch": 1, "seed": 3119, "variants": 6,
-      "per_variant": [{"pitch": 1.0}, {"pitch": 0.86}, {"pitch": 1.14, "dur": 0.7}, {"pitch": 0.93, "dur": 0.86}, {"pitch": 1.07}, {"pitch": 0.8, "dur": 0.9}],
+    "arrow_swarm": {
+      "dur": 1.03, "rate": 22050, "ch": 1, "seed": 3119, "variants": 3, "loop": true, "xfade_s": 0.2, "compress": "pcm", "band": [200, 5500],
       "layers": [
-        {"src": "chirp", "points": [[0, 2350], [0.18, 2620], [0.5, 2020], [0.9, 1320]], "vibrato": {"hz": 27, "cents": 26},
-         "env": {"points": [[0, 0], [0.08, 0.55], [0.26, 1.0], [0.9, 0]]}, "gain": 0.55},
-        {"src": "noise", "color": "white", "gain": 0.8, "env": {"points": [[0, 0], [0.12, 0.6], [0.3, 1.0], [0.9, 0]]},
-         "fx": [{"bp": {"f": [[0, 2600], [0.25, 2900], [0.9, 1500]], "q": 2.6}}]},
-        {"src": "noise", "color": "white", "gain": 0.24, "env": {"points": [[0, 0], [0.15, 1.0], [0.9, 0]]}, "fx": [{"hp": {"f": 4200}}]}
+        {"src": "noise", "color": "white", "gain": 0.9, "fx": [{"bp": {"f": [[0, 1300], [0.6, 1900], [1.23, 1300]], "q": 0.9}}, {"lp": {"f": 1900, "q": 0.7}}, {"trem": {"hz": 17, "depth": 0.3}}]},
+        {"src": "grains", "kind": "noise", "rate_hz": 44, "f": [900, 2000], "dur_s": [0.006, 0.022], "g": [0.25, 1.0], "gain": 0.6, "fx": [{"lp": {"f": 2100}}]},
+        {"src": "noise", "color": "white", "gain": 0.14, "fx": [{"hp": {"f": 4200}}, {"lp": {"f": 5200}}]}
       ]
     },
-    "arrow_patter": {
-      "dur": 0.62, "rate": 22050, "ch": 1, "seed": 3120, "variants": 2, "room": "open",
+    "arrow_dirt": {
+      "dur": 0.42, "rate": 22050, "ch": 1, "seed": 3120, "variants": 2, "band": [60, 6000],
       "per_variant": [{"pitch": 1.0}, {"pitch": 0.9}],
       "layers": [
-        {"src": "grains", "kind": "sine", "rate_hz": 34, "f": [520, 1900], "dur_s": [0.006, 0.022], "g": [0.3, 1.0], "gain": 0.9, "env": {"a": 0.005, "d": 0.5}},
-        {"src": "grains", "kind": "noise", "rate_hz": 28, "f": [400, 2400], "dur_s": [0.004, 0.014], "g": [0.2, 0.8], "gain": 0.65, "env": {"a": 0.003, "d": 0.5}, "fx": [{"lp": {"f": 3600}}]},
-        {"src": "grains", "kind": "sine", "rate_hz": 16, "f": [150, 320], "dur_s": [0.03, 0.07], "g": [0.3, 0.9], "gain": 0.8, "env": {"a": 0.005, "d": 0.45}}
+        {"src": "noise", "color": "brown", "gain": 0.55, "env": {"a": 0.003, "d": 0.12}, "fx": [{"lp": {"f": 420}}]},
+        {"src": "noise", "color": "white", "gain": 0.55, "env": {"a": 0.002, "d": 0.09}, "fx": [{"bp": {"f": 4300, "q": 1.2}}]},
+        {"src": "grains", "kind": "noise", "rate_hz": 75, "f": [3600, 5400], "dur_s": [0.003, 0.012], "g": [0.3, 1.0], "gain": 0.45, "env": {"a": 0.003, "d": 0.12}, "fx": [{"hp": {"f": 3400}}]},
+        {"src": "grains", "rate_hz": 18, "f": [150, 320], "dur_s": [0.02, 0.05], "g": [0.3, 0.9], "gain": 0.45, "env": {"a": 0.005, "d": 0.34}}
+      ]
+    },
+    "arrow_water": {
+      "dur": 0.5, "rate": 22050, "ch": 1, "seed": 3157,
+      "layers": [
+        {"src": "grains", "rate_hz": 26, "f": [480, 1500], "sweep": 1.8, "dur_s": [0.012, 0.045], "g": [0.3, 1.0], "gain": 0.95, "env": {"a": 0.004, "d": 0.42}},
+        {"src": "noise", "color": "white", "gain": 0.16, "env": {"a": 0.003, "d": 0.16}, "fx": [{"bp": {"f": 3000, "q": 0.7}}]}
       ]
     },
     "horn_wave": {
@@ -227,16 +270,16 @@
     "horn_push": {
       "dur": 1.5, "rate": 22050, "ch": 1, "seed": 3122, "room": "open",
       "layers": [
-        {"src": "chirp", "wave": "saw", "points": [[0, 140], [0.08, 146.83], [0.45, 146.83]], "dur": 0.5, "env": {"points": [[0, 0], [0.07, 1.0], [0.38, 0.85], [0.5, 0]]}, "gain": 0.7, "fx": [{"lp": {"f": 1300, "q": 1.0}}, {"drive": 1.5}, {"hp": {"f": 330}}, {"peak": {"f": 1050, "q": 0.9, "db": 5}}]},
-        {"src": "chirp", "wave": "saw", "points": [[0, 186], [0.1, 196], [0.9, 195]], "at": 0.5, "dur": 1.0, "env": {"points": [[0, 0], [0.08, 1.0], [0.34, 0.6], [1.0, 0]]}, "gain": 0.8, "fx": [{"lp": {"f": 1500, "q": 1.0}}, {"drive": 1.5}, {"hp": {"f": 330}}, {"peak": {"f": 1050, "q": 0.9, "db": 5}}]}
+        {"src": "chirp", "wave": "saw", "points": [[0, 140], [0.08, 146.83], [0.45, 146.83]], "vibrato": {"hz": 4.6, "cents": 9}, "dur": 0.5, "env": {"points": [[0, 0], [0.07, 1.0], [0.38, 0.85], [0.5, 0]]}, "gain": 0.7, "fx": [{"lp": {"f": 1300, "q": 1.0}}, {"drive": 1.5}, {"hp": {"f": 330}}, {"peak": {"f": 1050, "q": 0.9, "db": 5}}]},
+        {"src": "chirp", "wave": "saw", "points": [[0, 186], [0.1, 196], [0.9, 195]], "vibrato": {"hz": 4.8, "cents": 9}, "at": 0.5, "dur": 1.0, "env": {"points": [[0, 0], [0.08, 1.0], [0.34, 0.6], [1.0, 0]]}, "gain": 0.8, "fx": [{"lp": {"f": 1500, "q": 1.0}}, {"drive": 1.5}, {"hp": {"f": 330}}, {"peak": {"f": 1050, "q": 0.9, "db": 5}}]}
       ]
     },
     "horn_rush": {
       "dur": 1.5, "rate": 22050, "ch": 1, "seed": 3123, "room": "open",
       "layers": [
-        {"src": "chirp", "wave": "saw", "points": [[0, 186], [0.05, 196], [0.25, 196]], "dur": 0.28, "env": {"points": [[0, 0], [0.04, 1.0], [0.2, 0.85], [0.28, 0]]}, "gain": 0.75, "fx": [{"lp": {"f": 1800, "q": 1.0}}, {"drive": 1.7}, {"hp": {"f": 330}}, {"peak": {"f": 1050, "q": 0.9, "db": 5}}]},
-        {"src": "chirp", "wave": "saw", "points": [[0, 186], [0.05, 196], [0.25, 196]], "at": 0.34, "dur": 0.28, "env": {"points": [[0, 0], [0.04, 1.0], [0.2, 0.85], [0.28, 0]]}, "gain": 0.75, "fx": [{"lp": {"f": 1800, "q": 1.0}}, {"drive": 1.7}, {"hp": {"f": 330}}, {"peak": {"f": 1050, "q": 0.9, "db": 5}}]},
-        {"src": "chirp", "wave": "saw", "points": [[0, 248], [0.06, 261.63], [0.74, 261]], "at": 0.68, "dur": 0.82, "env": {"points": [[0, 0], [0.05, 1.0], [0.26, 0.55], [0.82, 0]]}, "gain": 0.8, "fx": [{"lp": {"f": 2000, "q": 1.0}}, {"drive": 1.7}, {"hp": {"f": 330}}, {"peak": {"f": 1050, "q": 0.9, "db": 5}}]}
+        {"src": "chirp", "wave": "saw", "points": [[0, 186], [0.05, 196], [0.25, 196]], "vibrato": {"hz": 4.6, "cents": 8}, "dur": 0.28, "env": {"points": [[0, 0], [0.04, 1.0], [0.2, 0.85], [0.28, 0]]}, "gain": 0.75, "fx": [{"lp": {"f": 1800, "q": 1.0}}, {"drive": 1.7}, {"hp": {"f": 330}}, {"peak": {"f": 1050, "q": 0.9, "db": 5}}]},
+        {"src": "chirp", "wave": "saw", "points": [[0, 186], [0.05, 196], [0.25, 196]], "vibrato": {"hz": 4.7, "cents": 8}, "at": 0.34, "dur": 0.28, "env": {"points": [[0, 0], [0.04, 1.0], [0.2, 0.85], [0.28, 0]]}, "gain": 0.75, "fx": [{"lp": {"f": 1800, "q": 1.0}}, {"drive": 1.7}, {"hp": {"f": 330}}, {"peak": {"f": 1050, "q": 0.9, "db": 5}}]},
+        {"src": "chirp", "wave": "saw", "points": [[0, 248], [0.06, 261.63], [0.74, 261]], "vibrato": {"hz": 4.9, "cents": 9}, "at": 0.68, "dur": 0.82, "env": {"points": [[0, 0], [0.05, 1.0], [0.26, 0.55], [0.82, 0]]}, "gain": 0.8, "fx": [{"lp": {"f": 2000, "q": 1.0}}, {"drive": 1.7}, {"hp": {"f": 330}}, {"peak": {"f": 1050, "q": 0.9, "db": 5}}]}
       ]
     },
     "wave_end_bell": {
@@ -296,18 +339,17 @@
       ]
     },
     "tower_creak": {
-      "dur": 3.1, "rate": 22050, "ch": 1, "seed": 3130, "loop": true, "xfade_s": 0.5, "room": "wood",
+      "dur": 1.9, "rate": 22050, "ch": 1, "seed": 3130, "loop": true, "xfade_s": 0.4,
       "layers": [
-        {"src": "chirp", "wave": "tri", "points": [[0, 88], [0.8, 122], [1.6, 96], [2.3, 134], [3.6, 88]], "vibrato": {"hz": 17, "cents": 70}, "gain": 0.5,
-         "fx": [{"drive": 2.4}, {"bp": {"f": 560, "q": 1.4}}, {"trem": {"hz": 0.81, "depth": 0.85}}]},
-        {"src": "noise", "color": "brown", "gain": 0.7, "fx": [{"lp": {"f": 170}}, {"trem": {"hz": 1.35, "depth": 0.5}}]},
-        {"src": "grains", "rate_hz": 7, "f": [180, 640], "dur_s": [0.03, 0.1], "g": [0.3, 1.0], "gain": 0.45}
+        {"src": "noise", "color": "pink", "gain": 0.55, "fx": [{"bp": {"f": [[0, 420], [0.8, 610], [1.5, 380], [2.6, 420]], "q": 1.0}}, {"trem": {"hz": 1.053, "depth": 0.8}}]},
+        {"src": "noise", "color": "brown", "gain": 0.7, "fx": [{"lp": {"f": 170}}, {"trem": {"hz": 1.579, "depth": 0.5}}]},
+        {"src": "grains", "rate_hz": 7, "f": [150, 520], "dur_s": [0.03, 0.09], "g": [0.3, 1.0], "gain": 0.5}
       ]
     },
     "tower_dock": {
       "dur": 0.9, "rate": 22050, "ch": 1, "seed": 3131, "room": "wood",
       "layers": [
-        {"src": "chirp", "wave": "tri", "points": [[0, 150], [0.12, 92]], "dur": 0.14, "env": {"a": 0.005, "d": 0.13}, "gain": 0.4, "fx": [{"drive": 2.0}, {"bp": {"f": 620, "q": 1.4}}]},
+        {"src": "noise", "color": "pink", "gain": 0.4, "dur": 0.14, "env": {"a": 0.005, "d": 0.13}, "fx": [{"bp": {"f": 560, "q": 1.0}}]},
         {"src": "modal", "f": [92, 168, 310, 620], "t60": [0.6, 0.4, 0.2, 0.09], "g": [1.0, 0.8, 0.45, 0.2], "gain": 1.0, "at": 0.12},
         {"src": "noise", "color": "brown", "gain": 1.0, "at": 0.12, "env": {"a": 0.001, "d": 0.2}, "fx": [{"lp": {"f": 700}}]},
         {"src": "modal", "f": [1510, 2240], "t60": [0.16, 0.09], "g": [1.0, 0.5], "gain": 0.09, "at": 0.15}
@@ -391,7 +433,7 @@
         {"src": "noise", "color": "white", "gain": 0.5,
          "fx": [{"bp": {"f": [[0, 1250], [1.9, 3100], [3.5, 980], [5.1, 2500], [6.8, 1500], [9.2, 1250]], "q": 0.8}},
                 {"gain_env": {"points": [[0, 0.66], [1.2, 0.81], [2, 0.99], [2.8, 0.62], [3.9, 0.87], [6, 0.75], [6.9, 0.54], [7.5, 0.88], [8, 0.66], [9.2, 0.81]]}}]},
-        {"src": "noise", "color": "white", "gain": 1.0, "fx": [{"hp": {"f": 3800}}, {"gain_env": {"points": [[0, 0.64], [0.4, 0.81], [1, 0.95], [1.6, 0.54], [3.1, 0.54], [3.7, 0.9], [4.2, 0.42], [4.6, 0.48], [5.3, 0.91], [6.2, 0.82], [6.7, 0.98], [7.4, 0.68], [8, 0.64], [8.4, 0.81], [9, 0.95], [9.2, 0.82]]}}]},
+        {"src": "noise", "color": "white", "gain": 10.0, "fx": [{"hp": {"f": 4200}}, {"lp": {"f": 8000}}, {"gain_env": {"points": [[0, 0.64], [0.4, 0.81], [1, 0.95], [1.6, 0.54], [3.1, 0.54], [3.7, 0.9], [4.2, 0.42], [4.6, 0.48], [5.3, 0.91], [6.2, 0.82], [6.7, 0.98], [7.4, 0.68], [8, 0.64], [8.4, 0.81], [9, 0.95], [9.2, 0.82]]}}]},
         {"src": "chirp", "points": [[0, 1040], [2.4, 1320], [4.4, 930], [6.5, 1180], [9.2, 1040]], "vibrato": {"hz": 0.9, "cents": 24}, "gain": 0.03, "fx": [{"gain_env": {"points": [[0, 0.1], [1.4, 0.8], [2.2, 0.1], [4.9, 0.05], [5.7, 1], [6.9, 0.2], [9.2, 0.1]]}}]}
       ]
     },
@@ -457,31 +499,26 @@
     "treadwheel": {
       "bus": "Machines", "priority": 5,
       "events": [
-        {"at": [0.0, 0.5], "sound": "pawl_click", "db": -4.0,
-         "db_by": [{"param": "p_eff", "points": [[0, -6], [120, -2], [300, 0], [340, 0.3]]}, {"param": "rpm", "points": [[40, 3.6], [60, 3.6], [75, 1.8], [90, 0], [110, 0], [140, -1]]}], "pitch_table": [0.0, -0.012, 0.009, 0.016, -0.007]},
-        {"at": [0.25], "sound": "wheel_creak", "db": -3.9,
-         "db_by": [{"param": "p_eff", "points": [[0, -9], [120, -4], [300, 0], [340, 0.4]]}, {"param": "rpm", "points": [[40, 3.6], [60, 3.6], [75, 1.8], [90, 0], [110, 0], [140, -1]]}], "pitch_table": [0.0, 0.03, -0.022, 0.012, -0.04, 0.02, 0.045]},
-        {"at": [0.0, 0.5], "sound": "tread_step", "db": -9.0, "lead_only": true, "when": {"param": "walkers", "min": 1},
-         "db_by": [{"param": "walkers", "points": [[1, -2], [2, 0], [3, 1]]}], "pitch_table": [0.0, -0.02, 0.012]},
-        {"at": [0.75], "sound": "axle_knock", "db": -9.0, "lead_only": true,
-         "db_by": [{"param": "p_eff", "points": [[0, -6], [300, 0], [340, 0.4]]}], "pitch_table": [0.0, -0.015, 0.012]}
+        {"at": [0.0, 0.5], "sound": "tread_step", "db": -4.0, "lead_only": true, "when": {"param": "walkers", "min": 1},
+         "db_by": [{"param": "walkers", "points": [[1, -2], [2, 0], [3, 1]]}, {"param": "rpm", "points": [[40, 1.5], [60, 1.5], [75, 0.8], [90, 0], [110, 0], [140, -1]]}], "pitch_table": [0.0, -0.02, 0.012]},
+        {"at": [0.0, 0.5], "sound": "pawl_click", "db": -11.0,
+         "db_by": [{"param": "p_eff", "points": [[0, -4], [120, -2], [300, 0], [340, 0.3]]}, {"param": "rpm", "points": [[40, 2.0], [60, 2.0], [75, 1.0], [90, 0], [110, 0], [140, -1]]}], "pitch_table": [0.0, -0.012, 0.009, 0.016, -0.007]},
+        {"at": [0.75], "sound": "axle_knock", "db": -6.5, "lead_only": true,
+         "db_by": [{"param": "p_eff", "points": [[0, -6], [300, 0], [340, 0.4]]}, {"param": "rpm", "points": [[40, 3.0], [60, 3.0], [75, 1.5], [90, 0], [110, 0], [140, -1]]}], "pitch_table": [0.0, -0.015, 0.012]}
       ],
       "loops": [
-        {"sound": "timber_groan", "db": -7.0, "min_rpm": 8, "other": true, "slew_s": 0.25,
-         "pitch_by": [{"param": "rpm", "points": [[20, 0.6], [90, 1.0], [140, 1.45]]}],
-         "db_by": [{"param": "p_eff", "points": [[0, -14], [100, -6], [300, 0], [340, 0.3]]}, {"param": "rpm", "points": [[40, 1.8], [60, 1.8], [75, 0.9], [90, 0], [110, 0], [140, -1]]}]},
-        {"sound": "timber_strain", "db": -11.5, "min_rpm": 8, "slew_s": 0.25,
-         "pitch_by": [{"param": "rpm", "points": [[20, 0.75], [90, 1.0], [140, 1.25]]}],
-         "db_by": [{"param": "p_eff", "points": [[100, -60], [120, -40], [170, -22], [220, -13], [262, -9], [340, -7.7]]}]},
-        {"sound": "timber_strain", "db": -11.5, "min_rpm": 8, "slew_s": 0.25,
-         "pitch_by": [{"param": "rpm", "points": [[20, 0.8475], [90, 1.13], [140, 1.4125]]}],
-         "db_by": [{"param": "p_eff", "points": [[100, -60], [120, -40], [170, -22], [220, -13], [262, -9], [340, -7.7]]}]}
+        {"sound": "wheel_rumble", "db": -9.0, "min_rpm": 8, "when": {"param": "far", "max": 0.5},
+         "db_by": [{"param": "p_eff", "points": [[0, -10], [100, -5], [300, 0], [340, 0.3]]}, {"param": "rpm", "points": [[60, -2], [90, 0], [110, 0.5], [140, 1]]}]},
+        {"sound": "wheel_rumble_far", "db": -5.5, "min_rpm": 8, "other": true, "when": {"param": "far", "min": 0.5},
+         "db_by": [{"param": "p_eff", "points": [[0, -10], [100, -5], [300, 0], [340, 0.3]]}, {"param": "rpm", "points": [[60, -2], [90, 0], [110, 0.5], [140, 1]]}]},
+        {"sound": "wheel_load", "db": -18.5, "min_rpm": 8, "when": {"param": "far", "max": 0.5},
+         "db_by": [{"param": "p_eff", "points": [[80, -40], [120, -24], [170, -12], [220, -6], [262, -3], [340, 0]]}]}
       ]
     },
     "mine": {
       "bus": "Machines", "priority": 4,
       "events": [
-        {"at": [0.0, 0.5], "sound": "mine_pick", "db": -19.0, "when": {"param": "m", "min": 0.01}, "pitch_table": [0.0, 0.02, -0.03]}
+        {"at": [0.0, 0.5], "sound": "mine_pick", "db": -23.0, "when": {"param": "m", "min": 0.01}, "pitch_table": [0.0, 0.02, -0.03]}
       ]
     },
     "pump": {
@@ -493,23 +530,23 @@
   },
   "loops": {
     "junction_clatter": {"bus": "Machines", "layers": [
-      {"sound": "junction_clatter", "db": -17.0, "pitch_by": [{"param": "team_w", "points": [[0, 0.7], [1500, 1.8]]}], "db_by": [{"param": "team_w", "points": [[0, -8], [600, -2], [1500, 0]]}]}
+      {"sound": "junction_clatter", "db": -23.0, "db_by": [{"param": "team_w", "points": [[0, -8], [600, -2], [1500, 0]]}]}
     ]},
     "tar_bubble": {"bus": "Sfx", "layers": [
       {"sound": "tar_bubble", "db": -24.0, "db_by": [{"param": "m", "points": [[0, -6], [1, 0], [2, 2]]}]}
     ]},
     "tar_pour": {"bus": "Sfx", "layers": [
-      {"sound": "tar_pour", "db": -22.0}
+      {"sound": "tar_pour", "db": -24.0}
     ]},
     "tower_creak": {"bus": "Sfx", "layers": [
-      {"sound": "tower_creak", "db": -17.0}
+      {"sound": "tower_creak", "db": -20.0}
     ]}
   },
   "beds": {
     "hill_wind": {
       "layers": [
         {"sound": "wind_hill_lo", "db": -16.0, "db_by": [{"param": "gust", "points": [[0, -4], [1, 2]]}]},
-        {"sound": "wind_hill_hi", "db": -7.5, "db_by": [{"param": "gust", "points": [[0, -8], [0.5, -2], [1, 2]]}, {"param": "in_wave", "points": [[0, 2.5], [1, -1]]}]},
+        {"sound": "wind_hill_hi", "db": -9.5, "db_by": [{"param": "gust", "points": [[0, -8], [0.5, -2], [1, 2]]}, {"param": "in_wave", "points": [[0, 4.0], [1, 0]]}]},
         {"sound": "crowd_far", "db": -11.5, "db_by": [{"param": "enemies", "points": [[0, -50], [1, -12], [20, -4], [80, 2]]}]}
       ],
       "spots": [
@@ -523,42 +560,56 @@
   },
   "cues": {
     "shot_bolt": {"hits": [
-      {"sound": "ballista_twang", "db": -8.0, "priority": 8},
-      {"sound": "bolt_whoosh", "db": -13.0, "delay_s": 0.04, "pitch_var": "p"}
-    ]},
+      {"sound": "ballista_twang", "db": -3, "priority": 8, "pan_var": "pan0"},
+      {"sound": "bolt_hiss", "db": -5, "pitch": 0.8, "delay_s": 0.04, "priority": 7, "pitch_var": "p", "pan_var": "pan0", "flight": {"dur_var": "flight_s", "pan_to_var": "pan1", "gain": [[0,-14],[0.2,-3],[0.5,0],[0.8,-6],[1,-16]], "pitch": [[0,1.14],[1,0.82]]}}
+    ], "other_db": -5},
     "shot_scorpion": {"hits": [
-      {"sound": "scorpion_snap", "db": -9.5}
-    ]},
+      {"sound": "scorpion_snap", "db": -11, "priority": 7, "pan_var": "pan0"},
+      {"sound": "bolt_hiss", "db": -4.3, "pitch": 1.25, "delay_s": 0.03, "priority": 7, "pitch_var": "p", "pan_var": "pan0", "flight": {"dur_var": "flight_s", "pan_to_var": "pan1", "gain": [[0,-24],[0.3,-8],[0.5,0],[0.7,-8],[1,-24]], "pitch": [[0,1.14],[1,0.82]]}}
+    ], "other_db": -5},
     "shot_stone": {"hits": [
-      {"sound": "onager_release", "db": -4.5, "priority": 8, "pitch_var": "p"},
-      {"sound": "stone_whoosh", "db": -14.0, "delay_s": 0.05, "pitch_var": "p"},
-      {"sound": "stone_impact", "db": -3.0, "delay_var": "flight_s"}
-    ], "duck": [{"bus": "Machines", "db": -3.0, "attack_s": 0.01, "release_s": 0.35}]},
+      {"sound": "onager_release", "db": -4.5, "priority": 8, "pitch_var": "p", "pan_var": "pan0"},
+      {"sound": "stone_tumble", "db": -2.7, "delay_s": 0.05, "priority": 7, "pitch_var": "p", "pan_var": "pan0", "flight": {"dur_var": "flight_s", "pan_to_var": "pan1", "gain": [[0,-26],[0.25,-10],[0.55,0],[0.8,-4],[1,-12]], "pitch": [[0,1.1],[1,0.82]]}}
+    ], "other_db": -5, "duck": [{"bus": "Machines", "db": -3.0, "attack_s": 0.01, "release_s": 0.35}]},
     "shot_arrow": {"hits": [
-      {"sound": "arrow_release", "db": -16.0, "pitch_var": "p"},
-      {"sound": "arrow_whistle", "db": -22.0, "pitch_var": "p0"},
-      {"sound": "arrow_whistle", "db": -23.0, "delay_s": 0.07, "pitch_var": "p1"},
-      {"sound": "arrow_whistle", "db": -24.0, "delay_s": 0.15, "pitch_var": "p2"},
-      {"sound": "arrow_patter", "db": -15.5, "delay_var": "flight_s"}
-    ], "duck": [{"bus": "Ambience", "db": -3.0, "attack_s": 0.05, "release_s": 0.9}]},
-    "shot_arrow_rack": {"hits": [
-      {"sound": "arrow_release", "db": -13.0, "pitch_var": "p"},
-      {"sound": "arrow_patter", "db": -12.5, "delay_var": "flight_s"}
-    ]},
+      {"sound": "arrow_release", "db": -9, "priority": 7, "pitch_var": "p", "pan_var": "pan0"},
+      {"sound": "arrow_swarm", "db": -3.3, "delay_s": 0.06, "priority": 7, "pitch_var": "p", "db_var": "lvl", "pan_var": "pan0", "flight": {"dur_var": "flight_s", "pan_to_var": "pan1", "gain": [[0,-40],[0.36,-18],[0.5,0],[0.6,-8],[0.72,-30],[1,-40]], "pitch": [[0,1.3],[0.5,1],[1,0.75]]}}
+    ], "other_db": -5},
+    "hit_arrow_dirt": {"hits": [{"sound": "arrow_dirt", "db": -2.6, "pan_var": "pan", "db_var": "lvl"}], "other_db": -4},
+    "hit_arrow_water": {"hits": [{"sound": "arrow_water", "db": -6, "pan_var": "pan", "db_var": "lvl"}], "other_db": -4},
+    "hit_arrow_flesh": {"hits": [{"sound": "hit_flesh", "db": -2.5, "pan_var": "pan", "db_var": "lvl"}], "other_db": -4},
+    "hit_arrow_wood": {"hits": [{"sound": "hit_wood", "db": -2, "pan_var": "pan", "db_var": "lvl", "pitch_var": "pv"}], "other_db": -4},
+    "hit_arrow_shield": {"hits": [{"sound": "hit_shield", "db": -4, "pan_var": "pan", "db_var": "lvl"}], "other_db": -4},
+    "hit_bolt_dirt": {"hits": [{"sound": "bolt_dirt", "db": 0, "pan_var": "pan", "db_var": "lvl"}], "other_db": -4},
+    "hit_bolt_water": {"hits": [{"sound": "arrow_water", "db": -4, "pan_var": "pan", "db_var": "lvl", "pitch": 0.7}], "other_db": -4},
+    "hit_bolt_flesh": {"hits": [{"sound": "hit_flesh", "db": -2.5, "pan_var": "pan", "db_var": "lvl", "pitch": 0.8}, {"sound": "bolt_dirt", "db": -18, "pan_var": "pan", "db_var": "lvl"}], "other_db": -4},
+    "hit_bolt_wood": {"hits": [{"sound": "bolt_wood", "db": 0, "pan_var": "pan", "db_var": "lvl"}], "other_db": -4},
+    "hit_bolt_shield": {"hits": [{"sound": "hit_shield", "db": -3, "pan_var": "pan", "db_var": "lvl", "pitch": 0.72}, {"sound": "bolt_wood", "db": -14, "pan_var": "pan", "db_var": "lvl"}], "other_db": -4},
+    "hit_scorpion_dirt": {"hits": [{"sound": "bolt_dirt", "db": 0, "pan_var": "pan", "db_var": "lvl", "pitch": 1.2}], "other_db": -4},
+    "hit_scorpion_water": {"hits": [{"sound": "arrow_water", "db": -2, "pan_var": "pan", "db_var": "lvl", "pitch": 0.8}], "other_db": -4},
+    "hit_scorpion_flesh": {"hits": [{"sound": "hit_flesh", "db": -2.5, "pan_var": "pan", "db_var": "lvl", "pitch": 1.0}], "other_db": -4},
+    "hit_scorpion_wood": {"hits": [{"sound": "hit_wood", "db": -0.5, "pan_var": "pan", "db_var": "lvl", "pitch": 0.84, "pitch_var": "pv"}], "other_db": -4},
+    "hit_scorpion_shield": {"hits": [{"sound": "hit_shield", "db": -4, "pan_var": "pan", "db_var": "lvl", "pitch": 0.86}], "other_db": -4},
+    "hit_stone_dirt": {"hits": [{"sound": "stone_impact", "db": 0, "pan_var": "pan", "db_var": "lvl"}], "other_db": -4},
+    "hit_stone_water": {"hits": [{"sound": "stone_splash", "db": -1, "pan_var": "pan", "db_var": "lvl"}], "other_db": -4},
+    "hit_stone_flesh": {"hits": [{"sound": "hit_flesh", "db": -2.5, "pan_var": "pan", "db_var": "lvl", "pitch": 0.62}, {"sound": "stone_impact", "db": -11.5, "pan_var": "pan", "db_var": "lvl"}], "other_db": -4},
+    "hit_stone_wood": {"hits": [{"sound": "stone_wood", "db": 0, "pan_var": "pan", "db_var": "lvl"}, {"sound": "stone_impact", "db": -12, "pan_var": "pan", "db_var": "lvl"}], "other_db": -4},
+    "hit_stone_shield": {"hits": [{"sound": "hit_shield", "db": -3, "pan_var": "pan", "db_var": "lvl", "pitch": 0.8}, {"sound": "stone_impact", "db": -12, "pan_var": "pan", "db_var": "lvl"}], "other_db": -4},
     "wave_start": {"hits": [{"sound": "horn_wave", "db": -9.0, "priority": 8}], "duck": [{"bus": "Machines", "db": -8.0, "attack_s": 0.03, "release_s": 2.4}, {"bus": "Ambience", "db": -4.0, "attack_s": 0.03, "release_s": 2.4}]},
     "push": {"hits": [{"sound": "horn_push", "db": -9.0, "priority": 8}], "duck": [{"bus": "Machines", "db": -8.0, "attack_s": 0.03, "release_s": 1.7}, {"bus": "Ambience", "db": -4.0, "attack_s": 0.03, "release_s": 1.7}]},
     "rush": {"hits": [{"sound": "horn_rush", "db": -9.0, "priority": 8}], "duck": [{"bus": "Machines", "db": -8.0, "attack_s": 0.03, "release_s": 1.7}, {"bus": "Ambience", "db": -4.0, "attack_s": 0.03, "release_s": 1.7}]},
     "wave_end": {"hits": [{"sound": "wave_end_bell", "db": -4.0}]},
     "breach": {"hits": [{"sound": "gate_crash", "db": 0.0, "priority": 8}],
       "duck": [{"bus": "Machines", "db": -6.0, "attack_s": 0.01, "release_s": 1.2}, {"bus": "Ambience", "db": -6.0, "attack_s": 0.01, "release_s": 1.2}, {"bus": "Sfx", "db": -6.0, "attack_s": 0.02, "release_s": 1.2}]},
-    "gate_hit": {"hits": [{"sound": "gate_hit", "db": -12.0, "db_var": "dmg_db"}]},
+    "gate_hit": {"hits": [{"sound": "gate_hit", "db": -12.0, "db_var": "dmg_db", "priority": 8}]},
     "gate_restored": {"hits": [{"sound": "gate_restored", "db": -9.0}]},
-    "hooves": {"hits": [{"sound": "hooves", "db": -10.0, "db_var": "count_db"}]},
-    "ram_thud": {"hits": [{"sound": "ram_thud", "db": -8.0, "pitch_var": "p"}]},
+    "hooves": {"hits": [{"sound": "hooves", "db": -20.0, "db_var": "count_db", "priority": 4}]},
+    "ram_thud": {"hits": [{"sound": "ram_thud", "db": -8.0, "pitch_var": "p", "priority": 8}]},
     "dock": {"hits": [{"sound": "tower_dock", "db": -4.0}]},
     "reach": {"hits": [{"sound": "reach_alarm", "db": -10.0, "priority": 8}]},
-    "leak": {"hits": [{"sound": "reach_alarm", "db": -12.0}]},
-    "kill": {"hits": [{"sound": "kill_thud", "db": -9.5}]},
+    "leak": {"hits": [{"sound": "reach_alarm", "db": -12.0, "priority": 8}]},
+    "kill": {"hits": [{"sound": "kill_thud", "db": -20.0, "pan_var": "pan", "priority": 5}]},
+    "kill_engine": {"hits": [{"sound": "stone_wood", "db": -5.0, "pitch": 0.8, "pan_var": "pan", "priority": 8}, {"sound": "stone_impact", "db": -9.0, "pan_var": "pan"}]},
     "route": {"hits": [{"sound": "lever_route", "db": -9.0}], "other_db": -14.0},
     "gold": {"hits": [{"sound": "coin_clink", "db": -18.0}]},
     "buy": {"hits": [{"sound": "hammer_buy", "db": -9.0}], "other_db": -10.0},
@@ -568,9 +619,10 @@
     "tar_hiss": {"hits": [{"sound": "tar_hiss", "db": -14.0}]}
   },
   "preview": {
+    "waive": {"A14": "Median of the ballista at the real rate: preview +0.4 dB, real wave +1.6 dB (rider on the organ) and +0.9 dB (rider on the onager), against +6. 1-4 kHz over the 500 ms before it never reaches +6 with the organ and the Scorpions in the air, unless the release is louder than the rest of the mix. The first shot of a wave alone reads +6.9: not an honest pass, so this stands as a waiver."},
     "lead": "treadwheel",
     "others": [
-      {"machine": "treadwheel", "rpm_scale": 0.97, "params": {"p_eff": 210, "walkers": 2}},
+      {"machine": "treadwheel", "rpm_scale": 0.97, "params": {"p_eff": 210, "walkers": 2, "far": 1}},
       {"machine": "mine", "lead": true, "rpm_by": {"param": "m", "points": [[0, 0], [1, 54]]}},
       {"machine": "pump", "lead": true, "rpm_by": {"param": "tar_m", "points": [[0, 0], [1, 30]]}}
     ],
@@ -583,46 +635,335 @@
       {"rpm": 0, "s": 9, "params": {"p_eff": 0, "walkers": 0, "gust": 0.05, "m": 0, "tar_m": 0, "in_wave": 0, "enemies": 0}}
     ],
     "events": [
-      {"t": 1.0, "cue": "wave_start"},
-      {"t": 5.0, "cue": "shot_bolt"},
-      {"t": 7.6, "cue": "shot_arrow", "vars": {"flight_s": 1.3, "p0": 1.0, "p1": 0.94, "p2": 1.05}},
-      {"t": 10.2, "cue": "shot_scorpion"},
-      {"t": 11.0, "cue": "shot_stone", "vars": {"flight_s": 2.1}},
-      {"t": 13.8, "cue": "kill"},
-      {"t": 14.1, "cue": "hooves", "vars": {"count_db": 4}},
-      {"t": 14.5, "cue": "hooves", "vars": {"count_db": 4}},
-      {"t": 14.9, "cue": "hooves", "vars": {"count_db": 4}},
-      {"t": 15.3, "cue": "hooves", "vars": {"count_db": 4}},
-      {"t": 17.0, "cue": "shot_bolt"},
-      {"t": 19.0, "cue": "gold"},
-      {"t": 21.0, "cue": "push"},
-      {"t": 25.5, "cue": "shot_arrow", "vars": {"flight_s": 1.1, "p0": 1.04, "p1": 0.97, "p2": 0.9}},
-      {"t": 26.0, "cue": "route"},
-      {"t": 27.0, "cue": "shot_arrow_rack", "vars": {"flight_s": 1.1, "p": 1.03}},
-      {"t": 28.5, "cue": "shot_arrow_rack", "vars": {"flight_s": 1.2, "p": 0.97}},
-      {"t": 30.0, "cue": "shot_arrow", "vars": {"flight_s": 1.15, "p": 1.0, "p0": 0.97, "p1": 1.05, "p2": 0.94}},
+      {"t": 1, "cue": "wave_start"},
+      {"t": 1.5, "cue": "shot_scorpion", "vars": {"flight_s": 1.14, "pan0": 0.05, "pan1": -0.47, "p": 1}, "lead": false},
+      {"t": 2, "cue": "shot_arrow", "vars": {"flight_s": 3.66, "pan0": 0.08, "pan1": -0.35, "p": 1.05, "lvl": 0}},
+      {"t": 2.3, "cue": "shot_scorpion", "vars": {"flight_s": 1.35, "pan0": -0.12, "pan1": -0.56, "p": 1}, "lead": false},
+      {"t": 2.64, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.47, "lvl": 0, "pv": 1}, "lead": false},
+      {"t": 3, "cue": "shot_stone", "vars": {"flight_s": 4.75, "pan0": -0.08, "pan1": -0.29, "p": 1}, "lead": false},
+      {"t": 3.02, "cue": "shot_arrow", "vars": {"flight_s": 3.24, "pan0": 0.08, "pan1": -0.5, "p": 1.05, "lvl": -6}},
+      {"t": 3.41, "cue": "shot_scorpion", "vars": {"flight_s": 1.19, "pan0": -0.17, "pan1": -0.33, "p": 1}, "lead": false},
+      {"t": 3.65, "cue": "hit_scorpion_wood", "vars": {"pan": -0.56, "lvl": 0, "pv": 0.95}, "lead": false},
+      {"t": 3.96, "cue": "shot_arrow", "vars": {"flight_s": 4.2, "pan0": 0.08, "pan1": -0.36, "p": 1.01, "lvl": 0}},
+      {"t": 4, "cue": "kill", "vars": {"pan": -0.53}},
+      {"t": 4.54, "cue": "shot_scorpion", "vars": {"flight_s": 0.92, "pan0": 0.02, "pan1": -0.59, "p": 1}, "lead": false},
+      {"t": 4.6, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.33, "lvl": 0, "pv": 1.06}, "lead": false},
+      {"t": 4.91, "cue": "shot_arrow", "vars": {"flight_s": 3.52, "pan0": 0.08, "pan1": -0.15, "p": 1.03, "lvl": -6}},
+      {"t": 5, "cue": "shot_bolt", "vars": {"flight_s": 1.3, "pan0": -0.3, "pan1": -0.6, "p": 1}, "lead": false},
+      {"t": 5.46, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.59, "lvl": 0, "pv": 0.97}, "lead": false},
+      {"t": 5.53, "cue": "kill", "vars": {"pan": -0.42}},
+      {"t": 5.64, "cue": "shot_scorpion", "vars": {"flight_s": 1.31, "pan0": -0.13, "pan1": -0.49, "p": 1}, "lead": false},
+      {"t": 5.66, "cue": "hit_arrow_wood", "vars": {"pan": -0.35, "lvl": 0, "pv": 1}},
+      {"t": 5.8, "cue": "shot_arrow", "vars": {"flight_s": 4.75, "pan0": 0.08, "pan1": -0.21, "p": 1.01, "lvl": 0}},
+      {"t": 6.26, "cue": "hit_arrow_wood", "vars": {"pan": -0.5, "lvl": 0, "pv": 0.95}},
+      {"t": 6.48, "cue": "shot_scorpion", "vars": {"flight_s": 1.03, "pan0": -0.05, "pan1": -0.48, "p": 1}, "lead": false},
+      {"t": 6.94, "cue": "shot_arrow", "vars": {"flight_s": 3.24, "pan0": 0.08, "pan1": -0.6, "p": 1, "lvl": -6}},
+      {"t": 6.95, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.49, "lvl": 0, "pv": 1.04}, "lead": false},
+      {"t": 7.1, "cue": "kill", "vars": {"pan": -0.32}},
+      {"t": 7.61, "cue": "shot_scorpion", "vars": {"flight_s": 0.95, "pan0": 0.03, "pan1": -0.34, "p": 1}, "lead": false},
+      {"t": 7.75, "cue": "hit_stone_flesh", "vars": {"pan": -0.29, "lvl": 0, "pv": 1.04}, "lead": false},
+      {"t": 7.98, "cue": "shot_arrow", "vars": {"flight_s": 3.87, "pan0": 0.08, "pan1": -0.38, "p": 0.97, "lvl": 0}},
+      {"t": 8.16, "cue": "hit_arrow_dirt", "vars": {"pan": -0.36, "lvl": 0}},
+      {"t": 8.43, "cue": "hit_arrow_wood", "vars": {"pan": -0.15, "lvl": 0, "pv": 1.06}},
+      {"t": 8.56, "cue": "hit_scorpion_wood", "vars": {"pan": -0.34, "lvl": 0, "pv": 1.02}, "lead": false},
+      {"t": 8.65, "cue": "shot_scorpion", "vars": {"flight_s": 1.09, "pan0": 0.14, "pan1": -0.37, "p": 1}, "lead": false},
+      {"t": 8.66, "cue": "shot_stone", "vars": {"flight_s": 4.29, "pan0": -0.08, "pan1": -0.52, "p": 1}, "lead": false},
+      {"t": 8.66, "cue": "kill", "vars": {"pan": -0.23}},
+      {"t": 9.02, "cue": "shot_arrow", "vars": {"flight_s": 3.38, "pan0": 0.08, "pan1": -0.4, "p": 1, "lvl": -6}},
+      {"t": 9.4, "cue": "shot_scorpion", "vars": {"flight_s": 1.12, "pan0": 0.09, "pan1": -0.46, "p": 1}, "lead": false},
+      {"t": 9.74, "cue": "hit_scorpion_wood", "vars": {"pan": -0.37, "lvl": 0, "pv": 1}, "lead": false},
+      {"t": 10.06, "cue": "shot_arrow", "vars": {"flight_s": 4.46, "pan0": 0.08, "pan1": -0.24, "p": 0.97, "lvl": 0}},
+      {"t": 10.18, "cue": "hit_arrow_flesh", "vars": {"pan": -0.6, "lvl": 0, "pv": 1.04}},
+      {"t": 10.22, "cue": "kill", "vars": {"pan": -0.52}},
+      {"t": 10.26, "cue": "shot_scorpion", "vars": {"flight_s": 1.37, "pan0": -0.17, "pan1": -0.36, "p": 1}, "lead": false},
+      {"t": 10.52, "cue": "hit_scorpion_wood", "vars": {"pan": -0.46, "lvl": 0, "pv": 0.95}, "lead": false},
+      {"t": 10.55, "cue": "hit_arrow_flesh", "vars": {"pan": -0.21, "lvl": 0, "pv": 0.97}},
+      {"t": 11.04, "cue": "shot_scorpion", "vars": {"flight_s": 1.36, "pan0": -0.18, "pan1": -0.26, "p": 1}, "lead": false},
+      {"t": 11.15, "cue": "shot_arrow", "vars": {"flight_s": 4.33, "pan0": 0.08, "pan1": -0.6, "p": 0.97, "lvl": -6}},
+      {"t": 11.63, "cue": "hit_scorpion_wood", "vars": {"pan": -0.36, "lvl": 0, "pv": 1.06}, "lead": false},
+      {"t": 11.85, "cue": "hit_arrow_dirt", "vars": {"pan": -0.38, "lvl": -0.79}},
+      {"t": 11.88, "cue": "kill", "vars": {"pan": -0.46}},
+      {"t": 11.91, "cue": "shot_scorpion", "vars": {"flight_s": 1.16, "pan0": -0.13, "pan1": -0.59, "p": 1}, "lead": false},
+      {"t": 12.2, "cue": "hit_scorpion_dirt", "vars": {"pan": -0.4, "lvl": 0, "pv": 1}, "lead": false},
+      {"t": 12.25, "cue": "shot_arrow", "vars": {"flight_s": 4.15, "pan0": 0.08, "pan1": -0.37, "p": 1, "lvl": 0}},
+      {"t": 12.4, "cue": "hit_arrow_wood", "vars": {"pan": -0.4, "lvl": 0, "pv": 0.94}},
+      {"t": 12.4, "cue": "hit_scorpion_wood", "vars": {"pan": -0.26, "lvl": 0, "pv": 0.97}, "lead": false},
+      {"t": 12.88, "cue": "shot_scorpion", "vars": {"flight_s": 0.92, "pan0": -0.12, "pan1": -0.55, "p": 1}, "lead": false},
+      {"t": 12.95, "cue": "hit_stone_wood", "vars": {"pan": -0.52, "lvl": 0, "pv": 0.94}, "lead": false},
+      {"t": 13.19, "cue": "shot_stone", "vars": {"flight_s": 4.43, "pan0": -0.08, "pan1": -0.33, "p": 1}, "lead": false},
+      {"t": 13.34, "cue": "shot_arrow", "vars": {"flight_s": 4.66, "pan0": 0.08, "pan1": -0.48, "p": 0.99, "lvl": -6}},
+      {"t": 13.4, "cue": "hit_stone_dirt", "vars": {"pan": -0.4, "lvl": 0, "pv": 0.95}, "lead": false},
+      {"t": 13.63, "cue": "kill", "vars": {"pan": -0.62}},
+      {"t": 13.8, "cue": "hit_scorpion_wood", "vars": {"pan": -0.55, "lvl": 0, "pv": 0.94}, "lead": false},
+      {"t": 13.9, "cue": "shot_scorpion", "vars": {"flight_s": 0.93, "pan0": -0.08, "pan1": -0.64, "p": 1}, "lead": false},
+      {"t": 14.1, "cue": "hit_arrow_dirt", "vars": {"pan": -0.4, "lvl": 0, "pv": 0.97}},
+      {"t": 14.1, "cue": "hooves", "vars": {"count_db": 2}},
+      {"t": 14.5, "cue": "shot_arrow", "vars": {"flight_s": 3.5, "pan0": 0.08, "pan1": -0.58, "p": 0.97, "lvl": 0}},
+      {"t": 14.5, "cue": "hooves", "vars": {"count_db": 2}},
+      {"t": 14.52, "cue": "hit_arrow_dirt", "vars": {"pan": -0.24, "lvl": 0}},
+      {"t": 14.79, "cue": "shot_scorpion", "vars": {"flight_s": 1.39, "pan0": 0.05, "pan1": -0.42, "p": 1}, "lead": false},
+      {"t": 14.83, "cue": "hit_scorpion_wood", "vars": {"pan": -0.64, "lvl": 0, "pv": 1.02}, "lead": false},
+      {"t": 14.9, "cue": "hooves", "vars": {"count_db": 2}},
+      {"t": 15.3, "cue": "hooves", "vars": {"count_db": 2}},
+      {"t": 15.38, "cue": "kill", "vars": {"pan": -0.43}},
+      {"t": 15.48, "cue": "hit_arrow_dirt", "vars": {"pan": -0.6, "lvl": 0}},
+      {"t": 15.66, "cue": "shot_arrow", "vars": {"flight_s": 3.87, "pan0": 0.08, "pan1": -0.33, "p": 1.03, "lvl": -6}},
+      {"t": 15.78, "cue": "shot_scorpion", "vars": {"flight_s": 1.03, "pan0": -0.02, "pan1": -0.44, "p": 1}, "lead": false},
+      {"t": 16.18, "cue": "hit_scorpion_wood", "vars": {"pan": -0.42, "lvl": 0, "pv": 1}, "lead": false},
+      {"t": 16.4, "cue": "hit_arrow_dirt", "vars": {"pan": -0.37, "lvl": -0.38}},
+      {"t": 16.67, "cue": "shot_arrow", "vars": {"flight_s": 3.53, "pan0": 0.08, "pan1": -0.53, "p": 1.03, "lvl": 0}},
+      {"t": 16.84, "cue": "shot_scorpion", "vars": {"flight_s": 0.94, "pan0": -0.01, "pan1": -0.2, "p": 1}, "lead": false},
+      {"t": 16.89, "cue": "kill", "vars": {"pan": -0.61}},
+      {"t": 17.3, "cue": "hit_arrow_water", "vars": {"pan": -0.4, "lvl": 0, "pv": 0.94}},
+      {"t": 17.62, "cue": "hit_stone_dirt", "vars": {"pan": -0.33, "lvl": 0, "pv": 1.02}, "lead": false},
+      {"t": 17.72, "cue": "shot_arrow", "vars": {"flight_s": 4, "pan0": 0.08, "pan1": -0.64, "p": 0.97, "lvl": -6}},
+      {"t": 17.78, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.2, "lvl": 0, "pv": 1.06}, "lead": false},
+      {"t": 17.92, "cue": "shot_scorpion", "vars": {"flight_s": 1.21, "pan0": 0.19, "pan1": -0.23, "p": 1}, "lead": false},
+      {"t": 18, "cue": "hit_arrow_dirt", "vars": {"pan": -0.48, "lvl": -0.79}},
+      {"t": 18, "cue": "hit_arrow_dirt", "vars": {"pan": -0.58, "lvl": 0}},
+      {"t": 18.2, "cue": "hit_stone_wood", "vars": {"pan": -0.4, "lvl": 0, "pv": 1.06}, "lead": false},
+      {"t": 18.58, "cue": "shot_stone", "vars": {"flight_s": 4.6, "pan0": -0.08, "pan1": -0.52, "p": 1}, "lead": false},
+      {"t": 18.63, "cue": "kill", "vars": {"pan": -0.33}},
+      {"t": 18.75, "cue": "shot_arrow", "vars": {"flight_s": 3.55, "pan0": 0.08, "pan1": -0.39, "p": 0.99, "lvl": 0}},
+      {"t": 18.77, "cue": "shot_scorpion", "vars": {"flight_s": 1.15, "pan0": -0.08, "pan1": -0.23, "p": 1}, "lead": false},
+      {"t": 19, "cue": "gold"},
+      {"t": 19.13, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.23, "lvl": 0, "pv": 0.97}, "lead": false},
+      {"t": 19.53, "cue": "hit_arrow_flesh", "vars": {"pan": -0.33, "lvl": 0, "pv": 1.02}},
+      {"t": 19.53, "cue": "shot_scorpion", "vars": {"flight_s": 0.96, "pan0": -0.02, "pan1": -0.32, "p": 1}, "lead": false},
+      {"t": 19.73, "cue": "shot_arrow", "vars": {"flight_s": 4.31, "pan0": 0.08, "pan1": -0.53, "p": 1.01, "lvl": -6}},
+      {"t": 19.92, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.23, "lvl": 0, "pv": 1.04}, "lead": false},
+      {"t": 20.2, "cue": "hit_arrow_flesh", "vars": {"pan": -0.53, "lvl": 0, "pv": 1}},
+      {"t": 20.21, "cue": "kill", "vars": {"pan": -0.3}},
+      {"t": 20.3, "cue": "hit_scorpion_water", "vars": {"pan": -0.4, "lvl": 0, "pv": 1.02}, "lead": false},
+      {"t": 20.34, "cue": "shot_scorpion", "vars": {"flight_s": 0.94, "pan0": -0.2, "pan1": -0.27, "p": 1}, "lead": false},
+      {"t": 20.61, "cue": "shot_arrow", "vars": {"flight_s": 3.41, "pan0": 0.08, "pan1": -0.54, "p": 0.99, "lvl": 0}},
+      {"t": 21, "cue": "push"},
+      {"t": 21.28, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.27, "lvl": 0, "pv": 1.02}, "lead": false},
+      {"t": 21.46, "cue": "shot_scorpion", "vars": {"flight_s": 1.27, "pan0": 0.05, "pan1": -0.29, "p": 1}, "lead": false},
+      {"t": 21.67, "cue": "shot_arrow", "vars": {"flight_s": 3.7, "pan0": 0.08, "pan1": -0.46, "p": 1, "lvl": -6}},
+      {"t": 21.72, "cue": "hit_arrow_wood", "vars": {"pan": -0.64, "lvl": 0, "pv": 0.95}},
+      {"t": 21.8, "cue": "kill", "vars": {"pan": -0.23}},
+      {"t": 22, "cue": "shot_bolt", "vars": {"flight_s": 1.3, "pan0": -0.3, "pan1": -0.6, "p": 1}, "lead": false},
+      {"t": 22.3, "cue": "hit_arrow_wood", "vars": {"pan": -0.39, "lvl": 0, "pv": 1.06}},
+      {"t": 22.34, "cue": "shot_scorpion", "vars": {"flight_s": 1.02, "pan0": 0.04, "pan1": -0.58, "p": 1}, "lead": false},
+      {"t": 22.57, "cue": "shot_arrow", "vars": {"flight_s": 4.63, "pan0": 0.08, "pan1": -0.6, "p": 1.03, "lvl": 0}},
+      {"t": 22.73, "cue": "hit_scorpion_wood", "vars": {"pan": -0.29, "lvl": 0, "pv": 1}, "lead": false},
+      {"t": 23.18, "cue": "hit_stone_flesh", "vars": {"pan": -0.52, "lvl": 0, "pv": 1}, "lead": false},
+      {"t": 23.25, "cue": "shot_scorpion", "vars": {"flight_s": 1.33, "pan0": -0.18, "pan1": -0.3, "p": 1}, "lead": false},
+      {"t": 23.67, "cue": "kill", "vars": {"pan": -0.65}},
+      {"t": 23.68, "cue": "shot_stone", "vars": {"flight_s": 4.85, "pan0": -0.08, "pan1": -0.31, "p": 1}, "lead": false},
+      {"t": 23.73, "cue": "shot_arrow", "vars": {"flight_s": 3.69, "pan0": 0.08, "pan1": -0.42, "p": 1.03, "lvl": -6}},
+      {"t": 24.02, "cue": "hit_arrow_dirt", "vars": {"pan": -0.54, "lvl": -0.79}},
+      {"t": 24.04, "cue": "hit_arrow_dirt", "vars": {"pan": -0.53, "lvl": -0.79}},
+      {"t": 24.26, "cue": "shot_scorpion", "vars": {"flight_s": 1.16, "pan0": -0.15, "pan1": -0.38, "p": 1}, "lead": false},
+      {"t": 24.3, "cue": "hit_bolt_water", "vars": {"pan": -0.4, "lvl": 0, "pv": 1}, "lead": false},
+      {"t": 24.58, "cue": "hit_scorpion_wood", "vars": {"pan": -0.3, "lvl": 0, "pv": 1.06}, "lead": false},
+      {"t": 24.72, "cue": "shot_arrow", "vars": {"flight_s": 3.56, "pan0": 0.08, "pan1": -0.33, "p": 0.96, "lvl": 0}},
+      {"t": 25.19, "cue": "kill", "vars": {"pan": -0.6}},
+      {"t": 25.29, "cue": "shot_scorpion", "vars": {"flight_s": 0.93, "pan0": -0.18, "pan1": -0.48, "p": 1}, "lead": false},
+      {"t": 25.37, "cue": "hit_arrow_flesh", "vars": {"pan": -0.46, "lvl": 0, "pv": 0.97}},
+      {"t": 25.42, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.38, "lvl": 0, "pv": 0.97}, "lead": false},
+      {"t": 25.7, "cue": "shot_arrow", "vars": {"flight_s": 4.02, "pan0": 0.08, "pan1": -0.3, "p": 1, "lvl": -6}},
+      {"t": 26, "cue": "route", "lead": false},
+      {"t": 26.22, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.48, "lvl": 0, "pv": 1.04}, "lead": false},
+      {"t": 26.31, "cue": "shot_scorpion", "vars": {"flight_s": 1.01, "pan0": 0.05, "pan1": -0.57, "p": 1}, "lead": false},
+      {"t": 26.81, "cue": "shot_arrow", "vars": {"flight_s": 3.65, "pan0": 0.08, "pan1": -0.26, "p": 1.03, "lvl": 0}},
+      {"t": 26.86, "cue": "kill", "vars": {"pan": -0.47}},
+      {"t": 27.2, "cue": "hit_arrow_wood", "vars": {"pan": -0.6, "lvl": 0, "pv": 1.04}},
+      {"t": 27.2, "cue": "hit_stone_water", "vars": {"pan": -0.4, "lvl": 0, "pv": 0.95}, "lead": false},
+      {"t": 27.32, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.57, "lvl": 0, "pv": 0.94}, "lead": false},
+      {"t": 27.42, "cue": "hit_arrow_flesh", "vars": {"pan": -0.42, "lvl": 0, "pv": 0.94}},
+      {"t": 27.47, "cue": "shot_scorpion", "vars": {"flight_s": 0.95, "pan0": 0.09, "pan1": -0.22, "p": 1}, "lead": false},
+      {"t": 27.72, "cue": "shot_arrow", "vars": {"flight_s": 3.69, "pan0": 0.08, "pan1": -0.33, "p": 0.96, "lvl": -6}},
+      {"t": 28.28, "cue": "hit_arrow_flesh", "vars": {"pan": -0.33, "lvl": 0, "pv": 1.02}},
+      {"t": 28.4, "cue": "hit_scorpion_wood", "vars": {"pan": -0.4, "lvl": 0, "pv": 0.97}, "lead": false},
+      {"t": 28.42, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.22, "lvl": 0, "pv": 1.02}, "lead": false},
+      {"t": 28.44, "cue": "shot_scorpion", "vars": {"flight_s": 1.22, "pan0": -0.13, "pan1": -0.44, "p": 1}, "lead": false},
+      {"t": 28.53, "cue": "hit_stone_wood", "vars": {"pan": -0.31, "lvl": 0, "pv": 0.95}, "lead": false},
+      {"t": 28.55, "cue": "shot_stone", "vars": {"flight_s": 4.73, "pan0": -0.08, "pan1": -0.51, "p": 1}, "lead": false},
+      {"t": 28.6, "cue": "shot_arrow", "vars": {"flight_s": 4.47, "pan0": 0.08, "pan1": -0.26, "p": 0.96, "lvl": 0}},
+      {"t": 28.73, "cue": "kill", "vars": {"pan": -0.24}},
+      {"t": 29.3, "cue": "hit_arrow_shield", "vars": {"pan": -0.4, "lvl": 0, "pv": 1.06}},
+      {"t": 29.45, "cue": "shot_scorpion", "vars": {"flight_s": 0.91, "pan0": 0.09, "pan1": -0.48, "p": 1}, "lead": false},
+      {"t": 29.66, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.44, "lvl": 0, "pv": 1}, "lead": false},
+      {"t": 29.72, "cue": "hit_arrow_wood", "vars": {"pan": -0.3, "lvl": 0, "pv": 1}},
+      {"t": 29.72, "cue": "shot_arrow", "vars": {"flight_s": 4.25, "pan0": 0.08, "pan1": -0.34, "p": 1.03, "lvl": -6}},
+      {"t": 30.23, "cue": "kill", "vars": {"pan": -0.5}},
+      {"t": 30.36, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.48, "lvl": 0, "pv": 0.95}, "lead": false},
       {"t": 30.4, "cue": "ram_thud"},
-      {"t": 31.5, "cue": "shot_arrow_rack", "vars": {"flight_s": 1.1, "p": 1.015}},
-      {"t": 33.0, "cue": "shot_arrow_rack", "vars": {"flight_s": 1.25, "p": 0.985}},
-      {"t": 34.5, "cue": "shot_arrow_rack", "vars": {"flight_s": 1.1, "p": 1.03}},
-      {"t": 31.0, "cue": "reach"},
-      {"t": 32.0, "cue": "ram_thud"},
+      {"t": 30.46, "cue": "hit_arrow_wood", "vars": {"pan": -0.26, "lvl": 0, "pv": 0.95}},
+      {"t": 30.55, "cue": "shot_scorpion", "vars": {"flight_s": 1.21, "pan0": 0.15, "pan1": -0.43, "p": 1}, "lead": false},
+      {"t": 30.75, "cue": "shot_arrow", "vars": {"flight_s": 4.77, "pan0": 0.08, "pan1": -0.44, "p": 0.97, "lvl": 0}},
+      {"t": 31, "cue": "reach"},
+      {"t": 31.41, "cue": "hit_arrow_wood", "vars": {"pan": -0.33, "lvl": 0, "pv": 1.06}},
+      {"t": 31.6, "cue": "hit_arrow_flesh", "vars": {"pan": -0.4, "lvl": 0, "pv": 1.04}},
+      {"t": 31.73, "cue": "shot_scorpion", "vars": {"flight_s": 1.08, "pan0": -0.17, "pan1": -0.23, "p": 1}, "lead": false},
+      {"t": 31.76, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.43, "lvl": 0, "pv": 1.06}, "lead": false},
+      {"t": 31.79, "cue": "shot_arrow", "vars": {"flight_s": 3.75, "pan0": 0.08, "pan1": -0.62, "p": 0.99, "lvl": -6}},
+      {"t": 32, "cue": "ram_thud"},
+      {"t": 32.06, "cue": "kill", "vars": {"pan": -0.4}},
+      {"t": 32.72, "cue": "shot_arrow", "vars": {"flight_s": 4.44, "pan0": 0.08, "pan1": -0.56, "p": 0.96, "lvl": 0}},
+      {"t": 32.81, "cue": "hit_scorpion_wood", "vars": {"pan": -0.23, "lvl": 0, "pv": 0.97}, "lead": false},
+      {"t": 32.83, "cue": "shot_scorpion", "vars": {"flight_s": 0.92, "pan0": 0.14, "pan1": -0.21, "p": 1}, "lead": false},
+      {"t": 33.07, "cue": "hit_arrow_wood", "vars": {"pan": -0.26, "lvl": 0, "pv": 0.97}},
       {"t": 33.2, "cue": "ram_thud"},
+      {"t": 33.28, "cue": "hit_stone_flesh", "vars": {"pan": -0.51, "lvl": 0, "pv": 1.06}, "lead": false},
+      {"t": 33.3, "cue": "hit_bolt_shield", "vars": {"pan": -0.4, "lvl": 0, "pv": 0.97}, "lead": false},
       {"t": 33.3, "cue": "gate_hit", "vars": {"dmg_db": 4.7}},
+      {"t": 33.6, "cue": "shot_scorpion", "vars": {"flight_s": 1, "pan0": -0.18, "pan1": -0.53, "p": 1}, "lead": false},
+      {"t": 33.6, "cue": "kill", "vars": {"pan": -0.51}},
+      {"t": 33.75, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.21, "lvl": 0, "pv": 1.04}, "lead": false},
+      {"t": 33.83, "cue": "shot_arrow", "vars": {"flight_s": 4.18, "pan0": 0.08, "pan1": -0.47, "p": 0.99, "lvl": -6}},
+      {"t": 33.97, "cue": "hit_arrow_flesh", "vars": {"pan": -0.34, "lvl": 0, "pv": 1.04}},
+      {"t": 34.24, "cue": "shot_stone", "vars": {"flight_s": 4.97, "pan0": -0.08, "pan1": -0.47, "p": 1}, "lead": false},
       {"t": 34.4, "cue": "ram_thud"},
       {"t": 34.5, "cue": "gate_hit", "vars": {"dmg_db": 4.7}},
-      {"t": 26.8, "cue": "shot_stone", "vars": {"flight_s": 1.8}},
-      {"t": 36.0, "cue": "tar_hiss"},
-      {"t": 37.5, "cue": "kill"},
-      {"t": 39.0, "cue": "buy"},
-      {"t": 41.0, "cue": "rush"},
-      {"t": 43.0, "cue": "overdrive_on"},
-      {"t": 45.0, "cue": "shot_bolt"},
-      {"t": 46.0, "cue": "shot_arrow", "vars": {"flight_s": 1.2, "p0": 0.96, "p1": 1.06, "p2": 1.0}},
+      {"t": 34.6, "cue": "hit_scorpion_wood", "vars": {"pan": -0.53, "lvl": 0, "pv": 0.94}, "lead": false},
+      {"t": 34.76, "cue": "shot_scorpion", "vars": {"flight_s": 1.08, "pan0": -0.13, "pan1": -0.56, "p": 1}, "lead": false},
+      {"t": 34.94, "cue": "shot_arrow", "vars": {"flight_s": 3.39, "pan0": 0.08, "pan1": -0.28, "p": 0.96, "lvl": 0}},
+      {"t": 35.2, "cue": "kill", "vars": {"pan": -0.57}},
+      {"t": 35.3, "cue": "hit_scorpion_shield", "vars": {"pan": -0.4, "lvl": 0, "pv": 1.04}, "lead": false},
+      {"t": 35.52, "cue": "hit_arrow_wood", "vars": {"pan": -0.44, "lvl": 0, "pv": 0.94}},
+      {"t": 35.53, "cue": "shot_scorpion", "vars": {"flight_s": 0.97, "pan0": 0.07, "pan1": -0.36, "p": 1}, "lead": false},
+      {"t": 35.54, "cue": "hit_arrow_wood", "vars": {"pan": -0.62, "lvl": 0, "pv": 1.02}},
+      {"t": 35.84, "cue": "hit_scorpion_wood", "vars": {"pan": -0.56, "lvl": 0, "pv": 1.02}, "lead": false},
+      {"t": 35.86, "cue": "shot_arrow", "vars": {"flight_s": 4.67, "pan0": 0.08, "pan1": -0.54, "p": 0.96, "lvl": -6}},
+      {"t": 36, "cue": "tar_hiss"},
+      {"t": 36.5, "cue": "shot_scorpion", "vars": {"flight_s": 1.28, "pan0": 0.14, "pan1": -0.52, "p": 1}, "lead": false},
+      {"t": 36.83, "cue": "kill", "vars": {"pan": -0.21}},
+      {"t": 36.93, "cue": "shot_arrow", "vars": {"flight_s": 4.75, "pan0": 0.08, "pan1": -0.37, "p": 0.99, "lvl": 0}},
+      {"t": 37.16, "cue": "hit_arrow_dirt", "vars": {"pan": -0.56, "lvl": 0}},
+      {"t": 37.3, "cue": "hit_stone_shield", "vars": {"pan": -0.4, "lvl": 0, "pv": 0.94}, "lead": false},
+      {"t": 37.51, "cue": "shot_scorpion", "vars": {"flight_s": 0.92, "pan0": 0.02, "pan1": -0.25, "p": 1}, "lead": false},
+      {"t": 37.78, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.52, "lvl": 0, "pv": 0.95}, "lead": false},
+      {"t": 37.97, "cue": "shot_arrow", "vars": {"flight_s": 4.39, "pan0": 0.08, "pan1": -0.58, "p": 1.01, "lvl": -6}},
+      {"t": 38, "cue": "shot_bolt", "vars": {"flight_s": 1.3, "pan0": -0.3, "pan1": -0.6, "p": 1}, "lead": false},
+      {"t": 38.01, "cue": "hit_arrow_dirt", "vars": {"pan": -0.47, "lvl": 0}},
+      {"t": 38.3, "cue": "shot_scorpion", "vars": {"flight_s": 1.31, "pan0": -0.1, "pan1": -0.34, "p": 1}, "lead": false},
+      {"t": 38.3, "cue": "kill_engine", "vars": {"pan": -0.3}},
+      {"t": 38.33, "cue": "hit_arrow_shield", "vars": {"pan": -0.28, "lvl": 0, "pv": 1}},
+      {"t": 38.82, "cue": "kill", "vars": {"pan": -0.34}},
+      {"t": 39, "cue": "buy"},
+      {"t": 39.1, "cue": "shot_arrow", "vars": {"flight_s": 4.48, "pan0": 0.08, "pan1": -0.54, "p": 0.99, "lvl": 0}},
+      {"t": 39.16, "cue": "shot_scorpion", "vars": {"flight_s": 1.2, "pan0": 0.05, "pan1": -0.34, "p": 1}, "lead": false},
+      {"t": 39.21, "cue": "hit_stone_flesh", "vars": {"pan": -0.47, "lvl": 0, "pv": 0.97}, "lead": false},
+      {"t": 39.61, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.34, "lvl": 0, "pv": 0.97}, "lead": false},
+      {"t": 39.7, "cue": "hit_arrow_wood", "vars": {"pan": -0.4, "lvl": 0, "pv": 1.02}},
+      {"t": 39.84, "cue": "shot_stone", "vars": {"flight_s": 4.64, "pan0": -0.08, "pan1": -0.34, "p": 1}, "lead": false},
+      {"t": 40.04, "cue": "shot_scorpion", "vars": {"flight_s": 1.09, "pan0": 0.05, "pan1": -0.63, "p": 1}, "lead": false},
+      {"t": 40.21, "cue": "shot_arrow", "vars": {"flight_s": 4.79, "pan0": 0.08, "pan1": -0.26, "p": 0.97, "lvl": -6}},
+      {"t": 40.36, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.34, "lvl": 0, "pv": 1.04}, "lead": false},
+      {"t": 40.39, "cue": "kill", "vars": {"pan": -0.28}},
+      {"t": 40.53, "cue": "hit_arrow_flesh", "vars": {"pan": -0.54, "lvl": 0, "pv": 0.95}},
+      {"t": 40.92, "cue": "shot_scorpion", "vars": {"flight_s": 1.13, "pan0": 0.1, "pan1": -0.59, "p": 1}, "lead": false},
+      {"t": 41, "cue": "rush"},
+      {"t": 41.13, "cue": "hit_scorpion_dirt", "vars": {"pan": -0.63, "lvl": 0, "pv": 0.94}, "lead": false},
+      {"t": 41.16, "cue": "shot_arrow", "vars": {"flight_s": 3.94, "pan0": 0.08, "pan1": -0.64, "p": 1.03, "lvl": 0}},
+      {"t": 41.68, "cue": "hit_arrow_flesh", "vars": {"pan": -0.37, "lvl": 0, "pv": 1.06}},
+      {"t": 42.04, "cue": "shot_scorpion", "vars": {"flight_s": 1.26, "pan0": -0.05, "pan1": -0.55, "p": 1}, "lead": false},
+      {"t": 42.05, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.59, "lvl": 0, "pv": 1.02}, "lead": false},
+      {"t": 42.15, "cue": "kill", "vars": {"pan": -0.42}},
+      {"t": 42.24, "cue": "shot_arrow", "vars": {"flight_s": 4.29, "pan0": 0.08, "pan1": -0.44, "p": 1, "lvl": -6}},
+      {"t": 42.36, "cue": "hit_arrow_wood", "vars": {"pan": -0.58, "lvl": 0, "pv": 0.97}},
+      {"t": 43, "cue": "overdrive_on"},
+      {"t": 43.13, "cue": "shot_scorpion", "vars": {"flight_s": 1.39, "pan0": -0.1, "pan1": -0.4, "p": 1}, "lead": false},
+      {"t": 43.3, "cue": "shot_arrow", "vars": {"flight_s": 3.69, "pan0": 0.08, "pan1": -0.17, "p": 1.03, "lvl": 0}},
+      {"t": 43.3, "cue": "hit_scorpion_wood", "vars": {"pan": -0.55, "lvl": 0, "pv": 1}, "lead": false},
+      {"t": 43.4, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.4, "lvl": 0, "pv": 0.94}, "lead": false},
+      {"t": 43.58, "cue": "hit_arrow_dirt", "vars": {"pan": -0.54, "lvl": -0.79}},
+      {"t": 43.68, "cue": "kill", "vars": {"pan": -0.58}},
+      {"t": 43.94, "cue": "shot_scorpion", "vars": {"flight_s": 1.05, "pan0": -0.18, "pan1": -0.37, "p": 1}, "lead": false},
+      {"t": 44.42, "cue": "shot_arrow", "vars": {"flight_s": 4.16, "pan0": 0.08, "pan1": -0.62, "p": 1.03, "lvl": -6}},
+      {"t": 44.48, "cue": "hit_stone_flesh", "vars": {"pan": -0.34, "lvl": 0, "pv": 1.04}, "lead": false},
+      {"t": 44.52, "cue": "hit_scorpion_dirt", "vars": {"pan": -0.4, "lvl": 0, "pv": 0.95}, "lead": false},
+      {"t": 44.85, "cue": "shot_scorpion", "vars": {"flight_s": 1.4, "pan0": -0.04, "pan1": -0.52, "p": 1}, "lead": false},
+      {"t": 45, "cue": "hit_arrow_dirt", "vars": {"pan": -0.26, "lvl": -0.79}},
+      {"t": 45.1, "cue": "hit_arrow_wood", "vars": {"pan": -0.64, "lvl": 0, "pv": 1.04}},
+      {"t": 45.1, "cue": "hooves", "vars": {"count_db": 2}},
+      {"t": 45.39, "cue": "shot_stone", "vars": {"flight_s": 5.04, "pan0": -0.08, "pan1": -0.22, "p": 1}, "lead": false},
+      {"t": 45.5, "cue": "shot_arrow", "vars": {"flight_s": 4.22, "pan0": 0.08, "pan1": -0.27, "p": 0.99, "lvl": 0}},
+      {"t": 45.5, "cue": "hooves", "vars": {"count_db": 2}},
+      {"t": 45.67, "cue": "kill", "vars": {"pan": -0.5}},
+      {"t": 45.9, "cue": "hooves", "vars": {"count_db": 2}},
+      {"t": 46.01, "cue": "shot_scorpion", "vars": {"flight_s": 0.92, "pan0": 0.04, "pan1": -0.33, "p": 1}, "lead": false},
+      {"t": 46.2, "cue": "hit_stone_flesh", "vars": {"pan": -0.4, "lvl": 0, "pv": 1.02}, "lead": false},
+      {"t": 46.25, "cue": "hit_scorpion_wood", "vars": {"pan": -0.52, "lvl": 0, "pv": 0.97}, "lead": false},
+      {"t": 46.39, "cue": "shot_arrow", "vars": {"flight_s": 3.26, "pan0": 0.08, "pan1": -0.53, "p": 0.99, "lvl": -6}},
+      {"t": 46.53, "cue": "hit_arrow_dirt", "vars": {"pan": -0.44, "lvl": -0.79}},
+      {"t": 46.9, "cue": "shot_scorpion", "vars": {"flight_s": 0.94, "pan0": -0.11, "pan1": -0.25, "p": 1}, "lead": false},
+      {"t": 46.99, "cue": "hit_arrow_flesh", "vars": {"pan": -0.17, "lvl": 0, "pv": 0.94}},
+      {"t": 47.32, "cue": "shot_arrow", "vars": {"flight_s": 4.56, "pan0": 0.08, "pan1": -0.38, "p": 0.97, "lvl": 0}},
+      {"t": 47.45, "cue": "kill", "vars": {"pan": -0.68}},
+      {"t": 47.8, "cue": "hit_bolt_dirt", "vars": {"pan": -0.4, "lvl": 0, "pv": 1}, "lead": false},
+      {"t": 47.84, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.25, "lvl": 0, "pv": 0.94}, "lead": false},
+      {"t": 48.02, "cue": "shot_scorpion", "vars": {"flight_s": 0.94, "pan0": 0.04, "pan1": -0.56, "p": 1}, "lead": false},
+      {"t": 48.27, "cue": "shot_arrow", "vars": {"flight_s": 3.21, "pan0": 0.08, "pan1": -0.5, "p": 1.03, "lvl": -6}},
       {"t": 48.5, "cue": "dock"},
+      {"t": 48.58, "cue": "hit_arrow_dirt", "vars": {"pan": -0.62, "lvl": 0}},
+      {"t": 48.96, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.56, "lvl": 0, "pv": 1.02}, "lead": false},
+      {"t": 49.01, "cue": "kill", "vars": {"pan": -0.22}},
+      {"t": 49.19, "cue": "shot_scorpion", "vars": {"flight_s": 1.4, "pan0": 0.14, "pan1": -0.45, "p": 1}, "lead": false},
+      {"t": 49.2, "cue": "hit_bolt_wood", "vars": {"pan": -0.4, "lvl": 0, "pv": 0.95}, "lead": false},
+      {"t": 49.27, "cue": "shot_arrow", "vars": {"flight_s": 3.9, "pan0": 0.08, "pan1": -0.31, "p": 0.96, "lvl": 0}},
+      {"t": 49.62, "cue": "shot_stone", "vars": {"flight_s": 4.4, "pan0": -0.08, "pan1": -0.46, "p": 1}, "lead": false},
+      {"t": 49.65, "cue": "hit_arrow_flesh", "vars": {"pan": -0.53, "lvl": 0, "pv": 1}},
+      {"t": 49.72, "cue": "hit_arrow_wood", "vars": {"pan": -0.27, "lvl": 0, "pv": 1.02}},
+      {"t": 49.98, "cue": "shot_scorpion", "vars": {"flight_s": 1.08, "pan0": 0.1, "pan1": -0.23, "p": 1}, "lead": false},
+      {"t": 50, "cue": "hit_bolt_flesh", "vars": {"pan": -0.4, "lvl": 0, "pv": 1.06}, "lead": false},
+      {"t": 50.22, "cue": "shot_arrow", "vars": {"flight_s": 3.67, "pan0": 0.08, "pan1": -0.49, "p": 1.01, "lvl": -6}},
+      {"t": 50.43, "cue": "hit_stone_flesh", "vars": {"pan": -0.22, "lvl": 0, "pv": 0.94}, "lead": false},
       {"t": 50.5, "cue": "breach"},
+      {"t": 50.59, "cue": "hit_scorpion_wood", "vars": {"pan": -0.45, "lvl": 0, "pv": 1}, "lead": false},
+      {"t": 50.69, "cue": "kill", "vars": {"pan": -0.43}},
+      {"t": 50.88, "cue": "shot_scorpion", "vars": {"flight_s": 0.97, "pan0": 0.08, "pan1": -0.52, "p": 1}, "lead": false},
+      {"t": 51.31, "cue": "shot_arrow", "vars": {"flight_s": 3.73, "pan0": 0.08, "pan1": -0.31, "p": 1.01, "lvl": 0}},
+      {"t": 51.48, "cue": "hit_arrow_dirt", "vars": {"pan": -0.5, "lvl": -0.38}},
+      {"t": 51.85, "cue": "hit_scorpion_flesh", "vars": {"pan": -0.52, "lvl": 0, "pv": 1.06}, "lead": false},
+      {"t": 51.88, "cue": "hit_arrow_flesh", "vars": {"pan": -0.38, "lvl": 0, "pv": 0.95}},
+      {"t": 51.89, "cue": "shot_scorpion", "vars": {"flight_s": 1.25, "pan0": 0.04, "pan1": -0.39, "p": 1}, "lead": false},
+      {"t": 52, "cue": "shot_bolt", "vars": {"flight_s": 1.3, "pan0": -0.3, "pan1": -0.6, "p": 1}, "lead": false},
+      {"t": 52.21, "cue": "shot_arrow", "vars": {"flight_s": 4.02, "pan0": 0.08, "pan1": -0.38, "p": 0.99, "lvl": -6}},
+      {"t": 52.38, "cue": "kill", "vars": {"pan": -0.44}},
+      {"t": 53.08, "cue": "shot_scorpion", "vars": {"flight_s": 1.24, "pan0": -0.09, "pan1": -0.64, "p": 1}, "lead": false},
+      {"t": 53.12, "cue": "shot_arrow", "vars": {"flight_s": 4.12, "pan0": 0.08, "pan1": -0.44, "p": 1.01, "lvl": 0}},
+      {"t": 53.14, "cue": "hit_scorpion_wood", "vars": {"pan": -0.39, "lvl": 0, "pv": 0.97}, "lead": false},
+      {"t": 53.17, "cue": "hit_arrow_dirt", "vars": {"pan": -0.31, "lvl": -0.79}},
+      {"t": 53.89, "cue": "hit_arrow_dirt", "vars": {"pan": -0.49, "lvl": -0.79}},
+      {"t": 53.93, "cue": "kill", "vars": {"pan": -0.45}},
+      {"t": 54.02, "cue": "hit_stone_dirt", "vars": {"pan": -0.46, "lvl": 0, "pv": 1.02}, "lead": false},
+      {"t": 54.07, "cue": "shot_scorpion", "vars": {"flight_s": 1.04, "pan0": -0.04, "pan1": -0.56, "p": 1}, "lead": false},
+      {"t": 54.18, "cue": "shot_arrow", "vars": {"flight_s": 4.37, "pan0": 0.08, "pan1": -0.46, "p": 1, "lvl": -6}},
+      {"t": 54.32, "cue": "hit_scorpion_wood", "vars": {"pan": -0.64, "lvl": 0, "pv": 1.04}, "lead": false},
       {"t": 54.5, "cue": "gate_restored"},
-      {"t": 57.5, "cue": "wave_end"}
+      {"t": 54.83, "cue": "shot_scorpion", "vars": {"flight_s": 0.96, "pan0": -0.01, "pan1": -0.5, "p": 1}, "lead": false},
+      {"t": 55.04, "cue": "hit_arrow_wood", "vars": {"pan": -0.31, "lvl": 0, "pv": 1.06}},
+      {"t": 55.11, "cue": "hit_scorpion_wood", "vars": {"pan": -0.56, "lvl": 0, "pv": 0.94}, "lead": false},
+      {"t": 55.13, "cue": "shot_stone", "vars": {"flight_s": 4.86, "pan0": -0.08, "pan1": -0.17, "p": 1}, "lead": false},
+      {"t": 55.18, "cue": "shot_arrow", "vars": {"flight_s": 4.1, "pan0": 0.08, "pan1": -0.51, "p": 1.01, "lvl": 0}},
+      {"t": 55.87, "cue": "kill", "vars": {"pan": -0.3}},
+      {"t": 55.9, "cue": "shot_scorpion", "vars": {"flight_s": 1.38, "pan0": -0.19, "pan1": -0.33, "p": 1}, "lead": false},
+      {"t": 56.09, "cue": "shot_arrow", "vars": {"flight_s": 4.73, "pan0": 0.08, "pan1": -0.38, "p": 1, "lvl": -6}},
+      {"t": 56.23, "cue": "hit_arrow_dirt", "vars": {"pan": -0.38, "lvl": 0}},
+      {"t": 56.97, "cue": "shot_scorpion", "vars": {"flight_s": 1.29, "pan0": 0.17, "pan1": -0.31, "p": 1}, "lead": false},
+      {"t": 57.06, "cue": "shot_arrow", "vars": {"flight_s": 3.64, "pan0": 0.08, "pan1": -0.26, "p": 0.96, "lvl": 0}},
+      {"t": 57.24, "cue": "hit_arrow_dirt", "vars": {"pan": -0.44, "lvl": -0.38}},
+      {"t": 57.28, "cue": "hit_scorpion_wood", "vars": {"pan": -0.33, "lvl": 0, "pv": 1}, "lead": false},
+      {"t": 57.5, "cue": "wave_end"},
+      {"t": 57.68, "cue": "kill", "vars": {"pan": -0.66}},
+      {"t": 57.76, "cue": "shot_scorpion", "vars": {"flight_s": 1.27, "pan0": 0.12, "pan1": -0.58, "p": 1}, "lead": false},
+      {"t": 57.97, "cue": "shot_arrow", "vars": {"flight_s": 4.4, "pan0": 0.08, "pan1": -0.45, "p": 1, "lvl": -6}},
+      {"t": 58.26, "cue": "hit_scorpion_wood", "vars": {"pan": -0.31, "lvl": 0, "pv": 0.95}, "lead": false},
+      {"t": 58.55, "cue": "hit_arrow_flesh", "vars": {"pan": -0.46, "lvl": 0, "pv": 0.97}},
+      {"t": 58.57, "cue": "shot_scorpion", "vars": {"flight_s": 0.98, "pan0": -0.1, "pan1": -0.51, "p": 1}, "lead": false},
+      {"t": 59.03, "cue": "hit_scorpion_wood", "vars": {"pan": -0.58, "lvl": 0, "pv": 1.06}, "lead": false},
+      {"t": 59.05, "cue": "shot_arrow", "vars": {"flight_s": 3.91, "pan0": 0.08, "pan1": -0.21, "p": 1.01, "lvl": 0}},
+      {"t": 59.28, "cue": "hit_arrow_dirt", "vars": {"pan": -0.51, "lvl": -0.79}},
+      {"t": 59.49, "cue": "kill", "vars": {"pan": -0.25}},
+      {"t": 59.99, "cue": "hit_stone_flesh", "vars": {"pan": -0.17, "lvl": 0, "pv": 1}, "lead": false},
+      {"t": 60.7, "cue": "hit_arrow_wood", "vars": {"pan": -0.26, "lvl": 0, "pv": 0.94}},
+      {"t": 60.82, "cue": "hit_arrow_flesh", "vars": {"pan": -0.38, "lvl": 0, "pv": 1.04}},
+      {"t": 62.37, "cue": "hit_arrow_flesh", "vars": {"pan": -0.45, "lvl": 0, "pv": 1.02}},
+      {"t": 62.96, "cue": "hit_arrow_dirt", "vars": {"pan": -0.21, "lvl": -0.79}}
     ],
     "loops": [
       {"id": "junction_clatter", "t0": 1, "t1": 60, "params": {"team_w": 800}},
@@ -630,6 +971,18 @@
       {"id": "tar_pour", "t0": 32, "t1": 40, "params": {}},
       {"id": "tower_creak", "t0": 42, "t1": 48.5, "params": {}}
     ],
-    "checks": {"a6": {"param": "p_eff", "from": 150, "to": 262}, "a14": {"cue": "shot_bolt"}}
+    "checks": {"a6": {"param": "p_eff", "from": 150, "to": 262}, "a14": {"cue": "shot_bolt"}, "a17": true, "ear_band": {"limit": -12},
+      "projectiles": {
+        "own_flight": {"cue": "shot_arrow", "band": [1000, 2400]},
+        "shots": ["shot_bolt", "shot_stone", "shot_arrow", "shot_scorpion"],
+        "surfaces": {
+          "dirt": ["hit_arrow_dirt", "hit_bolt_dirt", "hit_scorpion_dirt", "hit_stone_dirt"],
+          "flesh": ["hit_arrow_flesh", "hit_bolt_flesh", "hit_scorpion_flesh", "hit_stone_flesh"],
+          "wood": ["hit_arrow_wood", "hit_bolt_wood", "hit_scorpion_wood", "hit_stone_wood"],
+          "shield": ["hit_arrow_shield", "hit_bolt_shield", "hit_scorpion_shield", "hit_stone_shield"],
+          "water": ["hit_arrow_water", "hit_bolt_water", "hit_scorpion_water", "hit_stone_water"]
+        }
+      }
+    }
   }
 }
