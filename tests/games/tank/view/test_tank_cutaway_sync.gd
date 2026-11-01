@@ -159,11 +159,103 @@ func test_moving_a_stroke_without_the_picture_would_fail() -> void:
 	assert_eq(_worst(_tops(0.0), dropped), 1.0)
 
 
-func test_the_cards_own_tops_stay_where_the_lead_says() -> void:
-	# The card's firing tops, with no lead, are 40 crank degrees after the strokes. The lead is that gap, not a guess.
-	var card_top := 240.0 / (float(TankMechDiesel.RATIO["diesel"]) * 360.0)
-	var lead := _lead_revs()
-	assert_almost_eq(card_top - lead, _ats(FIRES)[0], AT_EPS)
+func test_the_lead_is_the_gap_from_the_flapper_to_a_top() -> void:
+	# The strokes sit on the flapper. Without the lead D_THROW and D_CYCLE top out 40 crank degrees after them.
+	var unled_top := 240.0 / (float(TankMechDiesel.RATIO["diesel"]) * 360.0)
+	assert_almost_eq(unled_top - _lead_revs(), _ats(FIRES)[0], AT_EPS)
+
+
+## How much the card's picture changes over bore k's cylinder, from one phase to another.
+func _bore_change(ph_a: float, ph_b: float, k: int) -> float:
+	var a := Image.create_empty(TankMech.W, TankMech.H, false, Image.FORMAT_RGBA8)
+	var b := Image.create_empty(TankMech.W, TankMech.H, false, Image.FORMAT_RGBA8)
+	TankMech.paint(a, "diesel", ph_a, 1.0, 1.0, Color.WHITE)
+	TankMech.paint(b, "diesel", ph_b, 1.0, 1.0, Color.WHITE)
+	var cx: int = TankMechDiesel.D_CX[k]
+	var out := 0.0
+	for y in range(16, 24):
+		for x in range(cx - 4, cx + 4):
+			var d := b.get_pixel(x, y) - a.get_pixel(x, y)
+			out += absf(d.r) + absf(d.g) + absf(d.b)
+	return out
+
+
+func test_the_cards_pistons_and_glow_land_on_the_same_strokes() -> void:
+	var source := FileAccess.get_file_as_string("res://src/games/tank/view/tank_mech_diesel.gd")
+	assert_true(source.contains("var crank := stroke_crank_deg(ph)"), "one crank with the cutaway")
+	assert_false(source.contains("e * 360.0 + D_CYCLE"), "no cycle of its own")
+	assert_false(source.contains("th + deg_to_rad(D_THROW"), "no throw of its own")
+	var seen := {}
+	for at: float in _ats(FIRES):
+		var lit := TankMechDiesel.lit_bores(at + 0.0005)
+		assert_eq(
+			TankMechDiesel.lit_bores(at - 0.002), 0, "dark just ahead of the stroke at %f" % at
+		)
+		var bore := -1
+		for k in TankMechDiesel.D_THROW.size():
+			if lit & (1 << k) != 0:
+				bore = k
+		assert_gte(bore, 0, "a bore lights on the stroke at %f" % at)
+		seen[bore] = true
+		for k in TankMechDiesel.D_THROW.size():
+			var change := _bore_change(at - 0.002, at + 0.0005, k)
+			if k == bore:
+				assert_gt(change, 4.0, "the card's bore %d glows on the stroke at %f" % [k, at])
+			else:
+				assert_lt(
+					change, 2.0, "the card's bore %d stays dark on the stroke at %f" % [k, at]
+				)
+	assert_eq(seen.size(), 3, "three strokes, three bores")
+	for at: float in _ats(["diesel_valve_in"] as Array[String]):
+		assert_eq(TankMechDiesel.lit_bores(at + 0.0005), 0, "no glow at the overlap top at %f" % at)
+
+
+## A view and a seat row on one game, the row reading the view's cranks as in a ride.
+func _row_on_a_view() -> Array:
+	var s := U.fixture("state", 3)
+	var v := U.view_of(self, s)
+	U.run(v, 3)
+	v.game.view = v
+	var row := TankHudSeats.new().setup(v.game, TankHud.LAYOUT["seats"]) as TankHudSeats
+	add_child_autofree(row)
+	row.refresh()
+	return [v, row]
+
+
+func test_the_card_reads_the_crank_the_sound_reads() -> void:
+	var pair := _row_on_a_view()
+	var v: TankView = pair[0]
+	var row: TankHudSeats = pair[1]
+	v.phases["drive"] = 12.34
+	assert_eq(row.phase_of(TankIds.ENGINE_DIESEL), 12.34)
+	assert_eq(
+		float(v.audio_feed(v.game.state)["drive"]["revs"]), 12.34, "the same number the audio has"
+	)
+
+
+func test_the_card_paints_a_firing_at_once_and_not_otherwise() -> void:
+	var pair := _row_on_a_view()
+	var v: TankView = pair[0]
+	var row: TankHudSeats = pair[1]
+	var at: float = _ats(FIRES)[0]
+	v.phases["drive"] = at - 0.01
+	row.refresh()
+	row.tick(0.0)
+	var before: PackedByteArray = (row._img[TankIds.ENGINE_DIESEL] as Image).get_data()
+	v.phases["drive"] = at - 0.002
+	row.tick(0.0)
+	assert_eq(
+		(row._img[TankIds.ENGINE_DIESEL] as Image).get_data(),
+		before,
+		"between firings it waits for the refresh"
+	)
+	v.phases["drive"] = at + 0.0005
+	row.tick(0.0)
+	assert_ne(
+		(row._img[TankIds.ENGINE_DIESEL] as Image).get_data(),
+		before,
+		"a firing paints in the same frame"
+	)
 
 
 func _lead_revs() -> float:

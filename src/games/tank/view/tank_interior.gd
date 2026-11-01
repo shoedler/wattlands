@@ -297,14 +297,7 @@ func _paint_unit(u: String, inp: Dictionary) -> void:
 ## The bores of the Drive room that have just fired, one bit each; none on a stopped machine.
 static func _drive_lit_now(inp: Dictionary) -> int:
 	var st: Dictionary = inp.get("drive", {})
-	if not _on(st):
-		return 0
-	var crank := TankMechDiesel.stroke_crank_deg(float(st.get("revs", 0.0)))
-	var out := 0
-	for k in TankMechDiesel.D_THROW.size():
-		if TankMechDiesel.bore_lit(crank, k):
-			out |= 1 << k
-	return out
+	return TankMechDiesel.lit_bores(float(st.get("revs", 0.0))) if _on(st) else 0
 
 
 static func _ang(st: Dictionary) -> float:
