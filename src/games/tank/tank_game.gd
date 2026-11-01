@@ -54,6 +54,8 @@ var _rescue: Dictionary = {}
 var _afk: Dictionary = {}
 var _group_phase: int = -1
 var _finished: bool = false
+## The view make_view built, or null: the HUD's machine cards read its cranks.
+var view: TankView = null
 
 
 func configure(p_ctx: GameContext) -> void:
@@ -319,7 +321,7 @@ func int_fields() -> Dictionary:
 
 
 func make_view() -> Node:
-	var view := TankView.new()
+	view = TankView.new()
 	view.game = self
 	return view
 

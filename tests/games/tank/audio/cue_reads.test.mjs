@@ -93,13 +93,24 @@ test('a near engine is higher than the machines: more above 1 kHz than a far boo
 });
 
 // Far stays far: the shell's flight comes close only at its end, and the shot itself is a low thump.
-test('a far shell is faint in the air and close only as it lands', () => {
-  const m = cue('incoming_whistle', { rate: 1 });
-  const early = readOf(bank, hardRide('diesel', m), one('incoming_whistle'), 1, 2);
-  const late = readOf(bank, hardRide('diesel', m), one('incoming_whistle'), 3, 3.5);
-  assert.ok(late.fg_db - early.fg_db >= 12, `early ${early.fg_db.toFixed(1)}, late ${late.fg_db.toFixed(1)} dB`);
-  assert.ok(early.db <= 6, `the first second is no near whistle: ${early.db.toFixed(1)} dB`);
-  assert.ok(late.db >= 10, `the last half second cuts through: ${late.db.toFixed(1)} dB`);
+for (const power of [1.1, 0.9]) {
+  test(`a far shell is faint in the air and close only as it lands, at power ${power}`, () => {
+    const m = { ...cue('incoming_whistle', { rate: 1 }), power };
+    const early = readOf(bank, hardRide('diesel', m), one('incoming_whistle'), 1, 2);
+    const late = readOf(bank, hardRide('diesel', m), one('incoming_whistle'), 3, 3.5);
+    assert.ok(late.fg_db - early.fg_db >= 12, `early ${early.fg_db.toFixed(1)}, late ${late.fg_db.toFixed(1)} dB`);
+    assert.ok(early.db <= 6, `the first second is no near whistle: ${early.db.toFixed(1)} dB`);
+    assert.ok(late.db >= 10, `the last half second cuts through: ${late.db.toFixed(1)} dB`);
+  });
+}
+
+test("the whistle's opening came down, and its warning, the last half second, did not", () => {
+  for (const layer of doc.sounds.incoming_whistle.layers) {
+    const tail = layer.env.points.filter(([t]) => t >= 2.0);
+    assert.deepEqual(tail, [[2.0, 0.5125], [2.3, 1], [2.47, 1], [2.5, 0]]);
+    const at = Object.fromEntries(layer.env.points);
+    assert.ok(at[1.9] <= 0.35 * 0.84, `at 1.9 s ${at[1.9]}, rc.2 0.35`);
+  }
 });
 
 test('a far shot is low', () => {
@@ -113,6 +124,7 @@ const NAMED = {
   shell_eject: ['dynamo', cue('shot_main'), one('shell_eject'), 1.3, 2.2, 0.1],
   shell_load: ['steam', cue('latch_load'), one('shell_load'), 1, 2.4],
   breech_close: ['steam', cue('latch_load'), one('breech_close'), 1.5, 2.5],
+  steam_valve: ['steam', {}, one('steam_valve'), 1, 7, 0.1],
   diesel_valve_ex: ['diesel', {}, one('diesel_valve_ex'), 1, 7, 0.1],
   diesel_valve_in: ['diesel', {}, one('diesel_valve_in'), 1, 7, 0.1],
   turbo_whistle: ['diesel', {}, one('turbo_whistle'), 2, 7, 1],
