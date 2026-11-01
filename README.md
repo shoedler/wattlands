@@ -2,7 +2,7 @@
 
 **WATTLANDS is a multiplayer fitness party game for the Wahoo KICKR CORE and KICKR CORE 2.** Your pedaling is the controller and the trainer pushes back. One app holds four games. A host shares a short room code and friends join with it; there are no accounts. Every ride is saved as a FIT file and can go to your own Strava account. Windows 10/11.
 
-> **Status:** built and tested with mock trainers only, without a real KICKR and without the real Strava API. No person has listened to the sound yet. Follow [the hardware test plan](docs/HARDWARE_TEST_PLAN.md) and each game's `HARDWARE_TEST.md` before riding hard on it.
+> **Status:** built and tested with mock trainers only, without a real KICKR and without the real Strava API. The sound has had one first listen, and the overhaul of Castellum Rotae's sound and Torque Company's Lights station that came from it has not been heard yet. Follow [the hardware test plan](docs/HARDWARE_TEST_PLAN.md) and each game's `HARDWARE_TEST.md` before riding hard on it.
 
 | Game | Riders | What it is |
 | --- | --- | --- |
@@ -21,7 +21,7 @@ Bots can fill the empty places in every game.
 4. Set your FTP in the profile, or run the FTP test in Settings. Until it is verified, every ERG target is lowered by 15%.
 5. Optional: connect a Bluetooth heart rate sensor in Settings > Trainer > Sensors. Your heart rate shows next to your power, goes into the FIT file and the results, and is never shared with other riders.
 
-Stop pedaling for 5 seconds and your ride pauses.
+Stop pedaling for 5 seconds and your ride pauses. The ride menu can also discard a ride, after a second question: nothing from it is kept, and it takes the keyboard or a controller, because pedals never confirm it.
 
 **No trainer, or a play test?** `--mock-trainer` (or Settings > Trainer > Use the mock trainer) rides a simulated rider. Add `--mock-keyboard` (or the "Keyboard controls the mock trainer" toggle) to steer it: T/G power, Y/H cadence, M , . J K L U I O set 50 to 250 % of FTP, N stops, Shift sprints ([docs/TRAINER.md](docs/TRAINER.md)).
 
@@ -85,7 +85,7 @@ One to four riders crew a pedal-powered landship through a starry forest night. 
 **Art and sound come from this repository.** No game calls an image or audio service, and there are no sample packs.
 
 - The art is baked by scripts and code in the repository. The one exception to "drawn from code" is Torque Company's landship and forest, which scripts rebuild as pixel art from a reference image made for this project and kept in the repository.
-- The sound is rendered from recipes in the repository by `tools/audio`: a diesel with three unequal cylinders, a treadwheel's pawl and creak, a chain and a freewheel, a boat's engine, a night forest. Nobody has heard it yet.
+- The sound is rendered from recipes in the repository by `tools/audio`: a diesel with three unequal cylinders, a treadwheel's timber rumble and footfalls, arrows and stones that swoosh past and land, a chain and a freewheel, a boat's engine, a night forest. Each game's `HARDWARE_TEST.md` has a Listen step, because a measurement can't say how it sounds.
 - Each rider's machine runs on that rider's cadence, in picture and sound: legs and cranks in Workout, the walkers in a treadwheel, a boat's crank, the landship's pistons and rivet hammer. Stop pedaling and the strokes stop. Wheels and tracks follow speed and distance, and a treadwheel itself turns by watts.
 - The trainer reports cadence about once a second, not crank angle. So the sound locks exactly to the crank on screen, and to your feet in rate only.
 

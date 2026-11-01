@@ -2,6 +2,29 @@
 
 Releases, newest first. Modules and games write fragments in `docs/changelog.d/<module or game id>.md`; the lead merges them here at each release and empties them.
 
+## v1.0.0-rc.2 (2026-11-01)
+
+The second release candidate, after the first person played the game. No one has heard the new sound below yet, and nothing automated has run on a real trainer.
+
+### For riders
+
+- **Discard the ride.** The ride menu has "Discard the ride" under End/Leave, in every game. After "Keep riding / Yes, discard" nothing from the ride is kept for that rider: no FIT, no Strava upload, no history entry, no results, no progress. It takes the keyboard or gamepad, because pedals never pick "Yes, discard". A client leaves. A host ends the session for everyone, and the other riders keep their results and FITs.
+- **Game picker pictures.** Castellum Rotae has a picture instead of a title card. Torque Company's is brighter and closer, and Turbo Reel's shows the current art.
+- **Castellum Rotae has no black border.** The canvas follows the window, like Turbo Reel and Torque Company, and the world goes on past the old frame.
+- **Castellum Rotae's sound is overhauled.** Every arrow, stone and bolt has a release, a swoosh that crosses the screen with it, and an impact by what it struck: flesh, wood, a shield, dirt or water. Your own station's shots sit over everyone else's, one volley at a time. The wheel is a low timber rumble with soft footfalls and one axle knock per revolution, with no creak or whine.
+- **Torque Company's Lights station no longer pierces.** It is a low generator thrum on your cadence, with a soft relay tock on each stroke. Its share of the 2-8 kHz band falls from about -4 dB to between -47 and -32 dB.
+- **The tank game is now called Torque Company.** Its id, paths and class names stay `tank`, so saved progress and rides keep working.
+
+### Fixed
+
+- A client whose host leaves right after sending the results now gets them, even when the leave arrives in the same network poll.
+
+### Shared by every game now
+
+- `GameHost.discard_own_ride()` and the ride menu's confirm, `WlNetSession.leave_when_flushed()`.
+- A sound can follow a projectile and a voice can sit left or right: `flight` and `pan_var` in the audio kit, `AudioBuses.pan_bus`.
+- `tools/audio/lib/ear_band.mjs`: the 2-8 kHz reading behind a rejected sound. Scorecard rows P1-P9 read flights and hits in the mix, A17 reads the top band at runtime pitch, and A14 reads the median of a cue's firings.
+
 ## v1.0.0-rc.1 (2026-10-31)
 
 The release candidate for v1: the build v0.9.3 prepared, with the full test suite run by hand. Nothing changes for riders since v0.9.3. No one has ridden this on a real trainer or heard the audio yet; each game's `HARDWARE_TEST.md` has the checklist and a Listen step.

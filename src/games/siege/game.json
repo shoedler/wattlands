@@ -1,6 +1,6 @@
 {"id": "siege", "title": "Castellum Rotae",
  "summary": "Co-op siege defense at a Roman wheel fort. Your watts turn a great treadwheel; couple it to a ballista, an onager, an arrow organ, the tar works or the gold mine.",
- "version": "0.4.0", "min_players": 1, "max_players": 4, "bots": true, "presentation": "2d", "pixel_base": [960, 540],
+ "version": "0.5.0", "min_players": 1, "max_players": 4, "bots": true, "presentation": "2d", "pixel_base": [960, 540],
  "pixel_flex": {"min": [852, 480]},
  "entry": "res://src/games/siege/siege_game.gd",
  "contents": ["short", "vo2", "sweetspot", "endurance", "drill"],

@@ -23,6 +23,8 @@ All of it is rendered by `tools/audio` from recipes in this repository: the plat
 
 ## Art
 
+The picker cards of Castellum Rotae, Turbo Reel and Torque Company are renders of each game's own view with no HUD (`tools/picker_cards/`).
+
 - **Castellum Rotae:** drawn by the game's own CPU rasterizer (`src/games/siege/art/*.mjs`, baked to `assets/siege/bake/`); the HUD shapes are code. No generated or downloaded art.
 - **Workout:** drawn by the game's own Node code (`src/games/workout/art/bake.mjs` and `src/games/workout/art/hud_bake.mjs`). No generated or downloaded art.
 - **Turbo Reel:** every sprite is original pixel art hand-authored as palette-indexed grids (`src/games/fishing/tools/fishing_art_grids.gd`), and the sky, water, floor, clouds, coast and waterfall are drawn in code. The style follows a reference image supplied for the project (Slynyrd, "Pixelblog 7: developing style"); nothing from it ships. `assets/fishing/art_manifest.json` records 53 fal requests of 2026-10-23, a first attempt whose output the hand-authored grids replaced the next day; none of it ships.

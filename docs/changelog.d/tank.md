@@ -1,1 +1,0 @@
-- The game is now called Torque Company. Its id, paths and class names stay `tank`, so saved progress and rides keep working.
