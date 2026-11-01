@@ -375,26 +375,19 @@ func test_your_own_stations_shots_are_over_the_others_and_a_scorpion_is_nobodys(
 
 
 func test_a_landing_keeps_the_side_of_the_shot_it_came_from() -> void:
-	var st := SiegeKit.state("short", 1, 0)
-	_rider_on(st, SiegeIds.STATION_BALLISTA)
-	var v := _view(st)
-	var ev := _shot(SiegeIds.SHOT_ARROW)
-	ev["src"] = SiegeIds.STATION_ARROWS
-	ev["tk"] = st.tick
-	v.audio.on_cue(SiegeIds.EV_SHOT, ev)
-	v.audio.kit.clear_played()
-	_land(v, v.audio.last_flight_s + 1.5)
-	var other := _db_of(v, "arrow_dirt")[0]
-	var st2 := SiegeKit.state("short", 1, 0)
-	_rider_on(st2, SiegeIds.STATION_ARROWS)
-	var w := _view(st2)
-	var ev2 := _shot(SiegeIds.SHOT_ARROW)
-	ev2["src"] = SiegeIds.STATION_ARROWS
-	ev2["tk"] = st2.tick
-	w.audio.on_cue(SiegeIds.EV_SHOT, ev2)
-	w.audio.kit.clear_played()
-	_land(w, w.audio.last_flight_s + 1.5)
-	assert_almost_eq(_db_of(w, "arrow_dirt")[0] - other, 4.0, 0.01)
+	var levels: Array[float] = []
+	for station: int in [SiegeIds.STATION_ARROWS, SiegeIds.STATION_ONAGER]:
+		var st := SiegeKit.state("short", 1, 0)
+		_rider_on(st, station)
+		var v := _view(st)
+		var ev := _shot(SiegeIds.SHOT_STONE)
+		ev["src"] = SiegeIds.STATION_ONAGER
+		ev["tk"] = st.tick
+		v.audio.on_cue(SiegeIds.EV_SHOT, ev)
+		v.audio.kit.clear_played()
+		_land(v, v.audio.last_flight_s + 1.5)
+		levels.append(_db_of(v, "stone_impact")[0])
+	assert_almost_eq(levels[1] - levels[0], 4.0, 0.01, "your own stone 4 dB over another's")
 
 
 func test_only_your_own_stone_ducks_your_wheel() -> void:
@@ -412,16 +405,64 @@ func test_only_your_own_stone_ducks_your_wheel() -> void:
 	AudioBuses.clear_ducks()
 
 
-func test_volleys_trim_each_other_up_to_the_cap() -> void:
+func test_every_other_volley_passes_under_and_each_still_has_its_flight() -> void:
 	var v := _solo(0.0)
-	for k in 8:
+	for k in 6:
 		v.audio.on_cue(SiegeIds.EV_SHOT, _shot(SiegeIds.SHOT_ARROW, k + 1))
 		_run(v, 0.1)
 	var levels := _db_of(v, "arrow_swarm")
-	assert_almost_eq(levels[0] - levels[1], 1.5, 0.01)
-	var cap := absf(SiegeAudio.VOLLEY_TRIM_DB) * SiegeAudio.VOLLEY_TRIM_MAX
-	assert_almost_eq(levels[0] - levels[levels.size() - 1], cap, 0.01, "and no further")
-	assert_gte(SiegeAudio.VOLLEY_TRIM_MAX, 5, "0.87 s a volley, 4 s in the air")
+	assert_eq(levels.size(), 6, "one flight per volley, the quiet ones too")
+	for k in 6:
+		var under := SiegeAudio.VOLLEY_UNDER_DB if k % 2 == 1 else 0.0
+		assert_almost_eq(levels[k] - levels[0], under, 0.01, "volley %d" % k)
+
+
+func test_another_riders_misses_are_dropped_and_your_own_kept() -> void:
+	for row: Array in [[SiegeIds.STATION_ARROWS, 1], [SiegeIds.STATION_BALLISTA, 0]]:
+		var st := SiegeKit.state("short", 1, 0)
+		_rider_on(st, row[0])
+		var v := _view(st)
+		var ev := _shot(SiegeIds.SHOT_ARROW)
+		ev["src"] = SiegeIds.STATION_ARROWS
+		ev["tk"] = st.tick
+		v.audio.on_cue(SiegeIds.EV_SHOT, ev)
+		_land(v, v.audio.last_flight_s + 1.5)
+		assert_eq(_count(v, "arrow_dirt"), row[1], "the wheel on station %d" % row[0])
+
+
+func test_other_riders_impacts_are_thinned_and_your_own_are_not() -> void:
+	var st := SiegeKit.state("short", 1, 0)
+	_rider_on(st, SiegeIds.STATION_BALLISTA)
+	var v := _view(st)
+	var last := 0.0
+	for k in SiegeAudio.MAX_SHOT_SOUNDS_PER_TICK:
+		var ev := _shot(SiegeIds.SHOT_SCORPION, k + 1)
+		ev["src"] = SiegeIds.SRC_PAD + 1
+		ev["tk"] = st.tick
+		v.audio.on_cue(SiegeIds.EV_SHOT, ev)
+		last = v.audio.last_flight_s
+	_land(v, last + 1.0)
+	assert_eq(_count(v, "bolt_dirt"), 1, "three Scorpion bolts down together, one impact heard")
+	var landed: int = v.audio._shots.landed_count.get("scorpion", 0)
+	assert_eq(landed, SiegeAudio.MAX_SHOT_SOUNDS_PER_TICK, "and nothing else is touched")
+	var st2 := SiegeKit.state("short", 1, 0)
+	_rider_on(st2, SiegeIds.STATION_ONAGER)
+	var w := _view(st2)
+	for k in 2:
+		var ev := _shot(SiegeIds.SHOT_STONE, k + 1)
+		ev["src"] = SiegeIds.STATION_ONAGER
+		ev["tk"] = st2.tick
+		w.audio.on_cue(SiegeIds.EV_SHOT, ev)
+	_land(w, 8.0)
+	assert_eq(_count(w, "stone_impact"), 2, "your own stones all land")
+
+
+func test_a_blow_on_timber_differs_in_pitch_each_time() -> void:
+	assert_lte(SiegeAudio.WOOD_PITCH.min(), 0.94 + 0.001)
+	assert_gte(SiegeAudio.WOOD_PITCH.max(), 1.06 - 0.001)
+	var bank := AudioBank.load_bank(SiegeAudio.BANK_PATH)
+	for cue_name: String in ["hit_arrow_wood", "hit_scorpion_wood"]:
+		assert_eq(str(bank.cues[cue_name]["hits"][0].get("pitch_var", "")), "pv", cue_name)
 
 
 func _shot_at(kind: int, st: SiegeState) -> Dictionary:
@@ -439,7 +480,12 @@ func test_a_shot_lands_on_the_ground_with_nothing_there() -> void:
 	]
 	for row: Array in table:
 		var v := _solo(0.0)
-		v.audio.on_cue(SiegeIds.EV_SHOT, _shot_at(row[0], v.state))
+		_rider_on(v.state, SiegeIds.STATION_ARROWS)
+		var ev := _shot_at(row[0], v.state)
+		ev["src"] = SiegeIds.STATION_ARROWS
+		if row[0] == SiegeIds.SHOT_STONE:
+			ev["src"] = SiegeIds.STATION_ONAGER
+		v.audio.on_cue(SiegeIds.EV_SHOT, ev)
 		assert_false(v.audio.played.has(row[1]), "still in the air")
 		_land(v, v.audio.last_flight_s + 1.0)
 		assert_true(v.audio.played.has(row[1]), "lands: %s" % row[1])
@@ -512,14 +558,16 @@ func test_shot_sounds_are_capped_per_tick_and_the_next_tick_starts_over() -> voi
 	assert_eq(_count(v, "scorpion_snap"), SiegeAudio.MAX_SHOT_SOUNDS_PER_TICK + 1)
 
 
-func test_kills_are_capped_per_frame() -> void:
+func test_kills_are_thinned_but_a_siege_engine_always_falls_loud() -> void:
 	var v := _solo(0.0)
 	for i in 6:
 		v.audio.on_cue(SiegeIds.EV_KILL, SiegeEvents.kill(i, SiegeIds.ENEMY_SPEAR, 1, false))
-	assert_eq(_count(v, "kill_thud"), SiegeAudio.MAX_SHOT_SOUNDS_PER_TICK)
-	v.update(FRAME)
+	assert_eq(_count(v, "kill_thud"), 1)
+	_run(v, SiegeAudio.KILL_EVERY_S + 0.1)
 	v.audio.on_cue(SiegeIds.EV_KILL, SiegeEvents.kill(9, SiegeIds.ENEMY_SPEAR, 1, false))
-	assert_eq(_count(v, "kill_thud"), SiegeAudio.MAX_SHOT_SOUNDS_PER_TICK + 1)
+	assert_eq(_count(v, "kill_thud"), 2)
+	v.audio.on_cue(SiegeIds.EV_KILL, SiegeEvents.kill(10, SiegeIds.ENEMY_RAM, 1, false))
+	assert_true(v.audio.played.has("stone_wood"), "a ram going down does not wait its turn")
 
 
 func test_each_event_plays_its_sound() -> void:

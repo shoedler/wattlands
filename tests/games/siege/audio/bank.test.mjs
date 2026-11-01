@@ -250,10 +250,27 @@ test('D5 sees the worst: a volley sits in the prompt window, and the preview fir
   assert.ok(run.length / 50 >= 0.9, `${(run.length / 50).toFixed(2)} volleys a second`);
 });
 
-test('the preview plays levels the adapter can give: 0 down in steps, to the cap', () => {
-  for (const e of doc.preview.events.filter((x) => x.cue === 'shot_arrow')) {
-    assert.equal(Math.abs(e.vars.lvl % 1.5), 0, `${e.t}: ${e.vars.lvl}`);
-    assert.ok(e.vars.lvl >= -7.5 && e.vars.lvl <= 0, `${e.t}: ${e.vars.lvl}`);
+test('the preview plays levels the adapter can give: every other volley under', () => {
+  const levels = doc.preview.events.filter((x) => x.cue === 'shot_arrow').map((x) => x.vars.lvl);
+  assert.deepEqual([...new Set(levels)].sort((x, y) => x - y), [-6, 0]);
+  levels.forEach((v, i) => assert.equal(v, i % 2 === 1 ? -6 : 0, `volley ${i}`));
+});
+
+test('A14 is a waiver, with its numbers, and not a pass', () => {
+  assert.match(doc.preview.waive.A14, /median/i);
+  assert.ok(doc.preview.events.filter((e) => e.cue === doc.preview.checks.a14.cue).length >= 3, 'a median of real firings');
+});
+
+test('a stone on bodies is the bodies first: the ground 9 dB under', () => {
+  const hits = doc.cues.hit_stone_flesh.hits;
+  assert.equal(hits[0].sound, 'hit_flesh');
+  assert.equal(hits[1].sound, 'stone_impact');
+  assert.equal(hits[0].db - hits[1].db, 9);
+});
+
+test('a body at full level stays under the master head on its own', () => {
+  for (const c of ['hit_arrow_flesh', 'hit_scorpion_flesh', 'hit_bolt_flesh', 'hit_stone_flesh']) {
+    assert.ok(doc.cues[c].hits[0].db <= -2.5, c);
   }
 });
 
@@ -269,6 +286,15 @@ for (const [name, wave] of REAL) {
     assert.ok(wave.lufs >= -20 && wave.lufs <= -16, `${wave.lufs} LUFS`);
     assert.ok(wave.top_band_share <= -32, `above 9.8 kHz ${wave.top_band_share} dB`);
     assert.ok(wave.prompt_margin_worst >= 6, `warning ${wave.prompt_margin_worst} LU over the wave at its worst`);
+    const a = wave.mix_apart_first_60ms;
+    for (const k of ['flesh_dirt', 'wood_dirt']) assert.ok(a[k] >= 3, `${k} ${a[k]} dB in the mix`);
+    if (name === 'organ') {
+      assert.ok(a.shield_dirt >= 3, `shield_dirt ${a.shield_dirt} dB in the mix`);
+      const own = wave.flights_1k_2k4.over.own_arrow_swarm_full_level;
+      assert.ok(own.n >= 50, 'flights from the log');
+      assert.ok(own.median >= 3, `your arrow's peak +${own.median} dB over everything, 1-2.4 kHz`);
+    }
+    assert.ok(wave.impacts_per_s + wave.kills_per_s <= 2.5, `${wave.impacts_per_s} impacts and ${wave.kills_per_s} kills a second`);
   });
 }
 

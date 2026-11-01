@@ -125,7 +125,7 @@ func test_a_volley_is_not_twelve_voices() -> void:
 	assert_lte(
 		float(impacts) / float(volleys), 7.0, "%d impacts of %d volleys" % [impacts, volleys]
 	)
-	assert_gt(float(impacts) / float(volleys), 0.8, "and each volley lands")
+	assert_gt(float(impacts) / float(volleys), 0.3, "and most are heard landing")
 
 
 func test_a_real_first_wave_gives_every_shot_a_real_player() -> void:
@@ -333,6 +333,12 @@ func test_every_kill_of_a_real_wave_knows_its_side() -> void:
 func test_a_shield_bearer_blocks_by_the_hosts_own_stream() -> void:
 	var got := _surfaces(_sounds_of(SiegeIds.SHOT_ARROW, SiegeIds.ENEMY_SHIELD, true))
 	assert_true(got.has("shield") or got.has("flesh"), "%s" % [got])
+
+
+func test_a_volley_that_strikes_is_its_hit_and_never_a_patter_as_well() -> void:
+	var got := _surfaces(_sounds_of(SiegeIds.SHOT_ARROW, SiegeIds.ENEMY_RAM, true))
+	assert_eq(got.count("dirt"), 0, "%s" % [got])
+	assert_eq(got.count("wood"), 1, "%s" % [got])
 
 
 func test_a_volleys_misses_are_one_patter_and_its_hits_are_capped() -> void:

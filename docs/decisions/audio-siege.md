@@ -158,3 +158,29 @@ Two critics read the first overhaul at 1e795326, with probes on the real rules a
 - Real wave now, rider where autopilot puts it: -17.2 LUFS, LRA 2.9, from -16.0 and 1.9. Rider on the organ: -17.4 LUFS, LRA 1.6. Worst prompt margin over it +8.0 and +7.4 LU at the prompt's real 20 ms attack. Hooves 128 starts in 700 s, from 675. 0 and 3 starts of about 2000 Sfx starts found no voice.
 - Upgraded onager: the splash reads 6.5 m at level 3, not 5 m.
 - Other games at runtime pitch, reported by A17 and not held: Torque Company -27.41 (`turbo_whistle`), Fishing -18.26 (`prop_churn`), Workout -31.72 (`wind_rush`). They pass A9 as it was. Holding them would fail their cards: a question for their owners.
+
+## 2026-11-01 Last round: one flight you can follow, a target that isn't dirt, an honest A14
+
+A fresh critic measured the recordings. Its figures matched mine within a few tenths on a run of its own kind, with flights now logged and not sampled (`flight_log` in `tools/audio/live_mix.gd`, read by `tools/audio/live_report.mjs`). Before and after are on the same session, rider on the organ, then rider on the onager:
+
+| | Before | After |
+|---|---|---|
+| Own arrow's peak over everything, 1-2.4 kHz, median, full-level volleys | -3.54 (all volleys) | +4.64 |
+| Other riders' arrows, same reading, rider on the onager | -8.70 | -3.60 |
+| Flights alone, spread of 50 ms levels p90-p10, 1-2.4 kHz | 6.54, 10.11 | 8.23, 10.19 |
+| Flesh to dirt, first 60 ms in the mix | 1.22, 1.30 dB | 5.61, 3.95 dB |
+| Wood to dirt, same | 1.69, 1.51 dB | 4.96, 3.59 dB |
+| Shield to dirt, same | 2.22, 2.62 dB | 5.44, 6.48 dB |
+| Impacts a second, plus kills | 3.07 + 0.80, 3.16 + 0.90 | 2.17 + 0.30, 1.26 + 0.32 |
+| Patters with a body hit within 300 ms | 72 %, 80 % | 44 %, 0 % (no own volleys) |
+| Master head over -1 dBFS, episodes a minute | 64.8, 43.4 | 38.4, 19.0 |
+| 2-8 kHz of the master | -12.72, -14.11 | -12.22, -14.95 |
+| LUFS, LRA | -17.38 / 1.61, -17.20 / 2.80 | -17.72 / 1.67, -17.81 / 3.37 |
+
+- Decision, flights: every other volley of the organ is under, a flight contour `[[0,-40],[.36,-18],[.5,0],[.6,-8],[.72,-30],[1,-40]]`, pitch `[[0,1.3],[.5,1],[1,.75]]` (about 3.4 semitones in the part you can hear), and the Scorpion's flight is a shorter pass. Each volley keeps its flight: P1 still 57 of 57.
+- Alternative tried: -12 dB under, as the critic suggested. P3, which holds every flight at +3 dB over the wheels and the bed, fails by 3 to 5 dB on the quiet volleys, and no limit may loosen, so the volleys are 6 dB apart and the spread is 8.2 dB and not the 10+ it could be. The Scorpion's suggested -6 meets the same row: it plays 1.2 dB lower with a shorter pass and not 6 dB lower. These are the numbers to reopen if a listener still hears haze.
+- Decision, impacts: a body around 1 kHz, the ground a low thud with sand above 3.4 kHz, a new bronze ring for a shield. A volley is its hit or one patter, never both. A stone on bodies is the bodies first, the ground 9 dB under. Other riders' arrow misses are dropped, and their other impacts and all kills are thinned on the audio side only; the sim's counts and the behaviour hash do not move. `hit_wood` varies by up to 6 % either way. `hit_flesh` is cue -2.5, so -3 dBFS alone.
+- Rows: P8 is the rider's own flight over everything, because P3 ignores other flights; P9 is target against ground in the mix, first 60 ms, because P5 reads files. `bank.test.mjs` holds both on the real-wave JSONs.
+- A14 reads the median of a cue's firings for every bank. Siege's reads +0.4 dB in the preview, +1.6 and +0.9 dB in the two real waves, against +6. The critic read +3.04 and +2.12 by its own method. I had moved the first ballista shot to before the organ was in the air, which read +6.9; that is withdrawn. It is `waive.A14`, on the card as a waiver and not a pass. The fixture's middle firing moved from 11 s to 5 s, because the median would otherwise read its busiest moment; Torque Company, Fishing and Workout pass unchanged.
+- A17 stays held for Siege alone and reported for the rest (`docs/decisions/audio-siege.md`, the entry above): the lead keeps the other games' numbers on the backlog.
+- Rises in the mix, 400-6000 Hz, median, against arbitrary moments +3.1 and +2.8: flesh +5.9 and +5.7, wood +6.5 and +4.9, patter +5.1, stone +5.9 and +8.2 (against +3.4 and +3.1 in its lower band). With the rider on the organ, over arbitrary moments: wood +3.4, flesh +2.8, patter +2.0, stone +2.5. The previous round's +3 slipped for flesh and the patter, because flesh came down to its -2.5 cue and the patter to keep the band limit; other riders' hits sit lower by design, as the lead accepted. Releases are unchanged: own arrow +3.8 and Scorpion +2.7, no room to lift them with the ear band at -12.22 on the organ.

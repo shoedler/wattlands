@@ -35,6 +35,11 @@ const HOOF_NEAR_GATE_M := 70.0
 const RAM_GAPS_S: Array[float] = [1.15, 1.25]
 const RAM_PITCH: Array[float] = [1.0, 0.96, 1.03, 0.94]
 const COIN_EVERY_S := 0.3
+## Audio only, never the sim: other riders' impacts and all kills are thinned, so a rider's own hits can be told apart.
+const OTHER_IMPACT_EVERY_S := 0.7
+const KILL_EVERY_S := 1.5
+## hit_wood's pitch for each blow: three files at about one a second would otherwise repeat.
+const WOOD_PITCH: Array[float] = [1.0, 0.95, 1.06, 0.97, 1.04, 0.94, 1.02]
 ## A ram's battering is one leak per whole HP: the alarm answers the first, not each.
 const LEAK_ALARM_EVERY_S := 3.0
 const MAX_SHOT_SOUNDS_PER_TICK := 3
@@ -43,11 +48,10 @@ const FLIGHT_MIN_S := 0.1
 const FLIGHT_MAX_S := 8.0
 ## Side of the screen: art x from the middle over half the width, then the panned sends' reach.
 const PAN_SPREAD := 0.75
-## Volleys overlap: a real wave's organ fires every 0.87 to 1.5 s and an arrow flies about 4 s, so 4 or 5 are in the air
-## at its full rate. Each one still flying takes this off the next one's swoosh, so a full rate reads as racks passing
-## over and not as one wall of hiss.
-const VOLLEY_TRIM_DB := -1.5
-const VOLLEY_TRIM_MAX := 5
+## Volleys overlap: a real wave's organ fires every 0.87 to 1.5 s and an arrow flies about 4 s. Every other volley
+## passes over at full level, the next this far under: with all of them at one level a rider hears haze and no single
+## pass. Each still has its own release, flight and landing. Further under drops it below the scorecard's P3.
+const VOLLEY_UNDER_DB := -6.0
 ## A volley's patter by how many of its 12 arrows came down on nothing: this much under, per halving.
 const PATTER_HALVING_DB := -3.0
 const PATTER_MIN_DB := -11.0
@@ -82,13 +86,16 @@ var _ram_t: float = 0.0
 var _ram_n: int = 0
 var last_flight_s: float = 0.0  ## the flight the last shot's sound was given (tests)
 var _shots := SiegeShotSounds.new()
+var _volley_n: int = 0
+var _other_impact_t: float = 0.0
+var _kill_t: float = 0.0
+var _wood_n: int = 0
 var _view: SiegeView = null
 var _coin_t: float = 0.0
 var _leak_t: float = 0.0
 var _gold_was: float = -1.0
 var _shot_tick: int = -1
 var _shot_sounds: int = 0
-var _kill_sounds: int = 0
 var _curtain_stage: int = -1
 var _coat_stage: int = -1
 var _gust_t: float = 0.0
@@ -159,7 +166,8 @@ func update(state: SiegeState, dt: float, p_local_peer: int, view: SiegeView) ->
 	var me := state.rider(local_peer)
 	_local_slot = me.slot if me != null else -1
 	_leak_t = maxf(_leak_t - dt, 0.0)
-	_kill_sounds = 0
+	_other_impact_t = maxf(_other_impact_t - dt, 0.0)
+	_kill_t = maxf(_kill_t - dt, 0.0)
 	_view = view
 	_shots.content = state.content
 	_shots.path = state.path
@@ -258,8 +266,9 @@ func on_cue(kind: String, data: Dictionary) -> void:
 		SiegeIds.EV_SHOT:
 			_shot(cue_name, data)
 		SiegeIds.EV_KILL:
-			_kill_sounds += 1
-			if _kill_sounds <= MAX_SHOT_SOUNDS_PER_TICK:
+			# A ram or a tower going down is always heard; a body among the many, one in a while.
+			if cue_name == CUE_KILL_ENGINE or _kill_t <= 0.0:
+				_kill_t = KILL_EVERY_S
 				kit.cue(cue_name, {"pan": _enemy_pan(int(data.get("id", -1)))})
 		SiegeIds.EV_LEAK:
 			if _leak_t <= 0.0:
@@ -281,7 +290,10 @@ func _shot(cue_name: String, data: Dictionary) -> void:
 		return
 	var sd := int(data.get("sd", 0))
 	var weapon := SiegeShotSounds.weapon_of(int(data.get("kind", 0)))
-	var volleys := mini(_shots.in_air(weapon), VOLLEY_TRIM_MAX)
+	var lvl := 0.0
+	if weapon == SiegeShotSounds.WEAPON_ARROW:
+		lvl = VOLLEY_UNDER_DB if _volley_n % 2 == 1 else 0.0
+		_volley_n += 1
 	var src := int(data.get("src", 0))
 	var lead := is_mine(src)
 	var flight := _shots.add(data, int(data.get("tk", 0)) * Wl.SIM_DT, _level_of(src), lead)
@@ -295,8 +307,7 @@ func _shot(cue_name: String, data: Dictionary) -> void:
 				"flight_s": last_flight_s,
 				"pan0": _pan(flight["from"]),
 				"pan1": _pan(flight["to"]),
-				"lvl":
-				VOLLEY_TRIM_DB * float(volleys) if weapon == SiegeShotSounds.WEAPON_ARROW else 0.0,
+				"lvl": lvl,
 			},
 			lead
 		)
@@ -330,11 +341,25 @@ func _landings(state: SiegeState, view: SiegeView) -> void:
 	if _paused or _shots.flying.is_empty():
 		return
 	for impact: Dictionary in _shots.step(view.clock_s, state.enemies):
-		var cue_name := "hit_%s_%s" % [impact["weapon"], impact["surface"]]
+		var lead := bool(impact["lead"])
+		var weapon: String = impact["weapon"]
+		var wet_or_dirt: bool = (
+			impact["surface"] in [SiegeShotSounds.SURFACE_DIRT, SiegeShotSounds.SURFACE_WATER]
+		)
+		# Another rider's misses say nothing to you, and a stone is an event whoever threw it.
+		if not lead and weapon == SiegeShotSounds.WEAPON_ARROW and wet_or_dirt:
+			continue
+		if not lead and weapon != SiegeShotSounds.WEAPON_STONE:
+			if _other_impact_t > 0.0:
+				continue
+			_other_impact_t = OTHER_IMPACT_EVERY_S
+		var cue_name := "hit_%s_%s" % [weapon, impact["surface"]]
 		var lvl := 0.0
-		if impact["surface"] in [SiegeShotSounds.SURFACE_DIRT, SiegeShotSounds.SURFACE_WATER]:
-			lvl = patter_db(int(impact["count"])) if impact["weapon"] == "arrow" else 0.0
-		kit.cue(cue_name, {"pan": _pan(impact["at"]), "lvl": lvl}, bool(impact["lead"]))
+		if wet_or_dirt and weapon == SiegeShotSounds.WEAPON_ARROW:
+			lvl = patter_db(int(impact["count"]))
+		var pv: float = WOOD_PITCH[_wood_n % WOOD_PITCH.size()]
+		_wood_n += 1
+		kit.cue(cue_name, {"pan": _pan(impact["at"]), "lvl": lvl, "pv": pv}, lead)
 
 
 ## A volley's patter under its level by how few of the rack's arrows it is.

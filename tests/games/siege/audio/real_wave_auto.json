@@ -1,20 +1,85 @@
 {
-  "seconds": 179.63,
-  "lufs": -17.19,
-  "lra": 2.87,
-  "ear_band_share": -14.1,
-  "ear_band_worst": -4.71,
-  "ear_band_a_share": -7.92,
-  "top_band_share": -36.72,
-  "sfx_lufs": -19.64,
-  "sfx_movement_1k_4k": {
-    "p10": -37.41,
-    "p50": -30.47,
-    "p90": -26.3,
-    "spread": 11.12
+  "mix_apart_first_60ms": {
+    "flesh_dirt": 3.95,
+    "wood_dirt": 3.59,
+    "flesh_wood": 1.31,
+    "shield_dirt": 6.48
   },
-  "prompt_margin_worst": 7.98,
-  "bank_sha": "edbfc2d4362b4658cb618ae8b717514d0f975da27bdd95ecaf8ec0409be5c474",
+  "impacts_per_s": 1.26,
+  "kills_per_s": 0.32,
+  "patters_with_a_body_in_300ms": 0,
+  "head_episodes_per_min": 19.03,
+  "a14_ballista": {
+    "n": 11,
+    "median": 0.85
+  },
+  "flights_1k_2k4": {
+    "over": {
+      "own_bolt_hiss": {
+        "n": 3,
+        "median": null,
+        "p90": null
+      },
+      "own_bolt_hiss_full_level": {
+        "n": 3,
+        "median": null,
+        "p90": null
+      },
+      "other_stone_tumble": {
+        "n": 1,
+        "median": -6.99,
+        "p90": -6.99
+      },
+      "own_arrow_swarm": {
+        "n": 4,
+        "median": -10.27,
+        "p90": -3.69
+      },
+      "own_arrow_swarm_full_level": {
+        "n": 2,
+        "median": -3.69,
+        "p90": -3.69
+      },
+      "own_stone_tumble": {
+        "n": 36,
+        "median": 5.31,
+        "p90": 12.57
+      },
+      "own_stone_tumble_full_level": {
+        "n": 36,
+        "median": 5.31,
+        "p90": 12.57
+      },
+      "other_arrow_swarm": {
+        "n": 173,
+        "median": -3.6,
+        "p90": 2.63
+      },
+      "other_bolt_hiss": {
+        "n": 204,
+        "median": -1.53,
+        "p90": 5.47
+      }
+    },
+    "ripple_p90_p10": 10.19
+  },
+  "sfx_over_machines_1k_2k": 15.71,
+  "seconds": 179.72,
+  "lufs": -17.81,
+  "lra": 3.37,
+  "ear_band_share": -14.95,
+  "ear_band_worst": -4.03,
+  "ear_band_a_share": -8.45,
+  "top_band_share": -37.6,
+  "sfx_lufs": -20.6,
+  "sfx_movement_1k_4k": {
+    "p10": -39.22,
+    "p50": -31.82,
+    "p90": -26.96,
+    "spread": 12.27
+  },
+  "prompt_margin_worst": 8.49,
+  "bank_sha": "8249ec1495a34b6e68ef0127d9f81be92db45fd1d07d37ba35038f9916e84fc0",
   "shots": 415,
   "flight_starts": 415,
   "voiceless": 0

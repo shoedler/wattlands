@@ -1,21 +1,61 @@
 {
-  "seconds": 179.54,
-  "lufs": -17.35,
-  "lra": 1.59,
-  "ear_band_share": -12.73,
-  "ear_band_worst": -2.76,
-  "ear_band_a_share": -7.23,
-  "top_band_share": -35.41,
-  "sfx_lufs": -20.16,
-  "sfx_movement_1k_4k": {
-    "p10": -34.86,
-    "p50": -30.4,
-    "p90": -25.47,
-    "spread": 9.39
+  "mix_apart_first_60ms": {
+    "flesh_dirt": 5.61,
+    "wood_dirt": 4.96,
+    "flesh_wood": 1.74,
+    "shield_dirt": 5.44
   },
-  "prompt_margin_worst": 7.44,
-  "bank_sha": "edbfc2d4362b4658cb618ae8b717514d0f975da27bdd95ecaf8ec0409be5c474",
+  "impacts_per_s": 2.17,
+  "kills_per_s": 0.3,
+  "patters_with_a_body_in_300ms": 0.44,
+  "head_episodes_per_min": 38.41,
+  "a14_ballista": {
+    "n": 10,
+    "median": 1.63
+  },
+  "flights_1k_2k4": {
+    "over": {
+      "own_arrow_swarm": {
+        "n": 185,
+        "median": 1.25,
+        "p90": 9.64
+      },
+      "own_arrow_swarm_full_level": {
+        "n": 93,
+        "median": 4.64,
+        "p90": 15.55
+      },
+      "other_stone_tumble": {
+        "n": 39,
+        "median": -2.62,
+        "p90": 0.72
+      },
+      "other_bolt_hiss": {
+        "n": 195,
+        "median": -1.99,
+        "p90": 2.43
+      }
+    },
+    "ripple_p90_p10": 8.23
+  },
+  "sfx_over_machines_1k_2k": 16.34,
+  "seconds": 179.63,
+  "lufs": -17.72,
+  "lra": 1.67,
+  "ear_band_share": -12.22,
+  "ear_band_worst": 0.08,
+  "ear_band_a_share": -6.42,
+  "top_band_share": -36.35,
+  "sfx_lufs": -20.76,
+  "sfx_movement_1k_4k": {
+    "p10": -36.61,
+    "p50": -31.2,
+    "p90": -26.02,
+    "spread": 10.59
+  },
+  "prompt_margin_worst": 10.43,
+  "bank_sha": "8249ec1495a34b6e68ef0127d9f81be92db45fd1d07d37ba35038f9916e84fc0",
   "shots": 416,
   "flight_starts": 416,
-  "voiceless": 3
+  "voiceless": 2
 }
