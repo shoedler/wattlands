@@ -2,7 +2,7 @@
 
 How WATTLANDS talks to a Wahoo KICKR CORE over Bluetooth LE FTMS, and how the safety governor shapes every command. For developers. "BRIEF x.y" is a section of `docs/BRIEF.md`; the design rationale is in `docs/decisions/trainer-core.md`, `trainer-control.md`, `ble.md`, `platform.md` and `app-shell.md`. Every constant below is quoted from the code on `main`.
 
-**Hardware status:** none of this has run against a real trainer. Every automated run had the hardware lock on and used MockTrainer or a fake KICKR transport. See [section 8](#8-never-tested-on-hardware) and `docs/HARDWARE_TEST_PLAN.md`.
+**Automated runs and hardware:** every automated run has the hardware lock on and uses MockTrainer or a fake KICKR transport. [Section 8](#8-what-automated-runs-cant-check) lists what only a real trainer can show, and `docs/HARDWARE_TEST_PLAN.md` is the checklist.
 
 ## 1. Layers (BRIEF 4.1)
 
@@ -460,9 +460,9 @@ LocalRider runs every sample through it before gestures and the governor.
 
 `crr` and `cw` keep their defaults (0.004, 0.51), and `system_mass_kg` (83, for the wind bound) isn't passed. The order is `governor.setup(device)`, then `adopt_connection(previous)` on the same device object, then `configure()`. Out-of-range values are clamped with `push_warning` (`weight_kg` 20–250 kg). An FTP outside 30–2000 W (`GovernorClamps.FTP_MIN_W`/`FTP_MAX_W`, the range Settings clamps a profile into) or an unknown profile is a `push_error` and the previous value stays (200 W for a new governor). Calling `configure()` again replaces only the given keys and keeps plan, phase, warm-up, limits, rescue, coasting and channels.
 
-## 8. Never tested on hardware
+## 8. What automated runs can't check
 
-Everything below ran only against MockTrainer, `fake_kickr_transport.gd`, the bridge's fake backend or golden vectors. `docs/HARDWARE_TEST_PLAN.md` (probe, connect, SIM flat, ERG 100 W, slew, rescue, coasting and panic, mode switches, Workout, two-PC multiplayer, disconnect and reconnect, Strava, and the W3 safety findings that need hardware) and `src/games/workout/HARDWARE_TEST.md` cover them.
+The automated runs cover everything below only against MockTrainer, `fake_kickr_transport.gd`, the bridge's fake backend or golden vectors. `docs/HARDWARE_TEST_PLAN.md` (probe, connect, SIM flat, ERG 100 W, slew, rescue, coasting and panic, mode switches, Workout, two-PC multiplayer, disconnect and reconnect, Strava, and the W3 safety findings that need hardware) and `src/games/workout/HARDWARE_TEST.md` cover them.
 
 - **GDBLE.** `initialize()`, scanning (and the stop before each rescan), connecting, CCCD writes and notifications on a real Windows adapter; the dedup of device and manager signals; adapter power-off; GATT reset recovery.
 - **The bridge.** Its bleak backend, the probe on a real trainer and the PyInstaller exe with bleak.

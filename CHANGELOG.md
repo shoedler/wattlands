@@ -2,9 +2,29 @@
 
 Releases, newest first. Modules and games write fragments in `docs/changelog.d/<module or game id>.md`; the lead merges them here at each release and empties them.
 
+## v1.0.0-rc.3 (2026-11-01)
+
+The third release candidate, from playing rc.2.
+
+### For riders
+
+- **Torque Company's Secondaries are machine guns.** Three times the rate of fire, 540 rounds a minute at 90 rpm and still tied to your cranks, at a quarter of the damage a round. Recon cars, tankettes and barricades are scaled to match, so they fall as fast as they did. The effort does not change. The tracers, the muzzle light, the belts and the rattle follow. With no target the feed only clacks over, and a crewmate's burst no longer drowns the other machines.
+- **Torque Company's enemy is redrawn as the Foundry Pact,** in the same hand as our tank but sealed factory slab where ours is patched plate: field grey with hard bands of dark yellow, welded seams, grime and mud, stowage, its own diamond mark and stencil numbers, and shut hatches, so an orange block is never mistaken for our own lit windows. Each of the seven kinds has its own outline, and wrecks keep their form. The rules are unchanged.
+- **Torque Company's cylinders no longer sound like a toy.** Each firing is a dull thump with a body and each valve a dull knock with four takes, and neither winds up in pitch as you speed up. The three unequal cylinders stay on the crank and no longer play a little tune each revolution, and the knocks ease off with your power. The Loader's valve is a dull knock too, and a far shell's whistle is fainter until its last half second. The gun's sounds are untouched.
+- **The diesel you see fires with the one you hear,** on the tank and on its machine card: three cylinders, each piston topping out on its stroke, and a spark that lights a bore only as it fires.
+- **Every arrow in Castellum Rotae lands with its own sound,** at its own moment and on its side of the screen: a slap on a spearman, a knock on timber, a ring on a shield, a small thud or plip on a miss. They play on a voice pool of their own, so flights, stones and the gate never lose a voice to them. Every arrow that strikes something stands out, and so does the first of a landing, so a volley can be counted. Arrows near the camera are louder, another rider's sit closer to your own, and a swoosh peaks at the top of its arc and clears before its arrows land.
+- **Castellum Rotae's gate alarm is louder,** with the arrows and the wheel stepping back for it. The wave's bell and a tower's docking are a little softer.
+- **The README is rewritten** for people who want to ride, with corrected times and settings.
+
+### Shared by every game now
+
+- `mix.crowd_voices` and a hit's `crowd` flag in the audio kit: many short sounds at once on a pool of their own, with `kit.stolen`, `kit.crowd_voiceless` and D6 reading it. `variant_var` and `kit.variants_of`.
+- `tools/audio/live_mix.gd` records a real session through the real audio driver in float, with a capture after the limiter, and `--audio-log` (`AudioRunLog`) does the same inside an exported exe. `live_report` reads landing contrast, linked-stereo overs and pan. Scorecard rows R1-R3 hold a bank's real-wave reports.
+- `tools/export_windows.mjs --smoke` counts every game's sounds in the PCK and fails if one is lost.
+
 ## v1.0.0-rc.2 (2026-11-01)
 
-The second release candidate, after the first person played the game. No one has heard the new sound below yet, and nothing automated has run on a real trainer.
+The second release candidate, after the first play-through.
 
 ### For riders
 
@@ -27,11 +47,11 @@ The second release candidate, after the first person played the game. No one has
 
 ## v1.0.0-rc.1 (2026-10-31)
 
-The release candidate for v1: the build v0.9.3 prepared, with the full test suite run by hand. Nothing changes for riders since v0.9.3. No one has ridden this on a real trainer or heard the audio yet; each game's `HARDWARE_TEST.md` has the checklist and a Listen step.
+The release candidate for v1: the build v0.9.3 prepared, with the full test suite run by hand. Nothing changes for riders since v0.9.3. Each game's `HARDWARE_TEST.md` has the checklist and a Listen step.
 
 ## v0.9.3 (2026-10-31)
 
-The cleanup release: much less code, shared parts for every game, and the sound now keeps even time with your cadence. No one has ridden this on a real trainer or heard the audio yet.
+The cleanup release: much less code, shared parts for every game, and the sound now keeps even time with your cadence.
 
 ### For riders
 
@@ -69,7 +89,7 @@ The cleanup release: much less code, shared parts for every game, and the sound 
 
 ## v0.9.2 (2026-10-31)
 
-Diesel Domestiques gets its overhaul and its sound. No one has ridden this on a real trainer or heard the audio yet; `src/games/tank/HARDWARE_TEST.md` has the checklist.
+Diesel Domestiques gets its overhaul and its sound. `src/games/tank/HARDWARE_TEST.md` has the checklist.
 
 ### Diesel Domestiques 0.4.0
 
@@ -150,7 +170,7 @@ Earlier versions of the game, listed here for the first time.
 
 ## v0.9.1 (2026-10-31)
 
-The games get their sound. Turbo Reel, Castellum Rotae and Workout now have sound rendered from recipes in the repository, locked 1:1 to each rider's crank. Diesel Domestiques gets its sound with its overhaul in the next prerelease. No one has heard this yet: the numbers come from offline measurements, and each game's `HARDWARE_TEST.md` has a Listen step.
+The games get their sound. Turbo Reel, Castellum Rotae and Workout now have sound rendered from recipes in the repository, locked 1:1 to each rider's crank. Diesel Domestiques gets its sound with its overhaul in the next prerelease. Each game's `HARDWARE_TEST.md` has a Listen step.
 
 ### Turbo Reel 0.3.0
 

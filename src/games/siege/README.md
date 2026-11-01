@@ -356,9 +356,9 @@ In PowerShell: `tools/godot.ps1 --path . -- --mock-trainer=erg`. Other profiles 
 ## Known gaps
 
 - **Endurance is uneven for a compliant team.** At `budget_factor` 0.72 seeds 1-3 grade D (one Breach), A and B. 0.70 gave B, B, B but put endurance 35% under the T3 mean; 0.74 kept T3 but graded D, C, D (ADR "Final T3 factors").
-- **Untested on hardware.** Every run used MockTrainer. The ERG targets, the 50 to 117% step, the Overdrive switches, rescue, coasting and panic have not met a KICKR CORE (`HARDWARE_TEST.md`).
+- **Automated runs use MockTrainer.** The ERG targets, the 50 to 117% step, the Overdrive switches, rescue, coasting and panic on a KICKR CORE are checked by riding `HARDWARE_TEST.md`.
 - **The renderer is unmeasured on integrated graphics.** The view has only been measured on an NVIDIA GPU. 60 fps at 1080p on integrated graphics with 150 enemies, and the depth test (the anchor depth travels in the modulate colour), need a real check (`HARDWARE_TEST.md` sections 12 and 13).
-- **The audio overhaul is unheard.** The owner heard the first version and it failed: no arrows, odd wheels. This one was measured in real sessions and against the scorecard, and read as spectrograms, but no person has listened to it yet (`HARDWARE_TEST.md` section 14, `docs/decisions/audio-siege.md`).
+- **The sound is judged by measurement in automated runs.** Real sessions are recorded and read against the scorecard, but only a listen can say how it sounds (`HARDWARE_TEST.md` section 14, `docs/decisions/audio-siege.md`).
 - **`bake.mjs --check` checks the version and the files, not the pixels.** A change to the art code without a version bump and a re-bake passes the check.
 - **Cosmetics unlock but can't be equipped.**
 

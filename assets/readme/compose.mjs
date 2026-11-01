@@ -141,8 +141,8 @@ function hero() {
     rect(out, x, PANEL + BAND - 3, 2, 2, [240, 206, 140]);
   }
 
-  const tall = face('assets/tank/v2/hud/tank_stencil_5x9.png', 6, 11);
-  const small = face('assets/tank/v2/hud/tank_stencil_5x7.png', 6, 9);
+  const tall = face('assets/tank/hud/tank_stencil_5x9.png', 6, 11);
+  const small = face('assets/tank/hud/tank_stencil_5x7.png', 6, 9);
   const SCALE = 12;
   const title = 'WATTLANDS';
   const tw = textWidth(tall, title, SCALE);

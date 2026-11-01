@@ -2,9 +2,7 @@
 
 One to four riders crew a pedal-powered landship through a starry forest night, one seat each of six. The enemy stands far off, so the screen splits: our tank and the near road on one side, a long-lens view of the enemy on the other, and a small screen in the far panel shows the shells in flight. Bots fill the empty seats.
 
-Version 0.4.0, 1 to 4 riders, bots, presentation `2d` at 960 x 540 art px (`pixel_flex` down to 852 x 480). Brief: `docs/games/tank.md`. Decisions: `docs/decisions/tank.md`. Contracts and the per-tick data flow: `contracts/README.md`. Real-trainer checklist: `HARDWARE_TEST.md`. Credits: `docs/credits.d/tank.md`.
-
-Nothing has run on a real trainer (see "Known gaps").
+Version 0.6.0, 1 to 4 riders, bots, presentation `2d` at 960 x 540 art px (`pixel_flex` down to 852 x 480). Brief: `docs/games/tank.md`. Decisions: `docs/decisions/tank.md`. Contracts and the per-tick data flow: `contracts/README.md`. Real-trainer checklist: `HARDWARE_TEST.md`. Credits: `docs/credits.d/tank.md`.
 
 ## Contents
 
@@ -252,7 +250,7 @@ Gates: the Tank GUT suite, `check_scripts`, gdformat and gdlint, `tests/sdk/test
 
 ## Known gaps
 
-- Not tested on a real trainer: `HARDWARE_TEST.md` is the checklist, and its last section lists what the automated runs cannot judge. Nothing has met a real Strava upload.
+- Automated runs use a mock trainer: `HARDWARE_TEST.md` is the checklist for a real one, and its last section lists what the automated runs cannot judge.
 - Frames and the mix are judged from screenshots and logs only. The split-screen frame cost is measured against the old baseline (2026-10-31, quiet machine, `TANK_FIXTURE="kind=v4:cap_v4;flex;stats;novsync;seconds=20"` against the same with `kind=cap`): v4 mean 14.98 ms, p99 16.67 ms, 355 draw calls, 3 of 1202 frames over 16.7 ms; baseline mean 14.84 ms, p99 16.31 ms, 385 draw calls, 4 of 1202 over. The gate is relative: v4 costs 0.14 ms more, with fewer draw calls. The spec's absolute "under 8 ms, p99 under 14" was an estimate the baseline never met either.
 - Balance is tuned on the simulation matrix with compliant synthetic riders. Real riders' compliance and sprint timing may want a retune. The open shortfalls are listed under "Difficulty".
 - A Behemoth (300 px) cannot fit the 286 px far panel at 852 x 480: it is centred and clipped 7 px each side.

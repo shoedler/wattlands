@@ -79,7 +79,7 @@ Only the lead lands on main: merge, never rebase, one branch at a time, through 
 - Every persisted file goes through `Paths.user_dir()` (honours `--profile-dir=<abs path>`). Tests use a fresh temp dir.
 - System nodes (trainer stack, governor, MockTrainer, NetSession and transports, GameHost, input router, gesture recognizer) run with `process_mode = PROCESS_MODE_ALWAYS`. Pause never uses `SceneTree.paused` for them.
 - Commit `*.import` and `*.uid` files. Commit small, conventional commits. Decisions: short ADRs (date, decision, alternatives, reason) in `docs/decisions/<agent or game id>.md`; the lead merges them into `docs/DECISIONS.md`. Credits and changelog entries go in `docs/credits.d/` and `docs/changelog.d/` fragments.
-- Command-line flags come after `--` and are read with `OS.get_cmdline_user_args()` through `CmdLine`: `--mock-trainer=<profile>`, `--autopilot`, `--host`, `--join=<code>`, `--relay=<url>`, `--game=<id>`, `--content=<id>`, `--seed=<n>`, `--sim-speed=<x>`, `--run-seconds=<n>`, `--report=<path>`, `--screenshot-dir=<dir>`, `--profile-dir=<abs path>`, `--strava-base=<url>`. `--sim-speed` runs x fixed steps per 0.05 s of wall time and never touches `Engine.time_scale`.
+- Command-line flags come after `--` and are read with `OS.get_cmdline_user_args()` through `CmdLine`: `--mock-trainer=<profile>`, `--autopilot`, `--host`, `--join=<code>`, `--relay=<url>`, `--game=<id>`, `--content=<id>`, `--seed=<n>`, `--sim-speed=<x>`, `--run-seconds=<n>`, `--report=<path>`, `--screenshot-dir=<dir>`, `--profile-dir=<abs path>`, `--strava-base=<url>`, `--audio-log=<path>`, `--audio-capture`. `--sim-speed` runs x fixed steps per 0.05 s of wall time and never touches `Engine.time_scale`.
 
 ## Ownership
 
