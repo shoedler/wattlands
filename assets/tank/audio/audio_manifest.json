@@ -943,22 +943,6 @@
     "locked": false,
     "compress": "pcm"
   },
-  "arc_lamp": {
-    "sound": "arc_lamp",
-    "variant": 0,
-    "rate": 22050,
-    "ch": 1,
-    "frames": 17641,
-    "loop_frames": 17640,
-    "preroll": 0,
-    "bytes": 35326,
-    "sha256": "88a16d98b8dbc363c25dd2e39e5ed30ea883dce6a17ec0298a84e77fe0380d00",
-    "peak_db": -11.71,
-    "lufs": -20,
-    "loop": true,
-    "locked": false,
-    "compress": "pcm"
-  },
   "arc_relay_1": {
     "sound": "arc_relay",
     "variant": 0,

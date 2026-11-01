@@ -189,10 +189,6 @@
         {"src": "saw", "f": 110.25, "gain": 0.7, "fx": [{"hp": {"f": 480}}, {"bp": {"f": 590, "q": 1.5}}, {"trem": {"hz": 3, "depth": 0.45}}, {"trem": {"hz": 1.5, "depth": 0.3}}]},
         {"src": "noise", "color": "pink", "gain": 0.12, "fx": [{"bp": {"f": 620, "q": 1.2}}, {"trem": {"hz": 0.75, "depth": 0.6}}]}
       ]},
-    "arc_lamp": {"dur": 0.8, "rate": 22050, "ch": 1, "seed": 1181, "loop": true, "xfade_s": 0.3,
-      "layers": [
-        {"src": "noise", "color": "white", "gain": 0.5, "fx": [{"hp": {"f": 6000}}, {"hp": {"f": 6000}}, {"hp": {"f": 6000}}, {"hp": {"f": 6000}}, {"lp": {"f": 8600}}]}
-      ]},
     "arc_relay": {"dur": 0.14, "rate": 22050, "ch": 1, "seed": 1126, "variants": 4, "locked": true, "band": [40, 1800],
       "per_variant": [{"pitch": 1, "norm": {"peak": -6}}, {"pitch": 0.96, "norm": {"peak": -7.5}}, {"pitch": 1.05, "norm": {"peak": -6.5}}, {"pitch": 0.98, "norm": {"peak": -8}}],
       "layers": [
@@ -574,15 +570,14 @@
       ]},
     "arc": {"bus": "Machines", "priority": 5,
       "events": [
-        {"at": [0, 0.5], "sound": "arc_relay", "db": 3.5, "db_by": [{"param": "reach", "points": [[0, -8], [1, 0]]}, {"param": "power", "points": [[0.12, -8], [1.2, 0]]}], "pitch_table": [0, 0.013, -0.011, 0.006, -0.014, 0.01, -0.004], "when": {"param": "power", "min": 0.12}, "priority": 5},
+        {"at": [0, 0.5], "sound": "arc_relay", "db": 4, "db_by": [{"param": "reach", "points": [[0, -8], [1, 0]]}, {"param": "power", "points": [[0.12, -8], [1.2, 0]]}], "pitch_table": [0, 0.013, -0.011, 0.006, -0.014, 0.01, -0.004], "when": {"param": "power", "min": 0.12}, "priority": 5},
         {"at": [0.25, 0.75], "sound": "arc_relay_over", "db": 1, "db_by": [{"param": "over", "points": [[0.3, -6], [1, 0]]}], "when": {"param": "over", "min": 0.3}, "priority": 5},
         {"at": [0.44, 0.94], "sound": "arc_spark", "db": -14, "db_by": [{"param": "reach", "points": [[0.85, -6], [1, 0]]}], "pitch_table": [0, 0.012, -0.01, 0.006, -0.012], "when": {"param": "reach", "min": 0.85}, "lead_only": true, "priority": 4},
         {"at": [0, 0.25, 0.5, 0.75], "sound": "belt_tick", "db": -18, "db_by": [{"param": "power", "points": [[0.3, -8], [1.2, 0]]}], "pitch_table": [0, -0.01, 0.012], "lead_only": true, "priority": 4}
       ],
       "loops": [
-        {"sound": "arc_lamp", "db": -13.5, "min_rpm": 8, "db_by": [{"param": "power", "points": [[0.5, -18], [1.1, 0]]}]},
-        {"sound": "arc_thrum", "db": -10.5, "min_rpm": 8, "other": true, "pitch_by": [{"param": "rpm", "ratio": 90}], "db_by": [{"param": "power", "points": [[0, -8], [1.2, 0]]}]},
-        {"sound": "arc_thrum_open", "db": -7, "min_rpm": 8, "other": true, "pitch_by": [{"param": "rpm", "ratio": 90}], "db_by": [{"param": "power", "points": [[0.3, -24], [1.15, 0]]}, {"param": "over", "points": [[0, 0], [1, 4]]}]}
+        {"sound": "arc_thrum", "db": -10, "min_rpm": 8, "other": true, "pitch_by": [{"param": "rpm", "ratio": 90}], "db_by": [{"param": "power", "points": [[0, -8], [1.2, 0]]}]},
+        {"sound": "arc_thrum_open", "db": -6.5, "min_rpm": 8, "other": true, "pitch_by": [{"param": "rpm", "ratio": 90}], "db_by": [{"param": "power", "points": [[0.3, -24], [1.15, 0]]}, {"param": "over", "points": [[0, 0], [1, 4]]}]}
       ]},
     "feed": {"bus": "Machines", "priority": 5,
       "events": [
