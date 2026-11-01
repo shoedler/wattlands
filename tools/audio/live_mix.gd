@@ -9,7 +9,8 @@ extends SceneTree
 ## frames, before anything is recorded. Writes <out>.json and <out>_<bus>.wav (stereo 16-bit):
 ##   cues: every game `cue` the view would hear, by kind; shots by shot kind, projectiles counted;
 ##   played: every start the kit recorded, by sound, with the level it asked for;
-##   voices: per pool the most and the mean playing at once, frames at the cap; voiceless and thinned.
+##   voices: per pool the most and the mean playing at once, frames at the cap; voiceless and thinned;
+##   flight_log: each flight as it started: [time, sound, seconds, db, 1 if the rider's own, pitch].
 ## A window opens, because a headless kit stays silent by design (GameAudioKit._quiet_run).
 
 const BUSES: Array[String] = ["Master", "Machines", "Ambience", "Sfx", "UI"]
@@ -37,6 +38,8 @@ var _shots: Dictionary = {}
 var _played: Dictionary = {}
 var _played_log: Array[Array] = []
 var _cue_log: Array[Array] = []
+var _flight_log: Array[Array] = []
+var _flights_seen: Dictionary = {}
 var _pool_max: Dictionary = {}
 var _pool_sum: Dictionary = {}
 var _pool_full: Dictionary = {}
@@ -191,6 +194,23 @@ func _drain_played() -> void:
 		_played[id] = e
 		_played_log.append([_captured_s(), id, snappedf(_kit.played_db[i], 0.1)])
 	_kit.clear_played()
+	for f: GameAudioKit.Flight in _kit._flights:
+		if _flights_seen.has(f.get_instance_id()):
+			continue
+		_flights_seen[f.get_instance_id()] = true
+		(
+			_flight_log
+			. append(
+				[
+					snappedf(_captured_s() - f.t, 0.001),
+					f.sound,
+					snappedf(f.dur, 0.001),
+					snappedf(f.db, 0.1),
+					1 if f.lead else 0,
+					snappedf(f.pitch, 0.001),
+				]
+			)
+		)
 
 
 ## Where the recording has got to. The log uses this and not the frame clock: a capture starts a mix step or two after
@@ -244,6 +264,7 @@ func _finish() -> void:
 		"thinned": _kit.thinned - _skip_thinned,
 		"cue_log": _cue_log,
 		"played_log": _played_log,
+		"flight_log": _flight_log,
 	}
 	var f := FileAccess.open(_out + ".json", FileAccess.WRITE)
 	if f != null:

@@ -258,7 +258,7 @@ test('the CLI writes the card and its exit code is the verdict', (t) => {
 
 test('P1-P5 are n/a for a bank with no projectiles, and count flights when it has them', () => {
   const plain = card(structuredClone(fixture));
-  for (const id of ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7']) assert.equal(row(plain, id).value, 'n/a', id);
+  for (const id of ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9']) assert.equal(row(plain, id).value, 'n/a', id);
   const doc = structuredClone(fixture);
   doc.sounds.air = { dur: 1, rate: 22050, ch: 1, seed: 9, loop: true, compress: 'pcm', layers: [{ src: 'noise', color: 'white', gain: 1, fx: [{ bp: { f: 2500, q: 0.7 } }] }] };
   const flying = { sound: 'air', db: 3, flight: { dur_var: 'f' } };
@@ -325,4 +325,30 @@ test('P6 holds the 2-8 kHz of the master where a bank asks', () => {
   assert.equal(row(card(doc), 'P6').pass, false);
   doc.preview.checks.ear_band.limit = 0;
   assert.equal(row(card(doc), 'P6').pass, true);
+});
+
+test('A14 reads the median of a cue\'s firings, not its quietest moment', () => {
+  const doc = structuredClone(fixture);
+  const shot = doc.preview.checks.a14.cue;
+  const one = doc.preview.events.find((e) => e.cue === shot);
+  doc.preview.events = [...doc.preview.events, { ...one, t: one.t + 0.05 }, { ...one, t: one.t + 0.1 }];
+  assert.match(String(row(card(doc), 'A14').note), /5 firings/);
+});
+
+test('P8 hears other flights, P9 reads the ground apart from a target in the mix', () => {
+  const doc = structuredClone(fixture);
+  doc.sounds.air = { dur: 1, rate: 22050, ch: 1, seed: 9, loop: true, compress: 'pcm', layers: [{ src: 'noise', color: 'white', gain: 1, fx: [{ bp: { f: 1700, q: 0.7 } }] }] };
+  doc.sounds.mud = { dur: 0.1, rate: 22050, ch: 1, seed: 11, layers: [{ src: 'noise', color: 'white', env: { a: 0.001, d: 0.09 }, gain: 1, fx: [{ bp: { f: 400, q: 1 } }] }] };
+  doc.sounds.tok = { dur: 0.1, rate: 22050, ch: 1, seed: 12, layers: [{ src: 'noise', color: 'white', env: { a: 0.001, d: 0.09 }, gain: 1, fx: [{ bp: { f: 4000, q: 1 } }] }] };
+  doc.cues.fly_own = { hits: [{ sound: 'air', db: 3, flight: { dur_var: 'f' } }] };
+  doc.cues.fly_other = { hits: [{ sound: 'air', db: 12, flight: { dur_var: 'f' } }] };
+  doc.cues.mud = { hits: [{ sound: 'mud', db: 0 }] };
+  doc.cues.tok = { hits: [{ sound: 'tok', db: 0 }] };
+  doc.preview.events = [...doc.preview.events, { t: 3, cue: 'fly_own', vars: { f: 2 } }, { t: 3, cue: 'fly_other', vars: { f: 2 } }, { t: 6, cue: 'mud' }, { t: 7, cue: 'tok' }];
+  doc.preview.checks = { ...doc.preview.checks, projectiles: { shots: ['fly_own'], surfaces: { dirt: ['mud'], wood: ['tok'] }, own_flight: { cue: 'fly_own', band: [1000, 2400] } } };
+  const c2 = card(doc);
+  assert.equal(row(c2, 'P8').pass, false, 'a louder flight beside it');
+  assert.equal(row(c2, 'P9').pass, true, row(c2, 'P9').value);
+  doc.cues.tok.hits[0].sound = 'mud';
+  assert.equal(row(card(doc), 'P9').pass, false, 'one sound on two surfaces');
 });

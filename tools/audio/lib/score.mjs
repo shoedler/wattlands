@@ -8,7 +8,7 @@ import path from 'node:path';
 import { allFiles, bankWavBytes, loadBank } from './bank.mjs';
 import { bandFilter, bandShareDb, fft, gainToDb, powerSpectrum } from './dsp.mjs';
 import { integratedLufs, loudnessRange, momentaryMaxLufs, momentaryTrack, truePeakDb } from './lufs.mjs';
-import { earBand } from './ear_band.mjs';
+import { earBand, onsetShape, shapeApart } from './ear_band.mjs';
 import { BankAudio, MIX_RATE, PROMPT_VOICE_DB, STROKE_HORIZON_S, mixdown, renderVoice, segmentsLength, simulate } from './offline_mix.mjs';
 import { curveEval, curvePasses } from './pattern.mjs';
 
@@ -401,6 +401,8 @@ const P_FLIGHT_MARGIN_DB = 3;
 const P_IMPACT_MARGIN_DB = 3;
 const P_SURFACE_APART_DB = 3;
 const P_FLIGHTS_APART_DB = 3;
+const P_PEAK_OVER_ALL_DB = 3;
+const P_MIX_APART_DB = 3;
 const P_FLIGHT_BAND = [800, 6000];
 const P_IMPACT_BAND = [400, 6000];
 
@@ -472,7 +474,7 @@ function shapeDistance(a, b) {
 }
 
 /**
- * P1-P7, for a bank whose preview says preview.checks.projectiles: {shots: [cue...], surfaces: {name: [cue...]}}. An
+ * P1-P9, for a bank whose preview says preview.checks.projectiles: {shots: [cue...], surfaces: {name: [cue...]}}. An
  * offline card passed a game nobody could hear arrows in, because nothing asked whether a shot had a sound that lasted
  * its flight, or whether that sound stood out of the mix. These ask.
  */
@@ -481,11 +483,13 @@ function projectileRows(bank, p, sim, mix, rows) {
   const targets = {
     P1: 'flight sounds started per shot: 1 for every weapon',
     P2: 'a flight sound lasts its flight',
-    P3: `a flight's loudest 250 ms is >= +${P_FLIGHT_MARGIN_DB} dB over the wheels and the bed, ${P_FLIGHT_BAND.join('-')} Hz`,
+    P3: `a flight's loudest 250 ms is >= +${P_FLIGHT_MARGIN_DB} dB over the wheels and the bed, ${P_FLIGHT_BAND.join('-')} Hz (not over other flights: P8)`,
     P4: `every impact cue is in the preview, each surface's median impact >= +${P_IMPACT_MARGIN_DB} dB over everything else that plays, ${P_IMPACT_BAND.join('-')} Hz`,
     P5: `surfaces differ: spectra >= ${P_SURFACE_APART_DB} dB apart`,
     P6: `2-8 kHz of the master <= ${p.checks?.ear_band?.limit ?? '?'} dB of its total`,
     P7: `flights differ: spectra at their pitch >= ${P_FLIGHTS_APART_DB} dB apart`,
+    P8: `the rider's own flight at full level, its loudest 250 ms over everything else, flights too, in its band: median >= +${P_PEAK_OVER_ALL_DB} dB`,
+    P9: `in the mix, first 60 ms of an impact: a target >= ${P_MIX_APART_DB} dB apart from the ground`,
   };
   if (!spec) {
     for (const id of Object.keys(targets)) rows.push({ id, pass: true, value: 'n/a', target: 'preview.checks.projectiles not set' });
@@ -575,6 +579,38 @@ function projectileRows(bank, p, sim, mix, rows) {
   else {
     const e = earBand(mono(mix.master));
     rows.push({ id: 'P6', pass: e.share <= limit, value: round(e.share), target: targets.P6, note: `loudest frame ${round(e.worst)}` });
+  }
+
+  const own = spec.own_flight;
+  if (!own) rows.push({ id: 'P8', pass: true, value: 'n/a', target: 'preview.checks.projectiles.own_flight not set' });
+  else {
+    const mine = sim.voices.filter((v) => v.flight && v.cue === own.cue && v.lead);
+    const top = Math.max(-200, ...mine.map((v) => v.db));
+    const overs = mine.filter((v) => v.db >= top - 1).map((v) => voiceOverRest(bank, v, everything, own.band, 0.25)).sort((x, y) => x - y);
+    const mid = median(overs);
+    rows.push({ id: 'P8', pass: mid >= P_PEAK_OVER_ALL_DB, value: `${mid >= 0 ? '+' : ''}${round(mid)} dB`, target: `${targets.P8}, ${own.band.join('-')} Hz`, note: `${overs.length} flights of ${own.cue}` });
+  }
+
+  const ground = spec.surfaces.dirt;
+  const masterMono = mono(mix.master);
+  const starts = (cues) => sim.voices.filter((v) => cues.includes(v.cue) && v.sound === bank.doc.cues[v.cue].hits[0].sound).map((v) => v.t);
+  if (!ground) rows.push({ id: 'P9', pass: true, value: 'n/a', target: 'no dirt surface' });
+  else {
+    const groundShape = onsetShape(masterMono, starts(ground));
+    let nearest = Infinity;
+    let nearestWhat = '';
+    const parts = [];
+    for (const [surface, cues] of surfaces) {
+      if (surface === 'dirt' || surface === 'water') continue;
+      const d = shapeApart(onsetShape(masterMono, starts(cues)), groundShape);
+      if (d === null) continue;
+      parts.push(`${surface} ${round(d)}`);
+      if (d < nearest) {
+        nearest = d;
+        nearestWhat = surface;
+      }
+    }
+    rows.push({ id: 'P9', pass: nearest >= P_MIX_APART_DB, value: parts.join(', '), target: targets.P9, note: `nearest: ${nearestWhat}` });
   }
 
   const flightHits = spec.shots.flatMap((cue) => (bank.doc.cues[cue]?.hits ?? []).filter((h) => h.flight).map((h) => ({ cue, hit: h })));
@@ -949,14 +985,19 @@ export function scoreBank(doc, dir, { shared, root = null, rpms = null, stems = 
 
   // A14: the shot's 1-4 kHz over the 500 ms before it.
   if (checks.a14) {
-    const ev = (p.events ?? []).find((e) => e.cue === checks.a14.cue);
-    if (!ev) rows.push({ id: 'A14', pass: false, value: 'no such event', target: `preview.events has no ${checks.a14.cue}` });
+    // Every firing of the cue, its median: one shot placed in a quiet moment says nothing about a wave.
+    const evs = (p.events ?? []).filter((e) => e.cue === checks.a14.cue);
+    if (evs.length === 0) rows.push({ id: 'A14', pass: false, value: 'no such event', target: `preview.events has no ${checks.a14.cue}` });
     else {
       const m = mono(mix.master);
-      const at = Math.round(ev.t * mixRate);
-      const before = bandDb(m.subarray(Math.max(0, at - Math.round(0.5 * mixRate)), at), 1000, 4000);
-      const after = bandDb(m.subarray(at, at + Math.round(0.25 * mixRate)), 1000, 4000);
-      rows.push({ id: 'A14', pass: after - before >= 6, value: `+${round(after - before)} dB`, target: 'event 1-4 kHz >= +6 dB over the background' });
+      const reads = evs.map((ev) => {
+        const at = Math.round(ev.t * mixRate);
+        const before = bandDb(m.subarray(Math.max(0, at - Math.round(0.5 * mixRate)), at), 1000, 4000);
+        const after = bandDb(m.subarray(at, at + Math.round(0.25 * mixRate)), 1000, 4000);
+        return after - before;
+      }).sort((x, y) => x - y);
+      const mid = median(reads);
+      rows.push({ id: 'A14', pass: mid >= 6, value: `+${round(mid)} dB`, target: 'event 1-4 kHz >= +6 dB over the background, median of its firings', note: `${reads.length} firings` });
     }
   } else rows.push({ id: 'A14', pass: true, value: 'n/a', target: 'preview.checks.a14 not set' });
 
