@@ -1,0 +1,1 @@
+- Castellum Rotae: every arrow that lands now makes its own sound, at its own moment and on its side of the screen, your arrows and the other riders' a little quieter: a slap on a spearman, a knock on timber, a ring on a shield, a small thud or plip on a miss. They play on a voice pool of their own, so flights, stones and the gate never lose a voice to them.

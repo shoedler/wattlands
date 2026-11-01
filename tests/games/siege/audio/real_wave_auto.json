@@ -1,17 +1,76 @@
 {
   "mix_apart_first_60ms": {
-    "flesh_dirt": 3.95,
-    "wood_dirt": 3.59,
-    "flesh_wood": 1.31,
-    "shield_dirt": 6.48
+    "flesh_dirt": 3.42,
+    "wood_dirt": 3.05,
+    "flesh_wood": 2.91,
+    "shield_dirt": 5.46
   },
-  "impacts_per_s": 1.26,
+  "impacts_per_s": 12.65,
   "kills_per_s": 0.32,
-  "patters_with_a_body_in_300ms": 0,
-  "head_episodes_per_min": 19.03,
+  "head_episodes_per_min": 17.67,
   "a14_ballista": {
     "n": 11,
-    "median": 0.85
+    "median": 1.26
+  },
+  "arrows": {
+    "landed": 2076,
+    "struck_by_ear": 256,
+    "station_hits": 226,
+    "sounds_asked": 2076,
+    "sounds_started": 2076,
+    "body_sounds": 258,
+    "miss_sounds": 1818,
+    "by_sound": {
+      "arrow_dirt": 1813,
+      "arrow_flesh": 124,
+      "arrow_wood": 132,
+      "arrow_water": 5,
+      "arrow_shield": 2
+    },
+    "crowd_voiceless": 0,
+    "stolen": {
+      "Sfx:6": 2,
+      "Sfx:7": 2
+    },
+    "crowd_voices": {
+      "cap": 16,
+      "frames_full": 0,
+      "max": 9,
+      "mean": 0.67
+    }
+  },
+  "fatigue": {
+    "lufs_30s": [
+      -17.24,
+      -17.81,
+      -17.74,
+      -17.07,
+      -18.17,
+      -17.1
+    ],
+    "lufs_30s_spread": 1.1,
+    "lufs_3s_p10_p90": [
+      -19.37,
+      -16.4
+    ],
+    "arrows_per_s_30s": [
+      7.6,
+      7.6,
+      13.2,
+      13.2,
+      13.2,
+      14.4
+    ],
+    "gap_ms_p10_p50_p90": [
+      0,
+      32,
+      139
+    ],
+    "envelope_repeat": {
+      "lag_s": 0.65,
+      "correlation": 0.32
+    },
+    "same_file_twice_running": 0
   },
   "flights_1k_2k4": {
     "over": {
@@ -27,60 +86,195 @@
       },
       "other_stone_tumble": {
         "n": 1,
-        "median": -6.99,
-        "p90": -6.99
+        "median": -7.09,
+        "p90": -7.09
       },
       "own_arrow_swarm": {
         "n": 4,
-        "median": -10.27,
-        "p90": -3.69
+        "median": -9.66,
+        "p90": -2.98
       },
       "own_arrow_swarm_full_level": {
         "n": 2,
-        "median": -3.69,
-        "p90": -3.69
+        "median": -2.98,
+        "p90": -2.98
       },
       "own_stone_tumble": {
         "n": 36,
-        "median": 5.31,
-        "p90": 12.57
+        "median": 4.3,
+        "p90": 12.72
       },
       "own_stone_tumble_full_level": {
         "n": 36,
-        "median": 5.31,
-        "p90": 12.57
+        "median": 4.3,
+        "p90": 12.72
       },
       "other_arrow_swarm": {
         "n": 173,
-        "median": -3.6,
-        "p90": 2.63
+        "median": -4.71,
+        "p90": 1.87
       },
       "other_bolt_hiss": {
         "n": 204,
-        "median": -1.53,
-        "p90": 5.47
+        "median": -1.75,
+        "p90": 4.36
       }
     },
-    "ripple_p90_p10": 10.19
+    "ripple_p90_p10": 10.2
   },
-  "sfx_over_machines_1k_2k": 15.71,
-  "seconds": 179.72,
-  "lufs": -17.81,
-  "lra": 3.37,
-  "ear_band_share": -14.95,
-  "ear_band_worst": -4.03,
-  "ear_band_a_share": -8.45,
-  "top_band_share": -37.6,
-  "sfx_lufs": -20.6,
+  "sfx_over_machines_1k_2k": 16.83,
+  "one_arrow": {
+    "all_400_6000": {
+      "body": {
+        "n": 258,
+        "median": 2.3,
+        "p10": -3.41,
+        "rise": 4.06,
+        "sounds": {
+          "arrow_flesh": {
+            "n": 124,
+            "median": 3.47,
+            "p10": -2.07
+          },
+          "arrow_wood": {
+            "n": 132,
+            "median": 1.05,
+            "p10": -4.06
+          },
+          "arrow_shield": {
+            "n": 2,
+            "median": -0.51,
+            "p10": -0.51
+          }
+        }
+      },
+      "miss": {
+        "n": 1818,
+        "median": -10.88,
+        "p10": -16.08,
+        "rise": 0.06,
+        "sounds": {
+          "arrow_dirt": {
+            "n": 1813,
+            "median": -10.9,
+            "p10": -16.08
+          },
+          "arrow_water": {
+            "n": 5,
+            "median": -4.27,
+            "p10": -6.75
+          }
+        }
+      },
+      "arbitrary_rise": -0.72
+    },
+    "low_400_1000": {
+      "body": {
+        "n": 258,
+        "median": 1.56,
+        "p10": -5.06,
+        "rise": 3.91,
+        "sounds": {
+          "arrow_flesh": {
+            "n": 124,
+            "median": 5.12,
+            "p10": -1.22
+          },
+          "arrow_wood": {
+            "n": 132,
+            "median": -0.87,
+            "p10": -6.1
+          },
+          "arrow_shield": {
+            "n": 2,
+            "median": -20.38,
+            "p10": -20.38
+          }
+        }
+      },
+      "miss": {
+        "n": 1818,
+        "median": -9.85,
+        "p10": -15.69,
+        "rise": 0.08,
+        "sounds": {
+          "arrow_dirt": {
+            "n": 1813,
+            "median": -9.85,
+            "p10": -15.69
+          },
+          "arrow_water": {
+            "n": 5,
+            "median": 0.96,
+            "p10": -4.43
+          }
+        }
+      },
+      "arbitrary_rise": -0.9
+    },
+    "high_2400_6000": {
+      "body": {
+        "n": 258,
+        "median": -7.5,
+        "p10": -12.44,
+        "rise": 1.07,
+        "sounds": {
+          "arrow_flesh": {
+            "n": 124,
+            "median": -10.66,
+            "p10": -13.91
+          },
+          "arrow_wood": {
+            "n": 132,
+            "median": -5.43,
+            "p10": -8.29
+          },
+          "arrow_shield": {
+            "n": 2,
+            "median": 3.9,
+            "p10": 3.9
+          }
+        }
+      },
+      "miss": {
+        "n": 1818,
+        "median": -6.78,
+        "p10": -9.87,
+        "rise": 0.89,
+        "sounds": {
+          "arrow_dirt": {
+            "n": 1813,
+            "median": -6.77,
+            "p10": -9.85
+          },
+          "arrow_water": {
+            "n": 5,
+            "median": -31.41,
+            "p10": -33.32
+          }
+        }
+      },
+      "arbitrary_rise": -0.22
+    }
+  },
+  "seconds": 180.01,
+  "lufs": -17.51,
+  "lra": 3.22,
+  "ear_band_share": -14.89,
+  "ear_band_worst": -2.94,
+  "ear_band_a_share": -8.75,
+  "top_band_share": -37.4,
+  "sfx_lufs": -20.08,
   "sfx_movement_1k_4k": {
-    "p10": -39.22,
-    "p50": -31.82,
-    "p90": -26.96,
-    "spread": 12.27
+    "p10": -38.24,
+    "p50": -31.25,
+    "p90": -26.25,
+    "spread": 11.99
   },
-  "prompt_margin_worst": 8.49,
-  "bank_sha": "8249ec1495a34b6e68ef0127d9f81be92db45fd1d07d37ba35038f9916e84fc0",
+  "prompt_margin_worst": 10.48,
+  "bank_sha": "a6e194b9a07134d4a388bf9cbd3a714d29af243d0f5186d9e59cd84b82abfa31",
+  "driver": "WASAPI",
   "shots": 415,
   "flight_starts": 415,
-  "voiceless": 0
+  "voiceless": 1
 }

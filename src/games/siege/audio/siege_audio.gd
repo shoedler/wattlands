@@ -35,7 +35,8 @@ const HOOF_NEAR_GATE_M := 70.0
 const RAM_GAPS_S: Array[float] = [1.15, 1.25]
 const RAM_PITCH: Array[float] = [1.0, 0.96, 1.03, 0.94]
 const COIN_EVERY_S := 0.3
-## Audio only, never the sim: other riders' impacts and all kills are thinned, so a rider's own hits can be told apart.
+## Audio only, never the sim: other riders' bolts and Scorpions and all kills are thinned, so a rider's own hits can be
+## told apart. Arrows are not: every arrow that lands is heard, a rider's own or another's.
 const OTHER_IMPACT_EVERY_S := 0.7
 const KILL_EVERY_S := 1.5
 ## hit_wood's pitch for each blow: three files at about one a second would otherwise repeat.
@@ -52,10 +53,13 @@ const PAN_SPREAD := 0.75
 ## passes over at full level, the next this far under: with all of them at one level a rider hears haze and no single
 ## pass. Each still has its own release, flight and landing. Further under drops it below the scorecard's P3.
 const VOLLEY_UNDER_DB := -6.0
-## A volley's patter by how many of its 12 arrows came down on nothing: this much under, per halving.
-const PATTER_HALVING_DB := -3.0
-const PATTER_MIN_DB := -11.0
-const ARROWS_PER_RACK := 12.0
+## Each arrow's own small pitch and level, so about 12 a second of a few very short files never read as one file
+## machine-gunning. Two low-discrepancy steps with no common period: no pair of an arrow's pitch and level comes back in
+## an hour of arrows. View-only.
+const ARROW_PITCH_SPREAD := 0.07
+const ARROW_DB_SPREAD := 2.5
+const ARROW_PITCH_STEP := 0.6180339887
+const ARROW_DB_STEP := 0.7548776662
 ## Gate hits answer what the gate lost since the last one, at most once a ram stroke, so the sound
 ## doesn't depend on the tick the damage came in: a host's fractions and a client's whole HP read
 ## the same. They and the hooves grow with the damage and the horses, up to these.
@@ -90,6 +94,7 @@ var _volley_n: int = 0
 var _other_impact_t: float = 0.0
 var _kill_t: float = 0.0
 var _wood_n: int = 0
+var _arrow_n: int = 0
 var _view: SiegeView = null
 var _coin_t: float = 0.0
 var _leak_t: float = 0.0
@@ -286,6 +291,10 @@ func _shot(cue_name: String, data: Dictionary) -> void:
 		_shot_tick = tk
 		_shot_sounds = 0
 	_shot_sounds += 1
+	var src := int(data.get("src", 0))
+	var lead := is_mine(src)
+	# Past the cap a shot has no release and no flight of its own, and it still lands.
+	var flight := _shots.add(data, tk * Wl.SIM_DT, _level_of(src), lead)
 	if _shot_sounds > MAX_SHOT_SOUNDS_PER_TICK:
 		return
 	var sd := int(data.get("sd", 0))
@@ -294,9 +303,6 @@ func _shot(cue_name: String, data: Dictionary) -> void:
 	if weapon == SiegeShotSounds.WEAPON_ARROW:
 		lvl = VOLLEY_UNDER_DB if _volley_n % 2 == 1 else 0.0
 		_volley_n += 1
-	var src := int(data.get("src", 0))
-	var lead := is_mine(src)
-	var flight := _shots.add(data, int(data.get("tk", 0)) * Wl.SIM_DT, _level_of(src), lead)
 	last_flight_s = clampf(float(flight["flight_s"]), FLIGHT_MIN_S, FLIGHT_MAX_S)
 	(
 		kit
@@ -343,29 +349,28 @@ func _landings(state: SiegeState, view: SiegeView) -> void:
 	for impact: Dictionary in _shots.step(view.clock_s, state.enemies):
 		var lead := bool(impact["lead"])
 		var weapon: String = impact["weapon"]
-		var wet_or_dirt: bool = (
-			impact["surface"] in [SiegeShotSounds.SURFACE_DIRT, SiegeShotSounds.SURFACE_WATER]
-		)
-		# Another rider's misses say nothing to you, and a stone is an event whoever threw it.
-		if not lead and weapon == SiegeShotSounds.WEAPON_ARROW and wet_or_dirt:
+		var cue_name := "hit_%s_%s" % [weapon, impact["surface"]]
+		var pan := _pan(impact["at"])
+		if weapon == SiegeShotSounds.WEAPON_ARROW:
+			var spread := arrow_spread(_arrow_n)
+			_arrow_n += 1
+			kit.cue(cue_name, {"pan": pan, "lvl": spread.y, "pv": spread.x}, lead)
 			continue
+		# A stone is an event whoever threw it.
 		if not lead and weapon != SiegeShotSounds.WEAPON_STONE:
 			if _other_impact_t > 0.0:
 				continue
 			_other_impact_t = OTHER_IMPACT_EVERY_S
-		var cue_name := "hit_%s_%s" % [weapon, impact["surface"]]
-		var lvl := 0.0
-		if wet_or_dirt and weapon == SiegeShotSounds.WEAPON_ARROW:
-			lvl = patter_db(int(impact["count"]))
 		var pv: float = WOOD_PITCH[_wood_n % WOOD_PITCH.size()]
 		_wood_n += 1
-		kit.cue(cue_name, {"pan": _pan(impact["at"]), "lvl": lvl, "pv": pv}, lead)
+		kit.cue(cue_name, {"pan": pan, "lvl": 0.0, "pv": pv}, lead)
 
 
-## A volley's patter under its level by how few of the rack's arrows it is.
-static func patter_db(misses: int) -> float:
-	var halvings := log(ARROWS_PER_RACK / maxf(float(misses), 1.0)) / log(2.0)
-	return maxf(PATTER_HALVING_DB * halvings, PATTER_MIN_DB)
+## The nth arrow's pitch (x) and level in dB (y).
+static func arrow_spread(n: int) -> Vector2:
+	var a := fposmod(float(n) * ARROW_PITCH_STEP, 1.0)
+	var b := fposmod(float(n) * ARROW_DB_STEP, 1.0)
+	return Vector2(1.0 + ARROW_PITCH_SPREAD * (2.0 * a - 1.0), -ARROW_DB_SPREAD * b)
 
 
 ## -1 left of the screen .. 1 right, where the view draws world point `p`.

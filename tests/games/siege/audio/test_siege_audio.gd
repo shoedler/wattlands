@@ -417,17 +417,41 @@ func test_every_other_volley_passes_under_and_each_still_has_its_flight() -> voi
 		assert_almost_eq(levels[k] - levels[0], under, 0.01, "volley %d" % k)
 
 
-func test_another_riders_misses_are_dropped_and_your_own_kept() -> void:
-	for row: Array in [[SiegeIds.STATION_ARROWS, 1], [SiegeIds.STATION_BALLISTA, 0]]:
+func test_every_arrow_sounds_and_another_riders_are_quieter() -> void:
+	var heard := {}
+	for station: int in [SiegeIds.STATION_ARROWS, SiegeIds.STATION_BALLISTA]:
 		var st := SiegeKit.state("short", 1, 0)
-		_rider_on(st, row[0])
+		_rider_on(st, station)
 		var v := _view(st)
 		var ev := _shot(SiegeIds.SHOT_ARROW)
 		ev["src"] = SiegeIds.STATION_ARROWS
 		ev["tk"] = st.tick
 		v.audio.on_cue(SiegeIds.EV_SHOT, ev)
 		_land(v, v.audio.last_flight_s + 1.5)
-		assert_eq(_count(v, "arrow_dirt"), row[1], "the wheel on station %d" % row[0])
+		var levels := _db_of(v, "arrow_dirt")
+		assert_eq(
+			levels.size(), 12, "twelve arrows, twelve sounds, the wheel on station %d" % station
+		)
+		heard[station] = levels[0]
+	var bank := AudioBank.load_bank(SiegeAudio.BANK_PATH)
+	assert_almost_eq(
+		heard[SiegeIds.STATION_BALLISTA] - heard[SiegeIds.STATION_ARROWS],
+		float(bank.cues["hit_arrow_dirt"]["other_db"]),
+		0.01,
+		"the same arrow of the same volley, another rider's"
+	)
+
+
+func test_no_two_arrows_running_play_one_file_and_each_takes_its_own_pitch() -> void:
+	var bank := AudioBank.load_bank(SiegeAudio.BANK_PATH)
+	for surface: String in ["dirt", "water", "flesh", "wood", "shield"]:
+		var hit: Dictionary = bank.cues["hit_arrow_%s" % surface]["hits"][0]
+		assert_eq(hit["sound"], "arrow_%s" % surface)
+		assert_true(bank.variants(hit["sound"]) >= 3, "%s: several variants" % surface)
+		assert_eq(str(hit.get("pitch_var", "")), "pv", surface)
+		assert_eq(str(hit.get("db_var", "")), "lvl", surface)
+		assert_eq(str(hit.get("pan_var", "")), "pan", surface)
+		assert_true(bool(hit.get("crowd", false)), "%s: on the crowd's pool" % surface)
 
 
 func test_other_riders_impacts_are_thinned_and_your_own_are_not() -> void:
