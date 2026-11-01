@@ -531,6 +531,7 @@ func _near_exhaust(state: TankState, id: int) -> void:
 			NEAR_EXHAUST,
 			0.45
 		)
+		fx.send_under_last(false)
 		return
 	fx.wisp(
 		from + Vector2(0.0, fx.rng.randf_range(-1.5, 1.5)),
@@ -540,6 +541,7 @@ func _near_exhaust(state: TankState, id: int) -> void:
 		0.5,
 		NEAR_EXHAUST
 	)
+	fx.send_under_last(true)
 
 
 func _near_dust(state: TankState, id: int) -> void:
