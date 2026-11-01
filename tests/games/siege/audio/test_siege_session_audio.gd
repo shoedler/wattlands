@@ -307,6 +307,12 @@ func test_accents_keep_their_gap_across_volleys() -> void:
 				last = t
 
 
+func test_bodies_landing_together_step_back_by_how_many() -> void:
+	assert_almost_eq(SiegeAudio.pile_db(1), 0.0, 0.001, "one body is all there")
+	assert_almost_eq(SiegeAudio.pile_db(2), SiegeAudio.ARROW_PILE_DB, 0.001)
+	assert_almost_eq(SiegeAudio.pile_db(12), SiegeAudio.ARROW_PILE_DB * 3.585, 0.01)
+
+
 func test_no_file_twice_running_and_the_order_is_not_a_rotation() -> void:
 	var was := 0
 	var steps := {}

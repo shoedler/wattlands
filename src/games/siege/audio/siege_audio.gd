@@ -78,6 +78,11 @@ const ARROW_DEPTH_PX := 90.0
 ## An arrow's level over its cue never passes this, whatever accent and depth add: a body near the camera that is also
 ## an accent would otherwise go over the top of the master by itself.
 const ARROW_LVL_MAX_DB := 2.0
+## Every body is an accent, and a volley on a ram is twelve bodies in about 120 ms. Each is this much under per doubling
+## of the bodies in the window: at full level together they took a safety prompt's margin under +6 LU. A prompt doesn't
+## move, so they do.
+const ARROW_PILE_S := 0.12
+const ARROW_PILE_DB := -2.0
 ## A volley comes down in a few metres, about one pan step of the road's side of the screen: the volley's place is a
 ## little wider than the picture and each arrow's distance from it much wider, or all twelve share one send.
 const ARROW_PAN_WIDEN := 1.3
@@ -119,6 +124,7 @@ var _wood_n: int = 0
 var _arrow_n: int = 0
 var _arrow_file: Dictionary = {}
 var _alarm_t: float = 0.0
+var _bodies_t: Array[float] = []
 var _view: SiegeView = null
 var _coin_t: float = 0.0
 var _leak_t: float = 0.0
@@ -399,18 +405,36 @@ func _arrow_landing(cue_name: String, impact: Dictionary, lead: bool) -> void:
 	var spread := arrow_spread(_arrow_n)
 	var lvl := spread.y + _arrow_depth_db(impact["at"])
 	lvl += ARROW_ACCENT_DB if bool(impact["accent"]) else 0.0
+	lvl = minf(lvl, ARROW_LVL_MAX_DB)
 	var sound := "arrow_%s" % impact["surface"]
+	if impact["surface"] not in [SiegeShotSounds.SURFACE_DIRT, SiegeShotSounds.SURFACE_WATER]:
+		lvl += _pile_db()
 	var file := next_file(_arrow_file.get(sound, 0), _arrow_n, kit.variants_of(sound))
 	_arrow_file[sound] = file
 	_arrow_n += 1
 	var vars := {
 		"pan": _arrow_pan(impact["at"], impact["mid"]),
-		"lvl": minf(lvl, ARROW_LVL_MAX_DB) + (ALARM_CROWD_DB if _alarm_t > 0.0 else 0.0),
+		"lvl": lvl + (ALARM_CROWD_DB if _alarm_t > 0.0 else 0.0),
 		"pv": spread.x,
 		"vr": file,
 		"acc": 1.0 if bool(impact["accent"]) else 0.0,
 	}
 	kit.cue(cue_name, vars, lead)
+
+
+## This body, among those landing with it: under by how many.
+func _pile_db() -> float:
+	var now := _view.clock_s if _view != null else 0.0
+	var keep: Array[float] = [now]
+	for t in _bodies_t:
+		if now - t < ARROW_PILE_S:
+			keep.append(t)
+	_bodies_t = keep
+	return pile_db(keep.size())
+
+
+static func pile_db(bodies: int) -> float:
+	return ARROW_PILE_DB * log(float(maxi(bodies, 1))) / log(2.0)
 
 
 ## Which of a sound's `count` files plays after `was`: any other, chosen by n.

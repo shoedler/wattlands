@@ -1,21 +1,21 @@
 {
   "mix_apart_first_60ms": {
-    "flesh_dirt": 4.88,
-    "wood_dirt": 5.62,
-    "flesh_wood": 5.39,
-    "shield_dirt": 5.04
+    "flesh_dirt": 4.37,
+    "wood_dirt": 5.16,
+    "flesh_wood": 4.94,
+    "shield_dirt": 5.09
   },
   "impacts_per_s": 12.84,
   "kills_per_s": 0.3,
-  "head_episodes_per_min": 28,
+  "head_episodes_per_min": 27,
   "a14_ballista": {
     "n": 10,
-    "median": 0.81
+    "median": 0.66
   },
   "arrows": {
     "landed": 2110,
     "struck_by_ear": 246,
-    "station_hits": 229,
+    "station_hits": 228,
     "sounds_asked": 2110,
     "sounds_started": 2110,
     "body_sounds": 246,
@@ -40,17 +40,17 @@
   },
   "fatigue": {
     "lufs_30s": [
-      -15.99,
-      -17.19,
-      -16.36,
-      -16.58,
-      -16.79,
-      -15.72
+      -16.09,
+      -17.29,
+      -16.43,
+      -16.54,
+      -16.63,
+      -15.89
     ],
-    "lufs_30s_spread": 1.47,
+    "lufs_30s_spread": 1.4,
     "lufs_3s_p10_p90": [
-      -18.22,
-      -15.17
+      -17.99,
+      -15.3
     ],
     "arrows_per_s_30s": [
       8,
@@ -63,18 +63,18 @@
     "gap_ms_p10_p50_p90": [
       0,
       22,
-      139
+      149
     ],
     "envelope_repeat": {
       "lag_s": 1.55,
-      "correlation": 0.18
+      "correlation": 0.19
     },
     "same_file_twice_running": 0
   },
   "landing_contrast": {
-    "ratio": 2.57,
-    "inside_per_s": 2.06,
-    "outside_per_s": 0.8,
+    "ratio": 3.01,
+    "inside_per_s": 2.25,
+    "outside_per_s": 0.75,
     "duty": 0.48,
     "volleys": 181
   },
@@ -82,206 +82,206 @@
     "over": {
       "own_arrow_swarm": {
         "n": 185,
-        "median": 0.82,
-        "p90": 6.66
+        "median": 0.87,
+        "p90": 8.52
       },
       "own_arrow_swarm_full_level": {
         "n": 92,
-        "median": 4.09,
-        "p90": 7.66
+        "median": 4.31,
+        "p90": 10.68
       },
       "other_stone_tumble": {
         "n": 40,
-        "median": -3.29,
-        "p90": 1.33
+        "median": -2.69,
+        "p90": 1.35
       },
       "other_bolt_hiss": {
         "n": 196,
-        "median": -2.84,
-        "p90": 1.82
+        "median": -2.99,
+        "p90": 0.93
       }
     },
-    "ripple_p90_p10": 8.19
+    "ripple_p90_p10": 8.17
   },
-  "sfx_over_machines_1k_2k": 20.22,
+  "sfx_over_machines_1k_2k": 19.87,
   "one_arrow": {
     "all_400_6000": {
       "body": {
         "n": 246,
-        "median": 8.31,
-        "p10": -1.86,
-        "rise": 8.49,
-        "rise_accented": 8.49,
+        "median": 7.19,
+        "p10": -2.45,
+        "rise": 7.07,
+        "rise_accented": 7.07,
         "rise_plain": 0,
         "accented": 246,
         "sounds": {
           "arrow_flesh": {
             "n": 100,
-            "median": 9.8,
-            "p10": -0.9
+            "median": 8.32,
+            "p10": -2.5
           },
           "arrow_wood": {
             "n": 146,
-            "median": 7.73,
-            "p10": -2.55
+            "median": 6.44,
+            "p10": -2.45
           }
         }
       },
       "miss": {
         "n": 1864,
-        "median": -6.05,
-        "p10": -14.3,
-        "rise": 1.35,
-        "rise_accented": 1.79,
-        "rise_plain": 1.25,
+        "median": -5.18,
+        "p10": -12.42,
+        "rise": 1.8,
+        "rise_accented": 2.52,
+        "rise_plain": 1.67,
         "accented": 300,
         "sounds": {
           "arrow_dirt": {
             "n": 1862,
-            "median": -6.06,
-            "p10": -14.3
+            "median": -5.19,
+            "p10": -12.42
           },
           "arrow_water": {
             "n": 2,
-            "median": -1.98,
-            "p10": -1.98
+            "median": -4.4,
+            "p10": -4.4
           }
         }
       },
-      "arbitrary_rise": -0.86
+      "arbitrary_rise": -0.96
     },
     "low_400_1000": {
       "body": {
         "n": 246,
-        "median": 3.26,
-        "p10": -3.81,
-        "rise": 6.14,
-        "rise_accented": 6.14,
+        "median": 2.97,
+        "p10": -5.07,
+        "rise": 5.23,
+        "rise_accented": 5.23,
         "rise_plain": 0,
         "accented": 246,
         "sounds": {
           "arrow_flesh": {
             "n": 100,
-            "median": 10.44,
-            "p10": -1.77
+            "median": 8.7,
+            "p10": -2.69
           },
           "arrow_wood": {
             "n": 146,
-            "median": 1.8,
-            "p10": -5.51
+            "median": 0.87,
+            "p10": -6.04
           }
         }
       },
       "miss": {
         "n": 1864,
-        "median": -5.11,
-        "p10": -11.95,
-        "rise": 1.65,
-        "rise_accented": 2.29,
-        "rise_plain": 1.53,
+        "median": -4.15,
+        "p10": -10.44,
+        "rise": 2.18,
+        "rise_accented": 2.91,
+        "rise_plain": 1.99,
         "accented": 300,
         "sounds": {
           "arrow_dirt": {
             "n": 1862,
-            "median": -5.11,
-            "p10": -11.95
+            "median": -4.15,
+            "p10": -10.44
           },
           "arrow_water": {
             "n": 2,
-            "median": -0.36,
-            "p10": -0.36
+            "median": -3.01,
+            "p10": -3.01
           }
         }
       },
-      "arbitrary_rise": -0.93
+      "arbitrary_rise": -1.06
     },
     "high_2400_6000": {
       "body": {
         "n": 246,
-        "median": 0.98,
-        "p10": -7.33,
-        "rise": 4.69,
-        "rise_accented": 4.69,
+        "median": -0.34,
+        "p10": -8.25,
+        "rise": 3.89,
+        "rise_accented": 3.89,
         "rise_plain": 0,
         "accented": 246,
         "sounds": {
           "arrow_flesh": {
             "n": 100,
-            "median": -1.56,
-            "p10": -10.27
+            "median": -1.9,
+            "p10": -10.93
           },
           "arrow_wood": {
             "n": 146,
-            "median": 2.09,
-            "p10": -4.56
+            "median": 0.46,
+            "p10": -5.02
           }
         }
       },
       "miss": {
         "n": 1864,
-        "median": -3.47,
-        "p10": -8.7,
-        "rise": 2.18,
-        "rise_accented": 2.9,
-        "rise_plain": 2.04,
+        "median": -3.04,
+        "p10": -8.49,
+        "rise": 2.23,
+        "rise_accented": 3.43,
+        "rise_plain": 2.03,
         "accented": 300,
         "sounds": {
           "arrow_dirt": {
             "n": 1862,
-            "median": -3.47,
-            "p10": -8.67
+            "median": -3.01,
+            "p10": -8.48
           },
           "arrow_water": {
             "n": 2,
-            "median": -33.37,
-            "p10": -33.37
+            "median": -34.86,
+            "p10": -34.86
           }
         }
       },
-      "arbitrary_rise": -0.34
+      "arbitrary_rise": -0.57
     }
   },
   "events": {
     "reach_alarm": [
       {
-        "t": 103.31,
+        "t": 103.3,
         "db": -7,
-        "rise": 0.09,
-        "best_octave": 5.58,
+        "rise": -0.57,
+        "best_octave": 5.23,
         "arrows_around": 10
       },
       {
-        "t": 107.92,
+        "t": 107.9,
         "db": -7,
-        "rise": -0.39,
-        "best_octave": 4.55,
-        "arrows_around": 4
+        "rise": -0.89,
+        "best_octave": 4.24,
+        "arrows_around": 3
       },
       {
         "t": 142.91,
         "db": -7,
-        "rise": 1.93,
-        "best_octave": 6.51,
-        "arrows_around": 10
+        "rise": 1.74,
+        "best_octave": 6.03,
+        "arrows_around": 9
       }
     ]
   },
-  "seconds": 180.01,
-  "lufs": -16.4,
-  "lra": 3.32,
-  "ear_band_share": -12.91,
-  "ear_band_worst": 0.52,
-  "ear_band_a_share": -8.46,
-  "top_band_share": -36.21,
-  "sfx_lufs": -18.36,
+  "seconds": 180.03,
+  "lufs": -16.45,
+  "lra": 2.8,
+  "ear_band_share": -13.04,
+  "ear_band_worst": -1.29,
+  "ear_band_a_share": -8.51,
+  "top_band_share": -35.95,
+  "sfx_lufs": -18.42,
   "sfx_movement_1k_4k": {
-    "p10": -35.8,
-    "p50": -30.61,
-    "p90": -25.2,
-    "spread": 10.59
+    "p10": -35.6,
+    "p50": -30.44,
+    "p90": -25.12,
+    "spread": 10.47
   },
-  "prompt_margin_worst": 7.35,
-  "bank_sha": "91c8b3ca0acd1c0e996e904a3cd3a1f8a10f4e85e43c13b2acf3c621e492bda5",
+  "prompt_margin_worst": 9.12,
+  "bank_sha": "df334ae495d7bd730402b838830ac78f7ef30cbbeefdbf6bed6e18b737f433a9",
   "driver": "WASAPI",
   "shots": 416,
   "flight_starts": 416,
