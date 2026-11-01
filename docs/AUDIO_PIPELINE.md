@@ -80,6 +80,8 @@ A hit with `flight` runs a loop for as long as a projectile is in the air, howev
 
 `GameAudioKit` moves the voice's level, pitch and send once a frame and stops it at the landing. A pause holds it, silent, with the rest of the battle. Give a flight sound variants when flights overlap: two voices of one noise, a little apart, sweep a comb through each other, and that reads as a jet flanger, not as two arrows. The kit plays a new variant per hit. The impact is the game's to fire at the landing, when it knows what was there.
 
+A hit with `"crowd": true` is one of many very short sounds at once, one per arrow in a volley: it plays on a pool of its own, `mix.crowd_voices` players (0, the default: on its bus's pool like any other hit). It can't take a player from the flights and cues of its bus, and they can't take one from it. A full crowd pool steals its oldest of lowest priority, as any pool does, and a lead's is safe from another rider's. `kit.stolen` counts players taken from a sound still playing by pool and priority, and `kit.crowd_voiceless` the crowd hits that found none. D6 reads the crowd against its own cap, and Sfx still against 16.
+
 The rest of the bank (`mix`, `machines`, `loops`, `beds`, `cues`) is the runtime contract: `docs/GAME_SDK.md`, and `tools/audio/test/fixtures/engine_bank.json` is a complete worked example. A new primitive or a change in `tools/audio/lib/` is a request to the lead, not a game's edit.
 
 ## Files
@@ -155,7 +157,7 @@ tools/godot.sh --path . --timeout=600 --audio-driver Dummy -s tools/audio/live_m
     --game=<id> --content=<id> --bots=3 --seed=1 --skip-s=430 --run-s=240 --out=build/audio_live/<name>
 ```
 
-A window opens, because a headless kit is silent by design; the Dummy driver keeps the speakers out of it, in real time. `node tools/audio/live_report.mjs build/audio_live/<name> [--bank=<audio.json>] [--out=<file>]` reads the recording: LUFS, LRA, the 2-8 kHz share, the top band and how the Sfx bus moves. Do this when a sound is heard not to be there. A preview's Sfx and its Machines sum to a passing LUFS whether or not the part you asked about can be heard over the rest.
+With `--app` it runs the app itself instead of `GameSimRunner`: the main scene, the autoloads and a solo quick start on the real session screen, with a mock trainer. Either way the JSON has `voice_starts`: what each player really took, by file, its buses and level, read off the pools once a frame. A window opens, because a headless kit is silent by design; the Dummy driver keeps the speakers out of it, in real time. `node tools/audio/live_report.mjs build/audio_live/<name> [--bank=<audio.json>] [--out=<file>]` reads the recording: LUFS, LRA, the 2-8 kHz share, the top band and how the Sfx bus moves. Do this when a sound is heard not to be there. A preview's Sfx and its Machines sum to a passing LUFS whether or not the part you asked about can be heard over the rest.
 
 ## What no number here can say
 

@@ -9,8 +9,13 @@ extends SceneTree
 ## frames, before anything is recorded. Writes <out>.json and <out>_<bus>.wav (stereo 16-bit):
 ##   cues: every game `cue` the view would hear, by kind; shots by shot kind, projectiles counted;
 ##   played: every start the kit recorded, by sound, with the level it asked for;
-##   voices: per pool the most and the mean playing at once, frames at the cap; voiceless and thinned;
-##   flight_log: each flight as it started: [time, sound, seconds, db, 1 if the rider's own, pitch].
+##   voices: per pool the most and the mean playing at once, frames at the cap; voiceless, thinned, stolen;
+##   flight_log: each flight as it started: [time, sound, seconds, db, 1 if the rider's own, pitch];
+##   voice_starts: what really reached a player, read off the pools once a frame, by file: starts, how many were still
+##   playing a frame later, the buses and the player level; lost if a player was re-granted inside one frame;
+##   arrows: arrows landed and struck by SiegeShotSounds and by the host's station.hits (Siege only).
+## --app runs the app itself: the main scene, its autoloads, a solo quick start on the session screen with a mock
+## trainer, the same screen a rider sees. Without it the session is GameSimRunner's, with --bots riders.
 ## A window opens, because a headless kit stays silent by design (GameAudioKit._quiet_run).
 
 const BUSES: Array[String] = ["Master", "Machines", "Ambience", "Sfx", "UI"]
@@ -19,6 +24,10 @@ const SETTLE_FRAMES := 30
 const PEAK := 32767.0
 
 var _runner: GameSimRunner = null
+var _host: GameHost = null
+var _main: Node = null
+var _app_mode: bool = false
+var _temp_profile: String = ""
 var _kit: GameAudioKit = null
 var _game: Node = null
 var _out: String = ""
@@ -47,6 +56,23 @@ var _voice_frames: int = 0
 var _skip_voiceless: int = 0
 var _skip_thinned: int = 0
 var _skip_flights: int = 0
+var _serials: Dictionary = {}
+var _fresh: Array[Array] = []
+var _voice_starts: Dictionary = {}
+var _start_log: Array[Array] = []
+var _bus_db: Dictionary = {}
+var _skip_landed: Dictionary = {}
+var _skip_struck: Dictionary = {}
+var _skip_hits: int = 0
+var _skip_crowd_voiceless: int = 0
+var _skip_stolen: Dictionary = {}
+
+
+func _init() -> void:
+	# Runs before the autoloads start: an app run must not touch the rider's real profile.
+	if CmdLine.has("app") and not CmdLine.has("profile-dir"):
+		_temp_profile = Paths.make_temp_dir("wattlands_live_mix")
+		Paths.set_override(_temp_profile)
 
 
 func _process(delta: float) -> bool:
@@ -56,16 +82,23 @@ func _process(delta: float) -> bool:
 		_started = true
 		_begin()
 		return false
-	if _runner == null:
+	if _app_mode and _host == null:
+		_host = _app_session()
+		if _host == null:
+			return false
+		_game = _host.game
+		_connect_game()
+	if _host == null:
 		return false
 	_frames += 1
 	if _frames == 1 and _skip_s > 0.0:
 		for _i in roundi(_skip_s / SIM_DT):
 			_step()
-	_accum += delta
-	while _accum >= SIM_DT:
-		_accum -= SIM_DT
-		_step()
+	if not _app_mode:
+		_accum += delta
+		while _accum >= SIM_DT:
+			_accum -= SIM_DT
+			_step()
 	if _kit == null:
 		_kit = _find_kit(root)
 	if not _recording:
@@ -75,14 +108,19 @@ func _process(delta: float) -> bool:
 			_skip_voiceless = _kit.voiceless
 			_skip_thinned = _kit.thinned
 			_skip_flights = _kit.flight_starts
+			_skip_crowd_voiceless = _kit.crowd_voiceless
+			_skip_stolen = _kit.stolen.duplicate()
+			_mark_arrows()
+			_mark_voices()
 			_add_captures()
 		return false
 	_t += delta
 	# The log first: what started this frame starts after what is already captured.
 	_drain_played()
+	_count_starts()
 	_drain_captures()
 	_count_voices()
-	if _t >= _run_s or _runner.host.is_finished():
+	if _t >= _run_s or _host.is_finished():
 		_finish()
 	return false
 
@@ -91,11 +129,14 @@ func _process(delta: float) -> bool:
 ## depends on whose shots are the rider's.
 func _step() -> void:
 	if _station >= 0 and _game != null and _game.get("state") != null:
-		var me: Variant = _game.state.rider(_runner.host.ctx.local_peer)
+		var me: Variant = _game.state.rider(_host.ctx.local_peer)
 		if me != null:
 			me.target = _station
 			me.route_fallback = false
-	_runner.step()
+	if _app_mode:
+		_host.step()
+	else:
+		_runner.step()
 
 
 func _begin() -> void:
@@ -103,6 +144,9 @@ func _begin() -> void:
 	_run_s = CmdLine.get_float("run-s", 240.0)
 	_skip_s = CmdLine.get_float("skip-s", 0.0)
 	_station = CmdLine.get_int("station", -1)
+	if CmdLine.has("app"):
+		_begin_app()
+		return
 	var args := PackedStringArray(
 		[
 			"--game=" + CmdLine.get_str("game", "siege"),
@@ -130,9 +174,47 @@ func _begin() -> void:
 		quit(3)
 		_done = true
 		return
-	_game = _runner.host.game
+	_host = _runner.host
+	_game = _host.game
+	_connect_game()
+
+
+func _connect_game() -> void:
 	if _game != null and _game.has_signal("cue"):
 		_game.connect("cue", _on_cue)
+
+
+## The rider's way in, less the menus: the main scene and the solo quick start the title screen would make.
+func _begin_app() -> void:
+	_app_mode = true
+	var packed := load(str(ProjectSettings.get_setting("application/run/main_scene", "")))
+	_main = (packed as PackedScene).instantiate()
+	root.add_child(_main)
+	current_scene = _main
+	var trainer := root.get_node_or_null(^"TrainerService") as WlTrainerService
+	trainer.use_mock(CmdLine.get_str("rider", "erg:compliance=1.0"))
+	var settings := root.get_node_or_null(^"Settings") as WlSettings
+	if not settings.has_profile():
+		settings.create_profile("Rider")
+	var gid := CmdLine.get_str("game", "siege")
+	HelpSeen.mark(gid)
+	var app := root.get_node_or_null(^"App") as WlApp
+	app.goto(
+		"session",
+		{
+			"role": Wl.SOLO,
+			"game_id": gid,
+			"content_id": CmdLine.get_str("content", "short"),
+			"quick": true
+		}
+	)
+
+
+func _app_session() -> GameHost:
+	var s := _main.get("screen") as AppSessionScreen
+	if s == null or s.host == null or s.host.game == null or s.host.clock == null:
+		return null
+	return s.host
 
 
 func _on_cue(kind: String, data: Dictionary) -> void:
@@ -234,10 +316,101 @@ func _count_voices() -> void:
 			_pool_full[key] = int(_pool_full.get(key, 0)) + 1
 
 
+## Before the recording: the voices' grants and the arrows so far don't count.
+func _mark_voices() -> void:
+	for key: String in _kit._pools:
+		for v: Variant in _kit._pools[key]:
+			_serials[v.get_instance_id()] = v.serial
+
+
+func _mark_arrows() -> void:
+	var sounds: Variant = _siege_shots()
+	if sounds == null:
+		return
+	_skip_landed = sounds.landed_count.duplicate()
+	_skip_struck = sounds.struck_count.duplicate()
+	_skip_hits = _game.state.station(SiegeIds.STATION_ARROWS).hits
+
+
+func _siege_shots() -> Variant:
+	var host_view: Node = _host.view_root() if _host != null else null
+	return _find_shots(host_view) if host_view != null else null
+
+
+func _find_shots(n: Node) -> Variant:
+	if n is SiegeAudio:
+		return n._shots
+	for c in n.get_children(true):
+		var found: Variant = _find_shots(c)
+		if found != null:
+			return found
+	return null
+
+
+## What really reached a player, once a frame. A grant this frame is looked at again on the next one, to see that it
+## plays: GameAudioKit's own log says a start was asked for, this says a player took it.
+func _count_starts() -> void:
+	for e: Array in _fresh:
+		var v: Variant = e[0]
+		var s: Dictionary = _voice_starts[e[1]]
+		if v.player.playing or v.player.get_playback_position() > 0.0:
+			s["playing"] = int(s["playing"]) + 1
+	_fresh.clear()
+	var sfx := AudioServer.get_bus_index("Sfx")
+	for key: String in _kit._pools:
+		for v: Variant in _kit._pools[key]:
+			var was := int(_serials.get(v.get_instance_id(), 0))
+			if v.serial == was:
+				continue
+			_serials[v.get_instance_id()] = v.serial
+			var stem := str(v.player.stream.resource_path).get_file().get_basename()
+			var s: Dictionary = _voice_starts.get(stem, _new_start(key))
+			s["n"] = int(s["n"]) + 1
+			s["lost"] = int(s["lost"]) + v.serial - was - 1
+			var bus := str(v.player.bus)
+			s["buses"][bus] = int(s["buses"].get(bus, 0)) + 1
+			s["db_min"] = minf(float(s["db_min"]), v.player.volume_db)
+			s["db_max"] = maxf(float(s["db_max"]), v.player.volume_db)
+			_voice_starts[stem] = s
+			_fresh.append([v, stem])
+			_start_log.append([_captured_s(), stem, bus, snappedf(v.player.volume_db, 0.1)])
+	var db := AudioServer.get_bus_volume_db(sfx)
+	_bus_db["n"] = int(_bus_db.get("n", 0)) + 1
+	_bus_db["sfx_min"] = minf(float(_bus_db.get("sfx_min", 99.0)), db)
+	_bus_db["sfx_sum"] = float(_bus_db.get("sfx_sum", 0.0)) + db
+
+
+func _stolen_since() -> Dictionary:
+	var out := {}
+	for key: String in _kit.stolen:
+		var n := int(_kit.stolen[key]) - int(_skip_stolen.get(key, 0))
+		if n > 0:
+			out[key] = n
+	return out
+
+
+static func _new_start(key: String) -> Dictionary:
+	return {
+		"n": 0, "playing": 0, "lost": 0, "pool": key, "buses": {}, "db_min": 99.0, "db_max": -99.0
+	}
+
+
+func _arrows_report() -> Dictionary:
+	var sounds: Variant = _siege_shots()
+	if sounds == null:
+		return {}
+	return {
+		"landed": int(sounds.landed_count.get("arrow", 0)) - int(_skip_landed.get("arrow", 0)),
+		"struck": int(sounds.struck_count.get("arrow", 0)) - int(_skip_struck.get("arrow", 0)),
+		"station_hits": _game.state.station(SiegeIds.STATION_ARROWS).hits - _skip_hits,
+	}
+
+
 func _finish() -> void:
 	_done = true
 	_drain_captures()
 	_drain_played()
+	_count_starts()
 	var rate := int(AudioServer.get_mix_rate())
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_out.get_base_dir()))
 	for bus: String in _samples:
@@ -260,11 +433,23 @@ func _finish() -> void:
 		"played": _played,
 		"voices": voices,
 		"voiceless": _kit.voiceless - _skip_voiceless,
+		"crowd_voiceless": _kit.crowd_voiceless - _skip_crowd_voiceless,
+		"stolen": _stolen_since(),
 		"flight_starts": _kit.flight_starts - _skip_flights,
 		"thinned": _kit.thinned - _skip_thinned,
 		"cue_log": _cue_log,
 		"played_log": _played_log,
 		"flight_log": _flight_log,
+		"app": _app_mode,
+		"voice_starts": _voice_starts,
+		"start_log": _start_log,
+		"arrows": _arrows_report(),
+		"sfx_bus_db":
+		{
+			"min": _bus_db.get("sfx_min", 0.0),
+			"mean": float(_bus_db.get("sfx_sum", 0.0)) / maxf(float(_bus_db.get("n", 1)), 1.0),
+			"user": AudioBuses.user_db("Sfx"),
+		},
 	}
 	var f := FileAccess.open(_out + ".json", FileAccess.WRITE)
 	if f != null:
@@ -276,8 +461,11 @@ func _finish() -> void:
 			% [_t, report["driver"], _cue_log.size(), _played_log.size(), report["voiceless"], _out]
 		)
 	)
-	_runner.host.end_session("timeout")
-	_runner.cleanup()
+	_host.end_session("timeout")
+	if _runner != null:
+		_runner.cleanup()
+	if _temp_profile != "":
+		print("live_mix: temp profile %s" % _temp_profile)
 	quit(0)
 
 

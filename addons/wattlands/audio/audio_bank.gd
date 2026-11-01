@@ -12,6 +12,7 @@ const DEFAULT_MIX := {
 	"machine_voices": 16,
 	"sfx_voices": 16,
 	"spot_voices": 6,
+	"crowd_voices": 0,
 	"max_loop_players": 24,
 }
 var dir: String = ""

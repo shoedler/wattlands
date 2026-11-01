@@ -832,8 +832,14 @@ export function scoreBank(doc, dir, { shared, root = null, rpms = null, stems = 
   // D6, D7: eight riders.
   const pool = (p.others ?? []).filter((o) => o.lead !== true);
   const ridersSim = simulate(bank, eightRiderScenario(p, moving, seg));
-  const d6Pass = ridersSim.voicePeak.Machines <= 16 && ridersSim.voicePeak.Sfx <= 16 && ridersSim.loopPeak <= (doc.mix?.max_loop_players ?? 24);
-  rows.push({ id: 'D6', pass: d6Pass, value: `${ridersSim.voicePeak.Machines}/${ridersSim.voicePeak.Sfx}/${ridersSim.loopPeak}`, target: 'Machines <= 16, Sfx <= 16, loops <= 24' });
+  const crowdCap = doc.mix?.crowd_voices ?? 0;
+  const d6Pass = ridersSim.voicePeak.Machines <= 16 && ridersSim.voicePeak.Sfx <= 16 && ridersSim.loopPeak <= (doc.mix?.max_loop_players ?? 24) && ridersSim.voicePeak.Crowd <= crowdCap;
+  rows.push({
+    id: 'D6',
+    pass: d6Pass,
+    value: `${ridersSim.voicePeak.Machines}/${ridersSim.voicePeak.Sfx}/${ridersSim.loopPeak}${crowdCap > 0 ? `, crowd ${ridersSim.voicePeak.Crowd}` : ''}`,
+    target: `Machines <= 16, Sfx <= 16, loops <= 24${crowdCap > 0 ? `, crowd <= ${crowdCap}` : ''}`,
+  });
   const otherStarts = ridersSim.events.filter((e) => e.kind === 'stroke' && e.lead === false && !e.thinned).length;
   const perS = otherStarts / D6_RIDE_S;
   rows.push({ id: 'D7', pass: perS <= 16.7 + 1e-6, value: round(perS), target: 'other strokes <= 16.7 per s' });
