@@ -595,8 +595,8 @@
       ]},
     "feed": {"bus": "Machines", "priority": 5,
       "events": [
-        {"at": [0, 0.5], "sound": "bow_shot", "db": 0, "db_by": [{"param": "power", "points": [[0, -6], [1.2, 0]]}], "pitch_table": [0, -0.012, 0.012, -0.006, 0.008, -0.014, 0.004], "when": {"param": "firing", "min": 0.5}, "priority": 5},
-        {"at": [0.1667, 0.3333, 0.6667, 0.8333], "sound": "bow_shot", "db": 0, "db_by": [{"param": "power", "points": [[0, -6], [1.2, 0]]}], "pitch_table": [0, -0.012, 0.012, -0.006, 0.008, -0.014, 0.004], "when": {"param": "firing", "min": 0.5}, "priority": 5, "lead_only": true},
+        {"at": [0, 0.5], "sound": "bow_shot", "db": 1, "db_by": [{"param": "power", "points": [[0, -6], [1.2, 0]]}], "pitch_table": [0, -0.012, 0.012, -0.006, 0.008, -0.014, 0.004], "when": {"param": "firing", "min": 0.5}, "priority": 5},
+        {"at": [0.1667, 0.3333, 0.6667, 0.8333], "sound": "bow_shot", "db": 1, "db_by": [{"param": "power", "points": [[0, -6], [1.2, 0]]}], "pitch_table": [0, -0.012, 0.012, -0.006, 0.008, -0.014, 0.004], "when": {"param": "firing", "min": 0.5}, "priority": 5, "lead_only": true},
         {"at": [0, 0.1667, 0.3333, 0.5, 0.6667, 0.8333], "sound": "bolt_clack", "db": -7, "db_by": [{"param": "power", "points": [[0, -8], [1.2, 0]]}], "pitch_table": [0, 0.012, -0.009, 0.005], "lead_only": true, "priority": 5, "when": {"param": "firing", "min": 0.5}},
         {"at": [0, 0.5], "sound": "bolt_clack", "db": 1, "db_by": [{"param": "power", "points": [[0, -8], [1.2, 0]]}], "pitch_table": [0, 0.012, -0.009, 0.005], "lead_only": true, "priority": 5, "when": {"param": "firing", "max": 0.5}},
         {"at": [0.25, 0.75], "sound": "link_clink", "db": -17, "db_by": [{"param": "power", "points": [[0.3, -12], [1.2, 0]]}], "pitch_table": [0, 0.012, -0.01], "lead_only": true, "priority": 4},
