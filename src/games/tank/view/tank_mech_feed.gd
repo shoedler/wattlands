@@ -6,8 +6,8 @@ extends TankMechKit
 # to the brass feed drum; the drum turns the feed shaft between the two gun lines, whose sprockets
 # pull both linked belts up out of their ammo boxes and into the two receivers at the wall (upper
 # and lower bow gun), whose bolts cycle in turn. Each crank revolution feeds exactly
-# TankFeedState.ROUNDS_PER_REV rounds (one per belt, the belts half a revolution apart, so the guns
-# alternate): each belt advances one cartridge pitch, each bolt strokes once, a flash at the
+# TankFeedState.ROUNDS_PER_REV rounds (F_STROKES per belt, the belts half a stroke apart, so the guns
+# alternate): each belt advances one cartridge pitch a stroke, each bolt strokes, a flash at the
 # receiver and a spent casing drops down the chute. A round counter steps per round, a dial reads
 # the rate. Warm brass key, olive boxes.
 
@@ -24,6 +24,10 @@ const F_GUN_Y: Array[int] = [8, 22]
 const F_SHAFT_Y := 15
 const F_RECV_X := 97
 const F_PITCH := 4.0
+## Each gun's strokes per crank revolution.
+const F_STROKES := TankFeedState.ROUNDS_PER_REV * 0.5
+## The share of a stroke the receiver's flash burns (about 80 ms at 90 rpm).
+const F_FLASH_U := 0.36
 const F_DIAL := Vector2i(40, 47)
 
 
@@ -105,14 +109,15 @@ static func _feed(cv: Cv, ph: float, pw: float, t: float, slot: Color, rate: flo
 	# the shaft's sprockets at the belts' corners turn with it
 	for k in 2:
 		cv.teeth(Vector2(F_BELT_X[k], F_SHAFT_Y), 2.4, 4, th + k * PI, STEEL[4])
-	# the two belts: each advances one pitch a revolution, the lower half a revolution behind the
-	# upper (the guns alternate); cartridges lie across the belt, brass cases and copper noses
+	# the two belts: each advances one pitch a stroke, the lower half a stroke behind the upper
+	# (the guns alternate); cartridges lie across the belt, brass cases and copper noses
 	for k2 in 2:
 		var bx := F_BELT_X[k2]
 		var gy := F_GUN_Y[k2]
 		var up := float(F_BELT_Y0 - gy)
 		var run := float(F_RECV_X + 3 - bx)
-		var s := fposmod((ph - 0.5 * float(k2)) * F_PITCH, F_PITCH)
+		var u := fposmod(ph * F_STROKES - 0.5 * float(k2), 1.0)
+		var s := u * F_PITCH
 		while s < up + run:
 			if s < up:
 				var y := roundi(F_BELT_Y0 - s)
@@ -130,13 +135,12 @@ static func _feed(cv: Cv, ph: float, pw: float, t: float, slot: Color, rate: flo
 				cv.rect(x, gy + 2, 2, 1, COPPER[3])
 			s += F_PITCH
 		# the bolt: home (and the shot) at the start of its stroke, back while the next round feeds
-		var u := fposmod(ph - 0.5 * float(k2), 1.0)
 		var back := roundi(5.0 * sin(u * PI))
 		cv.rect(F_RECV_X + 3 + back, gy - 1, 4, 2, BRASS[3])
 		cv.p(F_RECV_X + 3 + back, gy - 1, BRASS[4])
 		cv.rect(F_RECV_X + 5 + back, gy - 3, 1, 2, BRASS[2])
-		if pw > 0.1 and u < 0.12:
-			var k3 := (1.0 - u / 0.12) * (0.6 + 0.6 * heat)
+		if pw > 0.1 and u < F_FLASH_U:
+			var k3 := (1.0 - u / F_FLASH_U) * (0.4 + 0.4 * heat)
 			cv.e(W - 1, gy - 1, Color(1.0, 0.85, 0.5), k3)
 			cv.e(W - 1, gy, Color(1.0, 0.7, 0.35), k3)
 			cv.e(W - 2, gy, Color(1.0, 0.8, 0.45), 0.6 * k3)

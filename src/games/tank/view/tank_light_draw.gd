@@ -272,14 +272,18 @@ static func standby_lenses(v: TankView) -> Array[Vector2]:
 	return out
 
 
-## The bow rounds' light: a glow on each tracer's head and, while it burns, the muzzle flash.
+## The bow rounds' light: a glow on each tracer in flight, and each firing gun's muzzle (a steady
+## glow with a small pulse per round, TankFiring.muzzle_glow: a full flash per round would strobe).
 static func _bow_rounds(ci: CanvasItem, v: TankView) -> void:
 	for t in v.firing.tracers(v):
-		TankDraw.glow_at(ci, t["p"], 5.0, Color(1.0, 0.7, 0.35, 0.4))
-		var fl := float(t["flash"])
-		if fl > 0.0:
-			TankDraw.glow_at(ci, t["muzzle"], 12.0, Color(1.0, 0.75, 0.4, 0.7 * fl))
-			TankDraw.glow_at(ci, t["muzzle"], 4.0, Color(1.0, 0.95, 0.8, 0.9 * fl))
+		if bool(t["flying"]):
+			TankDraw.glow_at(ci, t["p"], 4.0, Color(1.0, 0.7, 0.35, 0.3))
+	for k in 2:
+		var g := v.firing.muzzle_glow(k)
+		if g > 0.0:
+			var m := v.bow_muzzle(k)
+			TankDraw.glow_at(ci, m, 12.0, Color(1.0, 0.75, 0.4, 0.4 * g))
+			TankDraw.glow_at(ci, m, 4.0, Color(1.0, 0.95, 0.8, 0.55 * g))
 
 
 ## The red and green position lights (the rear red one and the green one blinking slowly).

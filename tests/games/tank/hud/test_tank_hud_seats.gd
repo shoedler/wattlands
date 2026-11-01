@@ -393,8 +393,9 @@ func test_the_fonts_cover_the_seat_panels_text() -> void:
 	assert_true(D.ICONS.has(TankIds.ENGINE_FEED), "the Secondaries' icon")
 
 
-func test_the_belt_feed_paints_two_rounds_a_revolution() -> void:
+func test_the_belt_feed_paints_six_rounds_a_revolution() -> void:
 	assert_eq(TankMech.PARTS["feed"]["rounds_fed_both_belts"], TankFeedState.ROUNDS_PER_REV)
+	assert_eq(TankMech.PARTS["feed"]["bolt_strokes_each_gun"] * 2, TankFeedState.ROUNDS_PER_REV)
 	var a := Image.create_empty(TankMech.W, TankMech.H, false, Image.FORMAT_RGBA8)
 	var b := Image.create_empty(TankMech.W, TankMech.H, false, Image.FORMAT_RGBA8)
 	var c := Image.create_empty(TankMech.W, TankMech.H, false, Image.FORMAT_RGBA8)

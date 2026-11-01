@@ -201,6 +201,46 @@ func test_the_bow_rounds_are_heavier_tracers_with_a_glow() -> void:
 	assert_eq(float(v.firing.tracers(v)[0]["flash"]), 0.0, "and is out after 0.1 s")
 
 
+func test_nine_to_eleven_rounds_a_second_read_as_a_machine_gun_not_a_strobe() -> void:
+	var v := U.view_of(self, U.fixture("state", 4))
+	var f := v.firing
+	assert_eq(f.muzzle_glow(0), 0.0, "a silent gun has no light")
+	assert_eq(f.muzzle_glow(1), 0.0)
+	# One gun at 11 rounds a second across the two guns: 5.5 a second, every 0.18 s, here for 2 s.
+	var lo := 1.0
+	var hi := 0.0
+	var due := 0.0
+	var dt := 1.0 / 60.0
+	for i in 120:
+		if due <= 0.0:
+			f.bow_round(0)
+			due += 2.0 / 11.0
+		due -= dt
+		f.step(dt)
+		if i >= 12:
+			lo = minf(lo, f.muzzle_glow(0))
+			hi = maxf(hi, f.muzzle_glow(0))
+	assert_gte(lo, TankFiring.GLOW_STEADY, "it never goes dark between rounds")
+	assert_lte(hi / lo, 1.0 / TankFiring.GLOW_STEADY + 0.001, "a pulse, not a flash from nothing")
+	assert_gt(hi, lo, "but each round shows")
+	assert_lte(f.rounds.size(), TankFiring.MAX_ROUNDS, "the pool holds it")
+	# The slowest in-band rate, 60 rpm: a gun's gap is 1/3 s, and the glow still holds across it.
+	assert_gt(TankFiring.GUN_HOT_S, 1.0 / 3.0)
+	for i2 in 60:
+		f.step(dt)
+	assert_eq(f.muzzle_glow(0), 0.0, "and it goes out when the gun stops")
+
+
+func test_a_struck_or_burnt_out_tracer_has_no_glow() -> void:
+	var v := U.view_of(self, U.fixture("state", 4))
+	v.firing.bow_round(0)
+	v.firing.rounds[0]["age"] = TankFiring.TRACER_S + 0.01
+	assert_eq(v.firing.tracers(v).size(), 0, "burnt out, and its flash is long over")
+	assert_lt(TankFiring.TRACER_S, TankFiring.ROUND_S, "the case falls on after it")
+	var reach := TankFiring.TRACER_SPEED * TankFiring.TRACER_S
+	assert_gte(reach, 200.0, "it flies the guns' whole reach")
+
+
 # --- the bases ------------------------------------------------------------------------------------
 
 

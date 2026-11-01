@@ -40,7 +40,7 @@ const PARTS := {
 	{
 		"crank_and_sprocket_revs": 1,
 		"rounds_fed_both_belts": TankFeedState.ROUNDS_PER_REV,
-		"bolt_strokes_each_gun": 1,
+		"bolt_strokes_each_gun": 3,
 		"counter_drum_steps": TankFeedState.ROUNDS_PER_REV,
 	},
 	"repair":
