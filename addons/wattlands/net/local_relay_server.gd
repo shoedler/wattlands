@@ -13,8 +13,10 @@ const BUFFER_BYTES := 1 << 20
 ## Sockets the relay closes (version mismatch, idle) stay open this long first, so the
 ## error frame is read before the close.
 const LINGER_MS := 250
-## Open sockets at most; a rider's room needs 8. New ones beyond it are closed at once.
+## Open sockets at most, and from one address; a room needs 8. New ones beyond them close at once,
+## so a device on the network can't fill the relay and keep a dropped rider out.
 const MAX_CONNECTIONS := 32
+const MAX_PER_ADDRESS := 12
 
 var rooms: RelayRooms = RelayRooms.new()
 ## The listening port (the OS picks one when started with port 0).
@@ -105,17 +107,20 @@ func poll() -> void:
 		var stream := _tcp.take_connection()
 		if stream == null:
 			break
-		if _peers.size() >= MAX_CONNECTIONS:
+		var address := stream.get_connected_host()
+		if _peers.size() >= MAX_CONNECTIONS or _connections_from(address) >= MAX_PER_ADDRESS:
 			stream.disconnect_from_host()
 			continue
-		var from_here := LocalRelayServer.is_loopback(stream.get_connected_host())
+		var from_here := LocalRelayServer.is_loopback(address)
 		var ws := WebSocketPeer.new()
 		ws.inbound_buffer_size = BUFFER_BYTES
 		ws.outbound_buffer_size = BUFFER_BYTES
 		ws.max_queued_packets = 4096
 		if ws.accept_stream(stream) != OK:
 			continue
-		_peers[_next_conn] = {"ws": ws, "open": false, "since": now, "local": from_here}
+		_peers[_next_conn] = {
+			"ws": ws, "open": false, "since": now, "local": from_here, "address": address
+		}
 		_next_conn += 1
 		accepted += 1
 	for conn: Variant in _peers.keys():
@@ -190,6 +195,14 @@ func _now() -> float:
 	if time_func.is_valid():
 		return float(time_func.call())
 	return Time.get_ticks_msec() / 1000.0
+
+
+func _connections_from(address: String) -> int:
+	var n := 0
+	for conn: Variant in _peers.keys():
+		if str((_peers[conn] as Dictionary)["address"]) == address:
+			n += 1
+	return n
 
 
 static func is_loopback(address: String) -> bool:

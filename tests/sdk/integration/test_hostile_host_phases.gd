@@ -111,6 +111,103 @@ func test_the_session_follows_at_once_and_the_rider_when_the_switch_may_happen()
 	)
 
 
+## A rider on a hard ERG target whose last switch was just now, with a SIM phase on its way.
+func _just_switched_to_hard_erg() -> void:
+	var phases: Array[PlanPhase] = [
+		PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 40.0),
+		PlanPhase.erg(Wl.WORK, 60.0, 40.0),
+		PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 40.0),
+	]
+	_send_plan(PlanValidator.finalize(EffortPlan.of(phases)))
+	_phase(0, 1)
+	for _s in int(SafetyGovernor.SWITCH_SPACING_S / Wl.SIM_DT) + 2:
+		_client.step()
+	_phase(1, 2)
+	for _s in 60:
+		_client.step()
+	assert_gt(_erg_target(), _floor_w(), "riding the hard phase")
+	assert_eq(str(_rider.governor.status()["desired_mode"]), Wl.ERG)
+
+
+func _erg_target() -> int:
+	return int(_rider.governor.status()["governed_target_w"])
+
+
+func _floor_w() -> int:
+	return maxi(50, roundi(_rider.slot.ftp * 0.3))
+
+
+func test_a_held_rider_never_keeps_the_old_phases_load() -> void:
+	_just_switched_to_hard_erg()
+	_phase(2, 3)
+	assert_eq(_client._held_rider_phase, 2)
+	_client.step()
+	assert_lte(_erg_target(), _floor_w(), "the hold rides easy, not at the old target")
+	assert_eq(str(_rider.governor.status()["desired_mode"]), Wl.ERG, "no switch yet")
+	for _s in int(SafetyGovernor.SWITCH_SPACING_S / Wl.SIM_DT):
+		_client.step()
+	assert_eq(_client._held_rider_phase, -1)
+	assert_eq(str(_rider.governor.status()["desired_mode"]), Wl.SIM)
+	assert_false(bool(_rider.governor.status()["paused"]), "the rider's governor rides on")
+
+
+func test_a_wait_of_a_moment_keeps_the_load() -> void:
+	_just_switched_to_hard_erg()
+	var left := SafetyGovernor.SWITCH_SPACING_S - GameHost.HOLD_JITTER_S + 0.5 - 3.0
+	for _s in int(left / Wl.SIM_DT):
+		_client.step()
+	var before := _erg_target()
+	_phase(2, 3)
+	assert_eq(_client._held_rider_phase, 2)
+	_client.step()
+	assert_gte(_erg_target(), before, "jitter on a plan's own 30 s doesn't drop the rider")
+
+
+func test_a_lost_room_reaches_the_cool_down_at_once_from_erg() -> void:
+	_just_switched_to_hard_erg()
+	_client._lose_net("dropped")
+	assert_eq(_client._held_rider_phase, -1, "ERG to the ERG cool-down is no switch")
+	assert_eq(int(_rider.governor.status()["phase_index"]), _client._client_plan.cooldown_index())
+
+
+func test_a_lost_room_waits_for_the_cool_down_on_a_flat_road_from_sim() -> void:
+	_just_switched_to_hard_erg()
+	for _s in int(SafetyGovernor.SWITCH_SPACING_S / Wl.SIM_DT):
+		_client.step()
+	_phase(2, 3)
+	assert_eq(str(_rider.governor.status()["desired_mode"]), Wl.SIM)
+	_client._lose_net("dropped")
+	assert_gt(_client._held_rider_phase, -1, "SIM to the ERG cool-down waits for its 30 s")
+	_client.step()
+	assert_true(bool(_rider.governor.status()["paused"]), "a flat road while it waits")
+	for _s in int(SafetyGovernor.SWITCH_SPACING_S / Wl.SIM_DT):
+		_client.step()
+	assert_eq(_client._held_rider_phase, -1)
+	assert_eq(int(_rider.governor.status()["phase_index"]), _client._client_plan.cooldown_index())
+	assert_false(bool(_rider.governor.status()["paused"]))
+
+
+func test_a_session_ending_ends_the_hold() -> void:
+	_just_switched_to_hard_erg()
+	_phase(2, 3)
+	_client.end_session("host_left")
+	_rider.clear_plan()
+	for _s in 5:
+		_client.step()
+	assert_eq(_client._held_rider_phase, -1)
+	assert_false(bool(_rider.governor.status()["paused"]), "nothing stays paused")
+
+
+func test_panic_during_a_hold_stays_safe() -> void:
+	_just_switched_to_hard_erg()
+	_phase(2, 3)
+	_rider.panic()
+	assert_eq(str(_rider.governor.status()["desired_mode"]), SafetyGovernor.MODE_SAFE)
+	for _s in int(SafetyGovernor.SWITCH_SPACING_S / Wl.SIM_DT):
+		_client.step()
+	assert_eq(str(_rider.governor.status()["desired_mode"]), SafetyGovernor.MODE_SAFE)
+
+
 func test_a_later_phase_of_the_same_mode_needs_no_wait() -> void:
 	_send_plan(_flip_plan(6))
 	_phase(0, 1)
