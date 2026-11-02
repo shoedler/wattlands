@@ -44,6 +44,8 @@ var unlocks: Array = []
 var ride_summary: Dictionary = {}
 var fit_path: String = ""
 var host_left: bool = false
+## The room is gone for good (the relay or the network, not the host's choice).
+var net_lost: bool = false
 var headless: bool = false
 ## Tests: build the game's view and HUD even under the headless display server.
 var render_headless: bool = false
@@ -265,6 +267,8 @@ func _build_net_notice() -> void:
 
 ## The notice text now ("" when there is nothing to say).
 func net_notice_text() -> String:
+	if net_lost:
+		return t("NET_ROOM_LOST_HOST" if role == Wl.HOST else "NET_ROOM_LOST_CLIENT")
 	if net_reconnecting:
 		return t("NET_STATE_RECONNECTING")
 	if host_dropped:
@@ -733,6 +737,9 @@ func _on_refused(reason: String) -> void:
 			host.end_session("host_left")
 		if not finished:
 			_finish(host.final_results() if host != null else null)
+	elif reason != "host_left" and role != Wl.SOLO and not finished:
+		net_lost = true
+		_refresh_net_notice()
 
 
 func _on_session_finished(r: GameResults) -> void:
@@ -766,6 +773,7 @@ func _finish(r: GameResults) -> void:
 			"role": role,
 			"local_peer": local_peer(),
 			"host_left": host_left,
+			"net_lost": net_lost,
 			"autopilot": session_autopilot(),
 		}
 	)

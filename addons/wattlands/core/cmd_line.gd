@@ -4,7 +4,8 @@ extends RefCounted
 ## --mock-trainer=<profile> (plus --mock-keyboard: its keyboard control),
 ## --autopilot, --host, --join=<code>, --relay=<url>,
 ## --game=<id>, --content=<id>, --seed=<n>, --sim-speed=<x>, --run-seconds=<n>,
-## --report=<path>, --screenshot-dir=<dir>, --profile-dir=<abs path>, --strava-base=<url>.
+## --report=<path>, --screenshot-dir=<dir>, --profile-dir=<abs path>, --strava-base=<url>,
+## --lan-port=<n>, --lan-discovery-port=<n> (the built-in relay's TCP and UDP ports).
 ## Tools add their own flags (run_game_sim, screenshot, pixelate); all parse the same way:
 ## "--key=value", "--key value" is NOT supported, a bare "--flag" means true. A repeated
 ## flag keeps every value (see get_all).

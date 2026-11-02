@@ -46,6 +46,10 @@ func _build() -> void:
 	trainer_label = AppStyle.label("", AppStyle.FONT_BODY)
 	trainer_label.name = "TrainerLine"
 	left.add_child(trainer_label)
+	if not has_profile:
+		var risk := AppStyle.paragraph(t("APP_RIDE_AT_OWN_RISK"), AppStyle.FONT_BODY, AppStyle.WARN)
+		risk.name = "RideAtOwnRisk"
+		left.add_child(risk)
 	hint_label = AppStyle.paragraph("", AppStyle.FONT_HEADING, AppStyle.TEXT)
 	hint_label.name = "ZeroTouchHint"
 	left.add_child(hint_label)

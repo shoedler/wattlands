@@ -75,8 +75,11 @@ static func _wrapping_label() -> Label:
 	return l
 
 
-## ready: shown as Ready / Not ready (bots are always ready); trainer: TrainerDevice status.
-func update(ready: bool, trainer: String, options_text: String, is_bot: bool) -> void:
+## ready: shown as Ready / Not ready (bots are always ready); trainer: TrainerDevice status;
+## note: said instead of either when it isn't empty (why this rider can't be ready).
+func update(
+	ready: bool, trainer: String, options_text: String, is_bot: bool, note: String = ""
+) -> void:
 	if is_bot:
 		ready_label.text = AppScreen.t("APP_LOBBY_READY")
 		ready_label.add_theme_color_override("font_color", AppStyle.GOOD)
@@ -89,6 +92,9 @@ func update(ready: bool, trainer: String, options_text: String, is_bot: bool) ->
 			"font_color", AppStyle.GOOD if ready else AppStyle.WARN
 		)
 		trainer_label.text = AppScreen.t("APP_TITLE_TRAINER").format([trainer_text(trainer)])
+		if note != "":
+			ready_label.text = note
+			ready_label.add_theme_color_override("font_color", AppStyle.WARN)
 	options_label.text = options_text
 	options_label.visible = options_text != ""
 

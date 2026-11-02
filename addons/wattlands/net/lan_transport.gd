@@ -6,12 +6,18 @@ extends RelayTransport
 ## (LanDiscovery). A client joins by code: it listens for that code's beacon, then connects
 ## to ws://<beacon sender>:<port>/v1 and joins as with RelayTransport. Set `url` to join a
 ## known host directly (no discovery). Drops and reconnect tokens work as with the relay.
+## This is also the built-in relay: WlNetSession uses it when no relay was chosen, so a rider with
+## nothing but the release can host (docs/PROTOCOL.md section 8). A busy `port` falls back to any
+## free port (the beacon names it), only this machine may create rooms on the relay, and the relay
+## closes SERVER_LINGER_S after the host leaves, once clients have read host_left.
 ## Owned by net-client; runs with PROCESS_MODE_ALWAYS; all I/O in poll().
 
 const DEFAULT_PORT := 8790
 const BEACON_INTERVAL_S := 1.0
 ## A join waits this long for the room's beacon before room_not_found.
 const DISCOVERY_TIMEOUT_S := 5.0
+## After the host leaves, the relay stays up this long so the clients read host_left.
+const SERVER_LINGER_S := 2.0
 
 ## The relay port when hosting (0 = any free port).
 var port: int = DEFAULT_PORT
@@ -39,6 +45,8 @@ var _search_code: String = ""
 var _search_token: String = ""
 var _search_started: float = 0.0
 var _found_code: String = ""
+# When the relay closes after the host left (< 0: not closing).
+var _server_stop_at: float = -1.0
 
 
 func _init() -> void:
@@ -49,12 +57,17 @@ func _init() -> void:
 ## Host a LAN room: start the relay server, join it, then announce the room.
 func host(max_peers: int = 8) -> void:
 	_search_code = ""
+	_server_stop_at = -1.0
 	if server == null:
 		server = LocalRelayServer.new()
 		server.time_func = time_func
+		server.local_create_only = true
 		add_child(server)
 	if not server.is_listening():
 		var err := server.start(port, bind_address)
+		if err != OK and port != 0:
+			# Another program holds the port: the beacon tells clients which one this is.
+			err = server.start(0, bind_address)
 		if err != OK:
 			last_error = "error"
 			disconnected.emit("error")
@@ -66,7 +79,7 @@ func host(max_peers: int = 8) -> void:
 ## Join a LAN room by code (found by its beacon), or the host at `url` if one is set.
 func join(code: String, token: String = "") -> void:
 	var c := RoomCode.normalize(code)
-	if c == "" or server != null:
+	if c == "" or _serving():
 		# Not a code (refused by the base), or the host re-joining its own relay.
 		super.join(code, token)
 		return
@@ -107,6 +120,9 @@ func searching() -> bool:
 func poll() -> void:
 	if server != null:
 		server.poll()
+		if _server_stop_at >= 0.0 and _now() >= _server_stop_at:
+			_server_stop_at = -1.0
+			server.stop()
 	if discovery != null and discovery.is_listening():
 		discovery.poll(_now())
 		if _search_code != "":
@@ -125,7 +141,23 @@ func poll() -> void:
 func leave() -> void:
 	_search_code = ""
 	_stop_beacon()
+	if discovery != null:
+		discovery.stop()
+	var was_serving := _serving()
 	super.leave()
+	if was_serving:
+		_server_stop_at = _now() + SERVER_LINGER_S
+		url = ""
+
+
+## This transport's relay is up for a room it hosts (not closing after the host left).
+func _serving() -> bool:
+	return server != null and server.is_listening() and _server_stop_at < 0.0
+
+
+## The relay's port while it is up, else 0.
+func serving_port() -> int:
+	return server.port if _serving() else 0
 
 
 func _check_search() -> void:

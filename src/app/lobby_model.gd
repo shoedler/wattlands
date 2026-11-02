@@ -35,6 +35,7 @@ static func player_info(
 		"player_options": player_options.duplicate(true),
 		"games": games.duplicate(true),
 		"trainer": trainer_status,
+		"app": WlNetSession.app_version(),
 	}
 	if profile.share_weight:
 		info["weight_kg"] = profile.weight_kg
@@ -66,6 +67,16 @@ static func peer_value(
 	if dict.has(float(peer)):
 		return dict[float(peer)]
 	return default
+
+
+## This peer's entry in lobby.players ({} when it has none).
+static func player_entry(lobby: Dictionary, peer: int) -> Dictionary:
+	var players: Variant = lobby.get("players", [])
+	if players is Array:
+		for e: Variant in players:
+			if e is Dictionary and int((e as Dictionary).get("peer_id", 0)) == peer:
+				return e as Dictionary
+	return {}
 
 
 static func is_ready(lobby: Dictionary, peer: int) -> bool:

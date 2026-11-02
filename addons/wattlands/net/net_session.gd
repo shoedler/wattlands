@@ -53,6 +53,10 @@ extends Node
 ## and it is re-sent whenever a scaling change changes what it carries. A client's ready waits
 ## for its first lobby_state after a join (and for the end of each lobby_state's handlers), then
 ## follows the player_info for that scaling, so a RAW host never sees it before the weight.
+## Which relay: the one chosen (relay_url, --relay, the rider's Relay setting, the build's default),
+## read again at each host_room() and join_room(). With none chosen the session uses the built-in
+## relay (LanTransport): the host's own PC serves the room and riders find it on their network.
+## While the network lock is set it stays on loopback: no LAN traffic and no firewall prompt.
 
 ## "offline", "connecting", "hosting", "joined", "reconnecting", "error".
 signal state_changed(state: String, detail: String)
@@ -276,6 +280,9 @@ var _lan_failed: bool = false
 var _lan_published: String = "[]"
 var _lan_transport: LanTransport = null
 var _replaced_transport: Transport = null
+# The transport this session made for itself, and the relay choice it was made for ("": built in).
+var _auto_transport: Transport = null
+var _auto_relay: String = ""
 
 
 func _init() -> void:
@@ -994,10 +1001,41 @@ func lan_rooms() -> Array[Dictionary]:
 	if _lan == null:
 		_lan = LanDiscovery.new()
 	if not _lan.is_listening() and not _lan_failed:
-		_lan.port = lan_discovery_port
-		_lan.bind_address = lan_discovery_bind
+		_lan.port = CmdLine.get_int("lan-discovery-port", lan_discovery_port)
+		_lan.bind_address = "127.0.0.1" if Locks.network_locked() else lan_discovery_bind
 		_lan_failed = _lan.start() != OK
 	return _lan_list()
+
+
+## This build's release (project.godot, application/config/version); riders of one room share it.
+static func app_version() -> String:
+	return str(ProjectSettings.get_setting("application/config/version", ""))
+
+
+## The relay address in use ("" on the built-in relay).
+func relay_address() -> String:
+	if transport is LanTransport:
+		return ""
+	if transport is RelayTransport:
+		return (transport as RelayTransport).url
+	return _chosen_relay()
+
+
+## True when this session's rooms run on the built-in relay: its host's PC, found on the network.
+func uses_builtin_relay() -> bool:
+	if transport != null and transport != _auto_transport:
+		return transport is LanTransport
+	return _chosen_relay() == ""
+
+
+## While hosting on the built-in relay, the addresses a rider elsewhere types as their Relay.
+func shareable_relay_urls() -> PackedStringArray:
+	var out: PackedStringArray = []
+	if transport is LanTransport and (transport as LanTransport).serving_port() > 0:
+		var p := (transport as LanTransport).serving_port()
+		for a: String in LanDiscovery.shareable_addresses(IP.get_local_addresses()):
+			out.append("ws://%s:%d/v1" % [a, p])
+	return out
 
 
 ## P1: true while lan_rooms() discovery listens for beacons.
@@ -1478,7 +1516,8 @@ func _on_ready(from: int, data: Dictionary) -> void:
 						"reason": issue,
 						"scope": "ready",
 						"game_id": _game_id,
-						"game_version": _game_version
+						"game_version": _game_version,
+						"app": app_version()
 					}
 				)
 			)
@@ -1573,9 +1612,13 @@ func _on_refused_msg(data: Dictionary) -> void:
 		_ready_wanted = false
 		var gid := str(data.get("game_id", lobby.get("game_id", "")))
 		var mine := _version_str((_local_info.get("games", {}) as Dictionary).get(gid, ""))
-		ready_refused.emit(
-			reason, _ready_text(reason, gid, mine, _version_str(data.get("game_version", "")))
-		)
+		var theirs := _version_str(data.get("game_version", ""))
+		var app := str(data.get("app", ""))
+		if app not in ["", app_version()]:
+			reason = "app_mismatch"
+			mine = app_version()
+			theirs = app
+		ready_refused.emit(reason, _ready_text(reason, gid, mine, theirs))
 		game_message.emit(host_peer, data)
 		return
 	game_message.emit(host_peer, data)
@@ -1794,6 +1837,8 @@ func _game_issue(peer: int) -> String:
 	if _game_id == "":
 		return ""
 	var info: Dictionary = _infos.get(peer, {})
+	if str(info.get("app", "")) not in ["", app_version()]:
+		return "version_mismatch"
 	var games: Variant = info.get("games", {})
 	if not games is Dictionary or not (games as Dictionary).has(_game_id):
 		return "missing_game"
@@ -2209,11 +2254,49 @@ func _drain_self_inbox() -> void:
 
 
 func _ensure_transport() -> void:
-	if transport != null:
+	if transport != null and transport != _auto_transport:
 		return
-	var rt := RelayTransport.new()
-	rt.url = relay_url if relay_url != "" else RelayTransport.default_url(self)
-	use_transport(rt)
+	var chosen := _chosen_relay()
+	if transport != null:
+		if chosen == _auto_relay:
+			return
+		var old := transport
+		use_transport(null)
+		old.queue_free()
+	var made: Transport = null
+	if chosen == "":
+		made = _make_builtin_transport()
+	else:
+		var rt := RelayTransport.new()
+		rt.url = chosen
+		made = rt
+	_auto_transport = made
+	_auto_relay = chosen
+	use_transport(made)
+
+
+## The relay riders chose ("" = none, so the built-in one).
+func _chosen_relay() -> String:
+	if relay_url != "":
+		return relay_url
+	var u := RelayTransport.default_url(self)
+	if CmdLine.get_str("relay", "") != "":
+		return u
+	return "" if u == RelayTransport.DEFAULT_URL else u
+
+
+func _make_builtin_transport() -> LanTransport:
+	var t := LanTransport.new()
+	t.name = "BuiltinRelay"
+	t.port = CmdLine.get_int("lan-port", LanTransport.DEFAULT_PORT)
+	t.discovery_port = CmdLine.get_int("lan-discovery-port", lan_discovery_port)
+	t.discovery_bind = lan_discovery_bind
+	t.time_func = lan_time_func
+	if Locks.network_locked():
+		t.bind_address = "127.0.0.1"
+		t.discovery_address = "127.0.0.1"
+		t.discovery_bind = "127.0.0.1"
+	return t
 
 
 func _disconnect_transport(t: Transport) -> void:
