@@ -6,7 +6,7 @@ Short ADRs for `addons/wattlands/ui/`, `addons/wattlands/audio/`, `tests/ui/` an
 
 - Decision: the W1 build ships no font file. `WlTheme` uses Atkinson Hyperlegible when `addons/wattlands/ui/theme/fonts/AtkinsonHyperlegible-Regular.ttf` and `-Bold.ttf` exist, otherwise `ThemeDB.fallback_font`. Dropping both files in (plus `OFL.txt`, a `docs/deps.d/atkinson-hyperlegible.md` entry with source, version and SHA-256, and a credit) switches the Theme and every kit widget over with no code change.
 - Alternatives: download the font from Google Fonts or the Braille Institute release during the build.
-- Reason: this unattended W1 session can't get Simon's explicit go-ahead for a file download, and BRIEF 3.9 names Godot's default font as the fallback. The readability rules (sizes, outlines, contrast) don't depend on the font.
+- Reason: a file download needs explicit approval, which that session did not have, and BRIEF 3.9 names Godot's default font as the fallback. The readability rules (sizes, outlines, contrast) don't depend on the font.
 
 ## 2026-10-21: Synthesized sound only; no CC0 pack
 

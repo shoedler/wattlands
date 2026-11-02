@@ -49,11 +49,11 @@ Autoload names never change. Each is an instance of a class named `Wl<Name>` (a 
 | `Sfx` | `WlSfx` | `addons/wattlands/audio/sfx.gd` |
 | `App` | `WlApp` | `addons/wattlands/core/app_state.gd` |
 
-## Contracts (frozen after W0)
+## Contracts (frozen)
 
 `addons/wattlands/contracts/` holds the SDK and cross-module types: `Wl` (constants, slot looks, rule names), `GameModule`, `GameContext`, `PlayerSlot`, `EffortPlan`, `PlanPhase`, `PhaseState`, `EffortDirective`, `DirectiveResult`, `DirectiveSink`, `InputFrame`, `Telemetry`, `HudSpec`, `HudFeed`, `IntentSink`, `ProgressStore`, `GameStrings`, `GameResults`, `SessionStats`, `TrainerSample`, `TrainerDevice`, `BleTransport`, `Transport`, `NetMessages`, `RideRecorderApi` and `WlEventBus`.
 
-Module classes whose public API other modules call were also written in W0 as stubs with frozen signatures (owners fill the bodies; additive changes only): `SafetyGovernor`, `MockTrainer`, `FtmsClient`, `FtmsTrainer`, `FtmsConnectionManager`, `GestureRecognizer`, `SprintRule`, `ZwoImport`, `Bots`, `LocalRider`, `WlSettings`, `WlApp`, `WlTrainerService`, `WlNetSession`, `Protocol`, `LoopbackTransport`, `RoomCode`, `WlGameRegistry`, `PlanValidator`, `GameHost`, `GameSimRunner`, `WlInputRouter`, `PedalScanList`, `HudLayer`, `PixelViewport`, `WlSfx` and `WlRides`. W0 shipped real, tested implementations of the shared pure logic: `SimClock`, `SeededRng`, `WBalance`, `EffortScaling`, `SpeedModel`, `GovernorClamps`, `Paths`, `CmdLine`, `RiderProfile`, `RoomCode`, `Bots`, and a first `MockTrainer` (constant and ramp profiles, a tau = 2 s ERG follower).
+These module classes are called by other modules, so their public signatures are frozen (additive changes only): `SafetyGovernor`, `MockTrainer`, `FtmsClient`, `FtmsTrainer`, `FtmsConnectionManager`, `GestureRecognizer`, `SprintRule`, `ZwoImport`, `Bots`, `LocalRider`, `WlSettings`, `WlApp`, `WlTrainerService`, `WlNetSession`, `Protocol`, `LoopbackTransport`, `RoomCode`, `WlGameRegistry`, `PlanValidator`, `GameHost`, `GameSimRunner`, `WlInputRouter`, `PedalScanList`, `HudLayer`, `PixelViewport`, `WlSfx` and `WlRides`. The shared pure logic is plain tested code: `SimClock`, `SeededRng`, `WBalance`, `EffortScaling`, `SpeedModel`, `GovernorClamps`, `Paths`, `CmdLine`, `RiderProfile`, `RoomCode`, `Bots` and `MockTrainer`.
 
 ## Time
 

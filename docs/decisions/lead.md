@@ -1,10 +1,10 @@
 # Lead decisions
 
-## 2026-10-21: Godot binary is Simon's .NET 4.7.2 build
+## 2026-10-21: Godot binary is the .NET 4.7.2 build
 
-- Decision: run and test with `C:\Projects\.tooling\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe` (reports `4.7.2.stable.mono.official.ed1daf0bf`). The wrappers resolve `$GODOT`, then `tools/godot_bin.local` (gitignored, machine-local) in this or the main checkout, then `godot` on PATH.
+- Decision: run and test with the Godot 4.7.2 .NET (mono) console build, which reports `4.7.2.stable.mono.official.ed1daf0bf`. The wrappers resolve `$GODOT`, then `tools/godot_bin.local` (gitignored, machine-local) in this or the main checkout, then `godot` on PATH.
 - Alternatives: download the standard build (BRIEF 2); require `GODOT` in every shell.
-- Reason: the user named this binary for running and testing; BRIEF 2 allows a .NET build for that. Exports need the standard build's export templates (BRIEF 7.10), documented in the README.
+- Reason: the maintainer develops with this binary; BRIEF 2 allows a .NET build for running and testing. Exports need the standard build's export templates (BRIEF 7.10), documented in the README.
 
 ## 2026-10-21: Frozen W0 stubs for cross-module classes
 
@@ -75,13 +75,13 @@
 
 - Decision: `node tools/export_windows.mjs` exports the Windows Desktop preset into `build/windows/` from a clean copy of the tracked files (`build/export_src`), so the working tree is never touched. With a .NET editor (Simon's) it points the copy's preset at the standard `windows_release_x86_64.exe` as a custom template (`--template`, or the installed `<version>.stable` export templates), because a .NET editor looks for .NET templates. It writes `LICENSE.txt`, `CREDITS.md` and `THIRD_PARTY_NOTICES.txt` next to the exe and fails when the GDBLE DLL is missing. `--with-vcruntime` copies `vcruntime140.dll` (and `vcruntime140_1.dll`) from System32 next to the exe, an app-local Visual C++ runtime for the GDBLE DLL. `--smoke` runs the exported console exe headless with a mock trainer for 8 s, locks set and a temp profile, and fails on a non-zero exit or a script error. Godot runs take the machine-wide lock.
 - Alternatives: export from the working tree with the editor's own templates; install the standard editor only for exports; ship the VC++ redistributable installer or require it.
-- Reason: BRIEF 7.10 needs a Windows build that ships the GDBLE DLL, and Simon's editor is the .NET build. The notices travel with the exe. A fresh PC without the VC++ runtime shows no trainers, so the README names the redistributable and the app-local copy stays opt-in. The smoke run checks the exported build itself, not the source tree.
+- Reason: BRIEF 7.10 needs a Windows build that ships the GDBLE DLL, and the development editor is the .NET build. The notices travel with the exe. A fresh PC without the VC++ runtime shows no trainers, so the README names the redistributable and the app-local copy stays opt-in. The smoke run checks the exported build itself, not the source tree.
 
 ## 2026-10-21: Atkinson Hyperlegible and CC0 audio stay BRIEF 3.9 fallbacks
 
 - Decision: v0.1.0 ships Godot's default font and synthesized sound, BRIEF 3.9's fallbacks (as the ui-hud ADRs chose in W1). The font is a drop-in: put `AtkinsonHyperlegible-Regular.ttf` and `AtkinsonHyperlegible-Bold.ttf` with `OFL.txt` in `addons/wattlands/ui/theme/fonts/`, record them in `docs/deps.d/` and the credits, and import; `WlTheme` switches with no code change (`addons/wattlands/ui/theme/fonts/README.md`). Recorded sounds can replace a built-in through `Sfx.register(name, stream)`, with a credit.
 - Alternatives: download the font and a CC0 pack during the build.
-- Reason: downloading files needs Simon's explicit approval in chat, which an unattended run can't get; BRIEF 3.9 names both fallbacks.
+- Reason: a file download needs explicit approval, which this build did not have; BRIEF 3.9 names both fallbacks.
 
 ## 2026-10-21: The lead CI workflow runs the full tools/run_tests
 

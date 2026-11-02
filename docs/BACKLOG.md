@@ -1,6 +1,6 @@
 # Backlog (P2 design notes)
 
-Design notes only (BRIEF 1: P2 is never built in this run). Game-specific P2 notes live with each game (`src/games/<id>/README.md` or `BACKLOG.md`).
+Design notes only: none of this is built (BRIEF 1 marks it P2). Game-specific P2 notes live with each game (`src/games/<id>/README.md` or `BACKLOG.md`).
 
 ## Kart Rush (a future game)
 
@@ -23,7 +23,7 @@ Design notes only (BRIEF 1: P2 is never built in this run). Game-specific P2 not
 
 ## Known gaps (follow-ups, not P2)
 
-Found by the final Definition of Done sweep or left open by W3/W4 with a reason in `docs/DECISIONS.md`. None blocks a game session.
+Found in the pre-release review or left open after the W3 and W4 fix rounds, each with a reason in `docs/DECISIONS.md`. None blocks a game session.
 
 - Hardware and services: automated runs can't reach a real KICKR CORE or the real Strava API; `docs/HARDWARE_TEST_PLAN.md` and each game's `HARDWARE_TEST.md` are the pass to ride.
 - Trainer: the app never launches the `trainer_bridge` exe itself (start `trainer_bridge serve` by hand when GDBLE can't be used); RESISTANCE is never used as a fallback for a trainer without ERG or SIM support (the governor doesn't read the FTMS target-setting feature bits); `CadenceEstimator.start_calibration()` has no caller, so a trainer that never reports cadence gets no estimate (the KICKR CORE reports cadence); a SIM-block request in the first 30 s of the first ERG phase is accepted by the DirectiveRouter and then refused by the rider's governor for switch spacing (the refusal is reported, the trainer is never wrong).

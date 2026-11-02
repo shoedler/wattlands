@@ -5,14 +5,14 @@ Short ADRs (date, decision, alternatives, reason). Agents and game sessions writ
 ## From the concept phase (17-18 Oct 2026, moved here from the planning CLAUDE.md and README)
 
 - Shortlist: Generator Siege, Tank Crew and Turbo Reel (fishing). Kart Rush stays in the backlog (BRIEF 3.12) as P2 notes.
-- Dropped ideas, not to be revived without asking Simon: Boss Raid (WATTGAMES already does interval boss fights), Ramp Tower and Tug-of-War (too thin), Paceline TTT (Zwift covers it), Pedal Survivors, Track Night and Stealth Heist.
+- Dropped ideas, not to be revived without asking the project owner: Boss Raid (WATTGAMES already does interval boss fights), Ramp Tower and Tug-of-War (too thin), Paceline TTT (Zwift covers it), Pedal Survivors, Track Night and Stealth Heist.
 - Packaging: one platform brief, then one session per game. Everything lives in this repo as one app with a game picker.
 - Art direction (after concept round 1):
   - Generator Siege: a low-poly 3D miniature with simple primitives, in an alternate-history Roman fort powered by treadwheels driving a bronze flywheel generator with a watt readout. Enemies are realistic but not detailed; people are tiny, with no close-up riders. Four treadwheels, one per player.
   - Tank Crew: 2D pixel art in a dark, oily alternate 1940s, brutalist super-heavy tanks in x-ray cutaway with one crude engine per task (diesel, electric, steam), one tank layout each for 1, 2 and 3 players, enemy tanks only, no people.
   - Turbo Reel: 2D pixel art on one shared ocean, hand-authored in a muted, limited palette.
 - 2D pixel art (Tank Crew, Turbo Reel): whatever is fastest and looks good. The platform's `tools/art` generates sprites on fal with GPT Image 2.5, then pixelates them to a fixed palette and animates them by parts; Turbo Reel draws its sprites as pixel grids in code instead.
-- Concept art: round 2 is 7 images from GPT Image 2.5 Sunburst on fal (1536 x 864, high quality), reviewed in `docs/concept/NOTES.md`; every request is in `docs/concept/manifest.json`. About $2.83 of the $5 concept-art budget is left; Simon adds fal credits for the games' art.
+- Concept art: round 2 is 7 images from GPT Image 2.5 Sunburst on fal (1536 x 864, high quality), reviewed in `docs/concept/NOTES.md`; every request is in `docs/concept/manifest.json`. About $2.83 of the $5 concept-art budget is left; the owner adds fal credits for the games' art.
 - Art prompts describe original designs only: no brand names or logos (no Wahoo, Zwift or Strava), no existing characters or franchises, and no flags, insignia or national markings on the 1940s tank art.
 - `docs/concept/` is reference material for the build, not shipped content; images are committed as JPEG.
 - Toolchain choices baked into the brief (see `docs/research.md`, "Decisions baked into the prompt"): Godot 4.7.2 with GDScript and the Compatibility renderer; GDBLE for Bluetooth with a Python bridge as fallback; host-authoritative multiplayer through a small Node relay with room codes; % of FTP fairness by default; FIT export and optional upload to each rider's own Strava API app; GUT 9.7.1 with strict pass rules; procedural or pipeline-generated art, an OFL font and CC0 or synthesized audio.
@@ -23,11 +23,11 @@ Merged from the fragments in `docs/decisions/` (the fragments stay as the per-mo
 
 ### lead
 
-#### 2026-10-21: Godot binary is Simon's .NET 4.7.2 build
+#### 2026-10-21: Godot binary is the .NET 4.7.2 build
 
-- Decision: run and test with `C:\Projects\.tooling\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe` (reports `4.7.2.stable.mono.official.ed1daf0bf`). The wrappers resolve `$GODOT`, then `tools/godot_bin.local` (gitignored, machine-local) in this or the main checkout, then `godot` on PATH.
+- Decision: run and test with the Godot 4.7.2 .NET (mono) console build, which reports `4.7.2.stable.mono.official.ed1daf0bf`. The wrappers resolve `$GODOT`, then `tools/godot_bin.local` (gitignored, machine-local) in this or the main checkout, then `godot` on PATH.
 - Alternatives: download the standard build (BRIEF 2); require `GODOT` in every shell.
-- Reason: the user named this binary for running and testing; BRIEF 2 allows a .NET build for that. Exports need the standard build's export templates (BRIEF 7.10), documented in the README.
+- Reason: the maintainer develops with this binary; BRIEF 2 allows a .NET build for running and testing. Exports need the standard build's export templates (BRIEF 7.10), documented in the README.
 
 #### 2026-10-21: Frozen W0 stubs for cross-module classes
 
@@ -96,15 +96,15 @@ Merged from the fragments in `docs/decisions/` (the fragments stay as the per-mo
 
 #### 2026-10-21: A Windows export tool (W3 PKG-1, PKG-4, PKG-5)
 
-- Decision: `node tools/export_windows.mjs` exports the Windows Desktop preset into `build/windows/` from a clean copy of the tracked files (`build/export_src`), so the working tree is never touched. With a .NET editor (Simon's) it points the copy's preset at the standard `windows_release_x86_64.exe` as a custom template (`--template`, or the installed `<version>.stable` export templates), because a .NET editor looks for .NET templates. It writes `LICENSE.txt`, `CREDITS.md` and `THIRD_PARTY_NOTICES.txt` next to the exe and fails when the GDBLE DLL is missing. `--with-vcruntime` copies `vcruntime140.dll` (and `vcruntime140_1.dll`) from System32 next to the exe, an app-local Visual C++ runtime for the GDBLE DLL. `--smoke` runs the exported console exe headless with a mock trainer for 8 s, locks set and a temp profile, and fails on a non-zero exit or a script error. Godot runs take the machine-wide lock.
+- Decision: `node tools/export_windows.mjs` exports the Windows Desktop preset into `build/windows/` from a clean copy of the tracked files (`build/export_src`), so the working tree is never touched. With a .NET editor it points the copy's preset at the standard `windows_release_x86_64.exe` as a custom template (`--template`, or the installed `<version>.stable` export templates), because a .NET editor looks for .NET templates. It writes `LICENSE.txt`, `CREDITS.md` and `THIRD_PARTY_NOTICES.txt` next to the exe and fails when the GDBLE DLL is missing. `--with-vcruntime` copies `vcruntime140.dll` (and `vcruntime140_1.dll`) from System32 next to the exe, an app-local Visual C++ runtime for the GDBLE DLL. `--smoke` runs the exported console exe headless with a mock trainer for 8 s, locks set and a temp profile, and fails on a non-zero exit or a script error. Godot runs take the machine-wide lock.
 - Alternatives: export from the working tree with the editor's own templates; install the standard editor only for exports; ship the VC++ redistributable installer or require it.
-- Reason: BRIEF 7.10 needs a Windows build that ships the GDBLE DLL, and Simon's editor is the .NET build. The notices travel with the exe. A fresh PC without the VC++ runtime shows no trainers, so the README names the redistributable and the app-local copy stays opt-in. The smoke run checks the exported build itself, not the source tree.
+- Reason: BRIEF 7.10 needs a Windows build that ships the GDBLE DLL, and the development editor is the .NET build. The notices travel with the exe. A fresh PC without the VC++ runtime shows no trainers, so the README names the redistributable and the app-local copy stays opt-in. The smoke run checks the exported build itself, not the source tree.
 
 #### 2026-10-21: Atkinson Hyperlegible and CC0 audio stay BRIEF 3.9 fallbacks
 
 - Decision: v0.1.0 ships Godot's default font and synthesized sound, BRIEF 3.9's fallbacks (as the ui-hud ADRs chose in W1). The font is a drop-in: put `AtkinsonHyperlegible-Regular.ttf` and `AtkinsonHyperlegible-Bold.ttf` with `OFL.txt` in `addons/wattlands/ui/theme/fonts/`, record them in `docs/deps.d/` and the credits, and import; `WlTheme` switches with no code change (`addons/wattlands/ui/theme/fonts/README.md`). Recorded sounds can replace a built-in through `Sfx.register(name, stream)`, with a credit.
 - Alternatives: download the font and a CC0 pack during the build.
-- Reason: downloading files needs Simon's explicit approval in chat, which an unattended run can't get; BRIEF 3.9 names both fallbacks.
+- Reason: a file download needs explicit approval, which this build did not have; BRIEF 3.9 names both fallbacks.
 
 #### 2026-10-21: The lead CI workflow runs the full tools/run_tests
 
@@ -186,7 +186,7 @@ Short ADRs for `tools/godot.sh`, `tools/godot.ps1`, `tools/lib/godot_lock.mjs`, 
 - **2026-10-21: gdlint and gdformat --check are reported, not fatal, unless `--strict-lint` is passed.** Detection tries `gdlint` on PATH, then `uvx --from gdtoolkit==4.*` (gdtoolkit 4.5.0 works here), with a 90 s probe. Without it the runner prints "gdtoolkit unavailable, skipped". `--no-lint` skips both. *Reason:* BRIEF 7.2 makes them conditional on Python, gdtoolkit can lag GDScript 4.7 syntax, and style findings shouldn't block P0. The findings are in the summary and in `build/gdlint.log` and `build/gdformat.log`. *Superseded 2026-10-21* by docs/decisions/lead.md: lint is fatal whenever gdtoolkit 4.5.0 is available, `--strict-lint` is a no-op, and `./gdlintrc` configures gdlint.
 - **2026-10-21: `check_scripts.gd` also fails on logged load errors.** In Godot 4.7, a script with a parse error loads as non-null with `can_instantiate()` false. An `@abstract` script with a parse error would pass both of the brief's checks. So the checker registers an `OS.add_logger()` Logger (Godot 4.5+) and fails any script whose load logs an error (warnings excluded). It skips dot-folders and folders with a `.gdignore`, since Godot never imports them.
 - **2026-10-21: The node step.** It runs `node --test` with each suite directory as cwd (node's default file patterns) and skips a directory without test files. `WATTLANDS_RUN_TESTS_NESTED` stops a Node suite that starts `tools/run_tests` from recursing. Each suite has a 30 min timeout with a tree kill.
-- **2026-10-21: `tools/run_tests` removes `FAL_KEY` and `WATTLANDS_ALLOW_ART` for its own process tree** (docs/OWNERSHIP.md TL5), so no gate can make a paid fal call even in a session where Simon has set them. `tools/env.*` and the Godot wrappers still never name either variable, and a test scans them for that.
+- **2026-10-21: `tools/run_tests` removes `FAL_KEY` and `WATTLANDS_ALLOW_ART` for its own process tree** (docs/OWNERSHIP.md TL5), so no gate can make a paid fal call even in a session where a person has set them. `tools/env.*` and the Godot wrappers still never name either variable, and a test scans them for that.
 - **2026-10-21: Tooling tests never touch the main checkout's Godot cache.** Real-Godot tests run in scratch projects under `build/` (which has a `.gdignore`) and queue on the real machine-wide lock. Lock-logic tests use temp lock directories. The "empty environment" for the wrapper tests is PATH (bash, node, git, System32, WindowsPowerShell), SystemRoot and TEMP/TMP. TEMP is kept so `os.tmpdir()`, and with it the machine-wide lock directory, stays the same.
 
 ### vendor
@@ -943,7 +943,7 @@ Short ADRs for `addons/wattlands/ui/`, `addons/wattlands/audio/`, `tests/ui/` an
 
 - Decision: the W1 build ships no font file. `WlTheme` uses Atkinson Hyperlegible when `addons/wattlands/ui/theme/fonts/AtkinsonHyperlegible-Regular.ttf` and `-Bold.ttf` exist, otherwise `ThemeDB.fallback_font`. Dropping both files in (plus `OFL.txt`, a `docs/deps.d/atkinson-hyperlegible.md` entry with source, version and SHA-256, and a credit) switches the Theme and every kit widget over with no code change.
 - Alternatives: download the font from Google Fonts or the Braille Institute release during the build.
-- Reason: this unattended W1 session can't get Simon's explicit go-ahead for a file download, and BRIEF 3.9 names Godot's default font as the fallback. The readability rules (sizes, outlines, contrast) don't depend on the font.
+- Reason: a file download needs explicit approval, which that session did not have, and BRIEF 3.9 names Godot's default font as the fallback. The readability rules (sizes, outlines, contrast) don't depend on the font.
 
 #### 2026-10-21: Synthesized sound only; no CC0 pack
 
