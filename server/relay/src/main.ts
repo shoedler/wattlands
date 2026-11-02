@@ -1,5 +1,5 @@
 // Command-line entry: node src/main.ts [--port=8787] [--host=<addr>] [--impl=auto|ws|builtin]
-// Environment: PORT, HOST, RELAY_WS_IMPL, RELAY_TRUST_PROXY=1, RELAY_LOG=quiet.
+// Environment: PORT, HOST, RELAY_WS_IMPL, RELAY_TRUST_PROXY, RELAY_LOG=quiet, RELAY_MAX_* limits (see --help).
 // Prints "WATTLANDS_RELAY <ws url>" once it listens (harnesses read the port from it).
 
 import type { MainOptions } from './options.ts';
@@ -29,7 +29,7 @@ const log = (line: string): void => {
 };
 
 try {
-  const running = await startRelay({ port: opts.port, host: opts.host, impl: opts.impl, trustProxy: opts.trustProxy, log });
+  const running = await startRelay({ port: opts.port, host: opts.host, impl: opts.impl, trustProxy: opts.trustProxy, limits: opts.limits, log });
   process.stdout.write(`WATTLANDS_RELAY ${running.url}\n`);
   let stopping = false;
   const stop = (signal: string): void => {

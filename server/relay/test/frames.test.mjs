@@ -270,17 +270,39 @@ for (const { impl, skip } of await implementations()) {
     });
 
     describe('idle timeout', () => {
-      it('WebSocket ping and pong frames count as activity', async () => {
+      const HELLO = '{"t":"hello","proto":1,"game":"wattlands","build":"0.1.0"}';
+
+      it('WebSocket ping and pong frames are answered but are not activity', async () => {
         const c = await connected();
-        tr.clock.advance(59_000);
-        tr.relay.sweep();
-        c.send({ opcode: PING, payload: 'a' });
-        await c.next((f) => f.opcode === PONG);
-        tr.clock.advance(59_000);
-        tr.relay.sweep();
-        c.send({ opcode: PONG, payload: 'b' });
+        c.sendText(HELLO);
         c.sendText('{"t":"ping","ts":1}');
         await c.json();
+        tr.clock.advance(30_000);
+        tr.relay.sweep();
+        c.send({ opcode: PING, payload: 'a' });
+        const pong = await c.next((f) => f.opcode === PONG);
+        assert.equal(pong.payload.toString(), 'a', 'a WebSocket ping is still answered');
+        tr.clock.advance(29_000);
+        tr.relay.sweep();
+        c.send({ opcode: PONG, payload: 'b' });
+        c.send({ opcode: PING, payload: 'c' });
+        await c.next((f) => f.opcode === PONG && f.payload.toString() === 'c');
+        tr.clock.advance(1000);
+        tr.relay.sweep();
+        await expectClose(c, CLOSE_CODES.IDLE_TIMEOUT);
+      });
+
+      it('a relay message counts, a client that pings every 15 s stays connected', async () => {
+        const c = await connected();
+        c.sendText(HELLO);
+        for (let i = 0; i < 12; i++) {
+          tr.clock.advance(15_000);
+          c.send({ opcode: PING, payload: 'ws' });
+          c.sendText('{"t":"ping","ts":' + i + '}');
+          await c.json();
+          tr.relay.sweep();
+        }
+        assert.equal(tr.relay.stats().connections, 1, 'three minutes later the socket is still open');
         tr.clock.advance(60_000);
         tr.relay.sweep();
         await expectClose(c, CLOSE_CODES.IDLE_TIMEOUT);

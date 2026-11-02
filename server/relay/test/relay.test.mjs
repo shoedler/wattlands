@@ -549,6 +549,8 @@ for (const { impl, skip } of await implementations()) {
 
       it('an idle socket is closed after 60 s; any message keeps it open', async () => {
         const c = await tr.connect();
+        c.hello();
+        await c.sync();
         tr.clock.advance(59_000);
         tr.relay.sweep();
         await c.sync();

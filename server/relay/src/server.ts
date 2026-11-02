@@ -16,6 +16,14 @@ import { createWsPackageLayer } from './ws_package.ts';
 
 export type ImplChoice = 'auto' | WsImplName;
 
+/**
+ * Where the client's address comes from. false: the socket's own address. true or a number
+ * n: the n-th entry from the right of X-Forwarded-For (true is 1), the one the nearest
+ * trusted proxy appended; an entry further left is whatever the client sent. "fly":
+ * Fly-Client-IP, which Fly's proxy always sets itself.
+ */
+export type ProxyTrust = boolean | number | 'fly';
+
 export const DEFAULT_PORT = 8787;
 export const WS_PATH = '/v1';
 
@@ -30,8 +38,8 @@ export interface StartOptions {
   limits?: Partial<Limits>;
   /** Period of Relay.sweep() in ms (default 1000; 0 = never, the caller sweeps). */
   sweepMs?: number;
-  /** Take the client IP from Fly-Client-IP or X-Forwarded-For (behind a proxy only). */
-  trustProxy?: boolean;
+  /** Where the client IP comes from behind a proxy (default: the socket address). */
+  trustProxy?: ProxyTrust;
   log?: (line: string) => void;
   generateCode?: () => string;
   generateToken?: () => string;
@@ -79,17 +87,32 @@ export async function loadWsLayer(
   }
 }
 
-/** The client's IP for the join limit. */
-export function clientIp(req: http.IncomingMessage, trustProxy: boolean): string {
-  if (trustProxy) {
+/** An address as a map key: IPv4-mapped IPv6 unwrapped, and nothing longer than an IPv6 address. */
+function ipKey(text: string | undefined): string | undefined {
+  const t = text?.trim();
+  if (!t || t.length > 45) return undefined;
+  return t.toLowerCase().startsWith('::ffff:') && t.includes('.') ? t.slice(7) : t;
+}
+
+/**
+ * The client's IP for the per-address limits (joins, connections, rooms). Behind a proxy
+ * only the part the proxy wrote can be trusted: with `trust` n the n-th entry from the
+ * right of X-Forwarded-For, never the leftmost, which a client can set to anything. With
+ * fewer entries than that, or a missing header, the socket address is used.
+ */
+export function clientIp(req: http.IncomingMessage, trust: ProxyTrust = false): string {
+  const hops = trust === true ? 1 : typeof trust === 'number' ? Math.floor(trust) : 0;
+  let forwarded: string | undefined;
+  if (trust === 'fly') {
     const fly = req.headers['fly-client-ip'];
-    if (typeof fly === 'string' && fly.trim() !== '') return fly.trim();
+    forwarded = ipKey(Array.isArray(fly) ? fly[fly.length - 1] : fly);
+  } else if (hops > 0) {
     const xff = req.headers['x-forwarded-for'];
-    const first = (Array.isArray(xff) ? xff[0] : xff)?.split(',')[0]?.trim();
-    if (first) return first;
+    const entries = (Array.isArray(xff) ? xff.join(',') : (xff ?? '')).split(',').map((e) => e.trim());
+    // A header that is absent or has an empty slot (a stray comma) is not a proxy's doing.
+    if (entries.length >= hops) forwarded = ipKey(entries[entries.length - hops]);
   }
-  const addr = req.socket.remoteAddress ?? 'unknown';
-  return addr.startsWith('::ffff:') ? addr.slice(7) : addr;
+  return forwarded ?? ipKey(req.socket.remoteAddress) ?? 'unknown';
 }
 
 function pathOf(url: string | undefined): string {
@@ -126,7 +149,7 @@ export async function startRelay(opts: StartOptions = {}): Promise<RunningRelay>
     generateCode: opts.generateCode,
     generateToken: opts.generateToken,
   });
-  const trustProxy = opts.trustProxy ?? false;
+  const trustProxy: ProxyTrust = opts.trustProxy ?? false;
   const startedAt = clock.now();
   let closing = false;
 
@@ -169,6 +192,12 @@ export async function startRelay(opts: StartOptions = {}): Promise<RunningRelay>
     const problem = checkUpgrade(req);
     if (problem) return refuse(socket, problem.status, problem.text, problem.headers);
     const ip = clientIp(req, trustProxy);
+    const verdict = relay.admit(ip);
+    if (verdict !== 'ok') {
+      relay.noteRefused();
+      const full = verdict === 'total';
+      return refuse(socket, full ? 503 : 429, full ? 'Service Unavailable' : 'Too Many Requests', { 'Retry-After': '30' });
+    }
     layer.upgrade(req, socket, head, (conn) => relay.open(conn, ip));
   });
 
@@ -217,5 +246,11 @@ export async function startRelay(opts: StartOptions = {}): Promise<RunningRelay>
     },
   };
   log(`relay listening on ${running.url}; WebSocket layer: ${note}`);
+  const cap = (n: number): string => (n > 0 ? String(n) : 'off');
+  log(
+    `caps: ${cap(limits.maxConnections)} connections (${cap(limits.maxConnectionsPerIp)} per address), ` +
+      `${cap(limits.maxRooms)} rooms (${cap(limits.maxRoomsPerIp)} per address), ` +
+      `${cap(limits.roomCreatesPerWindow)} room creates a minute per address; proxy trust: ${String(trustProxy)}`,
+  );
   return running;
 }
