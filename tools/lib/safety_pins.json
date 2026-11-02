@@ -1,7 +1,7 @@
 {
- "reason": "Tank matrix rows S14-S18 and 85 runs are now required: a stricter gate, nothing weakened",
- "pinned_at": "bedb3744da5213a3644a234477fe45df684765a4",
- "date": "2026-10-31",
+ "reason": "v1.0.0-rc.4: gate --contributor; owner's name out of tool comments; new_game's workflow runs on main",
+ "pinned_at": "74e1e13d7c60a3037407dad1c18d92d9a37f7c8d",
+ "date": "2026-11-02",
  "globs": [
   "addons/wattlands/trainer/**",
   "addons/wattlands/core/locks.gd",
@@ -465,17 +465,17 @@
   "tools/e2e/lib/checks.mjs": "748df0ea22b58c6e330cd1c59d6d4172f5a776f131fb26fe11e20027ba9e8916",
   "tools/e2e/lib/game.mjs": "4fbafd76bfb04ae8f79c0ef89154daa1a80114419303b4b0088b5f2c69c76463",
   "tools/e2e/run.mjs": "6471b94d0a466eceeac9a43fb3bad083896660966dac866d9fde8f6b2b69b53e",
-  "tools/env.ps1": "9a46fb7367d7866452a1634dd7d5dfb884ea2c4b829093e376c665d6cd67594c",
-  "tools/env.sh": "b1c74be654c9b3c3e6e036c0602a04e0b0167efece28bc48d05724b16e28fd56",
+  "tools/env.ps1": "6def8a32af12ecb37970527e4b4ae4cf0104f219147c5c92f4f87e68ccdf578e",
+  "tools/env.sh": "d9ffa07c6750709c8c0b7f4c6692c730b98911ec807096d147770dbefbd71542",
   "tools/fit_check/check.mjs": "7966d584e80a18a7e9dbb3cf146661504b5c6dad5fca618434e7512f1ad061d5",
   "tools/godot.ps1": "b215d75983912c3831fea40249bead48044ff2fbf19b0a81322d772397934f29",
   "tools/godot.sh": "b58cd9a88106c732b495b424a462065337274f2fbce81a770dd2ef63568a2969",
-  "tools/lib/gate.mjs": "7d467184798802b4e8ea1198824d9c8c16732ce7941f603d9fc7017729a50b12",
-  "tools/lib/gate_core.mjs": "8184e4afd5ff0b90ba28b9ebb523ce8e44fa93f7851ae8062d018af5d3a6a769",
+  "tools/lib/gate.mjs": "054198bd893c743cd3a61c586e136cdbf6c3cfea877ad965e577295cf16887ef",
+  "tools/lib/gate_core.mjs": "131ccc6b9c52511d7d458ed47e773818bbb4676920ff70193226c019400f13c2",
   "tools/lib/gate_manifest.json": "1a20fdf1872665842bdfaacea5b74f721256c4af00a2fd7d3f8674ae30712c37",
   "tools/lib/godot_lock.mjs": "4709e3b0d0c0a9f7183ab0d47d10703c0b42700fe12c7ddf21579a6ef7b082f9",
   "tools/lib/gut_gate.mjs": "fa1c6bfbeb7c2fe52e556e9a7227446d374f7c94035fc9034b211d9907419a1b",
-  "tools/lib/run_tests.mjs": "f6cd41ff42f9a95b1ca0c37f4052a38a69b4c452a0c7b14adec53f7150a589bd",
+  "tools/lib/run_tests.mjs": "ce8bf7e699c4159c071fd2a1858f0678eeafe71f8c384ae85fee53f49473bc67",
   "tools/run_game_sim": "64013b3373d5700a852c2ed88fefac28ac5c873129ed63f7b60bcb4377d65f2d",
   "tools/run_game_sim.ps1": "3ede6d49f50916c1a375bb924f84314f4c51a9d32e43dac7308adb2c43320ba8",
   "tools/run_tests": "e0c1bc2b1245a6acf3f1f1e6e3d5ea4b20cc59c5f073a7898ef5fb208c0cfdc7",
@@ -649,30 +649,6 @@
     "  });",
     "}"
    ]
-  },
-  {
-   "file": "tests/games/tank/sim/check_sims.mjs",
-   "function": "result",
-   "lines": [
-    "function result(id, title, problems, extra = '') {",
-    "  const ok = problems.length === 0;",
-    "  return { id, status: ok ? 'PASS' : 'FAIL', summary: `${title}${extra ? `: ${extra}` : ''}`, details: problems };",
-    "}"
-   ],
-   "moved": "tools/lib/sim_report.mjs"
-  },
-  {
-   "file": "tests/games/tank/sim/check_sims.mjs",
-   "function": "pick",
-   "lines": [
-    "function pick(reports, names) {",
-    "  const found = [];",
-    "  const missing = [];",
-    "  for (const n of names) (reports[n] ? found : missing).push(n);",
-    "  return { found: found.map((n) => [n, reports[n]]), missing };",
-    "}"
-   ],
-   "moved": "tools/lib/sim_report.mjs"
   },
   {
    "file": "tests/games/tank/sim/check_sims.mjs",
@@ -1383,17 +1359,6 @@
     "  return String((humans[0] ?? report.slots?.[0])?.peer ?? '1');",
     "}"
    ]
-  },
-  {
-   "file": "tests/games/siege/sim/check_sims.mjs",
-   "function": "result",
-   "lines": [
-    "function result(id, title, problems, extra = '') {",
-    "  const ok = problems.length === 0;",
-    "  return { id, status: ok ? 'PASS' : 'FAIL', summary: `${title}${extra ? `: ${extra}` : ''}`, details: problems };",
-    "}"
-   ],
-   "moved": "tools/lib/sim_report.mjs"
   },
   {
    "file": "tests/games/siege/sim/check_sims.mjs",
