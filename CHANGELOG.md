@@ -1,6 +1,6 @@
 # Changelog
 
-Releases, newest first. Modules and games write fragments in `docs/changelog.d/<module or game id>.md`; the lead merges them here at each release and empties them.
+Releases, newest first. Modules and games write fragments in `docs/changelog.d/<module or game id>.md`; they are merged here at each release and the fragments are emptied.
 
 ## v1.0.0-rc.3 (2026-11-01)
 
@@ -83,9 +83,9 @@ The cleanup release: much less code, shared parts for every game, and the sound 
 
 ### Docs
 
-- `CLAUDE.md` has Gates, Merge queue and Agent rules sections, and `.claude/agents/` defines six agents: art, audio, game-developer and senior-engineer critics, a safety reviewer and a game builder.
+- `CLAUDE.md` has new sections on the test gates, the merge queue and the rules for AI coding agents, and `.claude/agents/` defines six agents for them: reviewers for art, audio, game design, engineering and safety, and a game builder.
 - `docs/GAME_SDK.md`, `docs/ARCHITECTURE.md` and the world2d page document the shared classes and `tests/lib`; `docs/OWNERSHIP.md`, `docs/BACKLOG.md`, `docs/ART_PIPELINE.md` and Tank's READMEs say what is true now.
-- `CREDITS.md` is rebuilt for the public release, game by game. `docs/DECISIONS.md` takes the platform decisions of the v1 run.
+- `CREDITS.md` is rebuilt for the public release, game by game. `docs/DECISIONS.md` takes the platform decisions made on the way to v1.
 
 ## v0.9.2 (2026-10-31)
 
@@ -156,7 +156,7 @@ Earlier versions of the game, listed here for the first time.
   - The cutaway machinery is readable: steam cylinder and crosshead, pressure dial, brass shells, the Bulwark's lever and lit output, and a bus bar to the dynamo.
   - Seeded flame masses, ragged smoke rings, brass casings with a glint, and hit sparks that stay on the armour.
   - The picker card is the generated Citadel cutaway.
-- An adversarial art critic reviewed every round against the brief's art direction: 3 style rounds and 6 scene rounds, ending with every criterion at 7 or more and no people, text, flags or icon-like marks.
+- Every round was reviewed against the brief's art direction: 3 style rounds and 6 scene rounds, ending with every criterion scored 7 or more and no people, text, flags or icon-like marks.
 
 #### 0.1.0
 
@@ -256,7 +256,7 @@ The first v1 prerelease.
 
 ### Turbo Reel
 
-- New art direction after an adversarial art review against the Nemk reference: one cool 12-colour palette with a single brass accent, flat top-lit planes, no outlines, no dither or speckle, no rotated sprites, clean pixel-stepped lines, a light sea that steps darker with depth, a seated cyclist at the drivetrain, bow-up hull poses and a wake when you push hard, a waterfall that drops through air at the edge of the world.
+- New art direction after an art review against the Nemk reference: one cool 12-colour palette with a single brass accent, flat top-lit planes, no outlines, no dither or speckle, no rotated sprites, clean pixel-stepped lines, a light sea that steps darker with depth, a seated cyclist at the drivetrain, bow-up hull poses and a wake when you push hard, a waterfall that drops through air at the edge of the world.
 - The HUD matches: a hand-made 5x7 pixel font, square borderless panels on the art's pixel grid, palette-only colours.
 
 ### Platform
@@ -290,12 +290,12 @@ The first v1 prerelease.
 
 ## v0.1.0 (2026-10-21)
 
-The first release: the Wattlands platform and the reference game Workout, built in one autonomous run (W0 foundation, W1 sixteen parallel builders, W2 integration, W3 review, W4 fixes).
+The first release: the Wattlands platform and the reference game Workout. They were built in five phases: foundation (W0), sixteen modules built in parallel (W1), integration (W2), review (W3) and fixes (W4). The entries below are grouped by module, and the W labels name the phase (see `docs/README.md`).
 
 ### lead
 
 - Added `tools/run_tests` and `tools/run_tests.ps1` (one Node runner, `tools/lib/run_tests.mjs`): import, the full GUT suite with the strict gate (exit code, "Run Summary", JUnit count at or above the last green count, no forbidden log line, no pending or risky test outside `tests/pending_allowlist.txt`), the 7.3 scaffold check in a throwaway copy, `check_scripts` plus gdlint and `gdformat --check` (gdtoolkit 4.5.0, `./gdlintrc`) plus a PyYAML parse of every CI workflow (through `uv`, skipped without it), `tools/run_game_sim` over every registered game's contents, `tools/fit_check` on every FIT the sims and tests wrote, every Node suite (game folders under `tests/games/` included) and the 3-peer end-to-end test.
-- Added the machine-wide Godot lock behind `tools/godot.sh` and `tools/godot.ps1` (FIFO tickets, leases, a 4-slot cap on this machine, exit 75 on a lock-wait timeout) and the per-checkout `.userdata/` user dir.
+- Added the machine-wide Godot lock behind `tools/godot.sh` and `tools/godot.ps1` (FIFO tickets, leases, a cap of 4 slots on a large machine and 2 on a small one, exit 75 on a lock-wait timeout) and the per-checkout `.userdata/` user dir.
 - Added `tools/export_windows.mjs`: the Windows Desktop export (the GDBLE DLL, LICENSE, CREDITS and third-party notices next to the exe), `--with-vcruntime` and `--smoke`.
 - Added `export_presets.cfg` with a test that the Windows preset ships the GDBLE DLL, and `.github/workflows/lead.yml`, which runs every gate on Linux.
 - Wired the app end to end: autoloads, the input map, the main scene, menus to lobby to session to results, and the merged docs (README, DESIGN, ARCHITECTURE, GAME_SDK, TRAINER, PROTOCOL, HARDWARE_TEST_PLAN, DECISIONS, OWNERSHIP, DEPENDENCIES, CREDITS).
