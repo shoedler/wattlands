@@ -10,13 +10,14 @@ name: lead
 
 on:
   push:
+    branches: ["**"]
   pull_request:
   workflow_dispatch:
 
 jobs:
   gates:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 150
     env:
       GODOT_VERSION: "4.7.2"
       WATTLANDS_NO_HW_CONTROL: "1"

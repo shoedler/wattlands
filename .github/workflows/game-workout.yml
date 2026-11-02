@@ -6,6 +6,7 @@ name: game-workout
 
 on:
   push:
+    branches: ["**"]
     paths:
       - "src/games/workout/**"
       - "content/workout/**"

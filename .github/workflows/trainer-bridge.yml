@@ -4,6 +4,7 @@ name: trainer-bridge
 
 on:
   push:
+    branches: ["**"]
     paths:
       - "addons/wattlands/trainer/ble/**"
       - "tools/trainer_bridge/**"

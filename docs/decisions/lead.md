@@ -139,3 +139,9 @@
 Decision: `tools/lib/gate_manifest.json` requires Tank's S14-S18 and 85 matrix runs, and the lead re-pinned `safety_pins.json`.
 Alternatives: leave the old 37 runs required, which would let the difficulty rows go missing unnoticed.
 Reason: a stricter gate; no threshold moved. The re-pin also took Tank v4's additive changes to `check_sims.mjs` (the Ambush laps, the Repairs engine code, the new rows).
+
+## 2026-11-02: a tag push runs no CI, and `lead` gets 150 minutes
+
+- Decision: every workflow's `push` trigger gets `branches: ["**"]`, and `tools/new_game` writes the same, so branches behave as before and tags run nothing. `lead.yml`'s limit rises from 120 to 150 minutes.
+- Alternatives: `branches: [main]` (a pushed branch would lose its CI); `tags-ignore` (the same effect, with a less obvious reading); keep 120 (rc.3's `lead` passed on main in 119 minutes, and its run on the tag was cancelled at the limit).
+- Reason: a release pushes main and then the tag, one commit, so all seven workflows ran twice and paid for it. GitHub ignores `paths` on a new tag, so even the games the release didn't touch ran. The time limit is a machine's, not a BRIEF 4.6 or 7 threshold, and no gate changed.

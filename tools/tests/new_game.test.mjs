@@ -155,6 +155,7 @@ describe('scaffold', () => {
     const wf = fs.readFileSync(path.join(root, '.github/workflows/game-demo.yml'), 'utf8');
     assert.match(wf, /^name: game-demo$/m);
     assert.match(wf, /runs-on: ubuntu-latest/);
+    assert.match(wf, /^ {2}push:\n {4}branches: /m, 'a tag push runs no CI');
     assert.match(wf, /tools\/run_tests --only=gut --gdir=res:\/\/tests\/games\/demo/);
     assert.match(wf, /tools\/check_scripts\.gd/);
     assert.doesNotMatch(wf, /\t/, 'YAML never uses tabs');

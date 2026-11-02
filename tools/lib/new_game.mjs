@@ -141,6 +141,7 @@ function workflowText(id) {
 name: game-${id}
 on:
   push:
+    branches: ['**']
   pull_request:
 jobs:
   test:

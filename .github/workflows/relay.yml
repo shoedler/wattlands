@@ -4,6 +4,7 @@ name: relay
 
 on:
   push:
+    branches: ['**']
     paths:
       - 'server/relay/**'
       - '.github/workflows/relay.yml'

@@ -60,7 +60,7 @@ Only the lead lands on main: merge, never rebase, one branch at a time, through 
 - Owner, before reporting: `git merge main`, resolve its own conflicts, run `tools/gate fast` (and `matrix`), report the tip, the stamp and `gut_total`. After a red in the queue, which leaves main untouched, the owner fixes it on the branch, merges main and requeues at the back.
 - Lead, per branch: `git checkout -B queue main`; `git merge --no-ff <branch>`; `tools/gate check --base=main --ws=<ws>`; `tools/gate stamp-ok <worktree> || tools/gate fast --base=main` (`stamp-ok` accepts the owner's stamp for the same tree; the same with `--matrix=<id>` and `matrix --game=<id>`); `git -C <main checkout> merge --ff-only queue`.
 - Checkpoint, in the queue: `matrix` for each game with a `run_sims.sh`, `strict`, `floor`, fast-forward main, then version, changelog, export, tag, `wt-gc`.
-- Push main only at release checkpoints: the repo is private, every push runs the GitHub Actions workflows, and their minutes cost money.
+- Push main only at release checkpoints: the repo is private, every push to a branch runs the GitHub Actions workflows (a tag push runs none), and their minutes cost money.
 
 ## Agent rules
 

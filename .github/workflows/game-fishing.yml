@@ -11,6 +11,7 @@ name: game-fishing
 
 on:
   push:
+    branches: ["**"]
     paths:
       - "src/games/fishing/**"
       - "content/fishing/**"

@@ -2103,3 +2103,9 @@ The new sprint run, 70 to 130 rpm in 2 s: 144 strokes fired, 144 heard; 6.34 / 3
 - Turbo Reel's card moves to `assets/fishing/cards/` and leaves `FishingArtGrids`, `art.json` and `sprites.json`, since that set holds hand-authored grids only. `assets/tank/v3/tools_src/cards.sh` no longer renders a picker card; it keeps the content cards.
 - Alternatives: 960 x 540 for all three (the same picture on screen under a nearest filter, larger files); a 1:1 art crop of Castellum (wheels twice as big, but no whole fortress and no moat); nearest instead of mean for Castellum (drops a third of its art pixels, so bricks shimmer); fal or any generated image (ruled out by the task).
 - Reason: the owner asked for a set that reads at a glance from a trainer. The Tank and Turbo Reel frames are not byte-reproducible, because their fixtures advance on wall-clock frame times: a rerun gives the same composition, not the same bytes, so tests check aspect and loading, not pixels.
+
+## 2026-11-02: a tag push runs no CI, and `lead` gets 150 minutes
+
+- Decision: every workflow's `push` trigger gets `branches: ["**"]`, and `tools/new_game` writes the same, so branches behave as before and tags run nothing. `lead.yml`'s limit rises from 120 to 150 minutes.
+- Alternatives: `branches: [main]` (a pushed branch would lose its CI); `tags-ignore` (the same effect, with a less obvious reading); keep 120 (rc.3's `lead` passed on main in 119 minutes, and its run on the tag was cancelled at the limit).
+- Reason: a release pushes main and then the tag, one commit, so all seven workflows ran twice and paid for it. GitHub ignores `paths` on a new tag, so even the games the release didn't touch ran. The time limit is a machine's, not a BRIEF 4.6 or 7 threshold, and no gate changed.

@@ -13,6 +13,7 @@ name: game-tank
 
 on:
   push:
+    branches: ["**"]
     paths:
       - "src/games/tank/**"
       - "content/tank/**"
