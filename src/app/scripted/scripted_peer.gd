@@ -289,7 +289,12 @@ func _on_net_state(state: String, detail: String) -> void:
 			_enter_lobby()
 		"error":
 			if phase == "connecting" or phase == "lobby":
-				finish("error:net:%s" % detail, EXIT_ERROR)
+				# The session sets "error" with the reason first and emits `refused` second: a
+				# refusal (room_not_found, session_in_progress, ...) is exit 3, a net failure 1.
+				if WlNetSession.REFUSALS.has(detail):
+					finish("refused:" + detail, EXIT_REFUSED)
+				else:
+					finish("error:net:%s" % detail, EXIT_ERROR)
 
 
 func _enter_lobby() -> void:
