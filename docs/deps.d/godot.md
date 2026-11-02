@@ -1,6 +1,6 @@
 # Godot 4.7.2 (standard build) and its Windows export template
 
-The Windows release build is exported with the standard (non-.NET) Godot 4.7.2 editor and the official export templates. The .NET editor in `C:/Projects/.tooling/` stays the development and test binary; neither is vendored into the repository.
+The Windows release build is exported with the standard (non-.NET) Godot 4.7.2 editor and the official export templates. The .NET editor stays the development and test binary (point `$GODOT` or `tools/godot_bin.local` at it); neither is vendored into the repository.
 
 - Upstream: https://github.com/godotengine/godot, release `4.7.2-stable` (`4.7.2.stable.official.ed1daf0bf`).
 - License: MIT (Godot Engine contributors); its notices are part of `docs/THIRD_PARTY_NOTICES.txt`, which the export ships.
@@ -11,7 +11,7 @@ The Windows release build is exported with the standard (non-.NET) Godot 4.7.2 e
 - `Godot_v4.7.2-stable_win64.exe.zip`, 86,013,866 bytes.
   - SHA-256: `731980f9608d61333e5baf54a2ef17210acc7a538446c0cb9969f002aca1e953`
   - SHA-512 (matches `SHA512-SUMS.txt`): `83decd58fdf67b9d657958a1ae6bf1929c20785315a81effe245874cdc57acb709bf868e00778a96984338c1b29dafdb453c6847747694621c6ecf5da2259993`
-- Unpacked to `C:/Projects/.tooling/Godot_v4.7.2-stable_win64/` (the export uses `Godot_v4.7.2-stable_win64_console.exe` as `GODOT`).
+- Unpacked anywhere; the export uses `Godot_v4.7.2-stable_win64_console.exe` as `GODOT` (set `$GODOT` or `tools/godot_bin.local`).
 
 ## Export template
 
