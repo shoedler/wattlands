@@ -1,6 +1,6 @@
 # Hardware test plan
 
-A checklist for Simon with the real KICKR CORE (or KICKR CORE 2) and a real Strava account (BRIEF 4.7). Nothing in this plan ran during the autonomous build: every automated run had the hardware and network locks set and used MockTrainer and the mock Strava server. Work through it in order; stop at the first failed safety check.
+A checklist for a pass with a real KICKR CORE (or KICKR CORE 2) and a real Strava account (BRIEF 4.7). The automated tests never touch hardware or the network: every automated run has the hardware and network locks set and uses MockTrainer and the mock Strava server. Work through it in order; stop at the first failed safety check.
 
 Commands that need the trainer or Strava pass `--allow-hw` or `--allow-network` to the wrappers (`tools/godot.ps1` on Windows, `tools/godot.sh` in Git Bash). Nothing else drops the locks. Run every command from the repo root.
 
@@ -119,7 +119,7 @@ The builders listed these while working against MockTrainer and fake transports.
 
 ## Safety findings that need hardware
 
-From the W3 review (the findings and their fixes are recorded in the W4 ADRs in `docs/decisions/*.md`, merged into `docs/DECISIONS.md`):
+From the W3 review (the findings and their fixes are recorded in `docs/decisions/*.md`, merged into `docs/DECISIONS.md`; `docs/README.md` explains the IDs):
 
 - [ ] Silent notifications (W3 SAF-7): with the link up but no Indoor Bike Data notifications for more than 3 s (hard to provoke; a trainer that stops notifying while connected), the stack treats the rider as not pedaling, so the coasting floor and pause/AFK still apply. Confirm the KICKR never stops notifying while the flywheel turns, and log what happens when it does.
 - [ ] An unanswered control-point write while ready (W3 ftms-ble-1, fixed): if the KICKR stops answering control-point writes, the app reconnects and restores the last safe mode instead of staying "ready" while dropping writes. Expected after a forced disconnect: the reconnect sequence of section 11 and the safe-mode restore above.

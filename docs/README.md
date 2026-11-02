@@ -43,4 +43,5 @@ Comments and docs across the repo cite section numbers and IDs. They all point i
 - `W0` to `W4` are the phases of the first build: W0 foundation and contracts, W1 the parallel module work, W2 integration, W3 review, W4 fixes. `W4r2` is the second fix round.
 - IDs such as `GM4`, `SH2`, `C36`, `TL5` and `ART7` are rows of the inventory in `OWNERSHIP.md`. Section 2 holds rows with prefixes such as `GM`, `SH`, `CTX`, `REG`, `NET`, `AU`, `TL` and `ART` (what the game briefs needed: game rules, shared helpers, the context, the registry, network, audio, tooling, art). Section 3 holds the `C` rows, where a brief and the platform disagreed.
 - IDs such as `NET-1`, `SAF-7` and `ftms-ble-3` are findings from the W3 review. The fix for each is in the decision log.
+- `lead` is the maintainer who merges to `main`.
 - `P0`, `P1` and `P2` are priorities in the brief: must build, should build, and design notes only.
