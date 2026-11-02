@@ -197,6 +197,28 @@ func test_only_this_machine_creates_rooms_on_the_relay() -> void:
 	assert_false(LocalRelayServer.is_loopback("192.168.1.20"))
 
 
+func test_one_address_cannot_fill_the_relay() -> void:
+	var server := LocalRelayServer.new()
+	add_child_autofree(server)
+	assert_eq(server.start(0, "127.0.0.1"), OK)
+	var sockets: Array[WebSocketPeer] = []
+	for i in LocalRelayServer.MAX_PER_ADDRESS + 3:
+		var ws := WebSocketPeer.new()
+		ws.connect_to_url(server.local_url())
+		sockets.append(ws)
+	var end_at := Time.get_ticks_msec() + 1500
+	while Time.get_ticks_msec() < end_at:
+		server.poll()
+		for ws in sockets:
+			ws.poll()
+		await get_tree().process_frame
+	assert_eq(server.connection_count(), LocalRelayServer.MAX_PER_ADDRESS)
+	assert_eq(server.accepted, LocalRelayServer.MAX_PER_ADDRESS)
+	for ws in sockets:
+		ws.close()
+	server.stop()
+
+
 func test_shareable_addresses_are_private_then_tailscale() -> void:
 	var got := LanDiscovery.shareable_addresses(
 		PackedStringArray(
