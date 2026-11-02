@@ -521,6 +521,48 @@ func test_host_left_before_results_fails() -> void:
 	assert_eq(fx.last_host().ended_reasons, ["host_left"] as Array[String])
 
 
+## The session screen keeps a rider going when the room is lost (not host_left): the GameHost
+## rides the plan's cool-down here and ends the session. A scripted client does the same, then
+## exits 3 with the reason, instead of quitting at the moment of the loss.
+func test_a_lost_room_lets_a_client_ride_its_cooldown() -> void:
+	var p := _client()
+	var net := fx.fake_net()
+	net.simulate_joined(2, "K7QX2M", _lobby())
+	net.receive(1, _start_msg())
+	fx.last_host().fits = {2: "C:/rides/c.fit"}
+	net.state_changed.emit("error", "dropped")
+	net.refused.emit("dropped")
+	assert_eq(p.phase, "session", "the GameHost rides the cool-down")
+	assert_eq(p.exit_code, -1)
+	assert_true(fx.last_host().ended_reasons.is_empty(), "the scripted peer does not end it")
+	fx.last_host().finish_with(null)
+	assert_eq(p.exit_code, AppScriptedPeer.EXIT_REFUSED)
+	assert_eq(p.exit_reason, "refused:dropped")
+	assert_eq(_read_report()["fit_paths"], ["C:/rides/c.fit"], "the ride is saved")
+
+
+func test_a_lost_room_lets_the_host_carry_on_to_its_results() -> void:
+	var p := _host()
+	fx.fake_net().simulate_hosting("K7QX2M")
+	var h := fx.last_host()
+	h.fits = {1: "C:/rides/host.fit"}
+	fx.fake_net().refuse("dropped")
+	assert_eq(p.phase, "session", "the host's ride goes on alone")
+	assert_true(h.ended_reasons.is_empty())
+	h.finish_with(GameResults.new())
+	p.step(3.5)
+	assert_eq(p.exit_code, 0)
+	assert_eq(p.exit_reason, "complete")
+
+
+func test_a_lost_room_before_the_session_still_quits_at_once() -> void:
+	var p := _client()
+	fx.fake_net().simulate_joined(2, "K7QX2M", _lobby())
+	fx.fake_net().refuse("dropped")
+	assert_eq(p.exit_code, AppScriptedPeer.EXIT_REFUSED)
+	assert_eq(p.exit_reason, "refused:dropped")
+
+
 func test_host_left_after_results_is_ignored() -> void:
 	var p := _client(["--strava-client-id=1", "--strava-client-secret=x", "--strava-auto-upload"])
 	fx.fake_rides().connected = true
