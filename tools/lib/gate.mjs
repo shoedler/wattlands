@@ -49,6 +49,7 @@ import {
   touchedGames,
   weightsByGroup,
   isMaintainerReview,
+  contributorWords,
 } from './gate_core.mjs';
 
 const LIB = path.dirname(fileURLToPath(import.meta.url));
@@ -560,7 +561,7 @@ export function runCheck(o, { base = o.base } = {}) {
   const lead = !ws && (manifest.lead_branches ?? []).some((re) => new RegExp(re).test(branch));
   const problems = [];
   const notes = [];
-  if (!ws) notes.push(lead ? `lead branch ${branch}: only never_edit of the ownership rules applies` : `ws-less branch ${branch}: only ownership rules 1 and 2 apply`);
+  if (!ws && !o.contributor) notes.push(lead ? `lead branch ${branch}: only never_edit of the ownership rules applies` : `ws-less branch ${branch}: only ownership rules 1 and 2 apply`);
 
   const committed = parseNameStatus(git(project, ['diff', '--name-status', '-z', '-M', `${mb}..HEAD`]));
   const uncommitted = uncommittedChanges(project);
@@ -620,12 +621,15 @@ export function runCheck(o, { base = o.base } = {}) {
 
   // A pull request from outside can propose these; only a maintainer lands them. Named, not failed.
   const review = o.contributor ? problems.filter(isMaintainerReview) : [];
-  notes.push(...review.map((p) => `maintainer review: ${p}`));
+  notes.push(...review.map((p) => `maintainer review: ${contributorWords(p)}`));
   return { problems: problems.filter((p) => !review.includes(p)), notes, ws, base: mb, branch, paths: allChanges.length };
 }
 
-function formatCheck(c) {
+function formatCheck(c, contributor = false) {
   const lines = [...c.notes.map((n) => `note: ${n}`), ...c.problems.map((p) => `FAIL ${p}`)];
+  if (contributor && c.problems.length === 0 && c.notes.some((n) => n.startsWith('maintainer review:'))) {
+    lines.push('Nothing to fix for these reviews: open your pull request and say why you changed them.');
+  }
   lines.push(`check: ${c.problems.length ? 'FAIL' : 'PASS'} ws ${c.ws ?? 'none'}, base ${c.base.slice(0, 9)}, ${c.paths} changes, ${c.problems.length} problems`);
   return lines.join('\n');
 }
@@ -644,7 +648,7 @@ function writeStamp(o, name, stamp) {
 function cmdCheck(o) {
   const start = stampBase(o, 'check');
   const c = runCheck(o);
-  out(formatCheck(c));
+  out(formatCheck(c, o.contributor));
   const pass = c.problems.length === 0;
   ensureBuildDir(o.project);
   writeStamp(o, 'check', { ...start, ws: c.ws, pass, problems: c.problems, allow: [...o.allow, ...o.allowPin], ended: new Date().toISOString() });

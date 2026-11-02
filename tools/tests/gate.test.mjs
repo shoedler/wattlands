@@ -381,8 +381,8 @@ describe('--contributor', { concurrency: 4 }, () => {
     await pin(dir);
     onBranch(dir, 'fix-the-lobby', { 'tools/godot.sh': 'stronger\n', 'README.md': 'better\n' }, 'fix');
     await assertCheck(dir, [], 1, /tools\/godot\.sh changed/);
-    await assertCheck(dir, ['--contributor'], 0, /maintainer review: safety pin: tools\/godot\.sh changed/);
-    await assertCheck(dir, ['--contributor'], 0, /maintainer review: ownership: README\.md: lead only/);
+    await assertCheck(dir, ['--contributor'], 0, /maintainer review: safety pin: tools\/godot\.sh changed .*a maintainer reads this change/);
+    await assertCheck(dir, ['--contributor'], 0, /maintainer review: ownership: README\.md: a maintainer lands this file/);
   });
 
   test('a contributor branch: never-edit paths and falling test counts still fail', async () => {

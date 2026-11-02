@@ -23,7 +23,7 @@ tools/godot.sh --path . -- --mock-trainer=erg
 
 Add `--mock-keyboard` to steer the mock rider. [docs/TRAINER.md](docs/TRAINER.md) has the keys.
 
-Source `tools/env.sh` in every shell (`tools/env.ps1` in PowerShell) and always start Godot through the wrapper. They set the locks that stop an automated run from commanding a real trainer or reaching Strava.
+Source `tools/env.sh` in every shell (`tools/env.ps1` in PowerShell) and always start Godot through the wrapper. They set the locks that stop an automated run from commanding a real trainer or reaching Strava. The wrapper also runs at most a few copies of Godot at once across your PC, so if a run seems to sit there, it's waiting for another one to finish. `node tools/lib/godot_lock.mjs status` shows who holds the slots.
 
 To try multiplayer on one PC, open two copies. With no relay set they find each other on the network. Choose Host a room in one and join with its code in the other. Pass a different `--profile-dir=<absolute path>` to each so they don't share a rider.
 
@@ -78,7 +78,7 @@ A maintainer reviews it and lands it by merge, one branch at a time, usually in 
 | | |
 | --- | --- |
 | The platform | `addons/wattlands/`, with the app shell in `src/app/` |
-| The games | `src/games/<id>/`, `content/<id>/`, `assets/<id>/`, `tests/games/<id>/` |
+| The games | `src/games/<id>/`, `content/<id>/`, `assets/<id>/`, `tests/games/<id>/`. The ids: `fishing` is Turbo Reel, `siege` is Castellum Rotae, `workout` is Workout, `tank` is Torque Company. |
 | The relay | `server/relay/` |
 | Tools | `tools/` |
 | How it fits together | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and the map of everything in [docs/README.md](docs/README.md) |

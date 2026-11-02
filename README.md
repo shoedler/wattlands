@@ -17,7 +17,7 @@ There are four games in one app. Someone hosts, reads out a room code, and frien
 
 Grab the Windows zip from the [releases page](https://github.com/shoedler/wattlands/releases), unzip the whole folder and run `Wattlands.exe`. Close Zwift, the Wahoo app and anything else that might hold the trainer, and make sure its firmware is current.
 
-Then pedal. Twenty seconds of pedaling on the title screen creates a profile and starts a ride, and every game can play through to the end without you touching anything. A new profile starts at an FTP of 200 W. Set yours in the profile or run the FTP test in Settings. Until it's verified, ERG targets are 15% lower.
+Then pedal. Twenty seconds of pedaling on the title screen creates a profile and starts a ride, and every game can play through to the end without you touching anything. FTP is the power you can hold for about an hour, and every target is a percentage of it. A new profile starts at 200 W. Set yours in the profile or run the FTP test in Settings. Until it's verified, targets in ERG are 15% lower. ERG means the trainer holds a set power however fast you spin. SIM means it acts like a road with a grade, and you shift gears.
 
 If you'd rather stay on the bike with no keyboard in reach, turn on Settings > Pedal navigation. The focus moves by itself, a short surge picks, and coasting for 3 s goes back, except during an ERG phase.
 
@@ -25,7 +25,7 @@ Stop pedaling for 10 seconds and a solo ride pauses until you pedal again. In a 
 
 You can pair a Bluetooth heart rate strap in Settings > Trainer > Sensors. It shows next to your power and goes in your FIT file, and other riders never see it.
 
-No trainer handy? Run `Wattlands.exe -- --mock-trainer` (or use Settings > Trainer > Use the mock trainer) to ride a simulated rider, and add `--mock-keyboard` to steer it. [docs/TRAINER.md](docs/TRAINER.md) has the keys.
+No trainer handy? Run `Wattlands.exe -- --mock-trainer` from a terminal in that folder (or use Settings > Trainer > Use the mock trainer) to ride a simulated rider, and add `--mock-keyboard` to steer it. [docs/TRAINER.md](docs/TRAINER.md) has the keys.
 
 ## The games
 

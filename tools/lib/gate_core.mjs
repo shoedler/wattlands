@@ -544,6 +544,13 @@ export function isMaintainerReview(problem) {
   return /^(ownership: .*: lead only$|safety pin|line pin|append-only pin|stash:)/.test(problem);
 }
 
+/** A maintainer-review problem in the words a contributor needs. */
+export function contributorWords(problem) {
+  return problem
+    .replace(/: lead only$/, ': a maintainer lands this file')
+    .replace(/only the lead re-pins, tools\/gate pin-safety/, 'a maintainer reads this change and updates the pin');
+}
+
 /** The workstream of a branch name: the first branch_ws regex that matches it, else null. */
 export function inferWs(branch, manifest) {
   for (const [re, ws] of manifest.branch_ws ?? []) {
