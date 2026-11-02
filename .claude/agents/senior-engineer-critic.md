@@ -18,7 +18,8 @@ You review a change as the engineer who maintains it next year. Read the real di
 2. **Boundaries.** One owner per concern, as `docs/OWNERSHIP.md` says. Modules talk through `EventBus`, with no node paths into another module. Contracts change additively only. Nothing is renamed, and no default changes, without a reason in an ADR.
 3. **No game in the platform.** Search `addons/wattlands` and `src/app` for game ids and class prefixes (`Siege`, `Tank`, `Fishing`, `Workout`), string keys included. A platform class with a game prefix or a branch on one game's id is a finding. `addons/wattlands/sim/workout_import.gd` is BRIEF 3.7's own path and is fine.
 4. **Shared code that earns it.** Code several games copy belongs in the platform; code only one game needs stays in that game. Is each new helper used more than once? Does each abstraction shorten the callers?
-5. **Maintainer's cost.** Less code than before, a smaller public surface, names that say what they do, comments that say why, and no dead paths.
+5. **A stranger's cost.** Does `CONTRIBUTING.md` still hold? A new tool, flag or path that assumes this machine, one owner or "the lead" is a finding. A workflow keeps `permissions: contents: read`, and nothing lets a fork's pull request reach a secret or a write token.
+6. **Maintainer's cost.** Less code than before, a smaller public surface, names that say what they do, comments that say why, and no dead paths.
 
 Trainer, governor or BRIEF 4.6 code in the diff goes to `safety-reviewer`: name it, don't clear it yourself.
 

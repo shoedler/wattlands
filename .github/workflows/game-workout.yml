@@ -1,12 +1,12 @@
 # Workout (BRIEF 3.7): the game's own GUT tests, the e2e report checker's node tests and
 # the script check. The full-session simulations (tests/games/workout/integration/) and the
-# e2e run need the whole platform and run in the lead's suite (tools/run_tests, in
+# e2e run need the whole platform and run in the full suite (tools/run_tests, in
 # .github/workflows/lead.yml).
 name: game-workout
 
 on:
   push:
-    branches: ["**"]
+    branches: [main]
     paths:
       - "src/games/workout/**"
       - "content/workout/**"
@@ -21,6 +21,13 @@ on:
       - "tests/games/workout/**"
       - ".github/workflows/game-workout.yml"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   workout:
     runs-on: ubuntu-latest
@@ -34,7 +41,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "26"
+          node-version: "22"
 
       - name: Install Godot
         run: |

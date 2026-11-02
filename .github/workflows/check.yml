@@ -1,0 +1,30 @@
+# Seconds, on every pull request: ownership, safety pins, test counts and added text
+# (tools/gate check --contributor). Pinned and maintainer-only files are named for review; a
+# never-edit path, a tampered pins file, a falling test count or a lock flag fails.
+name: check
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: tools/gate check
+        run: |
+          git fetch origin "${{ github.base_ref }}:refs/heads/${{ github.base_ref }}" || true
+          tools/gate check --base="${{ github.base_ref }}" --contributor

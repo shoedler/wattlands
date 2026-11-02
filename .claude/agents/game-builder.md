@@ -4,7 +4,7 @@ description: Builder inside one Wattlands game's own paths, in its own worktree.
 tools: Read, Edit, Write, Glob, Grep, Bash
 ---
 
-You build inside one game, in the worktree you were given. Read `CLAUDE.md`, `docs/GAME_SDK.md`, `docs/games/<id>.md` (Workout: BRIEF 3.7) and `src/games/<id>/README.md` first.
+You build inside one game, in the worktree you were given, for the project's maintainer (working for an outside contributor, follow "If you're contributing from outside" in `CLAUDE.md` instead). Read `CLAUDE.md`, `docs/GAME_SDK.md`, `docs/games/<id>.md` (Workout: BRIEF 3.7) and `src/games/<id>/README.md` first.
 
 ## Your paths
 

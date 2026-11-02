@@ -577,7 +577,7 @@ Short ADRs for the tank game: date, decision, alternatives, reason. Game session
 
 - Decision (lead's ruling): the gate is relative to the old baseline. Measured on a quiet machine with `TANK_FIXTURE="kind=v4:cap_v4;flex;stats;novsync;seconds=20"` against the same command with `kind=cap`: v4 mean 14.98 ms, p99 16.67 ms, 355 draw calls, 3 of 1202 frames over 16.7 ms; baseline mean 14.84 ms, p99 16.31 ms, 385 draw calls, 4 of 1202 over. v4 costs 0.14 ms more and uses fewer draw calls.
 - Alternatives: hold the spec's absolute "under 8 ms, p99 under 14" and cut art to reach it.
-- Reason: that number was an estimate the old baseline never met either, so it never described this game on this machine.
+- Reason: that number was an estimate the old baseline never met either, so it never described this game on the development machine.
 
 ## 2026-10-31 v4: closing the rules review
 

@@ -37,6 +37,7 @@ APP_JOIN_TITLE,Join a room
 APP_JOIN_CODE,Room code
 APP_JOIN_GO,Join
 APP_JOIN_HINT,"Type the host's code, or pick its rows and letters with pedal-scan. Dashes and spaces don't matter."
+APP_JOIN_HINT_BUILTIN,"Type the host's code, or pick its rows and letters with pedal-scan. Dashes and spaces don't matter. Rooms on your network show up in the list too."
 APP_JOIN_RECENT,Recent: {0} ({1})
 APP_JOIN_LAN,On your network: {0} ({1})
 APP_JOIN_BAD_CODE,"That isn't a room code: codes have 6 letters and digits, like K7Q-X2M."
@@ -65,7 +66,16 @@ APP_LOBBY_YOU,{0} (you)
 APP_LOBBY_LEAVE,Leave room
 APP_LOBBY_NEED_PLAYERS,This game needs at least {0} riders: add bots or wait for friends.
 APP_LOBBY_WAITING_READY,Waiting for every rider to ready up (pedal or press confirm).
-APP_LOBBY_MISSING_GAME,You don't have the game {0}. Install it to ride in this room.
+APP_LOBBY_WAITING_FOR,Waiting for {0} to ready up (pedal or press confirm).
+APP_LOBBY_SHARE_RELAY,Friends: choose Join a room and type this code.
+APP_LOBBY_SHARE_BUILTIN,"Friends on your network: choose Join a room and type this code. If Windows asks, allow Wattlands through the firewall."
+APP_LOBBY_SHARE_ELSEWHERE,"Room not showing up, or a friend on a VPN like Tailscale? They set Settings > Network > Relay to {0}"
+APP_LOBBY_YOU_READY,You're ready. The host starts the ride.
+APP_LOBBY_READY_HINT,Pedal or press confirm to ready up. The host starts the ride.
+APP_LOBBY_RETRY,Try again
+APP_LOBBY_DROPPED,Connection lost
+APP_LOBBY_NEEDS_UPDATE,Needs update
+APP_LOBBY_MISSING_GAME,You don't have the game {0}. Get the host's Wattlands release to ride in this room.
 APP_LOBBY_HOST_LEFT,The host left the room.
 APP_LOBBY_AUTOPILOT,My Autopilot: {0}
 APP_LOBBY_AUTOPILOT_TAG,Autopilot
@@ -75,12 +85,20 @@ APP_SCALING_WKG,Watts per kilo
 APP_SCALING_RAW,Raw watts
 APP_NET_ERROR,Network problem: {0}
 APP_NET_LOST,Lost the connection to the room.
-APP_REFUSED_IN_PROGRESS,This ride has already started. Ask the host to let you in after it ends.
+APP_NET_NO_ROOM_HERE,"Couldn't open a room on this PC. Check that your firewall allows Wattlands, then try again."
+APP_NET_NO_RELAY,"Couldn't reach the relay at {0}. Check Settings > Network > Relay, or clear it to host on this PC."
+APP_NET_NO_HOST_PC,Found the room but couldn't reach the host's PC. Ask them to allow Wattlands through their firewall.
+APP_ROOM_LOST_HOST,"Your room is gone: the connection to it was lost. Try again for a new room, and your friends join with its code."
+APP_REFUSED_IN_PROGRESS,This ride has already started. Ask the host to open a new room when it ends.
 APP_REFUSED_VERSION,Your WATTLANDS version doesn't match the host's. Update both to the same version.
 APP_REFUSED_NOT_FOUND,No room with that code. Check it with the host.
+APP_REFUSED_NOT_ON_NETWORK,"No room with that code on your network. Check the code and that you're on the host's network. For a room further away, set Settings > Network > Relay."
+APP_REFUSED_DROPPED,Lost the connection to the room and couldn't get back in. Ask the host whether it's still open.
+APP_REFUSED_MISSING_GAME,You don't have the host's game. Get the host's Wattlands release to ride in this room.
 APP_REFUSED_FULL,That room is full.
 APP_REFUSED_RATE,Too many tries: wait a minute and join again.
 APP_REFUSED_HOST_LEFT,The host left the room. Your ride is saved.
+APP_RESULTS_NET_LOST,The room closed during the ride. Your ride is saved.
 APP_REFUSED_OTHER,The room refused you ({0}).
 APP_ERR_NO_GAME,That game isn't installed.
 APP_ERR_NO_PLAYERS,No riders in the lobby.
@@ -163,6 +181,7 @@ APP_COLOR_5,Sky
 APP_COLOR_6,Orange
 APP_COLOR_7,White
 APP_FIRST_RUN_TITLE,Welcome to WATTLANDS
+APP_RIDE_AT_OWN_RISK,"Wattlands makes your trainer push back, sometimes hard. Ride at your own risk, ask a doctor if you're not sure hard exercise is right for you, and stop pedaling if something feels wrong."
 APP_FIRST_RUN_INTRO,Set up your rider. Don't know your FTP? Keep 200 W: it stays unverified and ERG targets are eased by 15% until you set it or take the FTP test.
 APP_FIRST_RUN_DONE,Start riding
 APP_SETTINGS_TITLE,Settings
@@ -202,7 +221,7 @@ APP_SET_VOL_SFX,Effects
 APP_SET_VOL_UI,Menus
 APP_SET_METRONOME,Cadence metronome
 APP_SET_FULLSCREEN,Fullscreen (F11 or Alt+Enter)
-APP_SET_RELAY,Relay
+APP_SET_RELAY,Relay (blank: rooms run on the host's PC)
 APP_SET_PEDAL_NAV_ON,Pedal navigation
 APP_SET_SCAN_INTERVAL,Scan interval
 APP_SET_CAPTURE,Press a key or button for {0}. Esc or B cancels.

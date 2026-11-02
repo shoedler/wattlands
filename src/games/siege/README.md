@@ -333,7 +333,7 @@ tools/godot.sh --path . -- --mock-trainer=erg
 
 In PowerShell: `tools/godot.ps1 --path . -- --mock-trainer=erg`. Other profiles are in `docs/GAME_SDK.md` section 20 (for example `--mock-trainer=erg+hr` for a heart rate).
 
-**Host.** Start the relay with `node server/relay/src/main.ts` (it prints `WATTLANDS_RELAY ws://127.0.0.1:8787/v1`; the app uses `ws://localhost:8787/v1` by default). Start the app on each PC as above, adding `--relay=<ws url>` when the relay runs elsewhere. One rider picks "Host a room", chooses Castellum Rotae and a shift, and reads out the room code; the others pick "Join a room" and type it. The host can add bots to empty wheels. No one joins after the start.
+**Host.** Start the app on each PC as above. On one network that's all: the room runs on the host's PC. To use a relay, start it with `node server/relay/src/main.ts` (it prints `WATTLANDS_RELAY ws://127.0.0.1:8787/v1`) and add `--relay=<ws url>`. One rider picks "Host a room", chooses Castellum Rotae and a shift, and reads out the room code; the others pick "Join a room" and type it. The host can add bots to empty wheels. No one joins after the start.
 
 **Tests.**
 - Siege's GUT tests (strict rules): `tools/run_tests --only=gut --gdir=res://tests/games/siege`. Narrow it with `--gdir=res://tests/games/siege/<dir>`.

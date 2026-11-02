@@ -902,8 +902,12 @@ func network_fields() -> Array:
 	]
 
 
+## The Relay field: blank while no relay is chosen (rooms run on the host's PC).
 func current_relay_url() -> String:
-	return services.settings.relay_url() if services.settings != null else ""
+	if services.settings == null:
+		return ""
+	var url := services.settings.relay_url()
+	return "" if url == RelayTransport.DEFAULT_URL else url
 
 
 func pedal_fields() -> Array:

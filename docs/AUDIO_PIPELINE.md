@@ -10,7 +10,7 @@ node tools/audio/scorecard.mjs --game=<id>|all [--json]
 
 `_shared` counts as a game id; `all` means `_shared` plus every `assets/<id>/audio/audio.json`. `--bank=<path>` takes a bank file instead (the import proof; the fixture). After generating new files run `tools/godot.sh --headless --path . --import` and commit `.wav`, `.wav.import` and `audio_manifest.json`.
 
-Commit `.wav` at most twice per branch (end of the first critic round, and final). Recipes commit freely; output is deterministic, so an unchanged sound makes no diff.
+Commit `.wav` at most twice per branch (end of the first review round, and final). Recipes commit freely; output is deterministic, so an unchanged sound makes no diff.
 
 ## The family
 

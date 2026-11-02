@@ -1,6 +1,6 @@
 # Hardware test plan
 
-A checklist for Simon with the real KICKR CORE (or KICKR CORE 2) and a real Strava account (BRIEF 4.7). Nothing in this plan ran during the autonomous build: every automated run had the hardware and network locks set and used MockTrainer and the mock Strava server. Work through it in order; stop at the first failed safety check.
+A checklist for a pass with a real KICKR CORE (or KICKR CORE 2) and a real Strava account (BRIEF 4.7). The automated tests never touch hardware or the network: every automated run has the hardware and network locks set and uses MockTrainer and the mock Strava server. Work through it in order; stop at the first failed safety check.
 
 Commands that need the trainer or Strava pass `--allow-hw` or `--allow-network` to the wrappers (`tools/godot.ps1` on Windows, `tools/godot.sh` in Git Bash). Nothing else drops the locks. Run every command from the repo root.
 
@@ -74,7 +74,7 @@ How to start the app for these tests: the exported build (`node tools/export_win
 
 ## 10. Two-PC multiplayer
 
-- [ ] Run the relay (`server/relay`) on one PC or a reachable host. PC A hosts Workout; PC B joins with the room code. Expected: both ride the same timeline at their own %FTP; the teammate strip shows both riders; each rider's FIT file is saved locally.
+- [ ] Run the relay (`server/relay`) on one PC or a reachable host and set Settings > Network > Relay to it on both. PC A hosts Workout; PC B joins with the room code. Expected: both ride the same timeline at their own %FTP; the teammate strip shows both riders; each rider's FIT file is saved locally.
 
 ## 11. Disconnect and reconnect
 
@@ -119,9 +119,17 @@ The builders listed these while working against MockTrainer and fake transports.
 
 ## Safety findings that need hardware
 
-From the W3 review (the findings and their fixes are recorded in the W4 ADRs in `docs/decisions/*.md`, merged into `docs/DECISIONS.md`):
+From the W3 review (the findings and their fixes are recorded in `docs/decisions/*.md`, merged into `docs/DECISIONS.md`; `docs/README.md` explains the IDs):
 
 - [ ] Silent notifications (W3 SAF-7): with the link up but no Indoor Bike Data notifications for more than 3 s (hard to provoke; a trainer that stops notifying while connected), the stack treats the rider as not pedaling, so the coasting floor and pause/AFK still apply. Confirm the KICKR never stops notifying while the flywheel turns, and log what happens when it does.
 - [ ] An unanswered control-point write while ready (W3 ftms-ble-1, fixed): if the KICKR stops answering control-point writes, the app reconnects and restores the last safe mode instead of staying "ready" while dropping writes. Expected after a forced disconnect: the reconnect sequence of section 11 and the safe-mode restore above.
 - [ ] Settings Disconnect, trainer switch and "use mock" (W3 SAF-8, fixed): the trainer goes to SIM flat, then Stop, before the link drops.
 - [ ] A rider's own FTP on a client (W3 SAF-1, fixed): a client riding with a host whose copy of the client's FTP differs still gets ERG targets from its own profile (check the target on the client's power gauge against its own FTP).
+
+## Two PCs, no relay
+
+- [ ] Host a room on one PC with Settings > Network > Relay blank. Windows asks about the firewall once; allow it on private networks.
+- [ ] On a second PC on the same network, join by typing the code, and once from the list on the join page. A wrong code says no room on your network.
+- [ ] Block Wattlands in the firewall on the host and join again: the message says what to check, and the Relay address in the host's lobby is what a friend would need.
+- [ ] Ride. Pull the second PC's network cable for 30 s and plug it back in: the rider comes back to the same seat, and the host sees the drop and the return.
+- [ ] Close the host's app: the second PC ends the session, rides its cool-down and keeps its FIT.

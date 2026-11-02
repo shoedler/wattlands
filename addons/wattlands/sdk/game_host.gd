@@ -97,6 +97,8 @@ const SHARED_PAUSE_REASON := "all_stopped"
 const RESYNC_EVERY_S := 2.0
 ## Rosters in a row that must show another phase index before a client calls it a desync.
 const PHASE_MISMATCH_ROSTERS := 2
+## A switch this close only rides out network jitter on a plan's own 30 s spacing: no easing.
+const HOLD_JITTER_S := 1.0
 ## A plan split into more parts than this is refused by the client (a 16 KB part holds about
 ## 120 phases, so this is far beyond any real workout).
 const MAX_PLAN_PARTS := 64
@@ -197,6 +199,11 @@ var _int_fields: Dictionary = {}
 ## Client: the next event gap is expected (this client rejoined, or the host came back).
 var _expect_gap: bool = false
 var _phase_mismatch: int = 0
+# A client's phase whose ERG <-> SIM switch waits for the rider's 30 s spacing (BRIEF 4.5): the
+# session is in it, the rider's trainer keeps its mode until then, at the governor's pause load.
+# -1: nothing waits.
+var _held_rider_phase: int = -1
+var _held_rider_eased: bool = false
 var _resync_reason: String = ""
 var _last_resync_ask: float = -INF
 ## Client: plan parts by plan_id ({parts, got: {part: plan dict}}).
@@ -1386,6 +1393,7 @@ func _client_step() -> void:
 			game.client_predict(DT, rider.telemetry())
 	if _client_phase >= 0 and state != "paused":
 		_client_phase_ticks += 1
+		_release_held_rider_phase()
 	if _net_lost != "" and state != "ended" and _local_cooldown_over():
 		_end_after_net_loss()
 	if state != "ended" and _net_lost == "" and clock.platform_tick % TELEMETRY_EVERY == 0:
@@ -1567,6 +1575,14 @@ func _on_peer_left(peer: int, reason: String) -> void:
 	_event("peer_left", {"peer": peer, "reason": reason})
 	if state == "running" or state == "cooldown" or state == "paused":
 		_set_afk(peer, true)
+		_toast_rider("NET_RIDER_DROPPED", peer)
+
+
+## Tell every rider about a teammate's connection, by name.
+func _toast_rider(key: String, peer: int) -> void:
+	var slot: PlayerSlot = ctx.player(peer) if ctx != null else null
+	if slot != null and hud_router != null:
+		hud_router.toast(key, [slot.name])
 
 
 func _on_rejoin(peer: int) -> void:
@@ -1578,6 +1594,7 @@ func _on_rejoin(peer: int) -> void:
 	_event("rejoin", {"peer": peer})
 	_send_to(peer, Protocol.game_msg("session_start", _session_start_payload(peer)))
 	_resync_peer(peer, "rejoin")
+	_toast_rider("NET_RIDER_BACK", peer)
 
 
 ## Everything a client needs to ride on in step (a rejoin, its resync request, the host's
@@ -1836,6 +1853,7 @@ func _on_plan(data: Dictionary) -> void:
 	_client_plan = plan
 	# A new plan starts no phase by itself: the next `phase` message enters one.
 	_client_phase = -1
+	_end_rider_hold(_local_riders.get(_local_peer))
 	var rider: LocalRider = _local_riders.get(_local_peer)
 	if rider != null:
 		rider.set_plan(plan)
@@ -1911,7 +1929,11 @@ func _enter_client_phase(index: int, start_tick: int, ended_by: String, elapsed_
 	_client_prev_ended_by = "" if ended_by == Wl.ENDED_START else ended_by
 	var rider: LocalRider = _local_riders.get(_local_peer)
 	if rider != null:
-		if elapsed_s > 0.0:
+		_end_rider_hold(rider)
+		if _switch_wait_s(rider, index) > 0.0:
+			_held_rider_phase = index
+			_ease_held_rider(rider)
+		elif elapsed_s > 0.0:
 			rider.resume_phase(index, elapsed_s)
 		else:
 			rider.start_phase(index)
@@ -1926,6 +1948,61 @@ func _enter_client_phase(index: int, start_tick: int, ended_by: String, elapsed_
 		hud_router.clear_power_band(_local_peer)
 		if state == "running":
 			_set_state("cooldown")
+
+
+## Seconds until this rider's trainer may switch between ERG and SIM for phase `index` (0 when it
+## needs no switch). The governor enforces the 30 s spacing for a directive's SIM block; phases come
+## from the host, which a client doesn't have to trust, so a host flipping phases can't flip the
+## trainer faster than that (BRIEF 4.5). A plan the validator passed keeps its switches 30 s apart,
+## so only network jitter or a session that finishes early makes a client wait. Meanwhile the old
+## phase must not keep its load: the governor's pause rule holds the ERG floor or a flat road, which
+## nothing asks more of than the phase to come.
+func _switch_wait_s(rider: LocalRider, index: int) -> float:
+	if rider.governor == null or not is_instance_valid(rider.governor):
+		return 0.0
+	var st: Dictionary = rider.governor.status()
+	var now_mode := str(st.get("desired_mode", ""))
+	var next_mode := _client_plan.phase(index).mode
+	if now_mode not in [Wl.ERG, Wl.SIM] or now_mode == next_mode:
+		return 0.0
+	var since := float(st.get("t", 0.0)) - float(st.get("last_switch_t", -INF))
+	return maxf(SafetyGovernor.SWITCH_SPACING_S - since, 0.0)
+
+
+## The rider waits for its switch at the pause load, unless the wait only rides out jitter. The
+## governor alone is paused: the rider's ride timer and game state carry on.
+func _ease_held_rider(rider: LocalRider) -> void:
+	if _held_rider_eased or _switch_wait_s(rider, _held_rider_phase) <= HOLD_JITTER_S:
+		return
+	_held_rider_eased = true
+	rider.governor.set_game_paused(true)
+
+
+func _end_rider_hold(rider: LocalRider) -> void:
+	_held_rider_phase = -1
+	if _held_rider_eased:
+		_held_rider_eased = false
+		if rider != null and rider.governor != null and is_instance_valid(rider.governor):
+			rider.governor.set_game_paused(state == "paused")
+
+
+## A held phase starts once its switch may happen, at the phase's clock. A session that ended
+## starts none: the rider's plan may be gone.
+func _release_held_rider_phase() -> void:
+	if _held_rider_phase < 0:
+		return
+	var rider: LocalRider = _local_riders.get(_local_peer)
+	if rider == null or _client_plan == null or state == "ended":
+		_end_rider_hold(rider)
+		return
+	if _switch_wait_s(rider, _held_rider_phase) > 0.0:
+		# A session pause that ended meanwhile gave the governor its load back.
+		if _held_rider_eased and not bool(rider.governor.status().get("paused", false)):
+			rider.governor.set_game_paused(true)
+		return
+	var index := _held_rider_phase
+	_end_rider_hold(rider)
+	rider.resume_phase(index, _client_phase_ticks * DT)
 
 
 func _on_directive(data: Dictionary) -> void:

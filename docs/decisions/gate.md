@@ -48,3 +48,9 @@
   - Node counts read source: a test made in a loop counts once, `{ skip: true }` is not seen, and `tools/run_tests` itself still reads an empty suite as SKIP.
   - The source count reads `func test_` by line, so one inside a multi-line string would be a false red. None exist today.
   - All pin rules are inactive until the lead runs `tools/gate pin-safety`; `floor` refuses until then.
+
+## 2026-11-02: `--contributor`, and CI for a public repository
+
+- Decision: `tools/gate check` and `fast` take `--contributor`, which reports maintainer-only files, safety pins and the stash rule as "maintainer review" notes instead of failures. Never-edit paths, test counts, locks, added text and the floor still fail, and a `fast` run with it is stamped partial. Pull requests run `check --contributor` in `lead.yml`. Workflows run on pushes to `main` and on pull requests, with read-only tokens, one run per ref, and `lead` skips documentation-only pull requests. Every workflow uses Node 22, the oldest line the docs promise.
+- Alternatives: a separate workstream for outsiders (it would have to allow everything, and still couldn't explain pins); a fork-only workflow; running `tools/run_tests` only after a label (cheaper, but a maintainer has to remember).
+- Reason: a stranger's first pull request failed `check` with "lead only", through no fault of theirs. Pins exist so a person reads those changes, and the note gets that without blocking the proposal. Public repositories get free runner minutes, so the concern is wasted runs, which `concurrency` handles.

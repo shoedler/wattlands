@@ -757,7 +757,7 @@ export async function main(argv) {
   process.env.WATTLANDS_NO_HW_CONTROL = '1';
   process.env.WATTLANDS_NO_NETWORK_INTEGRATIONS = '1';
   // docs/OWNERSHIP.md TL5: every gate runs without the art pipeline's key and permission, so no test
-  // can make a paid fal call even in a game session where Simon has set them. Only this process
+  // can make a paid fal call even in a game session where someone has set them. Only this process
   // tree loses them; the caller's shell keeps both (tools/env.* and the Godot wrappers never touch them).
   for (const name of ART_VARS) delete process.env[name];
   if (!fs.existsSync(path.join(o.project, 'project.godot'))) fail(`no project.godot in ${o.project}`);

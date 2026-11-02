@@ -12,7 +12,7 @@ assets/<id>/art.json ──► node tools/art/generate.mjs ──► .art_cache/
 
 ## Setup and the art lock
 
-Real generation needs two environment variables, both set by a human (Simon), never by an agent:
+Real generation needs two environment variables, both set by hand, never by a script or a test:
 
 - `FAL_KEY`: the fal API key (`<id>:<secret>`). Never print, log or commit it. `generate.mjs` sends it only to `queue.fal.run` and `api.fal.ai`, never to an image host, and redacts it from every message and from every file it writes (`art_manifest.json` and the `.art_cache` result JSON, whatever fal sends back). It uses the key with surrounding whitespace trimmed, as it goes on the wire.
 - `WATTLANDS_ALLOW_ART=1`: the permission for paid calls.

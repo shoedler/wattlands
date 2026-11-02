@@ -13,6 +13,10 @@ const BUFFER_BYTES := 1 << 20
 ## Sockets the relay closes (version mismatch, idle) stay open this long first, so the
 ## error frame is read before the close.
 const LINGER_MS := 250
+## Open sockets at most, and from one address; a room needs 8. New ones beyond them close at once,
+## so a device on the network can't fill the relay and keep a dropped rider out.
+const MAX_CONNECTIONS := 32
+const MAX_PER_ADDRESS := 12
 
 var rooms: RelayRooms = RelayRooms.new()
 ## The listening port (the OS picks one when started with port 0).
@@ -21,6 +25,8 @@ var port: int = 0
 var time_func: Callable = Callable()
 ## Connections accepted so far.
 var accepted: int = 0
+## Only connections from this machine may create rooms (the built-in relay: a room is its host's).
+var local_create_only: bool = false
 
 var _tcp: TCPServer = null
 # conn -> {"ws": WebSocketPeer, "open": bool, "since": float}
@@ -101,13 +107,20 @@ func poll() -> void:
 		var stream := _tcp.take_connection()
 		if stream == null:
 			break
+		var address := stream.get_connected_host()
+		if _peers.size() >= MAX_CONNECTIONS or _connections_from(address) >= MAX_PER_ADDRESS:
+			stream.disconnect_from_host()
+			continue
+		var from_here := LocalRelayServer.is_loopback(address)
 		var ws := WebSocketPeer.new()
 		ws.inbound_buffer_size = BUFFER_BYTES
 		ws.outbound_buffer_size = BUFFER_BYTES
 		ws.max_queued_packets = 4096
 		if ws.accept_stream(stream) != OK:
 			continue
-		_peers[_next_conn] = {"ws": ws, "open": false, "since": now}
+		_peers[_next_conn] = {
+			"ws": ws, "open": false, "since": now, "local": from_here, "address": address
+		}
 		_next_conn += 1
 		accepted += 1
 	for conn: Variant in _peers.keys():
@@ -120,6 +133,8 @@ func poll() -> void:
 		if st == WebSocketPeer.STATE_OPEN and not p["open"]:
 			p["open"] = true
 			rooms.open(int(conn))
+			if local_create_only and not p["local"]:
+				rooms.forbid_create(int(conn))
 		# Frames that arrived before a close are read first (a leave followed by the close).
 		if p["open"]:
 			while ws.get_available_packet_count() > 0:
@@ -180,6 +195,18 @@ func _now() -> float:
 	if time_func.is_valid():
 		return float(time_func.call())
 	return Time.get_ticks_msec() / 1000.0
+
+
+func _connections_from(address: String) -> int:
+	var n := 0
+	for conn: Variant in _peers.keys():
+		if str((_peers[conn] as Dictionary)["address"]) == address:
+			n += 1
+	return n
+
+
+static func is_loopback(address: String) -> bool:
+	return address.begins_with("127.") or address == "::1" or address == "::ffff:127.0.0.1"
 
 
 func _exit_tree() -> void:

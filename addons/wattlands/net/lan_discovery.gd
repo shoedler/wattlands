@@ -71,6 +71,29 @@ func find(code: String) -> Dictionary:
 	return rooms.get(RoomCode.normalize(code), {})
 
 
+## Of `addresses` (IP.get_local_addresses()), those a rider elsewhere could type to reach this PC:
+## private IPv4 networks, then Tailscale's 100.64.0.0/10. No loopback, link-local or IPv6.
+static func shareable_addresses(addresses: PackedStringArray) -> PackedStringArray:
+	var lan: PackedStringArray = []
+	var tailnet: PackedStringArray = []
+	for a: String in addresses:
+		var parts := a.split(".")
+		if parts.size() != 4 or not parts[0].is_valid_int() or not parts[1].is_valid_int():
+			continue
+		var first := int(parts[0])
+		var second := int(parts[1])
+		if (
+			first == 10
+			or (first == 192 and second == 168)
+			or (first == 172 and second >= 16 and second <= 31)
+		):
+			lan.append(a)
+		elif first == 100 and second >= 64 and second <= 127:
+			tailnet.append(a)
+	lan.append_array(tailnet)
+	return lan
+
+
 ## A beacon's JSON text ("game" only when game_id is set).
 static func beacon(
 	code: String, relay_port: int, name: String = "", game_id: String = ""

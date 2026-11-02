@@ -174,6 +174,12 @@ func _build() -> void:
 		)
 		_host_left_label.name = "HostLeft"
 		status.add_child(_host_left_label)
+	elif bool(params.get("net_lost", false)):
+		_host_left_label = AppStyle.paragraph(
+			t("APP_RESULTS_NET_LOST"), AppStyle.FONT_BODY, AppStyle.WARN
+		)
+		_host_left_label.name = "NetLost"
+		status.add_child(_host_left_label)
 	# The details: the full page width under both columns.
 	var details := AppStyle.vbox(8)
 	details.name = "Details"

@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Rider safety or security problem
+    url: https://github.com/shoedler/wattlands/security/advisories/new
+    about: Could this hurt a rider, or expose someone's PC or data? Please report it privately.

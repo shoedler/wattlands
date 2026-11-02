@@ -1,0 +1,22 @@
+name: Idea
+description: A new game, a feature or a change you'd like
+labels: [idea]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: What would be different for a rider? What's the fun or the problem it solves?
+    validations:
+      required: true
+  - type: textarea
+    id: trainer
+    attributes:
+      label: What would the trainer do?
+      description: If it changes the load, how? It has to fit the limits in the README's Riding safely section. Those don't move.
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Building it
+      options:
+        - label: I'd like to build this myself.

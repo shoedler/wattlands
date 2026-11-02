@@ -49,6 +49,18 @@ func test_client_shows_the_host_dropped_notice_until_the_host_is_back() -> void:
 	assert_false(s.net_notice.visible, "the host is back")
 
 
+func test_a_lost_room_says_so_and_the_results_repeat_it() -> void:
+	var s := _client_session()
+	fx.fake_net().refuse("dropped")
+	assert_true(s.net_lost)
+	assert_true(s.net_notice.visible)
+	assert_eq(s.net_notice.text, AppScreen.t("NET_ROOM_LOST_CLIENT"))
+	assert_false(s.host_left, "the host didn't choose this")
+	s._finish(null)
+	assert_eq(fx.app.state, "results")
+	assert_true(bool(fx.app.params.get("net_lost", false)))
+
+
 func test_host_left_clears_the_notice_and_ends_the_session() -> void:
 	var s := _client_session()
 	fx.net.peer_left.emit(1, "dropped")

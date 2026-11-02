@@ -2,7 +2,7 @@
 
 The player-facing and game-design view of the platform: what a rider sees, what the rules are, and the numbers behind them. "BRIEF x.y" is a section of `docs/BRIEF.md`. Every number here is taken from the code on `main`; where the code and the BRIEF differ, the code is described and the difference is listed under [Known differences](#13-known-differences-from-brief). The trainer stack itself (FTMS, the governor's internals, MockTrainer) is in `docs/TRAINER.md`; the game contract is in `docs/GAME_SDK.md`.
 
-Nothing here has run against a real trainer yet. `docs/HARDWARE_TEST_PLAN.md` is the checklist.
+The automated tests run against MockTrainer, never a real trainer. `docs/HARDWARE_TEST_PLAN.md` is the checklist for a pass on hardware.
 
 ## 1. Pillars (BRIEF 3.1)
 
@@ -205,7 +205,7 @@ Every session opens with a 300 s ERG ramp 50 → 65 % FTP (except `e2e`); every 
 
 **Workout Director (.zwo).** Workout lists the `zwo` content scheme, so the host and solo lobby's content picker shows the built-in sessions and then every `*.zwo` in `<user dir>/workouts/` (created on demand) as `zwo:<absolute path>`, labelled by file name; the page names the folder. `--content=zwo:<path>` does the same from the command line, and a `zwo:` id whose file is gone falls back to the default content. Only the host needs the file: clients get the plan (in parts over 16 KB) and the timeline through snapshots (in parts beyond 120 phases).
 
-The platform importer is `ZwoImport` (`addons/wattlands/sim/workout_import.gd`, named `WorkoutImport` until W4). It reads SteadyState, Warmup, Ramp, Cooldown, IntervalsT and FreeRide (as SIM flat), adds a warm-up prefix if needed, extends ERG or SIM runs shorter than 30 s, splits and clamps blocks to BRIEF 4.6 and the warm-up limits, and lists every clamp in the session preview. Workout then labels every block "Block n", turns an imported Cooldown into RECOVERY, raises an ERG block below 30 % FTP (a `Power="0"` rest) to 30 % and lists that clamp too.
+The platform importer is `ZwoImport` (`addons/wattlands/sim/workout_import.gd`, named `WorkoutImport` in early builds). It reads SteadyState, Warmup, Ramp, Cooldown, IntervalsT and FreeRide (as SIM flat), adds a warm-up prefix if needed, extends ERG or SIM runs shorter than 30 s, splits and clamps blocks to BRIEF 4.6 and the warm-up limits, and lists every clamp in the session preview. Workout then labels every block "Block n", turns an imported Cooldown into RECOVERY, raises an ERG block below 30 % FTP (a `Power="0"` rest) to 30 % and lists that clamp too.
 
 The rolling course is three seeded sine waves sampled every 250 m, generated and normalized to exactly −2…+6 % over an 8 km window, then mirrored back and forth to 50 km, so every rider meets both extremes within the 30 minutes. The trainer gets the course grade × difficulty (50 % by default), plus the gear offset (section 11.6).
 
@@ -328,7 +328,7 @@ Your governor always works from your own profile: on a client the host's copy of
 
 ## 12. Hardware status
 
-Everything above was built and tested against MockTrainer, emulated KICKR transports, the mock relay paths and the mock Strava server, with the hardware and network locks on. Before relying on any of it, work through `docs/HARDWARE_TEST_PLAN.md` (including its "Safety findings that need hardware") and `src/games/workout/HARDWARE_TEST.md`.
+The automated tests use MockTrainer, emulated KICKR transports, the mock relay paths and the mock Strava server, with the hardware and network locks on. They cannot show how a real trainer feels or behaves. To check that, work through `docs/HARDWARE_TEST_PLAN.md` (including its "Safety findings that need hardware") and `src/games/workout/HARDWARE_TEST.md`.
 
 ## 13. Known differences from BRIEF
 
@@ -340,7 +340,7 @@ Judgment calls and gaps that are still true on `main`:
 4. **Duration limits reset with a new trainer connection** (another trainer or a rebuilt mock), not only after 120 s at ≤ 90 % FTP (BRIEF 4.6.1 names only the latter).
 5. **FTP test results.** A test ended before one full step, or cancelled with `back`, gives no FTP (BRIEF 3.2 uses "the best 1-minute power so far"); the 10 s save countdown runs at the start of the cool-down.
 6. **P1 gaps.**
-   - The app can't host a LAN room: the join page lists and joins `LanTransport` rooms, but hosting always uses the relay.
+   - The app hosts on the relay only when one is chosen: with none, the room runs on the host's PC (`docs/PROTOCOL.md` section 8).
    - The app doesn't launch the trainer bridge itself; start `trainer_bridge serve` first.
 7. **Fallbacks taken.** No Atkinson Hyperlegible font and no CC0 audio pack were downloaded; BRIEF 3.9's fallbacks (Godot's font, synthesized sound) are in use.
 8. **Stored but unused.** `drivetrain` changes nothing. MockTrainer's keyboard control (T/G, Y/H, presets, N, Shift; `docs/TRAINER.md`) needs `--mock-keyboard` or the Settings > Trainer toggle.

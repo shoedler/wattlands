@@ -23,6 +23,15 @@ func _host_lobby(game: String = "workout") -> AppLobbyScreen:
 	return s
 
 
+## A host's lobby whose room doesn't exist yet.
+func _host_lobby_no_room() -> AppLobbyScreen:
+	fx.give_profile(250.0)
+	fx.fake_net().add_human(1, "Ada", 250.0)
+	return (
+		open_screen(AppLobbyScreen.new(), {"mode": "host", "game_id": "workout"}) as AppLobbyScreen
+	)
+
+
 func _client_lobby(lobby: Dictionary) -> AppLobbyScreen:
 	fx.give_profile(220.0, "Bea")
 	var net := fx.fake_net()
@@ -358,10 +367,11 @@ func test_host_left_message() -> void:
 	assert_eq(
 		s.message_label.text, AppScreen.t("APP_LOBBY_HOST_LEFT"), "no ride to save in the lobby"
 	)
-	assert_eq(menu(s).ids(), ["leave"])
-	confirm_pick(s, "leave")
-	assert_eq(fx.fake_net().calls_named("leave").size(), 1)
-	assert_eq(fx.app.state, "title")
+	assert_eq(
+		s.page, AppLobbyScreen.PAGE_JOIN, "back to the code page: another room is one code away"
+	)
+	assert_true(s.code_field.visible)
+	assert_eq(s.cards_box.get_child_count(), 0, "the lost room's riders are gone")
 
 
 func test_client_answers_no_lobby_echo_with_player_info() -> void:
@@ -421,11 +431,127 @@ func test_refusal_texts() -> void:
 		"room_not_found",
 		"room_full",
 		"rate_limited",
-		"host_left"
+		"host_left",
+		"dropped",
+		"timeout",
+		"error",
+		"closed",
+		"bad_request",
+		AppLobbyModel.MISSING_GAME
 	]:
-		var text := AppLobbyScreen.refusal_text(reason)
-		assert_ne(text, "", reason)
-		assert_false(text.begins_with("APP_"), "%s has a string" % reason)
+		for builtin: bool in [false, true]:
+			var text := AppLobbyScreen.refusal_text(reason, builtin)
+			assert_ne(text, "", reason)
+			assert_false(text.begins_with("APP_"), "%s has a string" % reason)
+			assert_false(text.begins_with("NET_"), "%s has a string" % reason)
+			assert_false(text.contains(reason), "%s is said in words: %s" % [reason, text])
+	assert_ne(
+		AppLobbyScreen.refusal_text("room_not_found", true),
+		AppLobbyScreen.refusal_text("room_not_found", false),
+		"on the built-in relay the room would be on this network"
+	)
+
+
+func test_a_host_whose_room_cannot_open_gets_try_again_and_leave() -> void:
+	var s := _host_lobby_no_room()
+	var net := fx.fake_net()
+	net.state_changed.emit("error", "connect_failed")
+	assert_eq(s.page, AppLobbyScreen.PAGE_FAILED)
+	assert_eq(menu(s).ids(), ["retry", "leave"])
+	assert_eq(s.message_label.text, AppScreen.t("APP_NET_NO_ROOM_HERE"))
+	assert_false(s.message_label.text.contains("connect_failed"))
+	var hosted := net.calls_named("host_room").size()
+	confirm_pick(s, "retry")
+	assert_eq(net.calls_named("host_room").size(), hosted + 1, "a new attempt")
+	assert_eq(s.page, AppLobbyScreen.PAGE_LOBBY)
+	net.simulate_hosting("K7QX2M")
+	assert_true(s.code_label.visible)
+	assert_eq(s.message_label.text, "")
+
+
+func test_a_failed_relay_names_its_address() -> void:
+	var s := _host_lobby_no_room()
+	var net := fx.fake_net()
+	net.relay_url = "ws://relay.example.test/v1"
+	net.state_changed.emit("error", "connect_failed")
+	assert_eq(
+		s.message_label.text, AppScreen.t("APP_NET_NO_RELAY").format(["ws://relay.example.test/v1"])
+	)
+	net.relay_url = ""
+
+
+func test_a_host_that_loses_its_room_can_open_another() -> void:
+	var s := _host_lobby()
+	confirm_pick(s, "start")
+	fx.fake_net().refuse("room_not_found")
+	assert_eq(s.page, AppLobbyScreen.PAGE_FAILED)
+	assert_eq(menu(s).ids(), ["retry", "leave"])
+	assert_eq(s.message_label.text, AppScreen.t("APP_ROOM_LOST_HOST"))
+	assert_false(s.start_requested, "no start waits for a room that's gone")
+	assert_false(s.code_label.visible)
+
+
+func test_a_client_that_cannot_reach_the_host_is_back_at_the_code_page() -> void:
+	fx.give_profile(200.0)
+	var s := open_screen(AppLobbyScreen.new(), {"mode": "join"}) as AppLobbyScreen
+	s.join_code("K7QX2M")
+	fx.fake_net().state_changed.emit("error", "connect_failed")
+	assert_eq(s.page, AppLobbyScreen.PAGE_JOIN)
+	assert_eq(s.message_label.text, AppScreen.t("APP_NET_NO_HOST_PC"))
+
+
+func test_a_late_joiner_is_told_and_goes_back_to_the_code_page() -> void:
+	var s := _client_lobby(workout_lobby())
+	fx.fake_net().refuse("session_in_progress")
+	assert_eq(s.page, AppLobbyScreen.PAGE_JOIN)
+	assert_eq(s.message_label.text, AppScreen.t("APP_REFUSED_IN_PROGRESS"))
+
+
+func test_the_lobby_says_when_it_is_reconnecting() -> void:
+	var s := _client_lobby(workout_lobby())
+	var net := fx.fake_net()
+	net.state_changed.emit("reconnecting", "dropped")
+	assert_eq(s.message_label.text, AppScreen.t("NET_STATE_RECONNECTING"))
+	net.state_changed.emit("joined", "K7QX2M")
+	assert_eq(s.message_label.text, "")
+
+
+func test_the_host_hint_says_how_friends_get_in() -> void:
+	var s := _host_lobby()
+	assert_eq(s.hint_label.text.get_slice("\n", 0), AppScreen.t("APP_LOBBY_SHARE_BUILTIN"))
+	assert_true(s.hint_label.visible)
+	fx.fake_net().relay_url = "ws://relay.example.test/v1"
+	s._refresh_all()
+	assert_eq(s.hint_label.text, AppScreen.t("APP_LOBBY_SHARE_RELAY"))
+	fx.fake_net().relay_url = ""
+
+
+func test_the_client_hint_follows_ready() -> void:
+	var s := _client_lobby(workout_lobby())
+	assert_eq(s.hint_label.text, AppScreen.t("APP_LOBBY_READY_HINT"))
+	confirm_pick(s, "ready")
+	assert_eq(s.hint_label.text, AppScreen.t("APP_LOBBY_YOU_READY"))
+
+
+func test_a_ready_refused_by_the_host_is_shown() -> void:
+	var s := _client_lobby(workout_lobby())
+	confirm_pick(s, "ready")
+	fx.fake_net().ready_refused.emit("app_mismatch", "You have Wattlands 1, the host has 2.")
+	assert_false(s.local_ready)
+	assert_eq(s.message_label.text, "You have Wattlands 1, the host has 2.")
+
+
+func test_a_card_says_why_a_rider_is_not_ready() -> void:
+	var slot := PlayerSlot.new()
+	slot.peer_id = 2
+	var lb := {"players": [{"peer_id": 2, "connected": true, "game_issue": "version_mismatch"}]}
+	assert_eq(AppLobbyScreen.card_note(lb, slot), AppScreen.t("APP_LOBBY_NEEDS_UPDATE"))
+	lb = {"players": [{"peer_id": 2, "connected": false, "game_issue": ""}]}
+	assert_eq(AppLobbyScreen.card_note(lb, slot), AppScreen.t("APP_LOBBY_DROPPED"))
+	lb = {"players": [{"peer_id": 2, "connected": true, "game_issue": ""}]}
+	assert_eq(AppLobbyScreen.card_note(lb, slot), "")
+	slot.is_bot = true
+	assert_eq(AppLobbyScreen.card_note({}, slot), "")
 
 
 func test_host_never_starts_before_the_room_exists() -> void:
@@ -451,7 +577,7 @@ func test_host_starts_once_everyone_is_ready() -> void:
 	net.add_human(2, "Bea")
 	confirm_pick(s, "start")
 	assert_ne(fx.app.state, "session", "Bea is not ready")
-	assert_eq(s.message_label.text, AppScreen.t("APP_LOBBY_WAITING_READY"))
+	assert_eq(s.message_label.text, AppScreen.t("APP_LOBBY_WAITING_FOR").format(["Bea"]))
 	net.ready_flags[2] = true
 	net.lobby_changed.emit(net.lobby)
 	assert_eq(fx.app.state, "session")

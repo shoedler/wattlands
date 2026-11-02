@@ -2,13 +2,12 @@
 # (the sim checker and the e2e report checker) and the script check; a second job runs a short
 # subset of the simulation matrix (tests/games/siege/sim/run_sims.sh: S2, S5) through
 # tools/run_game_sim with the check_sims.mjs assertions and fit_check. The full matrix (S1-S10),
-# the e2e run and tools/run_tests belong to the lead's suite (.github/workflows/lead.yml).
-# Nothing is pushed during a build, so GitHub never runs this there: every step passed locally.
+# the e2e run and tools/run_tests belong to the full suite (.github/workflows/lead.yml).
 name: game-siege
 
 on:
   push:
-    branches: ["**"]
+    branches: [main]
     paths:
       - "src/games/siege/**"
       - "content/siege/**"
@@ -26,6 +25,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:

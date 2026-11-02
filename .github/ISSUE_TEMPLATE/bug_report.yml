@@ -1,0 +1,53 @@
+name: Bug
+description: Something doesn't work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If this could hurt a rider, or it's a security problem, please don't file it here. See [SECURITY.md](https://github.com/shoedler/wattlands/blob/main/SECURITY.md).
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead. Include any message on screen, word for word.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Wattlands version
+      description: From the release you downloaded, or the commit if you built it.
+    validations:
+      required: true
+  - type: dropdown
+    id: game
+    attributes:
+      label: Where
+      options:
+        - Menus, lobby or settings
+        - Turbo Reel
+        - Castellum Rotae
+        - Workout
+        - Torque Company
+        - Trainer connection
+        - Multiplayer
+        - Strava or FIT files
+    validations:
+      required: true
+  - type: input
+    id: trainer
+    attributes:
+      label: Trainer and firmware
+      description: For example KICKR CORE 2, 1.6.2. Say "mock" if you used the mock trainer.
+  - type: textarea
+    id: multiplayer
+    attributes:
+      label: Multiplayer details
+      description: How many riders, a room on the host's PC or a relay, and at what point it went wrong.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log
+      description: Run `Wattlands.exe` from a terminal and paste what it prints around the problem. Remove anything private first.
+      render: text

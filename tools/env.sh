@@ -3,7 +3,7 @@
 #   . tools/env.sh        (source it; running it as a script changes nothing in your shell)
 #
 # It sets exactly these two variables and leaves every other variable alone,
-# including the art pipeline's, which only Simon sets (BRIEF 3.10).
+# including the art pipeline's, which only its owner sets (BRIEF 3.10).
 export WATTLANDS_NO_HW_CONTROL=1
 export WATTLANDS_NO_NETWORK_INTEGRATIONS=1
 if [ -n "${BASH_SOURCE:-}" ] && [ "${BASH_SOURCE:-}" = "$0" ]; then

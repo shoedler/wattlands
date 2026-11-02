@@ -23,3 +23,8 @@ NET_LAN_NOT_FOUND,No room with that code on your network.
 NET_REFUSED_CLOSED,You left the room.
 NET_REFUSED_TIMEOUT,The relay server stopped answering.
 NET_REFUSED_ERROR,The connection to the room failed.
+NET_ROOM_LOST_CLIENT,The room is gone. Riding the cool-down here; your ride is saved.
+NET_ROOM_LOST_HOST,"The room is gone, so other riders can't come back. Your ride carries on."
+NET_RIDER_DROPPED,{0} lost the connection. Their seat stays open.
+NET_RIDER_BACK,{0} is back.
+NET_READY_APP_MISMATCH,"You have Wattlands {mine}, the host has {theirs}. Get the same release to ready up."

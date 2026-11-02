@@ -2,7 +2,7 @@
 
 Section 1 says who owns each path today; `tools/gate check` enforces it from `tools/lib/gate_manifest.json`, which wins if the two differ.
 
-**Sections 2-4 are the W0 inventory, kept for their IDs.** Written in W0 on 2026-10-21 from `docs/BRIEF.md`, the three game briefs and the W0 contracts and stubs; comments and docs across the repo cite those IDs (GM4, C36, SH2). Section 2 lists every SDK call, kit helper, tool flag and platform behaviour the game briefs cite, with what the game expected and the test that had to prove it. Section 3 lists where a game brief assumed something BRIEF or the frozen contracts didn't say, with a resolution. Section 4 is the flat name checklist of the W3 SDK-completeness review. The W1 agents named in their Owner columns have ended; read those names as history, and section 1 for who owns a path now. `docs/GAME_SDK.md` is the live contract.
+**Sections 2-4 are an inventory from before the build, kept for their IDs.** It was written on 2026-10-21 from `docs/BRIEF.md`, the three game briefs and the first contracts and stubs; comments and docs across the repo cite those IDs (GM4, C36, SH2). Section 2 lists every SDK call, kit helper, tool flag and platform behaviour the game briefs cite, with what the game expected and the test that had to prove it. Section 3 lists where a game brief assumed something BRIEF or the frozen contracts didn't say, with a resolution. Section 4 is the flat name checklist of the SDK completeness review (W3). The names in the Owner columns are the module owners of the first build, and each has a file in `docs/decisions/`; read them as history, and section 1 for who owns a path now. `docs/GAME_SDK.md` is the live contract.
 
 How to read sections 2-4:
 
@@ -21,10 +21,10 @@ How to read sections 2-4:
 | Relay | `server/relay/` | `relay.yml` |
 | Trainer bridge | `tools/trainer_bridge/`, `addons/wattlands/trainer/ble/` | `trainer-bridge.yml` |
 | Lead (the platform) | Everything else: `addons/wattlands/`, `src/app/`, `src/games/_template/` and its counterparts, `content/strings/`, `server/mock_strava/`, `tools/`, `tests/` outside `tests/games/<id>/`, `docs/` | `lead.yml` (every gate) |
-| Lead only, for every session | `README.md`, `CHANGELOG.md`, `CREDITS.md`, `CLAUDE.md`, `LICENSE`, `.gitignore`, `project.godot`, `gdlintrc`, `addons/gut/`, `addons/wattlands/contracts/` (frozen after W0, additive changes only), `tests/green_count_floor.txt`, `tests/pending_allowlist.txt`, `tools/lib/gut_gate.mjs`, `tools/lib/run_tests.mjs`, `tools/lib/gate*`, `tools/lib/safety_pins.json` | |
+| Lead only, for every session | `README.md`, `CHANGELOG.md`, `CREDITS.md`, `CLAUDE.md`, `LICENSE`, `.gitignore`, `project.godot`, `gdlintrc`, `addons/gut/`, `addons/wattlands/contracts/` (frozen, additive changes only), `tests/green_count_floor.txt`, `tests/pending_allowlist.txt`, `tools/lib/gut_gate.mjs`, `tools/lib/run_tests.mjs`, `tools/lib/gate*`, `tools/lib/safety_pins.json` | |
 | Nobody | `docs/BRIEF.md`, `docs/games/`, `docs/concept/`, `docs/research.md`, `.gitattributes`, `.claude/settings.json` | |
 
-A game session changes the platform only under the platform-change policy in `CLAUDE.md`: small, additive, tested, and committed alone with the prefix `platform:`. A run's other workstreams (audio, cleanup, docs, gate) are the `workstreams` of the manifest; no workstream may touch a path its `deny` lists, and `safety_pin_globs` lists the files the gate pins.
+A game session changes the platform only under the platform-change policy in `CLAUDE.md`: small, additive, tested, and committed alone with the prefix `platform:`. The `workstreams` of the manifest (audio, cleanup, docs, gate) each list the paths they may change; none may touch a path its `deny` lists, and `safety_pin_globs` lists the files the gate pins.
 
 ### 1.2 Shared folders
 
@@ -32,11 +32,11 @@ A game session changes the platform only under the platform-change policy in `CL
 | --- | --- |
 | `content/strings/<module>.csv` | Platform strings, one file per module, each registered in `project.godot`. Platform keys never start with `WORKOUT_`, `SIEGE_`, `TANK_`, `FISHING_` or `_TEMPLATE_`. |
 | `docs/decisions/`, `docs/deps.d/`, `docs/credits.d/`, `docs/changelog.d/` | One `<agent or game id>.md` per owner. The lead merges them: changelog fragments are emptied at each release; decision fragments stay as the source. |
-| `.github/workflows/` | Seven workflows: `lead.yml` runs every gate, `game-<id>.yml` per game (`tools/new_game` writes it), `relay.yml` builds the relay's Docker image, `trainer-bridge.yml` runs the Python bridge's tests. |
+| `.github/workflows/` | Eight workflows: `check.yml` runs `tools/gate check --contributor` on every pull request, `lead.yml` runs every gate, `game-<id>.yml` per game (`tools/new_game` writes it), `relay.yml` builds the relay's Docker image, `trainer-bridge.yml` runs the Python bridge's tests. |
 
 ### 1.3 Frozen seams
 
-Fixed in W0 and additive since. These are the APIs between platform modules that a change must keep: time (`SimClock`, `Wl.SIM_DT`); the rider stack (`LocalRider`, with the GameHost's riders private and forbidden under `src/games/`); the governor (`SafetyGovernor.configure/set_plan/start_phase/resume_phase/set_game_paused/apply_directive/set_course_grade/shift/tick/status`, `Wl.CLAMP_*`, `Wl.REFUSE_*`); the mock rider (`MockTrainer.from_spec/parse_spec/set_cadence_band/set_power_band/set_phase`); pixel layout (`PixelViewport`); the HUD feed (`HudFeed`, `HudSpec`, `HudLayer`, the `WlEventBus` HUD signals); the session runner (`GameSimRunner`); the recorder (`RideRecorderApi`, `SessionStats`); messages (`NetMessages`, `Protocol`); per-peer services (`WlEventBus` and `WlNetSession` instantiable per in-process peer); slot looks (`Wl.slot_look`); the pixel import preset (3.1 C36).
+Fixed at the start and additive since. These are the APIs between platform modules that a change must keep: time (`SimClock`, `Wl.SIM_DT`); the rider stack (`LocalRider`, with the GameHost's riders private and forbidden under `src/games/`); the governor (`SafetyGovernor.configure/set_plan/start_phase/resume_phase/set_game_paused/apply_directive/set_course_grade/shift/tick/status`, `Wl.CLAMP_*`, `Wl.REFUSE_*`); the mock rider (`MockTrainer.from_spec/parse_spec/set_cadence_band/set_power_band/set_phase`); pixel layout (`PixelViewport`); the HUD feed (`HudFeed`, `HudSpec`, `HudLayer`, the `WlEventBus` HUD signals); the session runner (`GameSimRunner`); the recorder (`RideRecorderApi`, `SessionStats`); messages (`NetMessages`, `Protocol`); per-peer services (`WlEventBus` and `WlNetSession` instantiable per in-process peer); slot looks (`Wl.slot_look`); the pixel import preset (3.1 C36).
 
 ## 2. Game brief requirements
 

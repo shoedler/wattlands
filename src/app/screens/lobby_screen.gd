@@ -16,11 +16,15 @@ extends AppScreen
 ## Every rider edits their own player_options on their card (sent in player_info). Riders ready
 ## up with pedal_start or confirm. The host starts once everyone is ready; clients follow the
 ## host's session_start. Clear messages for a missing game, a version mismatch,
-## session_in_progress and host_left.
+## session_in_progress and host_left. With no relay chosen the room runs on the host's own PC
+## (WlNetSession.uses_builtin_relay()), and the hint under the code says how friends get in. A
+## host whose room could not open or was lost gets Try again and Leave; a client that lost its
+## lobby goes back to the code page, with the reason.
 
 const PAGE_JOIN := "join"
 const PAGE_CONNECTING := "connecting"
 const PAGE_LOBBY := "lobby"
+const PAGE_FAILED := "failed"
 const RECENT_MAX := 8
 const BOT_FTP_MIN := 50.0
 const BOT_FTP_MAX := 600.0
@@ -56,6 +60,8 @@ var keyboard: AppKeyboard = null
 var code_label: Label = null
 var message_label: Label = null
 var info_label: Label = null
+## How friends get in (host), or what this rider does next (client).
+var hint_label: Label = null
 ## Where the rider's own .zwo files go (host and solo of a game with the zwo scheme).
 var zwo_hint_label: Label = null
 ## Rider cards, two per row (8 riders fit at 1080p).
@@ -79,11 +85,19 @@ func _build() -> void:
 	_left = ui["left"]
 	code_label = AppStyle.label("", AppStyle.FONT_CODE, AppStyle.ACCENT)
 	code_label.name = "RoomCode"
-	_left.add_child(code_label)
+	var code_row := AppStyle.hbox(24)
+	code_row.name = "CodeRow"
+	code_row.add_child(code_label)
+	_left.add_child(code_row)
 	message_label = AppStyle.paragraph("", AppStyle.FONT_BODY, AppStyle.WARN)
 	message_label.name = "Message"
 	message_label.visible = false
 	_left.add_child(message_label)
+	hint_label = AppStyle.paragraph("", AppStyle.FONT_SMALL, AppStyle.TEXT)
+	hint_label.name = "Hint"
+	hint_label.visible = false
+	hint_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	code_row.add_child(hint_label)
 	info_label = AppStyle.paragraph("", AppStyle.FONT_BODY, AppStyle.TEXT_DIM)
 	info_label.name = "Info"
 	_left.add_child(info_label)
@@ -127,6 +141,7 @@ func _connect_net() -> void:
 	net.state_changed.connect(_on_net_state)
 	net.lobby_changed.connect(_on_lobby_changed)
 	net.refused.connect(_on_refused)
+	net.ready_refused.connect(_on_ready_refused)
 	net.game_message.connect(_on_game_message)
 	net.peer_joined.connect(_on_peer_changed)
 	net.peer_left.connect(_on_peer_left)
@@ -143,6 +158,7 @@ func _disconnect_net() -> void:
 			[net.state_changed, _on_net_state],
 			[net.lobby_changed, _on_lobby_changed],
 			[net.refused, _on_refused],
+			[net.ready_refused, _on_ready_refused],
 			[net.game_message, _on_game_message],
 			[net.peer_joined, _on_peer_changed],
 			[net.peer_left, _on_peer_left]
@@ -658,6 +674,7 @@ func _on_lobby_pick(_index: int, id: Variant, _auto: bool) -> void:
 			if start_requested:
 				start_requested = false
 				_set_ready(false)
+				_set_message("")
 			else:
 				start_requested = true
 				_set_ready(true)
@@ -683,6 +700,8 @@ func _on_lobby_pick(_index: int, id: Variant, _auto: bool) -> void:
 			_refresh_all()
 		"bot_ftp":
 			_open_bot_ftp()
+		"retry":
+			_retry_host()
 		"leave":
 			_leave_to_title()
 
@@ -972,7 +991,7 @@ func try_launch() -> bool:
 	if role == Wl.HOST:
 		everyone_ready = services.net != null and services.net.all_ready()
 	if not everyone_ready:
-		_set_message(t("APP_LOBBY_WAITING_READY"))
+		_set_message(waiting_text())
 		return false
 	launched = true
 	goto("session", {"role": role, "game_id": game_id, "content_id": content_id})
@@ -980,8 +999,19 @@ func try_launch() -> bool:
 
 
 func _tick(_dt: float) -> void:
-	if start_requested and not launched:
+	if start_requested and not launched and page == PAGE_LOBBY:
 		try_launch()
+
+
+## "Waiting for Bo, Ana to ready up (...)": the riders the start waits for, by name.
+func waiting_text() -> String:
+	var names: PackedStringArray = []
+	for s: PlayerSlot in AppLobbyModel.humans(slots()):
+		if s.peer_id != local_peer() and not AppLobbyModel.is_ready(lobby(), s.peer_id):
+			names.append(s.name)
+	if names.is_empty():
+		return t("APP_LOBBY_WAITING_READY")
+	return t("APP_LOBBY_WAITING_FOR").format([", ".join(names)])
 
 
 func _handle_gesture(gesture: StringName) -> bool:
@@ -1032,10 +1062,15 @@ func _on_net_state(state: String, detail: String) -> void:
 				_set_message("")
 				_send_player_info()
 				_show_lobby_page()
+			elif role == Wl.CLIENT:
+				_set_message("")
+		"reconnecting":
+			if page == PAGE_LOBBY:
+				_set_message(t("NET_STATE_RECONNECTING"))
 		"error":
-			_set_message(t("APP_NET_ERROR").format([detail]))
-			if role == Wl.CLIENT and page == PAGE_CONNECTING:
-				_show_join_page()
+			# Every other error comes with a refused(), which words it.
+			if detail == "connect_failed":
+				_on_connect_failed()
 		"offline":
 			if role == Wl.CLIENT and page == PAGE_LOBBY and not launched:
 				_set_message(t("APP_NET_LOST"))
@@ -1063,32 +1098,95 @@ func _on_lobby_changed(_lobby: Dictionary) -> void:
 
 
 func _on_refused(reason: String) -> void:
-	_set_message(refusal_text(reason))
-	if role == Wl.CLIENT and page != PAGE_LOBBY:
-		_show_join_page()
-		_set_message(refusal_text(reason))
-	elif page == PAGE_LOBBY and menus.size() >= 1:
-		pop_to_root()
-		refresh_menu([{"id": "leave", "text": t("APP_LOBBY_LEAVE")}])
+	var text := refusal_text(reason, _builtin_relay())
+	if role == Wl.HOST:
+		_show_failed_page(t("APP_ROOM_LOST_HOST"))
+	elif role == Wl.CLIENT:
+		_back_to_join_page(text)
+	else:
+		_set_message(text)
 
 
-## A clear message for each refusal (BRIEF 5.5).
-static func refusal_text(reason: String) -> String:
+## The host refused this rider's ready-up (another game or app version): it stays not ready.
+func _on_ready_refused(_reason: String, text: String) -> void:
+	local_ready = false
+	_set_message(text)
+	_refresh_root_menu()
+	_refresh_all()
+
+
+func _builtin_relay() -> bool:
+	return services.net != null and services.net.uses_builtin_relay()
+
+
+## The socket never got into a room.
+func _on_connect_failed() -> void:
+	var relay := services.net.relay_address() if services.net != null else ""
+	var text := t("APP_NET_NO_HOST_PC")
+	if relay != "":
+		text = t("APP_NET_NO_RELAY").format([relay])
+	if role == Wl.HOST:
+		_show_failed_page(t("APP_NET_NO_ROOM_HERE") if relay == "" else text)
+	else:
+		_back_to_join_page(text)
+
+
+## The host's room failed to open or is gone: say so, and offer Try again and Leave only.
+func _show_failed_page(text: String) -> void:
+	page = PAGE_FAILED
+	start_requested = false
+	local_ready = false
+	clear_menus()
+	push_menu(
+		[
+			{"id": "retry", "text": t("APP_LOBBY_RETRY")},
+			{"id": "leave", "text": t("APP_LOBBY_LEAVE")}
+		],
+		_on_lobby_pick,
+		_on_lobby_back
+	)
+	_set_message(text)
+	code_label.visible = false
+	_refresh_all()
+
+
+func _retry_host() -> void:
+	_set_message("")
+	_host_room()
+
+
+func _back_to_join_page(text: String) -> void:
+	local_ready = false
+	_options_game = ""
+	_last_info = {}
+	_show_join_page()
+	_set_message(text)
+	_refresh_all()
+
+
+## A clear message for each refusal (BRIEF 5.5). `builtin`: the room would be on the host's PC.
+static func refusal_text(reason: String, builtin: bool = false) -> String:
 	match reason:
 		"session_in_progress":
 			return AppScreen.t("APP_REFUSED_IN_PROGRESS")
 		"version_mismatch":
 			return AppScreen.t("APP_REFUSED_VERSION")
 		"room_not_found":
-			return AppScreen.t("APP_REFUSED_NOT_FOUND")
+			return AppScreen.t("APP_REFUSED_NOT_ON_NETWORK" if builtin else "APP_REFUSED_NOT_FOUND")
 		"room_full":
 			return AppScreen.t("APP_REFUSED_FULL")
 		"rate_limited":
 			return AppScreen.t("APP_REFUSED_RATE")
 		"host_left":
 			return AppScreen.t("APP_LOBBY_HOST_LEFT")
+		"dropped", "timeout", "error":
+			return AppScreen.t("APP_REFUSED_DROPPED")
+		"closed":
+			return AppScreen.t("NET_REFUSED_CLOSED")
+		"bad_request":
+			return AppScreen.t("NET_REFUSED_BAD_REQUEST")
 		AppLobbyModel.MISSING_GAME:
-			return AppScreen.t("APP_LOBBY_MISSING_GAME")
+			return AppScreen.t("APP_REFUSED_MISSING_GAME")
 	return AppScreen.t("APP_REFUSED_OTHER").format([reason])
 
 
@@ -1146,6 +1244,7 @@ func _set_message(text: String) -> void:
 func _refresh_all() -> void:
 	_refresh_title()
 	_refresh_cards()
+	_refresh_hint()
 	_refresh_info()
 	_refresh_zwo_hint()
 	_refresh_preview()
@@ -1175,7 +1274,7 @@ func _refresh_title() -> void:
 		code_label.visible = false
 	elif role == Wl.HOST:
 		var code := services.net.room_code if services.net != null else ""
-		code_label.visible = code != ""
+		code_label.visible = code != "" and page == PAGE_LOBBY
 		code_label.text = RoomCode.format(code)
 
 
@@ -1210,7 +1309,20 @@ func _refresh_cards() -> void:
 				if text == ""
 				else t("APP_LOBBY_AUTOPILOT_TAG") + " · " + text
 			)
-		card.update(ready, trainer, text, slot.is_bot)
+		card.update(ready, trainer, text, slot.is_bot, card_note(lb, slot))
+
+
+## What a rider's card says instead of Ready or Not ready ("" for neither): why they can't ready
+## up, or that their connection dropped (the seat stays theirs).
+static func card_note(lb: Dictionary, slot: PlayerSlot) -> String:
+	if slot.is_bot:
+		return ""
+	var entry := AppLobbyModel.player_entry(lb, slot.peer_id)
+	if not bool(entry.get("connected", true)):
+		return AppScreen.t("APP_LOBBY_DROPPED")
+	if str(entry.get("game_issue", "")) != "":
+		return AppScreen.t("APP_LOBBY_NEEDS_UPDATE")
+	return ""
 
 
 ## "Wave offset: 0 · Relaxed band: Off" for a rider's player_options.
@@ -1231,11 +1343,42 @@ static func options_text(gid: String, m: Dictionary, values: Dictionary) -> Stri
 	return " · ".join(parts)
 
 
+## The line under the code: how friends get in (host), or this rider's next step (client).
+func _refresh_hint() -> void:
+	if hint_label == null:
+		return
+	hint_label.text = hint_text()
+	hint_label.visible = hint_label.text != ""
+
+
+func hint_text() -> String:
+	if page != PAGE_LOBBY or services.net == null:
+		return ""
+	if role == Wl.HOST:
+		if services.net.room_code == "":
+			return ""
+		if not _builtin_relay():
+			return t("APP_LOBBY_SHARE_RELAY")
+		var text := t("APP_LOBBY_SHARE_BUILTIN")
+		var urls := services.net.shareable_relay_urls()
+		if not urls.is_empty():
+			text += "\n" + t("APP_LOBBY_SHARE_ELSEWHERE").format([", ".join(urls)])
+		return text
+	if role == Wl.CLIENT:
+		if services.trainer == null or services.trainer.device() == null:
+			return t("APP_ERR_NO_TRAINER")
+		return t("APP_LOBBY_YOU_READY") if local_ready else t("APP_LOBBY_READY_HINT")
+	return ""
+
+
 func _refresh_info() -> void:
 	if info_label == null:
 		return
 	if page == PAGE_JOIN:
-		info_label.text = t("APP_JOIN_HINT")
+		info_label.text = t("APP_JOIN_HINT_BUILTIN" if _builtin_relay() else "APP_JOIN_HINT")
+		return
+	if page == PAGE_FAILED:
+		info_label.text = ""
 		return
 	var gid := current_game()
 	if gid == "" or manifest().is_empty():

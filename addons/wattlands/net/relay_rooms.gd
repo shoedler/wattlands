@@ -49,6 +49,12 @@ func open(conn: int) -> void:
 	}
 
 
+## This connection can join a room but never create one (bad_request).
+func forbid_create(conn: int) -> void:
+	if _conns.has(conn):
+		_conns[conn]["no_create"] = true
+
+
 func is_open(conn: int) -> bool:
 	return _conns.has(conn)
 
@@ -216,7 +222,7 @@ func _on_hello(conn: int, c: Dictionary, msg: Dictionary) -> void:
 
 
 func _on_create(conn: int, c: Dictionary, msg: Dictionary) -> void:
-	if not c["hello"] or c["code"] != "":
+	if not c["hello"] or c["code"] != "" or c.get("no_create", false):
 		_error(conn, "bad_request")
 		return
 	var max_n := clampi(int(msg["max"]), 1, max_peers)

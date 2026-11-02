@@ -375,6 +375,34 @@ describe('6.2 and 6.3 pins, through git', { concurrency: 4 }, () => {
   });
 });
 
+describe('--contributor', { concurrency: 4 }, () => {
+  test('a contributor branch: maintainer-only files and pins are named for review, not failed', async () => {
+    const dir = pinnedRepo();
+    await pin(dir);
+    onBranch(dir, 'fix-the-lobby', { 'tools/godot.sh': 'stronger\n', 'README.md': 'better\n' }, 'fix');
+    await assertCheck(dir, [], 1, /tools\/godot\.sh changed/);
+    await assertCheck(dir, ['--contributor'], 0, /maintainer review: safety pin: tools\/godot\.sh changed .*a maintainer reads this change/);
+    await assertCheck(dir, ['--contributor'], 0, /maintainer review: ownership: README\.md: a maintainer lands this file/);
+  });
+
+  test('a contributor branch: a tampered pins file still fails', async () => {
+    const dir = pinnedRepo();
+    await pin(dir);
+    onBranch(dir, 'hollow-the-pins', { 'tools/lib/safety_pins.json': '{"globs":[],"files":{},"blocks":[]}\n' }, 'hollow');
+    const r = await assertCheck(dir, ['--contributor'], 1, /safety pin: /);
+    assert.ok(r !== null);
+  });
+
+  test('a contributor branch: never-edit paths and falling test counts still fail', async () => {
+    const dir = repo({ 'docs/BRIEF.md': 'brief\n', 'tests/a/test_a.gd': tests(2), 'tests/a/test_a.gd.uid': 'u\n' });
+    onBranch(dir, 'fix-the-brief', { 'docs/BRIEF.md': 'mine\n' }, 'edit');
+    await assertCheck(dir, ['--contributor'], 1, /never edited/);
+    const fewer = repo({ 'tests/a/test_a.gd': tests(2), 'tests/a/test_a.gd.uid': 'u\n' });
+    onBranch(fewer, 'fewer-tests', { 'tests/a/test_a.gd': tests(1) }, 'less');
+    await assertCheck(fewer, ['--contributor'], 1, /the total fell 2 -> 1/);
+  });
+});
+
 const tests = (n, name = 'x') => Array.from({ length: n }, (_, i) => `func test_${name}_${i}():\n\tassert_eq(a, b)\n`).join('\n');
 
 describe('6.4 test counts, through git', { concurrency: 4 }, () => {
