@@ -385,6 +385,14 @@ describe('--contributor', { concurrency: 4 }, () => {
     await assertCheck(dir, ['--contributor'], 0, /maintainer review: ownership: README\.md: a maintainer lands this file/);
   });
 
+  test('a contributor branch: a tampered pins file still fails', async () => {
+    const dir = pinnedRepo();
+    await pin(dir);
+    onBranch(dir, 'hollow-the-pins', { 'tools/lib/safety_pins.json': '{"globs":[],"files":{},"blocks":[]}\n' }, 'hollow');
+    const r = await assertCheck(dir, ['--contributor'], 1, /safety pin: /);
+    assert.ok(r !== null);
+  });
+
   test('a contributor branch: never-edit paths and falling test counts still fail', async () => {
     const dir = repo({ 'docs/BRIEF.md': 'brief\n', 'tests/a/test_a.gd': tests(2), 'tests/a/test_a.gd.uid': 'u\n' });
     onBranch(dir, 'fix-the-brief', { 'docs/BRIEF.md': 'mine\n' }, 'edit');

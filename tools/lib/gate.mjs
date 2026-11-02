@@ -651,7 +651,7 @@ function cmdCheck(o) {
   out(formatCheck(c, o.contributor));
   const pass = c.problems.length === 0;
   ensureBuildDir(o.project);
-  writeStamp(o, 'check', { ...start, ws: c.ws, pass, problems: c.problems, allow: [...o.allow, ...o.allowPin], ended: new Date().toISOString() });
+  writeStamp(o, 'check', { ...start, ws: c.ws, pass, contributor: Boolean(o.contributor), problems: c.problems, allow: [...o.allow, ...o.allowPin], ended: new Date().toISOString() });
   return pass ? 0 : 1;
 }
 

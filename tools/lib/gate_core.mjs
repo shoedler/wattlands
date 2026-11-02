@@ -536,12 +536,12 @@ function gamePaths(id) {
 
 /**
  * `check --contributor`: what a pull request may propose and a maintainer alone lands: maintainer-only
- * files and safety pins, which need `pin-safety` and an ADR. The stash rule guards the maintainer's
- * shared worktrees and means nothing in a contributor's clone. Never-edit paths, test counts, locks
- * and added text still fail.
+ * files and a changed safety-pinned file, which need `pin-safety` and an ADR. The stash rule guards the
+ * maintainer's shared worktrees and means nothing in a contributor's clone. Never-edit paths, test
+ * counts, locks, added text, a tampered pins file and the line and append-only pins still fail.
  */
 export function isMaintainerReview(problem) {
-  return /^(ownership: .*: lead only$|safety pin|line pin|append-only pin|stash:)/.test(problem);
+  return /^(ownership: .*: lead only$|safety pin: .* changed \(|stash:)/.test(problem);
 }
 
 /** A maintainer-review problem in the words a contributor needs. */

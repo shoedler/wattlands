@@ -33,6 +33,8 @@ The latest release. Older ones don't get fixes.
 
 ## What to know about multiplayer
 
-A room code is the only thing that keeps a room private, so share it only with people you're riding with. Other riders' machines can only ask your trainer for something, and your own PC decides. Everything in [Riding safely](README.md#riding-safely) holds whoever is hosting. A host can still ask for hard riding inside those limits, as any workout can, so ride with people you trust, and stop pedaling if a session feels wrong.
+A room on a host's PC isn't secret on its network: the app announces its code, the host's name and its game to every device there, so that friends can find it. Anyone on that network can see the room and take a seat in the lobby. A room code on a relay is private as long as you only share it with people you're riding with. Host on networks you trust, and if a stranger turns up in your lobby, open a new room.
 
-Traffic to a `ws://` relay and to a room on a host's PC isn't encrypted, so use them on networks you trust, or a VPN. Use `wss://` for a relay on the internet.
+Other riders' machines can only ask your trainer for something, and your own PC decides. Everything in [Riding safely](README.md#riding-safely) holds whoever is hosting. A host can still ask for hard riding inside those limits, as any workout can, so ride with people you trust, and stop pedaling if a session feels wrong.
+
+Traffic to a `ws://` relay and to a room on a host's PC isn't encrypted, so someone on the path could read or forge it. Use them on networks you trust, or a VPN, and `wss://` for a relay on the internet. Your PC's limits on your trainer hold either way.

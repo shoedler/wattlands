@@ -89,7 +89,7 @@ None of this replaces your own judgement. If something feels wrong, stop pedalin
 
 ## Playing together
 
-Someone chooses Host a room and picks a game, then reads out the room code. Everyone else chooses Join a room and types it. On one network, that's all: the host's PC runs the room and the others find it by its code. The first time, Windows may ask to let Wattlands through the firewall. Allow it on private networks, on the host's PC and on the others.
+Someone chooses Host a room and picks a game, then reads out the room code. Everyone else chooses Join a room and types it. On one network, that's all: the host's PC runs the room and the others find it by its code. The first time, Windows may ask to let Wattlands through the firewall. Allow it on private networks, on the host's PC and on the others. Everyone on that network can see your room and its code, so host on networks you trust.
 
 If a friend's PC can't find the room, or they're elsewhere and share a VPN with you (Tailscale is the easy one), the host's lobby shows an address. They enter it in Settings > Network > Relay, then join with the code. Clear that setting to go back to finding rooms on your own network.
 
