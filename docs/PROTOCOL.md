@@ -45,8 +45,12 @@ While creating or joining, every error code ends the attempt: the transport clos
 | Peers per room | 8 |
 | Frame size | 16 384 bytes (UTF-8 of the whole envelope) |
 | Rate | 60 frames per second per peer, burst 120 |
-| Idle timeout | 60 s without a frame (clients ping every 15 s) |
+| Idle timeout | 60 s without a message to the relay (clients ping every 15 s; WebSocket ping and pong frames don't count) |
+| First `hello` | 10 s after the socket opens (Node relay; the socket closes with 4000) |
 | Join attempts | 10 per minute per IP (Node relay) |
+| Open sockets | 500 in all, 64 per IP (Node relay; refused before the handshake with HTTP 503 or 429, `Retry-After: 30`) |
+| Open rooms | 200 in all, 8 per IP (Node relay; a `create` over it gets `rate_limited`) |
+| Room creates | 10 per minute per IP (Node relay; `rate_limited`) |
 | Room lifetime | 4 h |
 | Reconnect token | 120 s after a drop |
 
