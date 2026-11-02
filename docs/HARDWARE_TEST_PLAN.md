@@ -74,7 +74,7 @@ How to start the app for these tests: the exported build (`node tools/export_win
 
 ## 10. Two-PC multiplayer
 
-- [ ] Run the relay (`server/relay`) on one PC or a reachable host. PC A hosts Workout; PC B joins with the room code. Expected: both ride the same timeline at their own %FTP; the teammate strip shows both riders; each rider's FIT file is saved locally.
+- [ ] Run the relay (`server/relay`) on one PC or a reachable host and set Settings > Network > Relay to it on both. PC A hosts Workout; PC B joins with the room code. Expected: both ride the same timeline at their own %FTP; the teammate strip shows both riders; each rider's FIT file is saved locally.
 
 ## 11. Disconnect and reconnect
 

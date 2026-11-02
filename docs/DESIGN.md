@@ -340,7 +340,7 @@ Judgment calls and gaps that are still true on `main`:
 4. **Duration limits reset with a new trainer connection** (another trainer or a rebuilt mock), not only after 120 s at ≤ 90 % FTP (BRIEF 4.6.1 names only the latter).
 5. **FTP test results.** A test ended before one full step, or cancelled with `back`, gives no FTP (BRIEF 3.2 uses "the best 1-minute power so far"); the 10 s save countdown runs at the start of the cool-down.
 6. **P1 gaps.**
-   - The app can't host a LAN room: the join page lists and joins `LanTransport` rooms, but hosting always uses the relay.
+   - The app hosts on the relay only when one is chosen: with none, the room runs on the host's PC (`docs/PROTOCOL.md` section 8).
    - The app doesn't launch the trainer bridge itself; start `trainer_bridge serve` first.
 7. **Fallbacks taken.** No Atkinson Hyperlegible font and no CC0 audio pack were downloaded; BRIEF 3.9's fallbacks (Godot's font, synthesized sound) are in use.
 8. **Stored but unused.** `drivetrain` changes nothing. MockTrainer's keyboard control (T/G, Y/H, presets, N, Shift; `docs/TRAINER.md`) needs `--mock-keyboard` or the Settings > Trainer toggle.
