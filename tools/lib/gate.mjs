@@ -48,6 +48,7 @@ import {
   sourceTestCounts,
   touchedGames,
   weightsByGroup,
+  isMaintainerReview,
 } from './gate_core.mjs';
 
 const LIB = path.dirname(fileURLToPath(import.meta.url));
@@ -69,8 +70,8 @@ const TEMP_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const COAUTHOR = 'Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>';
 
 const USAGE = `usage: tools/gate <command> [options]      (tools/gate.ps1 in PowerShell)
-  check  [--base=main] [--ws=<id>] [--allow=<glob>]... [--allow-pin=<file>:<function>]...
-  fast   [--base=main] [--ws=<id>] [--allow=..]... [--allow-pin=..]... [--games=<ids>|all] [--shards=8] [--lanes=<names>]
+  check  [--base=main] [--ws=<id>] [--contributor] [--allow=<glob>]... [--allow-pin=<file>:<function>]...
+  fast   [--base=main] [--ws=<id>] [--contributor] [--allow=..]... [--allow-pin=..]... [--games=<ids>|all] [--shards=8] [--lanes=<names>]
   strict [--ws=<id>] [--allow=..]... [--allow-pin=..]... [--serial-gut]
   matrix --game=<id> [--jobs=8] [--scenarios=s1,s4]
   stamp-ok <worktree> [--matrix=<id>]
@@ -82,7 +83,7 @@ const USAGE = `usage: tools/gate <command> [options]      (tools/gate.ps1 in Pow
 Every command also takes --project=<dir> (default: this checkout).
 Exit: 0 pass, 1 fail, 2 usage, 3 refused, 75 lock timeout.`;
 
-const CHECK_FLAGS = ['base', 'ws', 'allow', 'allowPin'];
+const CHECK_FLAGS = ['base', 'ws', 'allow', 'allowPin', 'contributor'];
 const COMMANDS = {
   check: { flags: CHECK_FLAGS, positional: 0 },
   fast: { flags: [...CHECK_FLAGS, 'games', 'shards', 'lanes'], positional: 0 },
@@ -100,6 +101,7 @@ const FLAG_KEYS = {
   '--ws': 'ws',
   '--allow': 'allow',
   '--allow-pin': 'allowPin',
+  '--contributor': 'contributor',
   '--games': 'games',
   '--shards': 'shards',
   '--lanes': 'lanes',
@@ -114,7 +116,7 @@ const FLAG_KEYS = {
   '--apply': 'apply',
   '--reason': 'reason',
 };
-const BARE_FLAGS = new Set(['serialGut', 'apply']);
+const BARE_FLAGS = new Set(['serialGut', 'apply', 'contributor']);
 
 class Exit extends Error {
   constructor(code, message = '') {
@@ -616,7 +618,10 @@ export function runCheck(o, { base = o.base } = {}) {
   const addonLines = [...added.keys(), ...untracked.keys()].some((f) => f.startsWith('addons/wattlands/'));
   if (addonLines && !allChanges.some((c) => c.path.startsWith('tests/'))) notes.push('tests: addons/wattlands changed with no change under tests/');
 
-  return { problems, notes, ws, base: mb, branch, paths: allChanges.length };
+  // A pull request from outside can propose these; only a maintainer lands them. Named, not failed.
+  const review = o.contributor ? problems.filter(isMaintainerReview) : [];
+  notes.push(...review.map((p) => `maintainer review: ${p}`));
+  return { problems: problems.filter((p) => !review.includes(p)), notes, ws, base: mb, branch, paths: allChanges.length };
 }
 
 function formatCheck(c) {
@@ -970,6 +975,7 @@ async function cmdFast(o) {
     inferredWs: inferWs(gitLine(o.project, ['rev-parse', '--abbrev-ref', 'HEAD']), manifest),
     allow: o.allow,
     allowPin: o.allowPin,
+    contributor: o.contributor,
     games,
     requiredGames: revOf(o, 'main') ? touchedGames(changedSince(o, 'main'), ids).games : ids,
   });

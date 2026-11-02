@@ -1,6 +1,6 @@
 # Workout: real-trainer checklist
 
-A checklist for Simon with the real KICKR CORE (BRIEF 4.7). `docs/HARDWARE_TEST_PLAN.md` links here from its Workout section. Nothing here ran during the build: every automated run used MockTrainer with the hardware lock set. Do the platform plan's "Before you start", probe, connect, SIM flat and panic steps first, and stop at the first failed safety check.
+A checklist for riding this game on a real KICKR CORE (BRIEF 4.7). `docs/HARDWARE_TEST_PLAN.md` links here from its Workout section. Nothing here ran during the build: every automated run used MockTrainer with the hardware lock set. Do the platform plan's "Before you start", probe, connect, SIM flat and panic steps first, and stop at the first failed safety check.
 
 Commands that drive the trainer pass `--allow-hw` to the wrapper (`tools/godot.ps1` on Windows, `tools/godot.sh` in Git Bash). Use the log template from `docs/HARDWARE_TEST_PLAN.md` for every step.
 

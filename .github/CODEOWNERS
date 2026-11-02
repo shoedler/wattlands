@@ -1,0 +1,9 @@
+# Review routing. The trainer stack, its tests and the gates hold rider safety.
+*                                 @shoedler
+/addons/wattlands/trainer/        @shoedler
+/addons/wattlands/core/           @shoedler
+/tests/governor/                  @shoedler
+/tests/control/                   @shoedler
+/tests/arch/                      @shoedler
+/tools/lib/                       @shoedler
+/.github/                         @shoedler

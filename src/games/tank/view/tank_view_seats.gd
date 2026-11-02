@@ -100,7 +100,7 @@ func searchlight_k(state: TankState) -> float:
 
 
 ## The Lights seat is powered while it is manned and its arc lit, its rider in band (brief v3
-## "Lights"; tank 0.3.1: Simon). Both searchlights burn then (turret: forward about 11 degrees
+## "Lights"; tank 0.3.1). Both searchlights burn then (turret: forward about 11 degrees
 ## down; rear: aft about 13 degrees down) and the rooms have their warm lamps; unpowered, the
 ## searchlights go out (a standby glow on their lenses) and the rooms fall back to their dim backup
 ## lighting. search_level and backup_level fade them (search_fade()).

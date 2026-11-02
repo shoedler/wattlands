@@ -1,5 +1,4 @@
-# lead: every BRIEF 7 gate in one job, exactly as tools/run_tests runs them locally (the
-# command that ran green before v0.1.0): import, the full GUT suite (unit, contracts,
+# lead: every BRIEF 7 gate in one job, exactly as tools/run_tests runs them locally: import, the full GUT suite (unit, contracts,
 # integration, the Workout scenarios, conformance), the 7.3 scaffold check, check_scripts
 # with gdlint and gdformat --check (gdtoolkit 4.5.0, ./gdlintrc) and the workflow YAML parse (uv),
 # tools/run_game_sim over every registered game's contents plus tools/fit_check on the FIT
@@ -10,11 +9,40 @@ name: lead
 
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # Seconds, so a pull request hears about ownership, safety pins and test counts long before the
+  # full suite ends. Pinned and maintainer-only files are named for review, not failed.
+  check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: tools/gate check
+        run: |
+          git fetch origin "${{ github.base_ref }}:refs/heads/${{ github.base_ref }}" || true
+          tools/gate check --base="${{ github.base_ref }}" --contributor
+
   gates:
     runs-on: ubuntu-latest
     timeout-minutes: 150

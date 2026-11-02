@@ -86,7 +86,9 @@ HUD flow: `ctx.hud` on the host routes `power_band` to the rider's peer as a `di
 
 Intents: `local_intents(actions, gestures)` runs on every peer each tick (gestures arrive apart from actions, so games can tag gesture-made intents); a game's own widgets call `ctx.intents.send()`. Clients batch intents into `Telemetry.intents` at 5 Hz; in HOST and SOLO they go straight into the local rider's `frame.players[peer].intents`. For bots and Autopilot riders the host merges `autopilot_intents(peer)` in.
 
-Bots, AFK and reconnects: a dropped peer gets `on_afk(peer, true)` at once and `frame.players[peer]` becomes `connected = false`, power and cadence 0 and `age_s`; the slot stays. A rejoin with the relay reconnect token gets `lobby_state`, its `plan`, its `phase` and the latest snapshot; `on_afk(peer, false)` follows once fresh telemetry shows pedaling. Joins without a token after the start are refused with `session_in_progress`.
+A client doesn't have to trust its host. It validates each plan and clamps each directive through its own governor, and it holds its trainer's ERG <-> SIM switch to the 30 s spacing (BRIEF 4.5) whatever `phase` messages arrive: the session follows at once and the rider's trainer waits.
+
+Bots, AFK and reconnects: a dropped peer gets `on_afk(peer, true)` at once and every rider a toast (`NET_RIDER_DROPPED`, `NET_RIDER_BACK`);  `frame.players[peer]` becomes `connected = false`, power and cadence 0 and `age_s`; the slot stays. A rejoin with the relay reconnect token gets `lobby_state`, its `plan`, its `phase` and the latest snapshot; `on_afk(peer, false)` follows once fresh telemetry shows pedaling. Joins without a token after the start are refused with `session_in_progress`.
 
 ## In-process simulation
 
@@ -105,7 +107,7 @@ The app runs as a scripted peer when started with `--host` or `--join=<code>` (h
 
 ## Multiplayer
 
-Star topology through the relay (`server/relay`, Node, zero-dependency fallback). The relay generates 6-character Crockford codes (`K7Q-X2M`), holds a dropped host's room for 120 s, and never looks inside `d`. Game messages (BRIEF 5.5) are listed in `addons/wattlands/contracts/net_messages.gd`; `Protocol.decode()` turns ints back into ints (including each game's `int_fields()` paths) and rejects messages that fail their schema or version. See `docs/PROTOCOL.md`.
+Star topology through a relay: `server/relay` (Node, zero-dependency fallback), or with none chosen the built-in one on the host's own PC (`LanTransport`, `docs/PROTOCOL.md` section 8). The relay generates 6-character Crockford codes (`K7Q-X2M`), holds a dropped host's room for 120 s, and never looks inside `d`. Game messages (BRIEF 5.5) are listed in `addons/wattlands/contracts/net_messages.gd`; `Protocol.decode()` turns ints back into ints (including each game's `int_fields()` paths) and rejects messages that fail their schema or version. See `docs/PROTOCOL.md`.
 
 ## Rides
 

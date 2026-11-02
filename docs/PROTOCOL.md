@@ -145,11 +145,15 @@ The same load with 8 riders is about 71 frames a second (22 broadcasts plus 7 pe
 
 All transports run with `PROCESS_MODE_ALWAYS` and do their I/O in `poll()`, which the owning `WlNetSession` calls.
 
-## 8. LAN play (P1)
+## 8. The built-in relay and LAN play
 
-`LanTransport` (a `RelayTransport`) plays on a local network without the internet relay:
+With no relay chosen (no `--relay`, no Relay setting, no build default), `WlNetSession` uses `LanTransport`, so a rider with nothing but the release can host: the host's PC serves the room and the others find it by its code. The choice is read again at each `host_room()` and `join_room()`. While `WATTLANDS_NO_NETWORK_INTEGRATIONS=1` the relay and its beacons stay on 127.0.0.1; `--lan-port` and `--lan-discovery-port` move them, for concurrent test runs. A rider elsewhere on a shared VPN enters `ws://<host address>:<port>/v1` as their Relay, which the host's lobby shows (`WlNetSession.shareable_relay_urls()`).
 
-- **Host.** `host()` starts a `LocalRelayServer` on TCP port 8790 (`port`; every interface), joins it over `ws://127.0.0.1:8790/v1` as peer 1, and once the room exists broadcasts a beacon every second to UDP 255.255.255.255:8791 (`discovery_address`, `discovery_port`).
+The room lives in the host's process: if the host's app closes, the room is gone and clients end the session once their reconnect window passes. Only connections from the host's own machine may create a room (`LocalRelayServer.local_create_only`), at most 32 sockets are open at once, and the server closes 2 s after the host leaves, once clients have read `host_left`.
+
+`LanTransport` (a `RelayTransport`):
+
+- **Host.** `host()` starts a `LocalRelayServer` on TCP port 8790 (`port`; every interface; any free port if that one is taken), joins it over `ws://127.0.0.1:8790/v1` as peer 1, and once the room exists broadcasts a beacon every second to UDP 255.255.255.255:8791 (`discovery_address`, `discovery_port`).
 - **Beacon.** One datagram of JSON: `{"wattlands": "lan", "proto": 1, "code": "K7QX2M", "port": 8790, "name": "<host name>", "build": "0.1.0", "game": "workout"}`. `game` (the lobby's game id, from `LanTransport.game_id`, which `WlNetSession` keeps at its lobby's game) is optional; a beacon without it parses with `game_id` "". Receivers take the host's address from the datagram, never from the payload, and ignore beacons of another `proto` (`LanDiscovery.parse_beacon`).
 - **Client.** `join(code)` listens on UDP 8791 (`LanDiscovery`) until it hears that code (at most 5 s, else `disconnected("room_not_found")`), then joins `ws://<sender>:<port>/v1` like any relay. With `url` set it connects straight to that host. A rejoin after a drop reuses the address it found.
 - `LanTransport.lan_rooms()` lists the rooms heard so far (`{code: {code, ip, port, name, build, game_id, seen}}`; a room not heard for 5 s is forgotten).

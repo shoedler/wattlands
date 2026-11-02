@@ -4,14 +4,14 @@
 # (tests/games/fishing/sim/run_sims.sh --quick: e2e_2min with 3 riders, the Free Roam
 # determinism pair with bots and fit_check on every FIT) through
 # tools/run_game_sim with the check_sims.mjs assertions. The full matrix (run_sims.sh), the e2e run
-# (node tools/e2e/run.mjs --games=fishing) and tools/run_tests belong to the lead's suite.
+# (node tools/e2e/run.mjs --games=fishing) and tools/run_tests belong to the full suite.
 # Linux, the standard Godot 4.7.2 build, both locks on, FAL_KEY and WATTLANDS_ALLOW_ART never set.
 # Nothing is pushed during a build, so GitHub never runs this there: each step passed locally.
 name: game-fishing
 
 on:
   push:
-    branches: ["**"]
+    branches: [main]
     paths:
       - "src/games/fishing/**"
       - "content/fishing/**"
@@ -29,6 +29,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:

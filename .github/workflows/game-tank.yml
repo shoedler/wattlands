@@ -4,16 +4,15 @@
 # script check; a second job runs a short subset of
 # the simulation matrix (tests/games/tank/sim/run_sims.sh: S2 zero riders, S5 rescue, S6 haptics off, S9 the sprinting rider, S10 client intents and a stopped rider, S18 bots on Hard)
 # through tools/run_game_sim with the check_sims.mjs assertions and fit_check on every FIT. The full
-# matrix (S1-S7, S9-S18), the e2e run and tools/run_tests belong to the lead's suite (.github/workflows/lead.yml).
+# matrix (S1-S7, S9-S18), the e2e run and tools/run_tests belong to the full suite (.github/workflows/lead.yml).
 # S14-S17 ask for "most of 3 seeds", which one seed cannot show, so the subset leaves them out.
 # No fal call can happen here: FAL_KEY and WATTLANDS_ALLOW_ART are never set, and no tank test runs
 # the art tool (the sprites are procedural and committed as PNGs under assets/tank/).
-# Nothing is pushed during a build, so GitHub never runs this there: every step passed locally.
 name: game-tank
 
 on:
   push:
-    branches: ["**"]
+    branches: [main]
     paths:
       - "src/games/tank/**"
       - "content/tank/**"
@@ -31,6 +30,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:

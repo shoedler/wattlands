@@ -17,7 +17,7 @@ There are four games in one app. Someone hosts, reads out a room code, and frien
 
 Grab the Windows zip from the [releases page](https://github.com/shoedler/wattlands/releases), unzip the whole folder and run `Wattlands.exe`. Close Zwift, the Wahoo app and anything else that might hold the trainer, and make sure its firmware is current.
 
-Then pedal. Twenty seconds of pedaling on the title screen creates a profile and starts a ride, and every game can play through to the end without you touching anything. Set your FTP in the profile or run the FTP test in Settings. Until it's verified, ERG targets are 15% lower.
+Then pedal. Twenty seconds of pedaling on the title screen creates a profile and starts a ride, and every game can play through to the end without you touching anything. A new profile starts at an FTP of 200 W. Set yours in the profile or run the FTP test in Settings. Until it's verified, ERG targets are 15% lower.
 
 If you'd rather stay on the bike with no keyboard in reach, turn on Settings > Pedal navigation. The focus moves by itself, a short surge picks, and coasting for 3 s goes back, except during an ERG phase.
 
@@ -53,7 +53,7 @@ Waves are ERG intervals and the breaks between them are for recovering and shopp
 
 The plain one, and the one for up to eight. Everyone rides the same timeline at their own percentage of FTP, on a country road that goes from the blue hour to full daylight over the session. A crowd and a gantry turn out for scored sprints.
 
-Sessions run 28 to 40 minutes: an easy ride with three sprints, sweet spot, threshold, VO2 and a rolling road. To ride your own, drop `.zwo` files in `%APPDATA%Godotapp_userdataWATTLANDSworkouts` and pick them under Ride in the lobby, which shows the path too.
+Sessions run 28 to 40 minutes: an easy ride with three sprints, sweet spot, threshold, VO2 and a rolling road. To ride your own, drop `.zwo` files in `%APPDATA%\Godot\app_userdata\WATTLANDS\workouts` and pick them under Ride in the lobby, which shows the path too.
 
 ### Torque Company
 
@@ -67,33 +67,45 @@ The host picks Easy, Normal or Hard, which changes the enemy and the repair rate
 
 ## Riding safely
 
+This is hard exercise on a machine that pushes back. You ride at your own risk, and the software comes with no warranty ([LICENSE](LICENSE)). If you're not sure hard efforts are right for you, ask a doctor first.
+
 Everything that changes the load goes through one safety governor on your own PC. Other riders' machines can only ask, and yours decides. These are the limits it holds in every game:
 
 | | |
 | --- | --- |
-| Ramps | In ERG the target rises by at most 30 W per second and drops at once, and short haptic pulls are the one exception. In SIM the load follows the grade, and haptics add at most +3% for at most 8 s. Settings > Haptics turns all haptics off. |
-| Warm-up | For your first 5 minutes of riding, ERG stays at or under 65% of FTP, grade between -2% and +3%, and haptics are off. You can skip this in your profile. |
+| Ramps | In ERG the target rises by at most 30 W per second and drops at once. The one exception is a haptic pull, which adds up to 50% of FTP at once for at most 3 s. In SIM the load follows the grade, and haptics add at most +3% for at most 8 s. Settings > Haptics turns all haptics off. |
+| Warm-up | For your first 5 minutes of riding, ERG stays at or under 65% of FTP, grade between -2% and +3%, and haptics are off. The count starts at your first pedal stroke and starts over after 20 minutes off the bike. You can skip this in your profile. |
 | Rescue | In ERG at 60% of FTP or more, if cadence falls under 45 rpm for 3 s or power under 75% of target for 5 s, the target drops to 50% of FTP. Back at 70 rpm for 3 s and it ramps up again over 10 s. A game never ends your ride for this. |
-| Hard efforts | ERG tops out at 150% of FTP, with at most 5 minutes above 105% and 1 minute above 120%. After that it holds you down until you've ridden 2 minutes at 90% or less. The FTP test lifts these limits, since it ends when you fade. |
-| Coasting | ERG drops to a low floor after 3 s. After 10 s a solo ride pauses, and in a group you're marked away. |
-| Panic | Hold Backspace for 1 s, or View + Menu on a controller. The trainer goes safe at once and stays safe until you resume. |
-| Exit or crash | The app tries to set the trainer flat and stop it. |
+| Hard efforts | ERG tops out at 150% of FTP, with at most 5 minutes above 105% and 1 minute above 120%. After that it holds you down until you've ridden 2 minutes at 90% or less. The FTP test lifts these limits up to 1000 W or your trainer's maximum, since it ends when you fade. |
+| Coasting | After 3 s, ERG drops to 30% of FTP or 50 W, whichever is higher. After 10 s a solo ride pauses, and in a group you're marked away. |
+| Panic | Hold Backspace for 1 s, or View + Menu on a controller. The app sets the trainer to a flat road at once and holds it there until you resume. |
+| Exit | The app sets the trainer flat and lets go of it. |
+
+The app can only do this while it's running and connected. After a crash, a killed app, a PC going to sleep or a lost Bluetooth link, the trainer may keep its last load. Stop pedaling, and switch the trainer off at the wall if you need to.
+
+Keep the trainer's firmware current: before version 1.5.5, a switch between ERG and SIM could spike to 2000 W.
 
 None of this replaces your own judgement. If something feels wrong, stop pedaling.
 
 ## Playing together
 
-Multiplayer needs a small relay that every rider's PC can reach. One of you runs it from this repository, with Node 22.18 or newer:
+Someone chooses Host a room and picks a game, then reads out the room code. Everyone else chooses Join a room and types it. On one network, that's all: the host's PC runs the room and the others find it by its code. The first time, Windows may ask to let Wattlands through the firewall. Allow it on private networks, on the host's PC and on the others.
+
+If a friend's PC can't find the room, or they're elsewhere and share a VPN with you (Tailscale is the easy one), the host's lobby shows an address. They enter it in Settings > Network > Relay, then join with the code. Clear that setting to go back to finding rooms on your own network.
+
+If you drop out you have two minutes to rejoin with the same code. If the host's app closes, the session ends and everyone keeps their ride. Everyone needs to be on the same release.
+
+### Running a relay
+
+For friends elsewhere with no VPN, one of you can run a small relay on a machine everyone can reach. It needs this repository and Node 22.18 or newer:
 
 ```bash
 node server/relay/src/main.ts
 ```
 
-It listens on port 8787, so allow that through your firewall. There's a Dockerfile too, and [fly.toml](server/relay/fly.toml) and [render.yaml](server/relay/render.yaml) if you'd rather host it.
+It listens on port 8787, so allow that through your firewall. There's a Dockerfile too, and [fly.toml](server/relay/fly.toml) and [render.yaml](server/relay/render.yaml) if you'd rather host it. [Its README](server/relay/README.md) has the limits and settings.
 
-Everyone then sets Settings > Network > Relay to `ws://<relay address>:8787/v1` (`wss://<host>/v1` for a hosted one). The host picks a game and reads out the room code, the others choose Join and type it. If you drop out you have two minutes to rejoin with the same code. Everyone needs to be on the same release.
-
-For friends elsewhere, Tailscale is the easy way: share just the relay PC with them and use its Tailscale address as the Relay.
+Everyone then sets Settings > Network > Relay to `ws://<relay address>:8787/v1`, or `wss://<host>/v1` for a hosted one. With a relay, a host who drops out gets two minutes to come back before the room closes.
 
 ## Controls
 
@@ -112,7 +124,7 @@ Rebind them in Settings > Controls. Zwift Click and Play buttons can map to thes
 
 ## Your rides and Strava
 
-Every ride is saved as a FIT file in `%APPDATA%Godotapp_userdataWATTLANDSides`. To upload to Strava, create your own API application at https://www.strava.com/settings/api with the callback domain `localhost`, enter its Client ID and Secret in Settings > Strava, and choose Connect. Then upload from the results screen or turn on auto-upload.
+Every ride is saved as a FIT file in `%APPDATA%\Godot\app_userdata\WATTLANDS\rides`. To upload to Strava, create your own API application at https://www.strava.com/settings/api with the callback domain `localhost`, enter its Client ID and Secret in Settings > Strava, and choose Connect. Then upload from the results screen or turn on auto-upload.
 
 ## If something doesn't work
 
@@ -122,21 +134,13 @@ If the trainer won't connect, remove any Windows Bluetooth pairing of it, keep i
 
 On a fresh PC with no Bluetooth trainers showing at all, install the [Visual C++ x64 runtime](https://aka.ms/vs/17/release/vc_redist.x64.exe).
 
-If hosting fails or friends can't join, check the relay is running and that everyone's Relay setting points at it.
+If friends can't find your room, make sure Windows lets Wattlands through the firewall on both PCs and that you're on the same network, then try the address the lobby shows. If you use a relay, check it's running and that everyone's Relay setting points at it.
 
-## Hacking on it
+## Contributing
 
 The game is written in Godot 4.7.2 and GDScript. Art and sound are generated from code and recipes in this repository, with no sample packs and no image or audio service at runtime. The one starting point that isn't code is the reference image behind Torque Company's landship and forest, made from a prompt, which scripts rebuild as pixel art. Turbo Reel's style follows a pixel-art guide image, and nothing from it ships. An early image-model attempt at Turbo Reel's sprites was thrown out, and no shipped art comes from one.
 
-Always run Godot through `tools/godot.sh` or `tools/godot.ps1`. They set the locks that keep automated runs from commanding a real trainer.
-
-```bash
-tools/godot.sh --path . -- --mock-trainer=erg   # run with a mock trainer
-tools/run_tests                                 # full test suite
-node tools/export_windows.mjs --smoke           # build build/windows/
-```
-
-Exporting needs a standard Godot 4.7.2 editor and its templates ([docs/deps.d/godot.md](docs/deps.d/godot.md)). `tools/new_game <id>` starts a new game. To find your way around, read [ARCHITECTURE](docs/ARCHITECTURE.md), the [Game SDK](docs/GAME_SDK.md), the [audio](docs/AUDIO_PIPELINE.md) and [art](docs/ART_PIPELINE.md) pipelines, and the [hardware test plan](docs/HARDWARE_TEST_PLAN.md). What changed and when is in the [changelog](CHANGELOG.md).
+[CONTRIBUTING.md](CONTRIBUTING.md) gets you from a clean clone to a pull request, with or without a trainer. To find your way around, start at [docs/README.md](docs/README.md). What changed and when is in the [changelog](CHANGELOG.md). To report a safety or security problem, see [SECURITY.md](SECURITY.md).
 
 ## License
 

@@ -401,13 +401,14 @@ export function matrixRule(manifest, id) {
  * Why a `fast` run does not stand for the whole gate of its tree: anything that narrowed it. An empty
  * list means it may pass stamp-ok. `--games` wider than what the branch touches narrows nothing.
  */
-export function fastNarrowing({ lanes = null, baseSha, mainSha, base = 'main', ws = null, inferredWs = null, allow = [], allowPin = [], games = [], requiredGames = [] }) {
+export function fastNarrowing({ lanes = null, baseSha, mainSha, base = 'main', ws = null, inferredWs = null, allow = [], allowPin = [], contributor = false, games = [], requiredGames = [] }) {
   const out = [];
   if (lanes !== null) out.push(`--lanes=${lanes.join(',')}`);
   if (!mainSha || baseSha !== mainSha) out.push(`--base=${base} is not main`);
   if (ws !== null && ws !== inferredWs) out.push(`--ws=${ws} is not the branch's workstream (${inferredWs ?? 'none'})`);
   if (allow.length > 0) out.push(`--allow=${allow.join(',')}`);
   if (allowPin.length > 0) out.push(`--allow-pin=${allowPin.join(',')}`);
+  if (contributor) out.push('--contributor');
   const missing = requiredGames.filter((g) => !games.includes(g));
   if (missing.length > 0) out.push(`--games leaves out ${missing.join(',')}`);
   return out;
@@ -531,6 +532,16 @@ function gamePaths(id) {
     `docs/credits.d/${id}.md`,
     `docs/changelog.d/${id}.md`,
   ];
+}
+
+/**
+ * `check --contributor`: what a pull request may propose and a maintainer alone lands: maintainer-only
+ * files and safety pins, which need `pin-safety` and an ADR. The stash rule guards the maintainer's
+ * shared worktrees and means nothing in a contributor's clone. Never-edit paths, test counts, locks
+ * and added text still fail.
+ */
+export function isMaintainerReview(problem) {
+  return /^(ownership: .*: lead only$|safety pin|line pin|append-only pin|stash:)/.test(problem);
 }
 
 /** The workstream of a branch name: the first branch_ws regex that matches it, else null. */
