@@ -473,6 +473,35 @@ func test_client_refused_exit_codes() -> void:
 	assert_eq(lines[lines.size() - 1], "WATTLANDS_DONE refused:session_in_progress")
 
 
+## WlNetSession._refuse() sets its state to "error" with the reason first and emits `refused`
+## second: a refusal while joining must still end as refused (exit 3), not as a net error.
+func test_a_refusal_while_joining_is_refused_not_a_net_error() -> void:
+	var p := _client()
+	var net := fx.fake_net()
+	net.state_changed.emit("error", "room_not_found")
+	net.refused.emit("room_not_found")
+	assert_eq(p.exit_code, AppScriptedPeer.EXIT_REFUSED)
+	assert_eq(p.exit_reason, "refused:room_not_found")
+	assert_eq(lines[lines.size() - 1], "WATTLANDS_DONE refused:room_not_found")
+
+
+func test_a_refusal_in_the_lobby_is_refused_not_a_net_error() -> void:
+	var p := _client()
+	var net := fx.fake_net()
+	net.simulate_joined(2, "K7QX2M", _lobby())
+	net.state_changed.emit("error", "session_in_progress")
+	net.refused.emit("session_in_progress")
+	assert_eq(p.exit_code, AppScriptedPeer.EXIT_REFUSED)
+	assert_eq(p.exit_reason, "refused:session_in_progress")
+
+
+func test_a_connection_that_never_opened_is_still_a_net_error() -> void:
+	var p := _client()
+	fx.fake_net().state_changed.emit("error", "connect_failed")
+	assert_eq(p.exit_code, AppScriptedPeer.EXIT_ERROR)
+	assert_eq(p.exit_reason, "error:net:connect_failed")
+
+
 func test_client_missing_game_is_refused() -> void:
 	var p := _client()
 	var lobby := _lobby()
