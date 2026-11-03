@@ -222,7 +222,7 @@ export async function relayDiesScenario(env) {
   const [h, c] = outs;
   const checks = [];
   if (lateNote(late, `${o.longTimeoutS} s`)) checks.push({ name: 'peers end', ok: false, details: [lateNote(late, `${o.longTimeoutS} s`)] });
-  checks.push(...lostRoomChecks(h, c, { hostCodes: [EXIT.OK, EXIT.REFUSED, EXIT.HOST_LEFT], clientCodes: [EXIT.REFUSED, EXIT.HOST_LEFT] }));
+  checks.push(...lostRoomChecks(h, c, { hostCodes: [EXIT.OK], clientCodes: [EXIT.REFUSED] }));
   checks.push(timing('after the relay died', killedAt, h, c));
   return { checks, peers: evidence };
 }
@@ -244,7 +244,7 @@ export async function relayRestartsScenario(env) {
   const [h, c] = outs;
   const checks = [];
   if (lateNote(late, `${o.longTimeoutS} s`)) checks.push({ name: 'peers end', ok: false, details: [lateNote(late, `${o.longTimeoutS} s`)] });
-  checks.push(...lostRoomChecks(h, c, { hostCodes: [EXIT.OK, EXIT.REFUSED, EXIT.HOST_LEFT], clientCodes: [EXIT.REFUSED, EXIT.HOST_LEFT] }));
+  checks.push(...lostRoomChecks(h, c, { hostCodes: [EXIT.OK], clientCodes: [EXIT.REFUSED] }));
   checks.push(timing('after the relay restarted', restartedAt, h, c));
   return { checks, peers: evidence };
 }

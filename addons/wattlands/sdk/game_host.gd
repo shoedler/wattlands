@@ -204,7 +204,8 @@ var _resync_reason: String = ""
 var _last_resync_ask: float = -INF
 ## Client: plan parts by plan_id ({parts, got: {part: plan dict}}).
 var _plan_parts: Dictionary = {}
-## Client: why the net session ended for good ("" while it runs); the cool-down then runs here.
+## Why the net session ended for good ("" while it runs). A client rides the cool-down here and
+## ends; a host rides on alone and sends nothing more.
 var _net_lost: String = ""
 # host side
 var _plan_seq: int = 0
@@ -1503,6 +1504,18 @@ func _authority_message(from: int, data: Dictionary) -> void:
 			_on_rejoin(from)
 		"_resync":
 			_resync_peer(from, str(data.get("reason", "")))
+		"_refused":
+			_authority_lost_net(str(data.get("reason", "")))
+
+
+## The room is gone for good (the relay died and the rejoin window ran out, the relay lost the
+## room): the session is the host's own, so its ride goes on to the end, with nobody to send to.
+func _authority_lost_net(reason: String) -> void:
+	if _net_lost != "" or state == "ended":
+		return
+	_net_lost = reason if reason != "" else "dropped"
+	_event("net_lost", {"reason": _net_lost})
+	push_warning("GameHost: the session's network ended (%s): carrying on alone" % _net_lost)
 
 
 func _on_telemetry(from: int, data: Dictionary) -> void:
@@ -2507,7 +2520,7 @@ func _send_or_broadcast(peer: int, msg: Dictionary) -> void:
 
 
 func _send_to(peer: int, msg: Dictionary) -> void:
-	if net == null:
+	if net == null or _net_lost != "":
 		return
 	if _remote.has(peer) and bool((_remote[peer] as Dictionary)["dropped"]):
 		return
@@ -2515,7 +2528,7 @@ func _send_to(peer: int, msg: Dictionary) -> void:
 
 
 func _broadcast(msg: Dictionary) -> void:
-	if net != null:
+	if net != null and _net_lost == "":
 		net.broadcast(msg)
 
 
