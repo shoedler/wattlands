@@ -24,11 +24,11 @@ function commandFor(template, vars) {
 }
 
 /**
- * Starts the relay on a free port and waits for GET /health. Returns
+ * Starts the relay on a free port (or on `port`, to start it again where it was) and waits for GET /health. Returns
  * {proc, port, url (ws://127.0.0.1:<port>/v1), cmdline}.
  */
-export async function startRelay({ repo, relayCmd, logFile, timeoutMs, env = process.env, echo }) {
-  const port = await getFreePort();
+export async function startRelay({ repo, relayCmd, logFile, timeoutMs, env = process.env, echo, port: fixedPort = null }) {
+  const port = fixedPort ?? (await getFreePort());
   const { cmd, args } = commandFor(relayCmd, { port, pid: process.pid });
   const proc = new Proc('relay', cmd, args, {
     cwd: repo,

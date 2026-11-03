@@ -57,3 +57,39 @@ A game's `e2e_check.mjs` reads `events_by_peer` (or `peers.<role>.events`) to as
 ## Exit codes
 
 0 every game passed, 1 a game failed, 2 usage error (unknown game, bad option, no mock trainer), 75 Godot lock wait timeout.
+
+# tools/e2e/faults.mjs: the multiplayer failure paths
+
+`node tools/e2e/faults.mjs [--games=a,b] [--scenarios=x,y]` proves what happens when a room goes wrong, with real headless peers (`tools/godot.sh`, `--mock-trainer=erg:compliance=1.0 --autopilot --sim-speed=1 --e2e --wait-peers=2`, a fresh `--profile-dir` per peer under `build/e2e_faults/<scenario>/`). `run.mjs` plays one good session and kills one client inside the hold window; `faults.mjs` kills and refuses things on purpose, on the built-in relay and on `server/relay`. Zero npm dependencies. `--help` lists the options (`--run-seconds`, `--kill-after`, `--end-timeout`, `--long-timeout`, `--relay-cmd`, `--lock-timeout`, `--peer-cmd`, `--verbose`).
+
+The built-in relay is what a host without `--relay` uses: `WlNetSession` hosts on the host's own PC through `LanTransport`, and a client finds the room from UDP beacons by its code. While the network lock is set it binds and beacons on 127.0.0.1 only. The harness gives every peer of such a scenario one free TCP port (`--lan-port`, host only) and one free UDP port (`--lan-discovery-port`, every peer), so scenarios never meet. A client stops listening once it found its room, so only one client at a time searches a discovery port: the scenarios start their clients one after another.
+
+Each scenario takes one lease of the machine-wide Godot lock (2 slots, 3 for `late_join`) and its peers run inside it, as in `run.mjs`. Nothing is shared between scenarios.
+
+## Scenarios
+
+| Scenario | What it does | Passes when |
+| --- | --- | --- |
+| `builtin:<game>` (fishing, siege, tank, workout) | host without `--relay`, one client joins by code over beacons, the session starts, the client is killed `--kill-after` s into it and restarted `--restart-delay` s later with the same profile; `--run-seconds` (70) ends it | both reached the session, the restarted client has the same `WATTLANDS_PEER` id and was not refused, the host exits 2 (`run_seconds`), the client 2 (or 4, `host_left`), no script or push_error lines, a report on each, a valid FIT on the host and the restarted client |
+| `wrong_code:relay`, `wrong_code:builtin` | a real room waits in its lobby; a client joins `ZZZZZZ` | the client exits 3 with reason `refused:room_not_found`, no error lines, and the real room's host is still running afterwards |
+| `late_join:relay`, `late_join:builtin` | a third peer with a fresh profile joins a running room (workout) | it exits 3 with `refused:session_in_progress`; the host and first client are still riding 5 s later, end at `--run-seconds` with no error and a FIT each |
+| `relay_dies` | workout on `server/relay`, relay killed `--kill-after` s into the session and left dead | the peers retry for the token's 120 s; the client then rides the plan's cool-down here (`WATTLANDS_STATE cooldown`) and exits 3 `refused:dropped` with its FIT (about 300 s after the kill); the host carries on alone to its results and exits 0 `complete` (about 295 s); no error lines, no warning flood |
+| `relay_restarts` | the same, but the relay is started again on its port 2 s later, so its rooms are gone | the client's rejoin gets `room_not_found`: it rides the cool-down at once (about 180 s later) and exits 3 `refused:room_not_found` with its FIT; the host's rejoin fails the same way, it carries on alone and exits 0 `complete` |
+| `host_killed_relay` | host killed in the session on the relay (it holds the room 120 s, then sends `host_left`) | the client exits 4 `host_left` with its FIT 120 s after the kill (a client ends at once on `host_left`, like the session screen; no cool-down) |
+| `host_killed_builtin` | host killed on the built-in relay, which dies with it | nobody holds the room: the client retries 120 s, rides the cool-down and exits 3 `refused:dropped` with its FIT, about 300 s after the kill (the `timing` check says how long) |
+
+Error lines are matched like `run.mjs` does (`SCRIPT ERROR`, `Parse Error`, `ERROR:` push_error, `Debugger Break`, `Ignoring script`) over each peer's stdout, stderr and Godot log; a scenario may allow named patterns (`EXPECTED_ERRORS` in `lib/fault_scenarios.mjs`, empty today) and the report says how many lines were ignored. Desync warnings and `rate_limited` fail a scenario too.
+
+`relay_dies`, `relay_restarts`, `host_killed_relay` and `host_killed_builtin` play the whole 2 minute workout and ride out the 120 s reconnect window and the 180 s cool-down: expect 5 to 6 minutes each. Run them one by one with `--scenarios=` when a shell call is limited to 10 minutes.
+
+## report.json
+
+`build/e2e_faults/report.json`: `{schema: 1, started, ok, games, scenarios: [{name, ok, failures: [String], checks: [{name, ok, details}], evidence: {duration_s, out_dir, timeline: [{t, text}], relays, lan: {port, discoveryPort}, peers: [{name, role, exit_code, exit_reason, done_line, peer_id, room, states, started_s, exited_s, report_path, stdout_log, godot_log, cmdline, error_lines, script_errors, desync_warnings, fit_paths, fit_check, report_error}]}}], pending: [names not run]}`. The report is rewritten after every scenario.
+
+## Exit codes
+
+0 every scenario passed, 1 one failed (or none ran), 2 usage error, 75 Godot lock wait timeout.
+
+## Tests
+
+`node --test tools/e2e/test` covers the harness's pure logic in `test/fault_scenarios.test.mjs` (the command line, the peer flags, a peer's outcome from fake output, each scenario check and the run verdict). The scenarios themselves need Godot; the lead runs them.

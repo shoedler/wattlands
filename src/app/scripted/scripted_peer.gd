@@ -80,6 +80,8 @@ var strava_deadline: float = -1.0
 var close_at: float = -1.0
 var last_state: String = ""
 var last_snapshot: Variant = null
+## The refusal that ended the room mid-session ("dropped", "room_not_found"); the ride goes on.
+var net_lost_reason: String = ""
 ## The newest `event` batch seq recorded (a batch is never recorded twice).
 var _event_seq_seen: int = 0
 var exit_code: int = -1
@@ -289,7 +291,12 @@ func _on_net_state(state: String, detail: String) -> void:
 			_enter_lobby()
 		"error":
 			if phase == "connecting" or phase == "lobby":
-				finish("error:net:%s" % detail, EXIT_ERROR)
+				# The session sets "error" with the reason first and emits `refused` second: a
+				# refusal (room_not_found, session_in_progress, ...) is exit 3, a net failure 1.
+				if WlNetSession.REFUSALS.has(detail):
+					finish("refused:" + detail, EXIT_REFUSED)
+				else:
+					finish("error:net:%s" % detail, EXIT_ERROR)
 
 
 func _enter_lobby() -> void:
@@ -370,6 +377,11 @@ func _on_refused(reason: String) -> void:
 		return
 	if reason == "host_left":
 		finish("host_left", EXIT_HOST_LEFT)
+	elif phase == "session" and host != null and is_instance_valid(host):
+		# Like the session screen: a room lost mid-session (the relay died, the rejoin window
+		# ran out) does not end the ride. A client's GameHost rides the plan's cool-down here
+		# and ends the session (session_finished without results); a host carries on alone.
+		net_lost_reason = reason
 	else:
 		finish("refused:" + reason, EXIT_REFUSED)
 
@@ -562,6 +574,10 @@ func _on_session_finished(r: GameResults) -> void:
 		return
 	if r != null:
 		results = r
+	if results == null and net_lost_reason != "":
+		# The room was lost and the ride ended here: the FIT is kept, the refusal is the exit.
+		finish("refused:" + net_lost_reason, EXIT_REFUSED)
+		return
 	if results == null:
 		# The session ended without GameResults (aborted, host gone): the run failed.
 		finish("error:no_results", EXIT_ERROR)

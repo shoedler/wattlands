@@ -388,6 +388,24 @@ func test_a_client_whose_room_is_gone_rides_its_cooldown_and_ends() -> void:
 	_net_gives_up("room_not_found")
 
 
+## A host whose room is lost (the relay died, its rejoin window ran out) rides on alone: the
+## session is its own, the clients are gone. It stops sending, instead of warning "only the host
+## broadcasts" on every tick for the rest of the ride.
+func test_a_host_whose_room_is_lost_carries_on_without_sending() -> void:
+	_lobby("short")
+	_start_host()
+	_step(100)
+	var net := _nets[0]
+	net.leave()
+	net.refused.emit("dropped")
+	_host.step()
+	assert_push_warning("carrying on alone")
+	var ignored := int(net.stats.get("ignored", 0))
+	_step(200)
+	assert_eq(_host.state, "running", "the host's ride goes on")
+	assert_eq(int(net.stats.get("ignored", 0)), ignored, "nothing is sent into the lost room")
+
+
 ## The host's elapsed time in the client's phase at the moment of `call` ([index, elapsed_s,
 ## the rider's platform time then]), from the host's elapsed time now.
 func _host_elapsed_at(call: Array, rider: LocalRider, peer: int) -> float:
