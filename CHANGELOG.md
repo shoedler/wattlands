@@ -2,6 +2,36 @@
 
 Releases, newest first. Modules and games write fragments in `docs/changelog.d/<module or game id>.md`; they are merged here at each release and the fragments are emptied.
 
+## v1.0.0-rc.4 (2026-11-03)
+
+The release candidate for opening the project up.
+
+### For riders
+
+- **Multiplayer needs nothing but this download.** With no relay set, the host's PC runs the room, and riders on the same network find it by its code. A friend on a VPN such as Tailscale enters the address the host's lobby shows, like `192.168.1.20:8790`. A relay is still the way to reach friends elsewhere, and Settings > Network > Relay now takes an address as typed.
+- **Every way a room can fail now says what happened and what to do.** A room that can't open offers Try again. A wrong code, a blocked firewall, a room that's already riding and a lost connection each have their own words instead of a code. The lobby says how friends get in, who the start is waiting for, why a rider can't ready up and when a rider dropped. A client that lost its lobby goes back to the code page.
+- **Riders see a teammate drop and come back,** and a room lost mid-ride is named during the ride and on the results. A long reconnect says the room may be gone, and your ride is saved either way.
+- **Everyone in a room must be on the same release,** and a rider who isn't is told so on joining, with both versions.
+- **Your trainer holds its own spacing between ERG and SIM.** A client switches its trainer between them at most once every 30 s, whatever the host sends, and rides easy while it waits.
+- **A hostile or broken message can't crash a game.** Every game checks the snapshots, events and intents it receives.
+- **The README says plainly what the safety governor can't promise:** after a crash, a lost Bluetooth link or a PC going to sleep, the trainer may keep its last load. It also says to keep the trainer's firmware current, and that you ride at your own risk. A first start says it too.
+- The README's paths to your rides and your `.zwo` folder had lost their backslashes.
+
+### For relay hosts
+
+- **The relay caps what one address and the whole relay can hold:** sockets, rooms, room creates a minute, and 10 s for a new socket to say hello. Each has a flag and an environment variable.
+- Only a message to the relay keeps a socket alive, not a WebSocket ping.
+- Behind a proxy the relay reads the address the proxy added, not one a client wrote (`RELAY_TRUST_PROXY=1`, or `fly` on Fly).
+- `server/relay/README.md` covers running it for friends and in public.
+
+### For contributors
+
+- **CONTRIBUTING.md, a code of conduct, SECURITY.md, issue and pull request templates.** `docs/README.md` maps the docs.
+- **`tools/gate check --contributor`** names maintainer-only files and changed safety pins for review instead of failing a stranger's branch, and every pull request runs it in CI. Workflows run on main and on pull requests, with read-only tokens.
+- `node tools/e2e/faults.mjs` plays real peers through a wrong code, a late join, a dying or restarting relay and a killed host, on the relay and on the built-in relay. It runs on main in CI.
+- `tests/net/test_mp_every_game.gd` drops, restarts and feeds hostile data to every game in process. A client's arrow hits in Castellum Rotae are measured against the host's.
+- `CLAUDE.md` opens with what an outside contributor's AI agent does and doesn't do.
+
 ## v1.0.0-rc.3 (2026-11-01)
 
 The third release candidate, from playing rc.2.
