@@ -22,6 +22,8 @@ const F_AFK := 4
 const F_DISCONNECTED := 8
 const MODES: Array[String] = [Wl.ERG, Wl.SIM]
 const SOURCES: Array[String] = [Wl.GRADE_FLAT, Wl.GRADE_COURSE, Wl.GRADE_GAME]
+## Most rider rows check() lets through (the game's cap is 8 riders).
+const MAX_ROWS := 16
 ## Protocol int_fields for the snapshot.
 const INT_FIELDS: Array[String] = ["t", "p", "pt", "r[][]", "tl[][]", "tlo", "tln"]
 ## Phases per timeline part (about 6 KB with labels).
@@ -152,6 +154,29 @@ static func _apply_timeline_part(
 		decode_timeline(all_tl.slice(0, total), all_labels.slice(0, total), state.course)
 	)
 	state.timeline_parts = {}
+
+
+## "" when `snap` is safe to apply, else the problem: its scalars numbers, the timeline and the
+## rider rows lists of rows of numbers (the labels `tll` are read through str()), the rows few.
+static func check(snap: Dictionary) -> String:
+	for k: String in ["t", "p", "pt", "tlo", "tln"]:
+		if snap.has(k) and not WireRead.is_number(snap[k]):
+			return "%s is not a number" % k
+	if snap.has("tll") and not (snap["tll"] is Array):
+		return "tll is not a list"
+	if snap.has("tl"):
+		if not (snap["tl"] is Array):
+			return "tl is not a list"
+		for e: Variant in snap["tl"]:
+			if not WireRead.is_flat_numbers(e):
+				return "a timeline entry is a list of numbers"
+	if snap.has("r"):
+		if not (snap["r"] is Array) or (snap["r"] as Array).size() > MAX_ROWS:
+			return "r is not a list of at most %d rows" % MAX_ROWS
+		for row: Variant in snap["r"]:
+			if not WireRead.is_flat_numbers(row):
+				return "a rider row is a list of numbers"
+	return ""
 
 
 ## Applies a snapshot to a client's state. Riders not in the state are ignored.
