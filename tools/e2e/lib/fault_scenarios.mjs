@@ -4,7 +4,7 @@
 // in tools/e2e/README.md.
 import { familyOf } from './fault_args.mjs';
 import {
-  EXIT, SESSION_STATES, checkClean, checkExit, checkFit, checkNotRefused, checkSamePeer, checkState,
+  EXIT, SESSION_STATES, checkClean, checkExit, checkFit, checkNoFlood, checkNotRefused, checkSamePeer, checkState,
 } from './fault_verdicts.mjs';
 import { sleep } from './util.mjs';
 
@@ -202,6 +202,8 @@ function lostRoomChecks(h, c, { hostCodes, clientCodes, clientCooldown = true })
   if (clientCooldown) checks.push(checkState(c, ['cooldown'], { label: 'client' }));
   checks.push(checkClean(h, { label: 'host', allow: EXPECTED_ERRORS }));
   checks.push(checkClean(c, { label: 'client', allow: EXPECTED_ERRORS }));
+  checks.push(checkNoFlood(h, { label: 'host' }));
+  checks.push(checkNoFlood(c, { label: 'client' }));
   checks.push(checkFit(h, { label: 'host' }));
   checks.push(checkFit(c, { label: 'client' }));
   return checks;
@@ -209,8 +211,8 @@ function lostRoomChecks(h, c, { hostCodes, clientCodes, clientCooldown = true })
 
 /**
  * relay_dies: workout on server/relay; the relay is killed mid-session and stays dead. Both peers
- * retry for the token's 120 s, then the client rides its cool-down here and ends, saving a FIT, and
- * the host carries on to its results.
+ * retry for the token's 120 s. The client then rides its cool-down here and exits 3 (dropped) with
+ * its FIT; the host carries on alone to its results and exits 0.
  */
 export async function relayDiesScenario(env) {
   const o = env.o;
@@ -229,7 +231,8 @@ export async function relayDiesScenario(env) {
 
 /**
  * relay_restarts: the relay is killed and started again on the same port, so its rooms are gone.
- * Every peer's rejoin gets room_not_found; each must still end by itself with a FIT and no error.
+ * Every peer's rejoin gets room_not_found: the client rides the cool-down and exits 3, the host
+ * carries on alone and exits 0; each keeps a FIT and prints no error.
  */
 export async function relayRestartsScenario(env) {
   const o = env.o;

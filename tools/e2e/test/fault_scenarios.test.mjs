@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FAULT_GAMES, SCENARIO_FAMILIES, familyOf, parseFaultArgs, variantsOf } from '../lib/fault_args.mjs';
 import {
-  EXIT, checkClean, checkExit, checkFit, checkNotRefused, checkSamePeer, checkState, faultPeerArgs, peerOutcome,
+  EXIT, checkClean, checkExit, checkFit, checkNoFlood, checkNotRefused, checkSamePeer, checkState, faultPeerArgs, peerOutcome,
   runVerdict, scenarioVerdict,
 } from '../lib/fault_verdicts.mjs';
 
@@ -170,6 +170,17 @@ test('checkClean ignores only the errors a scenario allows', () => {
   const c = checkClean(q, { allow: [/relay hiccup/] });
   assert.equal(c.ok, true);
   assert.match(c.details[0], /1 expected line/);
+});
+
+test('checkNoFlood fails on a warning printed once per tick', () => {
+  assert.equal(checkNoFlood(peer()).ok, true);
+  const flood = Array.from({ length: 60 }, () => 'WARNING: NetSession.broadcast: only the host broadcasts');
+  const c = checkNoFlood(peer({ logLines: flood }), { label: 'host' });
+  assert.equal(c.ok, false);
+  assert.match(c.details[0], /host: 60 x WARNING: NetSession.broadcast/);
+  assert.equal(checkNoFlood(peer({ logLines: flood.slice(0, 50) })).ok, true, 'the limit itself is allowed');
+  const notWarnings = Array.from({ length: 80 }, () => 'frame');
+  assert.equal(checkNoFlood(peer({ logLines: notWarnings })).ok, true);
 });
 
 test('checkFit wants a FIT file in the report, on disk and valid', () => {

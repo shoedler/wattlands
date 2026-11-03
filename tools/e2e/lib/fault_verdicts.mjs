@@ -14,9 +14,19 @@ export const DONE_LINE = /^WATTLANDS_DONE\b\s*(.*)$/;
 /** The states that mean the session itself began (the lobby is over). */
 export const SESSION_STATES = ['setup', 'running', 'warmup', 'riding', 'session', 'playing', 'started', 'in_session'];
 
+/** A warning line that repeats more often than this in one peer's log is a flood (a bug: a warning per tick). */
+export const FLOOD_LIMIT = 50;
+
 export function describeExit(code) {
   if (code === null || code === undefined) return 'no exit code';
   return EXIT_NAMES[code] ? `${code} (${EXIT_NAMES[code]})` : String(code);
+}
+
+/** The WARNING lines a peer printed more than `limit` times: [{line, count}]. */
+export function warningFloods(lines, limit = FLOOD_LIMIT) {
+  const counts = new Map();
+  for (const l of lines) if (/^\s*(USER )?WARNING:/.test(l)) counts.set(l, (counts.get(l) ?? 0) + 1);
+  return [...counts].filter(([, n]) => n > limit).map(([line, count]) => ({ line, count }));
 }
 
 function lastOf(lines, re) {
@@ -60,6 +70,7 @@ export function peerOutcome(raw) {
     reportError: raw.reportError ?? (rep ? null : 'no report'),
     errorLines: scan.errors,
     desyncLines: scan.desync,
+    floods: warningFloods(all),
     rateLimited: scan.rateLimited.length,
     scriptErrors: Number.isFinite(Number(rep?.script_errors)) ? Number(rep.script_errors) : null,
     desyncWarnings: Number.isFinite(Number(rep?.desync_warnings)) ? Number(rep.desync_warnings) : null,
@@ -103,6 +114,12 @@ export function checkClean(out, { label = out.name, allow = [], needReport = tru
   if (needReport && !out.report) problems.push(`${label}: ${out.reportError ?? 'no report'}`);
   const allowed = out.errorLines.length - bad.length;
   return chk(`${label} clean`, problems.length === 0, problems.length ? problems : `${label}: no script error or push_error${allowed ? ` (${allowed} expected line(s) ignored)` : ''}, report written`);
+}
+
+/** No warning repeats more than FLOOD_LIMIT times (a warning per tick would fill a long ride's log). */
+export function checkNoFlood(out, { label = out.name } = {}) {
+  const f = out.floods;
+  return chk(`${label} no warning flood`, f.length === 0, f.length ? f.slice(0, 3).map((x) => `${label}: ${x.count} x ${x.line}`) : `${label}: no warning repeated more than ${FLOOD_LIMIT} times`);
 }
 
 /** The peer's ride is on disk: fit_paths in its report, every file present and (if checked) valid. */
