@@ -157,6 +157,21 @@ const INT_FIELDS := {
 const FLOAT_FIELDS := {SHOT: ["flight_s"]}
 
 
+## "" when `event` has a known type, every declared number (an Array or an Array of Arrays where
+## the path says so) and, on a far shot, a numeric flight_s; else the problem. A client runs it
+## before it reads an event.
+static func check(event: Dictionary) -> String:
+	var type := str(event.get("type", ""))
+	if not INT_FIELDS.has(type):
+		return "unknown type %s" % type
+	var problem := WireRead.int_path_problem(event, INT_FIELDS[type])
+	if problem != "":
+		return "%s: %s" % [type, problem]
+	if event.has("flight_s") and not WireRead.is_number(event["flight_s"]):
+		return "%s: flight_s is not a number" % type
+	return ""
+
+
 static func segment(index: int, seg: String, stage: int) -> Dictionary:
 	return {"type": SEGMENT, "i": index, "sg": TankIds.seg_code(seg), "st": stage}
 

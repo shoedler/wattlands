@@ -123,6 +123,10 @@ func snapshot() -> Dictionary:
 
 func apply_snapshot(snap: Dictionary) -> void:
 	sim_alive()
+	var why := WorkoutSnapshot.check(snap)
+	if why != "":
+		push_warning("workout: snapshot ignored: %s" % why)
+		return
 	WorkoutSnapshot.apply(state, snap)
 	history.push(float(state.tick) * Wl.SIM_DT, state)
 	var r := state.rider(ctx.local_peer) if ctx != null else null
@@ -133,6 +137,12 @@ func apply_snapshot(snap: Dictionary) -> void:
 
 
 func apply_event(event: Dictionary) -> void:
+	var paths: Variant = int_fields().get(str(event.get("type", "")))
+	if not (paths is Array) or WireRead.bad_int_path(event, paths) != "":
+		push_warning(
+			"workout: event ignored: unknown or malformed (%s)" % str(event.get("type", ""))
+		)
+		return
 	cue.emit(str(event.get("type", "")), event)
 	match str(event.get("type", "")):
 		WorkoutRules.EV_INTERVAL_START:

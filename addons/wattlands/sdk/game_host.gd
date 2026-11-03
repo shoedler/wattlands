@@ -102,6 +102,33 @@ const HOLD_JITTER_S := 1.0
 ## A plan split into more parts than this is refused by the client (a 16 KB part holds about
 ## 120 phases, so this is far beyond any real workout).
 const MAX_PLAN_PARTS := 64
+## Telemetry keys that carry a number, and those that carry a flag (_clean_telemetry).
+const TELEMETRY_NUMBERS: Array[String] = [
+	"peer",
+	"t",
+	"power_w",
+	"cadence_rpm",
+	"speed_kmh",
+	"effort",
+	"p_eff_w",
+	"wbal_j",
+	"ftp_pct",
+	"applied_target_w",
+	"applied_grade_pct",
+	"gear",
+	"s_left_105",
+	"s_left_120",
+	"distance_m",
+	"phase_index",
+	"age_s",
+	"cadence_age_s",
+	"haptic_pct",
+	"heart_rate_bpm",
+]
+## Intents and acks nest at most this deep (a game's intents are flat; a deeper one is hostile
+## and would make duplicate(true) raise an engine error).
+const TELEMETRY_DEPTH := 6
+const TELEMETRY_FLAGS: Array[String] = ["rescue", "coasting", "afk", "paused", "connected"]
 
 var ctx: GameContext = null
 var game: GameModule = null
@@ -1515,7 +1542,7 @@ func _on_telemetry(from: int, data: Dictionary) -> void:
 	var tmd: Variant = data.get("tm")
 	if not (tmd is Dictionary):
 		return
-	var tm := Telemetry.from_dict(tmd)
+	var tm := Telemetry.from_dict(_clean_telemetry(tmd))
 	var r: Dictionary = _remote[from]
 	(r["gestures"] as Array).append_array(tm.gestures)
 	(r["intents"] as Array).append_array(tm.intents)
@@ -1554,6 +1581,45 @@ func _on_telemetry(from: int, data: Dictionary) -> void:
 		and not GestureRecognizer.is_not_pedaling(tm.power_w, tm.cadence_rpm)
 	):
 		r["await_pedal"] = false
+
+
+## A client's telemetry dictionary as Telemetry.from_dict can read it: a field of the wrong type,
+## or a number that is not finite, is left out (its default), so a hostile peer cannot raise a
+## script error here or put NaN in a game's rules. Only the keys of Telemetry.to_dict() are read.
+static func _clean_telemetry(tmd: Dictionary) -> Dictionary:
+	var out := tmd.duplicate()
+	for k: String in TELEMETRY_NUMBERS:
+		if out.has(k):
+			var v: Variant = out[k]
+			if WireRead.is_number(v) and is_finite(float(v)):
+				out[k] = WireRead.float_of(v)
+			else:
+				out.erase(k)
+	for k: String in TELEMETRY_FLAGS:
+		if out.has(k) and not (out[k] is bool or WireRead.is_number(out[k])):
+			out.erase(k)
+	if out.has("mode") and not (out["mode"] is String):
+		out.erase("mode")
+	for k: String in ["clamped_by", "gestures", "intents", "acks"]:
+		if out.has(k) and not (out[k] is Array):
+			out.erase(k)
+	if out.has("acks"):
+		var acks: Array = []
+		for a: Variant in out["acks"]:
+			if (
+				a is Dictionary
+				and WireRead.within_depth(a, TELEMETRY_DEPTH)
+				and (not (a as Dictionary).has("id") or WireRead.is_number(a["id"]))
+			):
+				acks.append(a)
+		out["acks"] = acks
+	if out.has("intents"):
+		var kept: Array = []
+		for it: Variant in out["intents"]:
+			if WireRead.within_depth(it, TELEMETRY_DEPTH):
+				kept.append(it)
+		out["intents"] = kept
+	return out
 
 
 func _on_peer_left(peer: int, reason: String) -> void:
@@ -2143,10 +2209,10 @@ func _on_roster(data: Dictionary) -> void:
 	for k: Variant in (rv as Dictionary).keys():
 		var row: Variant = (rv as Dictionary)[k]
 		if row is Dictionary:
-			var copy := (row as Dictionary).duplicate(true)
+			var copy := _clean_roster_row(row)
 			if copy.has("slot_index"):
-				copy["slot_index"] = int(copy["slot_index"])
-			roster[int(str(k))] = copy
+				copy["slot_index"] = WireRead.int_of(copy["slot_index"])
+			roster[WireRead.int_of(str(k))] = copy
 	for peer: int in hud_router.statuses.keys():
 		if roster.has(peer):
 			(roster[peer] as Dictionary)["status"] = (
@@ -2158,6 +2224,23 @@ func _on_roster(data: Dictionary) -> void:
 	_check_roster_phase(roster.get(_local_peer))
 	if data.has("paused") and _configured:
 		_apply_shared_pause(bool(data["paused"]))
+
+
+## A roster row as a game's HUD can read it: numbers where it declares numbers, flags where it
+## declares flags, a String name and a Dictionary status; anything of another type is left out.
+static func _clean_roster_row(row: Dictionary) -> Dictionary:
+	var out := row.duplicate(true)
+	for k: String in ["raw_w", "cadence_rpm", "ftp_pct", "slot_index", "phase"]:
+		if out.has(k) and not (WireRead.is_number(out[k]) and is_finite(float(out[k]))):
+			out.erase(k)
+	for k: String in ["rescue", "afk", "connected", "paused"]:
+		if out.has(k) and not (out[k] is bool or WireRead.is_number(out[k])):
+			out.erase(k)
+	if out.has("name") and not (out["name"] is String):
+		out.erase("name")
+	if out.has("status") and not (out["status"] is Dictionary):
+		out.erase("status")
+	return out
 
 
 ## The host's phase index for this rider (roster `phase`) against the one it rides: twice in a

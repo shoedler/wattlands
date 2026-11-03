@@ -56,6 +56,9 @@ extends RefCounted
 const VERSION := 5
 const MAX_BYTES := TankConst.SNAPSHOT_MAX_BYTES
 const KEYS: Array[String] = ["v", "tick", "sg", "tk", "r", "st", "e", "s", "o", "gl", "b", "sc"]
+## Most rows of the riders, stations and obstacles a snapshot may hold (enemies and shells have
+## their own caps in TankConst); check() refuses more.
+const MAX_ROWS := 64
 
 # sg columns and flags
 const SG_SEG := 0
@@ -263,19 +266,26 @@ static func check(snap: Dictionary) -> String:
 	for k: String in KEYS:
 		if not snap.has(k):
 			return "missing %s" % k
+	if not (WireRead.is_number(snap["v"]) and WireRead.is_number(snap["tick"])):
+		return "v and tick are numbers"
 	for spec: Array in [
 		["sg", SG_LEN], ["tk", TK_LEN], ["gl", GL_LEN], ["b", B_LEN], ["sc", SC_LEN]
 	]:
-		if not (snap[spec[0]] is Array) or (snap[spec[0]] as Array).size() != int(spec[1]):
-			return "%s needs %d columns" % [spec[0], int(spec[1])]
+		if (
+			not WireRead.is_flat_numbers(snap[spec[0]])
+			or (snap[spec[0]] as Array).size() != int(spec[1])
+		):
+			return "%s needs %d numbers" % [spec[0], int(spec[1])]
 	for spec: Array in [["r", R_LEN], ["st", ST_LEN], ["e", E_LEN], ["s", S_LEN], ["o", O_LEN]]:
 		if not (snap[spec[0]] is Array):
 			return "%s must be an array of rows" % spec[0]
+		if (snap[spec[0]] as Array).size() > MAX_ROWS and spec[0] != "e" and spec[0] != "s":
+			return "%s: too many rows" % spec[0]
 		for row: Variant in snap[spec[0]]:
-			if not (row is Array) or (row as Array).size() != int(spec[1]):
+			if not WireRead.is_flat_numbers(row) or (row as Array).size() != int(spec[1]):
 				return "%s: a row needs %d columns" % [spec[0], int(spec[1])]
 	if snap.has(RM_KEY):
-		if not (snap[RM_KEY] is Array) or (snap[RM_KEY] as Array).size() != RM_LEN:
+		if not WireRead.is_flat_numbers(snap[RM_KEY]) or (snap[RM_KEY] as Array).size() != RM_LEN:
 			return "rm needs %d columns" % RM_LEN
 	if (snap["e"] as Array).size() > TankConst.MAX_ENEMIES:
 		return "e: more than %d enemies" % TankConst.MAX_ENEMIES

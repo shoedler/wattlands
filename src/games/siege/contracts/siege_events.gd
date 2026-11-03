@@ -67,12 +67,12 @@ static func cast(event: Dictionary) -> Dictionary:
 		if path.ends_with("[]") and out[key] is Array:
 			out[key] = (out[key] as Array).map(_to_int)
 		elif out[key] is float or out[key] is int or out[key] is bool:
-			out[key] = int(out[key])
+			out[key] = WireRead.int_of(out[key])
 	return out
 
 
 static func _to_int(v: Variant) -> int:
-	return int(v)
+	return WireRead.int_of(v)
 
 
 ## "" when `event` has a known type and every declared field, else the problem.
@@ -80,9 +80,9 @@ static func check(event: Dictionary) -> String:
 	var type := str(event.get("type", ""))
 	if not INT_FIELDS.has(type):
 		return "unknown type %s" % type
-	for path: String in INT_FIELDS[type]:
-		if not event.has(path.trim_suffix("[]")):
-			return "%s: missing %s" % [type, path.trim_suffix("[]")]
+	var problem := WireRead.int_path_problem(event, INT_FIELDS[type])
+	if problem != "":
+		return "%s: %s" % [type, problem]
 	if type == SiegeIds.EV_BUY and not (event.get("item") is String and event.get("why") is String):
 		return "buy: item and why are strings"
 	if type == SiegeIds.EV_WAVE_START and not (event.get("role") is String):

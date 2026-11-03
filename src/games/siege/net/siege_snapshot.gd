@@ -119,41 +119,43 @@ static func encode(state: SiegeState) -> Dictionary:
 ## stations by id, pads by number; enemies are rebuilt (positions from state.path when present).
 static func apply(state: SiegeState, snap: Dictionary) -> void:
 	state.init_fixed()
-	state.tick = int(snap.get("tick", state.tick))
-	state.phase_index = int(snap.get("ph", state.phase_index))
-	state.phase_elapsed_s = int(snap.get("pt_ms", 0)) / 1000.0
-	var g: Array = snap.get("gate", [])
+	state.tick = WireRead.int_of(snap.get("tick"), state.tick)
+	state.phase_index = WireRead.int_of(snap.get("ph"), state.phase_index)
+	state.phase_elapsed_s = WireRead.int_of(snap.get("pt_ms", 0)) / 1000.0
+	var g: Array = WireRead.array_of(snap.get("gate", []))
 	if g.size() == 3:
-		state.gate_hp = float(int(g[SiegeSnapshotSchema.G_HP]))
-		state.gate_max = float(int(g[SiegeSnapshotSchema.G_MAX]))
-		state.breach_s = int(g[SiegeSnapshotSchema.G_BREACH_MS]) / 1000.0
-	state.breaches = int(snap.get("nb", 0))
-	state.iron_bands = int(snap.get("ib", 0))
-	state.mine_level = int(snap.get("ml", 0))
+		state.gate_hp = float(WireRead.int_of(g[SiegeSnapshotSchema.G_HP]))
+		state.gate_max = float(WireRead.int_of(g[SiegeSnapshotSchema.G_MAX]))
+		state.breach_s = WireRead.int_of(g[SiegeSnapshotSchema.G_BREACH_MS]) / 1000.0
+	state.breaches = WireRead.int_of(snap.get("nb", 0))
+	state.iron_bands = WireRead.int_of(snap.get("ib", 0))
+	state.mine_level = WireRead.int_of(snap.get("ml", 0))
 	state.perks.clear()
-	for p: Variant in snap.get("pk", []):
-		state.perks.append(int(p))
-	state.team_w = float(int(snap.get("w", 0)))
+	for p: Variant in WireRead.array_of(snap.get("pk", [])):
+		state.perks.append(WireRead.int_of(p))
+	state.team_w = float(WireRead.int_of(snap.get("w", 0)))
 	_riders(state, snap.get("r", []))
 	_stations(state, snap.get("st", []), snap.get("dw", []))
 	_pads(state, snap.get("pd", []))
 	_tar(state, snap.get("tar", []))
 	_enemies(state, snap.get("e", []))
-	state.queue_len = int(snap.get("q", 0))
-	state.wave.gate_damage = int(snap.get("gd", 0)) / 10.0
-	state.station(SiegeIds.STATION_ARROWS).rack = int(snap.get("rk", 0))
-	state.wave.rush_next = int(snap.get("rn", 0))
+	state.queue_len = WireRead.int_of(snap.get("q", 0))
+	state.wave.gate_damage = WireRead.int_of(snap.get("gd", 0)) / 10.0
+	state.station(SiegeIds.STATION_ARROWS).rack = WireRead.int_of(snap.get("rk", 0))
+	state.wave.rush_next = WireRead.int_of(snap.get("rn", 0))
 	var ru: Variant = snap.get("ru")
 	if ru is Array and (ru as Array).size() > SiegeSnapshotSchema.RU_INDEX:
 		var left_ms := (
-			int(ru[SiegeSnapshotSchema.RU_LEFT_MS])
+			WireRead.int_of(ru[SiegeSnapshotSchema.RU_LEFT_MS])
 			if (ru as Array).size() > SiegeSnapshotSchema.RU_LEFT_MS
 			else 1000
 		)
 		state.wave.rush_s = (
-			maxf(left_ms / 1000.0, 0.001) if int(ru[SiegeSnapshotSchema.RU_ON]) != 0 else 0.0
+			maxf(left_ms / 1000.0, 0.001)
+			if WireRead.int_of(ru[SiegeSnapshotSchema.RU_ON]) != 0
+			else 0.0
 		)
-		state.wave.rush_next = int(ru[SiegeSnapshotSchema.RU_INDEX]) + 1
+		state.wave.rush_next = WireRead.int_of(ru[SiegeSnapshotSchema.RU_INDEX]) + 1
 	else:
 		state.wave.rush_s = 0.0
 
@@ -162,48 +164,52 @@ static func _riders(state: SiegeState, rows: Variant) -> void:
 	for row: Variant in rows if rows is Array else []:
 		if not (row is Array) or (row as Array).size() < SiegeSnapshotSchema.R_LEN_BRIEF:
 			continue
-		var rd := state.rider_at(int(row[SiegeSnapshotSchema.R_SLOT]))
+		var rd := state.rider_at(WireRead.int_of(row[SiegeSnapshotSchema.R_SLOT]))
 		if rd == null:
 			continue
-		rd.target = clampi(int(row[SiegeSnapshotSchema.R_TARGET]), 0, SiegeIds.STATION_COUNT - 1)
-		rd.reconnect_s = int(row[SiegeSnapshotSchema.R_RECONNECT_MS]) / 1000.0
-		rd.od_s = int(row[SiegeSnapshotSchema.R_OD_MS]) / 1000.0
-		rd.od_cd_s = int(row[SiegeSnapshotSchema.R_OD_CD_MS]) / 1000.0
+		rd.target = clampi(
+			WireRead.int_of(row[SiegeSnapshotSchema.R_TARGET]), 0, SiegeIds.STATION_COUNT - 1
+		)
+		rd.reconnect_s = WireRead.int_of(row[SiegeSnapshotSchema.R_RECONNECT_MS]) / 1000.0
+		rd.od_s = WireRead.int_of(row[SiegeSnapshotSchema.R_OD_MS]) / 1000.0
+		rd.od_cd_s = WireRead.int_of(row[SiegeSnapshotSchema.R_OD_CD_MS]) / 1000.0
 		rd.od_state = (
 			SiegeIds.OD_ACTIVE
 			if rd.od_s > 0.0
 			else (SiegeIds.OD_COOLDOWN if rd.od_cd_s > 0.0 else SiegeIds.OD_READY)
 		)
-		rd.gold = float(int(row[SiegeSnapshotSchema.R_GOLD]))
-		rd.p_eff_w = float(int(row[SiegeSnapshotSchema.R_P_EFF_W]))
-		rd.raw_w = float(int(row[SiegeSnapshotSchema.R_RAW_W]))
-		rd.cadence_rpm = float(int(row[SiegeSnapshotSchema.R_CADENCE]))
-		rd.rescue = int(row[SiegeSnapshotSchema.R_RESCUE]) != 0
-		rd.afk = int(row[SiegeSnapshotSchema.R_AFK]) != 0
+		rd.gold = float(WireRead.int_of(row[SiegeSnapshotSchema.R_GOLD]))
+		rd.p_eff_w = float(WireRead.int_of(row[SiegeSnapshotSchema.R_P_EFF_W]))
+		rd.raw_w = float(WireRead.int_of(row[SiegeSnapshotSchema.R_RAW_W]))
+		rd.cadence_rpm = float(WireRead.int_of(row[SiegeSnapshotSchema.R_CADENCE]))
+		rd.rescue = WireRead.int_of(row[SiegeSnapshotSchema.R_RESCUE]) != 0
+		rd.afk = WireRead.int_of(row[SiegeSnapshotSchema.R_AFK]) != 0
 		if (row as Array).size() >= SiegeSnapshotSchema.R_LEN:
-			rd.connected = int(row[SiegeSnapshotSchema.R_CONNECTED]) != 0
-			rd.shop_fallback = int(row[SiegeSnapshotSchema.R_SHOP_FALLBACK]) != 0
+			rd.connected = WireRead.int_of(row[SiegeSnapshotSchema.R_CONNECTED]) != 0
+			rd.shop_fallback = WireRead.int_of(row[SiegeSnapshotSchema.R_SHOP_FALLBACK]) != 0
 
 
 static func _stations(state: SiegeState, rows: Variant, dw: Variant) -> void:
 	for row: Variant in rows if rows is Array else []:
 		if not (row is Array) or (row as Array).size() < SiegeSnapshotSchema.ST_LEN:
 			continue
-		var id := int(row[SiegeSnapshotSchema.ST_ID])
+		var id := WireRead.int_of(row[SiegeSnapshotSchema.ST_ID])
 		if not SiegeIds.is_station(id):
 			continue
 		var s := state.station(id)
-		s.level = int(row[SiegeSnapshotSchema.ST_LEVEL])
-		s.wind = int(row[SiegeSnapshotSchema.ST_WIND_PM]) / 1000.0
-		s.yaw_deg = int(row[SiegeSnapshotSchema.ST_YAW_CDEG]) / 100.0
-		s.m = int(row[SiegeSnapshotSchema.ST_M_X100]) / 100.0
-		s.arm = int(row[SiegeSnapshotSchema.ST_ARM_PM]) / 1000.0
+		s.level = WireRead.int_of(row[SiegeSnapshotSchema.ST_LEVEL])
+		s.wind = WireRead.int_of(row[SiegeSnapshotSchema.ST_WIND_PM]) / 1000.0
+		s.yaw_deg = WireRead.int_of(row[SiegeSnapshotSchema.ST_YAW_CDEG]) / 100.0
+		s.m = WireRead.int_of(row[SiegeSnapshotSchema.ST_M_X100]) / 100.0
+		s.arm = WireRead.int_of(row[SiegeSnapshotSchema.ST_ARM_PM]) / 1000.0
 	for row: Variant in dw if dw is Array else []:
 		if not (row is Array) or (row as Array).size() < SiegeSnapshotSchema.DW_LEN:
 			continue
-		var id := int(row[SiegeSnapshotSchema.DW_STATION])
+		var id := WireRead.int_of(row[SiegeSnapshotSchema.DW_STATION])
 		if SiegeIds.is_station(id):
-			state.station(id).damage_wave = float(int(row[SiegeSnapshotSchema.DW_DAMAGE]))
+			state.station(id).damage_wave = float(
+				WireRead.int_of(row[SiegeSnapshotSchema.DW_DAMAGE])
+			)
 
 
 static func _pads(state: SiegeState, rows: Variant) -> void:
@@ -214,14 +220,14 @@ static func _pads(state: SiegeState, rows: Variant) -> void:
 	for row: Variant in rows if rows is Array else []:
 		if not (row is Array) or (row as Array).size() < SiegeSnapshotSchema.PD_LEN:
 			continue
-		var n := int(row[SiegeSnapshotSchema.PD_PAD])
+		var n := WireRead.int_of(row[SiegeSnapshotSchema.PD_PAD])
 		if not SiegeIds.is_pad(n):
 			continue
 		var p := state.pad(n)
-		p.type = int(row[SiegeSnapshotSchema.PD_TYPE])
-		p.level = int(row[SiegeSnapshotSchema.PD_LEVEL])
-		p.cd_s = int(row[SiegeSnapshotSchema.PD_CD_MS]) / 1000.0
-		p.yaw_deg = int(row[SiegeSnapshotSchema.PD_YAW_CDEG]) / 100.0
+		p.type = WireRead.int_of(row[SiegeSnapshotSchema.PD_TYPE])
+		p.level = WireRead.int_of(row[SiegeSnapshotSchema.PD_LEVEL])
+		p.cd_s = WireRead.int_of(row[SiegeSnapshotSchema.PD_CD_MS]) / 1000.0
+		p.yaw_deg = WireRead.int_of(row[SiegeSnapshotSchema.PD_YAW_CDEG]) / 100.0
 
 
 static func _tar(state: SiegeState, row: Variant) -> void:
@@ -229,10 +235,10 @@ static func _tar(state: SiegeState, row: Variant) -> void:
 	state.tar.curtain_max = state.curtain_max()
 	if not (row is Array) or (row as Array).size() < SiegeSnapshotSchema.TAR_LEN:
 		return
-	state.tar.cauldron_l = int(row[SiegeSnapshotSchema.TAR_CAULDRON_DL]) / 10.0
-	state.tar.curtain_hp = int(row[SiegeSnapshotSchema.TAR_CURTAIN_DHP]) / 10.0
-	state.tar.coat = int(row[SiegeSnapshotSchema.TAR_COAT_PM]) / 1000.0
-	state.tar.boarded = int(row[SiegeSnapshotSchema.TAR_BOARDED]) != 0
+	state.tar.cauldron_l = WireRead.int_of(row[SiegeSnapshotSchema.TAR_CAULDRON_DL]) / 10.0
+	state.tar.curtain_hp = WireRead.int_of(row[SiegeSnapshotSchema.TAR_CURTAIN_DHP]) / 10.0
+	state.tar.coat = WireRead.int_of(row[SiegeSnapshotSchema.TAR_COAT_PM]) / 1000.0
+	state.tar.boarded = WireRead.int_of(row[SiegeSnapshotSchema.TAR_BOARDED]) != 0
 
 
 static func _enemies(state: SiegeState, rows: Variant) -> void:
@@ -241,12 +247,12 @@ static func _enemies(state: SiegeState, rows: Variant) -> void:
 		if not (row is Array) or (row as Array).size() < SiegeSnapshotSchema.E_LEN:
 			continue
 		var en := SiegeEnemyState.new()
-		en.id = int(row[SiegeSnapshotSchema.E_ID])
-		en.type = int(row[SiegeSnapshotSchema.E_TYPE])
-		en.prog_m = int(row[SiegeSnapshotSchema.E_PROG_DM]) / 10.0
-		en.lat_m = int(row[SiegeSnapshotSchema.E_LAT_DM]) / 10.0
-		en.hp = float(int(row[SiegeSnapshotSchema.E_HP]))
-		en.st = int(row[SiegeSnapshotSchema.E_ST])
+		en.id = WireRead.int_of(row[SiegeSnapshotSchema.E_ID])
+		en.type = WireRead.int_of(row[SiegeSnapshotSchema.E_TYPE])
+		en.prog_m = WireRead.int_of(row[SiegeSnapshotSchema.E_PROG_DM]) / 10.0
+		en.lat_m = WireRead.int_of(row[SiegeSnapshotSchema.E_LAT_DM]) / 10.0
+		en.hp = float(WireRead.int_of(row[SiegeSnapshotSchema.E_HP]))
+		en.st = WireRead.int_of(row[SiegeSnapshotSchema.E_ST])
 		var def: Dictionary = state.content.enemy_def(en.type) if state.content != null else {}
 		en.max_hp = maxf(float(def.get("hp", en.hp)), en.hp)
 		en.speed_mps = float(def.get("speed_mps", 0.0)) if en.st == SiegeIds.EN_WALK else 0.0
