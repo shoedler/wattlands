@@ -19,16 +19,14 @@ for (const name of names) {
   const text = fs.readFileSync(path.join(dir, name), 'utf8');
 
   test(`${name}: a push runs on main only, never on a tag or a stray branch`, () => {
-    if (/^ {2}push:/m.test(text)) assert.match(text, /^ {2}push:
- {4}branches: \[main\]/m);
+    if (/^ {2}push:/m.test(text)) assert.match(text, /^ {2}push:\n {4}branches: \[main\]/m);
     else assert.match(text, /^ {2}pull_request:/m, 'a workflow with no push runs on pull requests');
   });
 
   // A public repository takes pull requests from forks, so nothing here may reach a write token or
   // a secret from their code.
   test(`${name}: read-only token, and no way for a fork to reach a secret`, () => {
-    assert.match(text, /^permissions:
- {2}contents: read$/m);
+    assert.match(text, /^permissions:\n {2}contents: read$/m);
     assert.doesNotMatch(text, /pull_request_target|workflow_run|secrets\./);
   });
 }
