@@ -151,7 +151,7 @@ All transports run with `PROCESS_MODE_ALWAYS` and do their I/O in `poll()`, whic
 
 ## 8. The built-in relay and LAN play
 
-With no relay chosen (no `--relay`, no Relay setting, no build default), `WlNetSession` uses `LanTransport`, so a rider with nothing but the release can host: the host's PC serves the room and the others find it by its code. The choice is read again at each `host_room()` and `join_room()`. While `WATTLANDS_NO_NETWORK_INTEGRATIONS=1` the relay and its beacons stay on 127.0.0.1; `--lan-port` and `--lan-discovery-port` move them, for concurrent test runs. A rider elsewhere on a shared VPN enters `ws://<host address>:<port>/v1` as their Relay, which the host's lobby shows (`WlNetSession.shareable_relay_urls()`).
+With no relay chosen (no `--relay`, no Relay setting, no build default), `WlNetSession` uses `LanTransport`, so a rider with nothing but the release can host: the host's PC serves the room and the others find it by its code. The choice is read again at each `host_room()` and `join_room()`. While `WATTLANDS_NO_NETWORK_INTEGRATIONS=1` the relay and its beacons stay on 127.0.0.1; `--lan-port` and `--lan-discovery-port` move them, for concurrent test runs. A rider elsewhere on a shared VPN enters `<host address>:<port>` as their Relay (`RelayTransport.normalize_url` makes it a URL), which the host's lobby shows (`WlNetSession.shareable_relay_addresses()`).
 
 The room lives in the host's process: if the host's app closes, the room is gone and clients end the session once their reconnect window passes. Only connections from the host's own machine may create a room (`LocalRelayServer.local_create_only`), at most 32 sockets are open at once, and the server closes 2 s after the host leaves, once clients have read `host_left`.
 

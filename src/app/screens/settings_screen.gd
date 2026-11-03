@@ -897,9 +897,13 @@ func network_fields() -> Array:
 			"rows": AppTextField.ROWS_URL,
 			"max_length": 120,
 			"get": current_relay_url,
-			"set": func(v: Variant) -> void: set_setting("relay_url", str(v).strip_edges())
+			"set": func(v: Variant) -> void: set_setting("relay_url", normalized_relay(v))
 		},
 	]
+
+
+static func normalized_relay(typed: Variant) -> String:
+	return RelayTransport.normalize_url(str(typed))
 
 
 ## The Relay field: blank while no relay is chosen (rooms run on the host's PC).

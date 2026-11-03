@@ -46,6 +46,8 @@ var fit_path: String = ""
 var host_left: bool = false
 ## The room is gone for good (the relay or the network, not the host's choice).
 var net_lost: bool = false
+## Seconds of this reconnect; after RECONNECT_LONG_S the notice says the room may be gone.
+var reconnecting_s: float = 0.0
 var headless: bool = false
 ## Tests: build the game's view and HUD even under the headless display server.
 var render_headless: bool = false
@@ -68,6 +70,8 @@ var net_reconnecting: bool = false
 ## The rider confirmed Discard the ride: the session goes to the title, not to results.
 var discarded: bool = false
 
+## A reconnect this long says the room may be gone: the host's app may have closed.
+const RECONNECT_LONG_S := 20.0
 const SCRIM_COLOR := Color(0.0, 0.0, 0.0, 0.6)
 const OVERLAY_PANEL_COLOR := Color(0.06, 0.07, 0.09, 0.97)
 
@@ -270,6 +274,8 @@ func net_notice_text() -> String:
 	if net_lost:
 		return t("NET_ROOM_LOST_HOST" if role == Wl.HOST else "NET_ROOM_LOST_CLIENT")
 	if net_reconnecting:
+		if reconnecting_s >= RECONNECT_LONG_S:
+			return t("NET_RECONNECTING_LONG")
 		return t("NET_STATE_RECONNECTING")
 	if host_dropped:
 		return t("NET_HOST_DROPPED")
@@ -303,7 +309,22 @@ func _on_net_peer_joined(peer_id: int) -> void:
 
 func _on_net_state(state: String, _detail: String) -> void:
 	net_reconnecting = role != Wl.SOLO and state == WlNetSession.STATE_RECONNECTING
+	if not net_reconnecting:
+		reconnecting_s = 0.0
 	_refresh_net_notice()
+
+
+func _tick(dt: float) -> void:
+	count_reconnect(dt)
+
+
+func count_reconnect(dt: float) -> void:
+	if not net_reconnecting:
+		return
+	var was_long := reconnecting_s >= RECONNECT_LONG_S
+	reconnecting_s += dt
+	if not was_long and reconnecting_s >= RECONNECT_LONG_S:
+		_refresh_net_notice()
 
 
 # --- overlay and panic -------------------------------------------------------------------------
