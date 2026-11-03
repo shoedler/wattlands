@@ -2,7 +2,7 @@
 
 Co-op tower defense for 1-4 riders at a Roman wheel fort (brief: `docs/games/siege.md`). Each rider turns one great treadwheel. A junction couples the wheel to one of five stations: the gold mine, the tree ballista, the great onager, the arrow organ or the tar works. Attackers march down one long road to the only gate. Waves are ERG intervals, breaks are recovery and shopping, and Overdrive is a 30 s SIM sprint block. Bots fill empty wheels, and every phase, the shop and the results work with zero input.
 
-Presentation `2d`: a fixed isometric pixel-art view designed at 960 x 540 art pixels (x2 at 1080p, 3.5 px per metre) whose canvas flexes with the window (`pixel_flex`, see "The flex canvas"), drawn by Siege's own CPU rasterizer and baked to PNGs. Version 0.3.1 (v2 with its own Roman HUD). v0.1.0 had a 3D fort, three roads, eight pads, a generator and denarii; v2 replaces all of that. Decisions: `docs/decisions/siege.md`. Real-trainer checklist: `HARDWARE_TEST.md`.
+Presentation `2d`: a fixed isometric pixel-art view designed at 960 x 540 art pixels (x2 at 1080p, 3.5 px per metre) whose canvas flexes with the window (`pixel_flex`, see "The flex canvas"), drawn by Siege's own CPU rasterizer and baked to PNGs. Version 0.6.0 (v2 with its own Roman HUD). v0.1.0 had a 3D fort, three roads, eight pads, a generator and denarii; v2 replaces all of that. Decisions: `docs/decisions/siege.md`. Real-trainer checklist: `HARDWARE_TEST.md`.
 
 ## How to play
 
@@ -103,7 +103,7 @@ Numbers are the current content in `content/siege/*.json` (committed state). Whe
 **Gate and Breach**
 - The gate has 130 HP; each Iron bands purchase adds 25 (180 with both).
 - At 0 HP it is breached: every station (the mine too) and pad stops for 10 s, perks included. Arrivals vanish without damage, and rams pause.
-- Afterwards the gate is back at 30 HP, and every rider loses 30% of their unspent gold (rounded down). The wave and its ERG target run on.
+- Every rider loses 30% of their unspent gold (rounded down) when the Breach starts, so buying first can't dodge it. Afterwards the gate is back at 30 HP, or at its current HP if that is higher. The wave and its ERG target run on.
 
 **Shop** (every break, including the build break; countdown over the last 10 s)
 

@@ -1,124 +1,28 @@
-# Wattlands: Diesel Domestiques game brief (v2)
+# Wattlands: Torque Company game brief (v4)
 
-Diesel Domestiques (game id `tank`) is one game module on the Wattlands platform: one to four riders crew a pedal-powered landship, one engine each. v1 (`tank-v0.1.0`, `tank-v0.1.1`) shipped from the first version of this brief. This is v2. Simon approved it on 2026-10-27 from the round 1 and round 2 mockups (published plan page "Diesel Domestiques v2 Plan"), and he authorized this rewrite: "all of those old decisions for that tank game can be amended as we please. We build it right, even if we break the brief rules." Where v2 differs from v1, v2 wins. The ADRs dated 2026-10-27 in `docs/decisions/tank.md` record each change. "BRIEF x.y" means a section of `docs/BRIEF.md`; this file is `docs/games/tank.md`.
+Torque Company (game id `tank`) is one game module on the Wattlands platform: one to four riders crew a pedal-powered landship, one seat each of six, and bots can fill the seats nobody takes. The enemy stands far across a night valley, so the screen splits: our tank and the near road on one side, a long-lens view of the enemy on the other. The game has been through four versions of this brief. Where the versions differ, the newest wins, and `docs/decisions/tank.md` records each change with its reason. "BRIEF x.y" means a section of `docs/BRIEF.md`; this file is `docs/games/tank.md`. The game was called Diesel Domestiques until 2026-10-31. The id `tank`, the `Tank` class prefix and the paths kept the old name.
 
-**THE reference:** `assets/tank/v2/source/reference.webp` (1088 × 608, Simon's image). "This is THE reference image. The game must look like this." Small tweaks are allowed so players can tell what they power. Simon's art direction, quoted from the prompt that made it:
+**The reference:** a 1088 × 608 image the owner made. "This is THE reference image. The game must look like this." Small tweaks are allowed so players can tell what they power. The file left the tree and stays in git history (`assets/tank/v2/source/reference.webp` at commit `d82d901c`). The owner's art direction, quoted from the prompt that made it:
 
 > tank / landship from a fictional ww2 era, allied side, side profile, driving through a starry, extremely dark, blue/greenish-tinted summer night in the forest … warm headlights and searchlights and few, green and red, small position lights … strong tilt shift … many rivets and intricate details about little mechanisms, armament and creature comforts … dark brown paint, weathering … sections that allow a peek beneath the armor, showcasing the main drive diesel engine, the electric motor for turret traverse, the petrol engine for loading the shell and some more. Everything inside is just about enough illuminated by the incandescent lights inside the tank, giving an eery vibe … All the mechanisms allow the examiner of the image to imagine how they work, as they have a logical process that can be inferred from looking at the mechanisms in detail.
 
-## v3 (2026-10-28): what changes from v2
+## How the design got here
 
-Simon played v2 and chose v3 from mockups (the "Diesel Domestiques v3 Options" page, rounds 1 to 4). Where this section and the v2 sections below differ, this section wins. The mockup code lives on local branches `mock/tank3-tank` (the tank generator, `assets/tank/v3/tools_src/`, round r6) and `mock/tank3-env` (forest planes, layout, light layers, seat HUD, `assets/tank/v3env/`, `src/games/tank/view/tank_v3_env.gd`, `src/games/tank/hud/tank_hud_seats.gd`).
-
-### One tank, five seats
-- **Tank:** every crew size (1-4) rides the same tank, the reference landship rebuilt as pixel art (`r6`: 475 × 216 art px, base art plus live parts). The Bulwark, Rampart, Citadel and Bastion variants and the Bulwark gearbox go.
-- **Seats:** five, with fixed trainer modes:
-
-  | Seat | Engine id | Machine | Trainer | Job | Empty seat |
-  | --- | --- | --- | --- | --- | --- |
-  | Drive | `diesel` | diesel | SIM, terrain grade | moves the tank; in a gun line it digs the berm | the tank stops |
-  | Gun | `dynamo` | dynamo | ERG, the bank pattern (55-100 %) | traverses and elevates the main gun, fires what is in the rack | the gun stays where it is and does not fire |
-  | Loader | `steam` | steam | SIM, boiler grade | reloads into a 3-round ready rack, about 7 s a shell in band | no reloads |
-  | Lights | `arc` | arc generator | ERG 65-80 % (searchlight load) | the searchlights: full gun range and normal dispersion | the gun reaches only the headlight's range (about 260 rules px), dispersion x2 |
-  | Secondaries | `feed` (new) | crank-driven twin belt feed | SIM, flat | the two bow guns: exactly 2 rounds per pedal revolution (rounds per minute = 2 × cadence); power in band sets their slew speed | silent |
-
-- **An empty seat does nothing.** With at most 4 riders at least one seat is always empty.
-- **Rotation is gone;** seat choice replaces it.
-
-### Seat choice and switching
-- **Moving:** any rider moves to an empty seat with left/right (pick) and confirm (sit), only while their seat lock is open.
-- **Seat lock:** a rider may change seats only 60 s or more after their last trainer-mode change of any kind (a seat switch or a plan boundary). A switch that would bring a mode change within 60 s of a planned one (a segment boundary such as a checkpoint) is refused. The HUD shows the lock as a timer.
-- **Effort:** each switch is a `replan` for that rider. The rest of the current phase continues with the new seat's mode and targets, and the platform ramps every ERG <-> SIM switch (BRIEF 4.5). The PlanValidator must pass every replanned plan with no switch warning.
-- **Automatic seating:** a rider who has never sent a seat or deliberate intent (Autopilot, and the solo rider by default) is seated automatically. The rule (solo loop):
-  1. Drive while no target is in range.
-  2. When a target comes and the rack is not full, the Loader until the rack is full.
-  3. Then the Gun while the rack holds shells and a target is in range.
-  4. The Secondaries when only light targets are within 220 px.
-
-  Every stay is at least 60 s. With 2-4 riders the automatic riders fill the most needed empty seat: Drive first, then Gun, Loader, Lights, Secondaries.
-
-### Combat changes
-- **Main gun reload:** the Loader in band fills a 3-round ready rack, one shell per `steam.full_j` (tuned so a shell takes about 7 s at 250 W). The Gun fires from the rack. Each shot chambers the next shell in 1 s at the loading elevation, after which the gun re-lays. Overpressure stays (a sprint for a double-damage shell).
-- **Secondaries:** two bow guns. Each pedal revolution of the Secondaries rider fires 2 rounds (alternating guns) at the nearest enemy 40-220 px ahead. Damage is per round, tuned for balance.
-- **Telegraphs:** every telegraphed shot warns at least 6 s ahead:
-
-  | Shooter | Telegraph |
-  | --- | --- |
-  | Light flank shot | 6 s |
-  | Heavy | 6 s |
-  | Destroyer | 7 s |
-  | Behemoth | 8 s |
-
-  The evade rule is unchanged: hold the sprint 2 s inside the warning (3 s for the Behemoth).
-- **Difficulty is enemy count:** enemy counts scale with the crew size (1 rider 0.5, 2 riders 0.7, 3 riders 0.85, 4 riders 1.0, rounded, at least 1). Enemy HP is the same for every crew size.
-- **Hitbox:** the rules' hull, turret and track-run rects come from the drawn tank (`r6_hitbox.json`, art px / 1.5), as do the trunnion, muzzle and bow-gun muzzles.
-- **Terrain relief:** the view follows the rules' terrain with a height profile plus small seeded cosmetic bumps.
-  - Every road wheel rides its own suspension arm.
-  - The hull rotates as a whole sprite (nearest filtering) to fit the wheels, and bobs on the springs.
-  - Enemies do the same.
-  - The rules may use the ground height for the aim solver; otherwise the relief is cosmetic.
-
-### World
-- **Forest, mostly:** the road runs through a pine forest at night, bluer and greener, with moderate tilt-shift. The road and tank sit lower (ground line 385 art px), with a soft verge between the road and the foreground blur.
-- **Little bases:** a fenced clearing with a bunker, lamp, crates and barrier stands at the depot start, at gun lines where it fits, and at the free-roam strongpoints.
-- **Removed:** the village, quarry, lake and foundry-town backdrops and zone planes.
-- **No people outside the tank.**
-- **Ashfall Road** keeps its segments, gun lines and the Behemoth, through the forest.
-- **Free-roam zones** become forest variants and base clearings. The strip names change to match.
-- **Lights:** the world's lights draw on their own layer behind the tank (the v2 layering bug). The tank's lights:
-  - the room lamps;
-  - the headlight;
-  - the turret searchlight, forward and about 11° down, on while Lights is manned and in band;
-  - the rear searchlight, aft and about 13° down, always on as a work light;
-  - v2's position lights.
-
-### The tank, in the view
-- **Base:** the r6 base art (re-pixelled from the reference, 63 colours).
-- **Live parts, drawn each frame:**
-  - the track and the road wheels on their suspension;
-  - the main gun with recoil;
-  - the bow guns tilting in their armoured box;
-  - each seat's machine moving with its rider (the diesel's pistons on cadence);
-  - a rider on each manned seat, and a bare saddle and still crank on an empty one;
-  - the turret's two windows: the ready rack with its manipulator, and the breech with its rammer, following the rules' rack and loader state;
-  - both bow guns' receivers.
-- **Firing:**
-  - the r6 main-gun blast: star flash, brake jets, fireball, smoke, dust, pebbles;
-  - 11 px recoil, a 2° hull rock, a short screen shake and a scene flash;
-  - the bow guns' per-round flashes, tracers and casings.
-
-### HUD
-- **Seat row:** seat panel A replaces the crew row: five live machine cards (Drive, Gun, Loader, Lights, Secondaries), each with a tiny ERG or SIM tag.
-  - Empty seats are dark and marked EMPTY.
-  - Your card carries YOU and the lock timer, and the hint plate reads "seat locked" or "< > move  OK sit".
-  - The rack pips show on the Gun and Loader cards, and rounds per minute on the Secondaries card.
-- **My numbers** follow your seat.
-- **W' becomes SPRINT.**
-- **Secondaries dial:** a small cold blue-white dial next to the main gun's arc.
-
-### Effort plan (per seat, mission segments)
-
-| Seat | Depot (WARMUP) | Advance | Gun line | Boss | Checkpoint |
-| --- | --- | --- | --- | --- | --- |
-| Drive | SIM game 0..+2 % | SIM game -3..+6 % | SIM flat (dig) | SIM flat | ERG 50 % |
-| Gun | ERG 50 % -> 65 % | ERG bank [55, 100] | same | same | ERG 50 % |
-| Loader | SIM flat, boiler 3 % × p | SIM flat, boiler 8 % × min(p, 1) | same | same | ERG 50 % |
-| Lights | ERG 50 % -> 65 % | ERG [65, 80] | same | same | ERG 50 % |
-| Secondaries | SIM flat | SIM flat | SIM flat | SIM flat | ERG 50 % |
-
-- **Free roam:** each seat's work mode for the whole roam phase. The Gun's bank range is [55, 85].
-- **v2's 90 % ERG gun-line block for the diesel is gone:** gun lines are now the Gun seat's bank work and the Drive seat's dig.
-- **Unchanged:** every BRIEF 4.6 and 4.5 check in 2.3 applies to every replanned plan.
+- **v1:** four tanks by crew size, rotation of engines at checkpoints, the platform's kit HUD, a Ram.
+- **v2:** the reference look as the art target, the game's own HUD, a fourth engine (the arc generator), bow guns, free roam. "Surge to evade" replaced the Ram: the legs are the input, not a button.
+- **v3:** one tank for every crew size with seats the riders choose and change, a 3-round ready rack for the Loader, the rebuilt pixel-art tank on suspension, a forest world. Rotation went.
+- **v4:** the far field and the split screen, difficulty and tank loss, a sixth seat (Repairs), bots and automatic seating, the Foundry Pact enemy art.
+- **Since v4:** the display name, and the Secondaries as machine guns (6 rounds per pedal revolution, 2026-11-01).
 
 ## 0. Hard requirements
 
 1. Build the game through the Game SDK only (BRIEF 3.6): a `GameModule` declared by `src/games/tank/game.json`, listed by `GameRegistry`, passing `tests/sdk/test_conformance.gd` with no change to platform tests.
-2. Presentation `2d` at `pixel_base` [960, 540] with `pixel_flex` `{"min": [852, 480]}`: the reference's night diorama (section 3). The rules keep their 640 × 360 units; the view scales them by 1.5.
-3. 1–4 human riders, no AI crew and no bots. The crew size picks the tank. Play is host-authoritative through the relay with room codes (BRIEF 5).
+2. Presentation `2d` at `pixel_base` [960, 540] with `pixel_flex` `{"min": [852, 480]}`: the reference's night diorama (section 3). The near rules work in rules px (8 per game metre) and the view scales them by 1.5 into art px. The far field has its own frame (2.4).
+3. 1–4 human riders, with bots allowed to fill empty seats (`bots` is true). Every crew size rides the same tank. Play is host-authoritative through the relay with room codes (BRIEF 5).
 4. Pedaling first: every crew size plays every content to the results with zero input (BRIEF 3.5).
-5. Each engine has its own effort profile (2.3). Every plan and directive obeys BRIEF 4.6 and the switch rules of BRIEF 4.5. The governor outranks gameplay: change the design, never the governor.
+5. Each seat has its own effort profile (2.3). Every plan and directive obeys BRIEF 4.6 and the switch rules of BRIEF 4.5. The governor outranks gameplay: change the design, never the governor.
 6. Rides are saved and uploaded by the platform (BRIEF 3.8), with a lap per plan phase.
-7. Original designs only, with no flags, insignia, national markings, text or numerals on vehicles, logos, brands, real vehicle names or existing franchises. The reference's turret star and "A17" are left off. Small crewmen (about 20 art px tall) are drawn and animated in code. People are allowed in v2.
+7. Original designs only, with no flags, insignia, national markings, text or numerals that could pass for real ones on vehicles, no logos, brands, real vehicle names or existing franchises. The reference's turret star and "A17" are left off. Small riders (about 20 art px tall) are drawn and animated in code inside the tank. No people outside it.
 8. Testable headless with MockTrainer riders and Autopilot. Every gate in section 4 is green.
 9. The game draws its own HUD with no platform kit widgets (3.6), the way Turbo Reel does.
 
@@ -131,133 +35,136 @@ Simon played v2 and chose v3 from mockups (the "Diesel Domestiques v3 Options" p
   - Never print, log or commit `FAL_KEY`.
   - `tools/godot.sh` exit 75 is a lock-wait timeout: retry.
 - **Art sources:**
-  - Procedural first. The tank comes from the reference's own pixels. Machines, crew, HUD, fonts, effects and enemies are drawn in code.
-  - fal is only a fallback for a backdrop plane the critic finds weak, starting from Simon's prompt. The cap is $10 for v2.
-- **Branches:**
-  - The integration branch is `game/tank2` (worktree `C:/Projects/wt/tank2`). Builders use their own worktrees and branches.
-  - Never touch the main checkout `C:/Projects/wattlands`, except for git reads and, only while it is clean and on `main`, the final merge. Another session works there.
-  - Never touch `C:/Projects/wt/reel*`, `C:/Projects/wt/v030*` or `C:/Projects/wt/exe`.
-  - Never use `git stash`: the stash list is shared across worktrees.
-  - Commits are small and conventional, prefixed `tank:`, except `platform:` changes and `docs:` commits.
-- **Owned paths:**
+  - The game and its tools make no image-model request. The tank comes from the reference's own pixels, rebuilt as pixel art by scripts in the repository. Machines, riders, enemies, HUD, fonts and effects are drawn in code.
+  - `docs/credits.d/tank.md` lists every source.
+- **Commits** are small and conventional, prefixed `tank:`, except `platform:` and `docs:` commits.- **Owned paths:**
   - `src/games/tank/`, `content/tank/`, `assets/tank/`, `tests/games/tank/` and `.github/workflows/game-tank.yml`.
   - `docs/decisions/tank.md`, `docs/credits.d/tank.md` and `docs/changelog.d/tank.md`.
   - This file.
-- **Platform changes:** only when a P0 item is blocked. Keep them minimal and additive, with tests, committed alone with the prefix `platform:` (CLAUDE.md). None is expected: `pixel_flex`, the game's own HUD Controls, `shows_power` and `help` exist on `main`.
-- **Release:** v2 is done when it is merged into `main`, tagged `tank-v0.2.0` and published as a GitHub release with a Windows build and screenshots (section 6). Push only `main` and the tag. Never force-push. If a push is rejected, stop and report.
+- **Platform changes:** only when a P0 item is blocked. Keep them minimal and additive, with tests, committed alone with the prefix `platform:` (CLAUDE.md). The game needed one: `DirectiveSink.split` ends a phase early and replans in the same tick, which seat moves use (2.2). It refuses a split that would break the 30 s switch spacing of BRIEF 4.5.
+- **Release:** a version is done when it is merged into `main` and released on GitHub with the Windows build (section 5).
 
 ## 2. Game design
 
 ### 2.1 Fantasy and pillars
 
-A dark brown, riveted landship of a fictional 1940s grinds through a starry blue-green summer night: forest roads, a lake under pale cliffs, a village and a quarry. Its hull is an x-ray cutaway. Each engine room is one rider's station, and its machine visibly runs on that rider's cadence and power. Little crewmen work the rooms.
+A dark brown, riveted landship of a fictional 1940s grinds through a starry blue-green summer night: forest roads, bases in clearings, and an enemy of field-grey factory armour far across the valley. Its hull is an x-ray cutaway. Each seat is one rider's room, and its machine visibly runs on that rider's cadence and power. Little riders work the rooms.
 
 - **Your machine is your display.** Cadence drives its motion. Power against your target drives its heat, light, smoke and gauges (3.4). Your room lamp glows in your slot colour while you are in band.
-- **Each engine feels different:**
-  - the diesel is road tempo with sprints and ERG 90% while dug in;
+- **Each seat feels different:**
+  - the diesel is road tempo with sprints;
   - the dynamo is ERG that climbs as its capacitor bank drains;
-  - the steam engine is a grade that rises with boiler pressure and resets with every shell;
-  - the arc generator is steady ERG tempo that lifts while the bow guns fire.
-- **Few decisions.** One decision every 10–30 s at most. Aiming, firing, latching and the solo lever are automatic by default. Sprints are prompted: "Surge to evade" and "Surge to overpressure". Failure costs score or time, never the workout.
+  - the steam engine is a grade that rises with boiler pressure and resets with every shell stowed;
+  - the arc generator is steady ERG tempo that lifts while an enemy stands in range;
+  - the belt feed is a machine gun: six rounds a turn of the crank, so it fires as fast as you pedal;
+  - the repair press is ERG that lifts while the hull is damaged.
+- **Few decisions.** One decision every 10–30 s at most. Aiming, firing, latching and seating are automatic by default. Sprints are prompted: "Surge to evade" and "Surge to overpressure". Failure costs score or time, never the workout.
 
-### 2.2 Players, slots and tanks
+### 2.2 Players, seats and the tank
 
 ```json
-{"id": "tank", "title": "Diesel Domestiques",
- "summary": "Crew a pedal-powered landship through a starry forest night. One engine per rider: diesel, dynamo, steam, arc generator.",
- "version": "0.2.0", "min_players": 1, "max_players": 4, "bots": false, "presentation": "2d",
+{"id": "tank", "title": "Torque Company",
+ "summary": "Crew a pedal-powered landship through a starry forest night. Six seats, one rider each, and the enemy far across the valley.",
+ "version": "0.6.0", "min_players": 1, "max_players": 4, "bots": true, "presentation": "2d",
  "pixel_base": [960, 540], "pixel_flex": {"min": [852, 480]},
  "entry": "res://src/games/tank/tank_game.gd",
- "picker_image": "res://assets/tank/v2/picker_card.png",
- "contents": ["ashfall_road", "roam_30", "roam_10", "roam_20", "roam_45", "roam_60", "drill"],
+ "picker_image": "res://assets/tank/cards/picker_card.png",
+ "contents": ["ashfall_road", "ambush_15", "roam_30", "roam_10", "roam_20", "roam_45", "roam_60", "drill"],
  "default_content": "ashfall_road", "e2e_content": "drill", "zero_input_content": "ashfall_road",
  "first_run_priority": -1,
- "options": [{"id": "rotation", "type": "toggle", "default": true, "label": "TANK_OPT_ROTATION"}],
- "content_cards": {"ashfall_road": {...featured}, "roam_30": {...featured}, "roam_10": {...}, "roam_20": {...}, "roam_45": {...}, "roam_60": {...}, "drill": {...not featured}}}
+ "options": [{"id": "difficulty", "type": "choice", "default": "auto", "choices": [auto, easy, normal, hard]}],
+ "player_options": [{"id": "miniature", "type": "toggle", "default": true}],
+ "content_cards": {"ashfall_road": {...featured}, "ambush_15": {...featured}, "roam_30": {...featured}, "roam_10": {...}, "roam_20": {...}, "roam_45": {...}, "roam_60": {...}, "drill": {...not featured}}}
 ```
 
-The content cards use in-engine renders under `assets/tank/v2/` and `TANK_CARD_*` detail strings. `rotation` applies to missions only. Free roam never rotates (Simon's decision).
+The content cards use in-engine renders under `assets/tank/cards/` and `TANK_CARD_*` detail strings. `difficulty` is set by the host (2.4). `miniature` is the rider's own tilt-shift toggle (3.1).
 
-| Crew | Tank | Engine rooms, rear to front | Notes |
-| --- | --- | --- | --- |
-| 1 | Bulwark | bulwark (the diesel with a three-way gearbox) | the short tank |
-| 2 | Rampart | diesel, dynamo | |
-| 3 | Citadel | diesel, steam, dynamo | the reference tank |
-| 4 | Bastion | diesel, steam, dynamo, arc | the Citadel plus an arc-generator room and a searchlight tower |
+**One tank, six seats.** Every crew size (1–4) rides the same tank, the reference landship rebuilt as pixel art. Each seat has a machine, a trainer mode and a job. An empty seat does nothing, and with at most 4 riders at least two seats are always empty.
 
-- The modules are cut from the reference (3.2). The art kit measures hull sizes and anchors, and `tanks.json` takes them in rules px (art px / 1.5).
-- **Starting engines by slot:** 0 diesel, 1 dynamo, 2 steam, 3 arc. The room order above is the art's; the slot-to-engine map is independent of it.
-- **Rotation** (missions, default on): at each checkpoint everyone moves to the next engine in slot order: diesel → dynamo → steam → arc → diesel, among the tank's engines. It is fixed at the start, with no `replan`. With 4 riders and 4 stages every rider works every engine once.
-- **Engine roles:**
-  - Diesel: tracks, and the dozer blade at a gun line.
-  - Dynamo: turret traverse and gun elevation; the hoist in the Rampart; the bow guns in the Rampart and the Citadel.
-  - Steam: the loader in the Citadel and the Bastion.
-  - Arc generator: the searchlights and the bow guns in the Bastion.
-  - The Bulwark's diesel does everything through its gearbox.
-- **Drops and AFK:** no join after the start. A dropped or AFK rider's station runs on reserve (as if P_eff 60 W, never in band) under Autopilot. If every rider is AFK, nothing has power.
+| Seat | Engine id | Machine | Trainer | Job | Empty seat |
+| --- | --- | --- | --- | --- | --- |
+| Drive | `diesel` | diesel | SIM, terrain grade | moves the tank; at a holding action it digs the berm in SIM flat, and the berm absorbs hits | the tank stops |
+| Gun | `dynamo` | dynamo | ERG, the bank pattern (55–100 %) | lays, chambers and fires the main gun; the bank pays for stabilizing and elevation | the gun does not fire |
+| Loader | `steam` | steam | SIM flat plus boiler grade | builds shells into a ready rack of 3, about 7 s a shell at 250 W in band | no reloads |
+| Lights | `arc` | arc generator | ERG 65–80 % (searchlight load) | in band the searchlights are lit: the gun reaches its full range at normal dispersion | the gun reaches less far (about 2300 m) with dispersion × 1.5 |
+| Secondaries | `feed` | crank-driven twin belt feed | SIM flat | the two bow machine guns: 6 rounds per pedal revolution (540 a minute at 90 rpm), at near threats and barricades; power in band sets their slew speed | silent |
+| Repairs | `repair` | rivet hammer and press | ERG 55–70 % (repair load) | rebuilds the hull per joule in band, only while it is below its maximum | no repairs |
+
+- **Rooms, rear to front:** diesel, steam, dynamo, arc, repair (upper deck), feed.
+- **Starting seats:** a crew of n starts on Drive, Gun, Loader, Lights (the first n). A solo rider is seated by the solo loop (2.5).
+- **Moving seats:** any rider may move at once to an empty seat, or to a bot's seat, which the bot gives up. The HUD's picker is `<` `>` to pick, OK to sit, back to close. A move is refused only for a seat a human holds, for a rider on reserve and in the cool-down. There is no seat lock. The stations, the `seat` event, the HUD and the power follow in the same tick.
+- **The trainer follows the seat** (directive pattern 9, 2.3). A move that keeps the mode splits the rider's phase at once. An ERG ↔ SIM move splits when the rider's last switch is 30 s old (BRIEF 4.5), or at the segment's end when the split's rest could not hold 30 s. Meanwhile the rider works the new seat from their own power and the seat card says "ERG in 12 s" or "ERG at stage end". Moving back cancels a waiting switch. Every split and replan passes the PlanValidator with no switch warning, and the platform ramps every ERG ↔ SIM switch (BRIEF 4.5).
+- **Drops and AFK:** no join after the start. A dropped or AFK rider's seat runs on reserve (as if P_eff were 60 W, never in band) under Autopilot. If every rider is AFK or stopped, the host pauses the game.
 
 ### 2.3 Effort plan
 
-`effort/tank_plan_builder.gd` builds one EffortPlan per rider. Mission segments are unchanged from v1:
+`effort/tank_plan_builder.gd` builds one EffortPlan per rider. Mission segments:
 
 | Segment | Kind | Length |
 | --- | --- | --- |
 | Depot | WARMUP | 300 s |
 | Advance | WORK | open-ended, 180 s nominal (90–300 s) |
-| Gun line | WORK | open-ended, 120 s nominal (60–180 s) |
+| Holding action | WORK | open-ended, 120 s nominal (60–180 s) |
 | Checkpoint | RECOVERY | 60 s, ERG 50% for everyone |
 | Boss | WORK | open-ended, 240 s nominal (120–360 s) |
 | Cool-down | appended by the validator | |
 
-The nominal mission is 30 min and at most 41 min. The rules read segments from `frame.phase` and call `end_phase` for every rider in one step once an objective is done and `min_s` has passed. Free roam has its own plan (2.10).
+Ashfall Road runs the depot, three stages of Advance, holding action and checkpoint, then the boss. The nominal mission is 30 min and at most 41 min. Ambush (2.9) is shorter. The rules read segments from `frame.phase` and call `end_phase` for every rider in one step once an objective is done and `min_s` has passed ("Regroup" until then). The platform cuts a phase at `max_s`; that is an overrun and costs score (an Advance tows the tank to the halt line, a holding force is barraged, the Behemoth withdraws). The ride itself never fails. Free roam has its own plan (2.10). The internal ids `gun_line`, `SEG_GUN_LINE` and `TankGunLineState` stay for the wire, the plans and the FIT; the UI says "Holding action".
 
-| Engine | Depot (WARMUP) | Advance | Gun line | Boss |
-| --- | --- | --- | --- | --- |
-| Diesel | SIM `game`, terrain 0 … +2% | SIM `game`, terrain −3 … +6%; evade sprints | ERG 90% (dig in) | SIM `flat`; evade sprints |
-| Dynamo | ERG 50%, `ramp_to_pct` 65 | ERG 55%, `range_pct` [55, 100] (bank) | same | same |
-| Steam | SIM `flat`, boiler 3% × pressure | SIM `flat`, boiler 8% × min(pressure, 1); Overpressure and evade sprints | same | same |
-| Arc generator | ERG 50%, `ramp_to_pct` 65 | ERG 65%, `range_pct` [65, 80] (arc load) | same | same |
-| Bulwark | SIM `game`, terrain 0 … +2%; lever drills | SIM `game` + Hoist grade 4%; evade sprints | ERG 90% | SIM `flat` + Hoist 4% or 0; evade sprints |
+| Seat | Depot (WARMUP) | Advance | Holding action | Boss | Checkpoint | Roam |
+| --- | --- | --- | --- | --- | --- | --- |
+| Drive | SIM `game`, terrain 0 … +2 % | SIM `game`, terrain −3 … +6 %; evade sprints | SIM flat (dig) | SIM flat; evade sprints | ERG 50 % | SIM `game`, valley grade −3 … +5 % |
+| Gun | ERG 50 % → 65 % | ERG 55 %, `range_pct` [55, 100] (bank) | same | same | ERG 50 % | bank [55, 85] |
+| Loader | SIM flat, boiler 3 % × pressure | SIM flat, boiler 8 % × min(pressure, 1); Overpressure and evade sprints | same | same | ERG 50 % | same |
+| Lights | ERG 50 % → 65 % | ERG 65 %, `range_pct` [65, 80] (searchlight load) | same | same | ERG 50 % | same |
+| Secondaries | SIM flat | SIM flat | SIM flat | SIM flat | ERG 50 % | SIM flat |
+| Repairs | ERG 50 % → 65 % | ERG 55 %, `range_pct` [55, 70] (repair load) | same | same | ERG 50 % | same |
 
-**Enemies shape the workout:**
-- light tanks bring short sprint prompts (their flank shot, 2.4);
-- mediums bring sustained tempo;
-- heavy tanks bring the 90% gun-line duel;
+A seat move replans the rest of the rider's plan from these same tables. Difficulty never touches an effort number (2.4).
+
+**The fight shapes the workout:**
+- light tanks bring a telegraphed flank shot and short sprint prompts;
+- mediums bring sustained tempo and the bank's drain;
+- destroyers and heavies bring telegraphed shots to evade and long duels;
 - the Behemoth is the sprint-heavy finale.
 
-The encounter list is fixed in the mission file, so the PlanValidator checks the whole plan before the ride. Enemies never add, lengthen or harden a phase. Tank calls no `replan`.
+The encounter list is fixed in the mission file, so the PlanValidator checks the whole plan before the ride. Enemies never add, lengthen or harden a phase. A tank loss (2.4) changes no plan.
 
 **In band** (glow, score, charging):
 
-| Engine | In band when |
+| Seat | In band when |
 | --- | --- |
-| Diesel and Bulwark in SIM | 76–105% FTP; evade sprints count |
-| Dynamo, arc generator, and every 90% gun line | power ≥ 95% of the applied target and cadence ≥ 60 |
-| Steam, building | ≥ 90% FTP |
-| Steam, loaded or cycling | cadence ≥ 50 |
+| Drive and Secondaries in SIM | 76–105% FTP; evade sprints count |
+| Gun, Lights, Repairs (ERG) | power ≥ 95% of the applied target and cadence ≥ 60 |
+| Loader, building | ≥ 90% FTP |
+| Loader, idle (rack full) | cadence ≥ 50 |
 | Depot and checkpoints | cadence ≥ 60 |
+
+While the trainer waits for a seat move, an ERG seat on a SIM trainer is in band at ≥ 95% of the seat's planned target (× 0.85 while FTP is unverified) and cadence ≥ 60; a SIM seat on an ERG trainer uses the SIM band.
 
 **Checks** (each tested, section 4):
 - **4.6.1:**
   - Every target and range bound is 50–100% FTP, and nothing exceeds 105%.
   - The boss and every roam phase longer than 300 s stay under their 105% cap.
-  - 90% gun lines last ≤ 180 s.
+  - The schema still holds every ERG phase planned at 90% or more to 180 s, though no seat plans one now.
   - The unverified factor of 0.85 only lowers targets.
-- **4.6.2:** a bank or arc update moves ≤ 10 points, sent as three sub-steps 1 s apart (≤ 3.3% FTP/s).
-- **4.6.3:** rescue arms in dynamo and arc phases while the applied target is ≥ 60% FTP, and in every 90% gun line.
-- **4.6.6:** steam 8% × difficulty ≤ +8%; diesel (−3 … +6%) × difficulty; Bulwark (6 + 4)% × difficulty ≤ +10%. The largest haptic is +3%.
+- **4.6.2:** a bank, arc or repair update moves ≤ 10 points, sent as three sub-steps 1 s apart (≤ 3.3% FTP/s).
+- **4.6.3:** rescue arms in every ERG phase while the applied target is ≥ 60%.
+- **4.6.6:** boiler 8% × the rider's difficulty setting ≤ +8%; terrain (−3 … +6%) × the same. The largest haptic is +3%.
 - **4.6.8:** the depot stays at ERG 50–65% and SIM 0 … +3% before difficulty, with no haptics.
-- **BRIEF 4.5:** per-rider ERG ↔ SIM switches are ≥ 60 s apart.
+- **BRIEF 4.5:** per-rider ERG ↔ SIM switches are ≥ 30 s apart.
 
-**Directive patterns** (`ctx.directives`, `source: "tank"`):
-1. **Bank (dynamo):** `{mode: ERG, target_pct: 55 + 45 × (1 − bank/100), reason: "bank"}` every 5 s in sub-steps, inside `range_pct` (roam: [55, 85], 2.10). None in the depot or checkpoints.
-2. **Arc:** `{mode: ERG, target_pct: 65 + 15 × duty, reason: "arc"}` every 5 s in sub-steps. `duty` is the share of the last 10 s in which the bow guns were firing (0–1). None in the depot or checkpoints.
-3. **Boiler:** `{mode: SIM, mode_grade: 8% × min(pressure, 1), reason: "boiler"}`, as in v1.
-4. **Hoist (Bulwark):** as in v1.
-5. **Terrain:** `course_grade(peer, pct)` at 2 Hz.
-6. **Cadence:** `cadence_band(peer, 60, 120)` at each segment start, and (50, 120) for a loaded or cycling loader.
+**Directive patterns** (`ctx.directives`, `source: "tank"`, sent only by `TankDirector`):
+1. **Bank (Gun):** `{mode: ERG, target_pct: 55 + 45 × (1 − bank/100), reason: "bank"}` every 5 s in sub-steps, clamped to `range_pct` (roam: [55, 85]). None in the depot or checkpoints.
+2. **Arc (Lights):** `{mode: ERG, target_pct: 65 + 15 × duty, reason: "arc"}` on the same schedule. `duty` is the share of the last 10 s in which an enemy stood in the main gun's range (0–1).
+3. **Boiler (Loader):** `{mode: SIM, mode_grade: 8% × min(pressure, 1), reason: "boiler"}`, at most once a second, rising at most 0.5% a step; 0 at a stow and while the rack is full; 3% in WARMUP.
+4. Retired (it belonged to a v1 tank's gearbox).
+5. **Terrain:** `course_grade(peer, pct)` at 2 Hz in `grade_source: game` phases; 0 under a tow.
+6. **Bands:** `cadence_band(peer, 60, 120)` at each segment start, and (50, 120) while the Loader idles; `power_band` 76–105% for Drive and Secondaries in WORK SIM.
 7. **Haptics** (2.7).
 8. **`end_phase`.**
+9. **The trainer follows the seat** (2.2): `split` and `replan`.
+10. **Repair (Repairs):** `{mode: ERG, target_pct: 55 + 15 × duty, reason: "repair"}` on the arc's schedule. `duty` is the share of the last 10 s in which the hull was below its maximum.
 
 Nothing is sent in the cool-down.
 
@@ -265,71 +172,146 @@ Nothing is sent in the cool-down.
 
 ### 2.4 Rules and mechanics
 
-Pure `step(state, inputs, dt)` classes at 0.05 s, using only `ctx.rng`, configured by parsed content dictionaries. Units: rules px (640 × 360 world), game metres, seconds, P_eff watts. The v1 rules carry over unless changed here: drive and speed model, dig in and berm, the dynamo bank, steam pressure and Overpressure, the Bulwark gearbox and auto-lever, damage, breakdown, overrun, enemies, gun lines and the boss.
+Pure `step(state, inputs, dt)` classes at 0.05 s, using only `ctx.rng`, configured by parsed content dictionaries. Units: rules px (near), metres (far and game distance), seconds, P_eff watts.
 
-**Removed: the Ram.** This covers its rules, state, intents (`ram`, ability_1 for the diesel), cues, haptic, events (`ram`, `dodge`), HUD cell, sound, content keys, strings and tests. Obstacles (wire, wrecks) stop the tank until a heavy shell, three light shells or 4 s of bow-gun fire within range clears them. The Bulwark's boss lunge is gone.
+**Two frames, no conversion in the rules.**
 
-**New: Surge to evade.**
-- **Telegraphed shots:**
+| Thing | Frame | Unit |
+| --- | --- | --- |
+| Hull, barricades, drill wrecks, tank traps, recon cars, tankettes, bow guns | near | rules px |
+| Light, medium, destroyer, heavy, Behemoth | far | `range_m` from the hull's front |
+| Far shells | far | range and height in metres |
+| Near threats' rounds, the main gun at a barricade or drill wreck | near | px |
 
-  | Shooter | Telegraph |
-  | --- | --- |
-  | Tank destroyer | 4 s glint |
-  | Heavy tank | 3 s muzzle glow |
-  | Behemoth main gun | 6 s |
-  | Light tank | 2.5 s flank shot: its first shot after it reaches its hold distance (8 damage, 70%) |
+Far enemies pace the tank, so Advance lengths and terrain stand alone. Nothing spawns or moves behind the tank, and there are no stationary guns.
 
-- **Who sees the prompt:** during a telegraph, every peer shows the world tag "SURGE TO EVADE" over the shooter with countdown pips. The instruction line ("SURGE nnn+ W s") shows only to riders who can evade: in a SIM WORK phase, past the first 300 s.
-- **How the shot misses:** if any such rider holds the sprint rule (≥ 1.2 × FTP over the last 3 s, BRIEF 3.5, raw W) for ≥ 2 s inside the telegraph (≥ 3 s for the Behemoth), the shot misses. The tank lurches (diesel or Bulwark) or the boiler blows a smoke screen (steam).
+**Enemies** (the Foundry Pact, 3.5):
+
+| Enemy | Behaviour |
+| --- | --- |
+| Light tank | Far, nearest of the far kinds. Weaves around its hold. Its first shot there is a telegraphed flank shot. Retires after a while with no credit |
+| Medium tank | Far. Holds and shifts on a timer |
+| Tank destroyer | Far, farthest, a casemate. Telegraphs each shot and shifts after it |
+| Heavy tank | Far. Telegraphs, shifts on a timer, backs off in steps as it takes damage |
+| Behemoth (boss) | Far. Three bogies, then the turret. Creeps in; each broken bogie pushes it back. Main gun every 35–45 s (25–35 s once only the turret stands), telegraphed |
+| Recon car, tankette | Near. Burst from the roadside bushes, dash away with pauses, fire back while paused, then flee. Only the Secondaries hit them. One that gets away gives no reward and no penalty |
+
+Far enemies enter in 10 s from just past their hold, fading out of the haze. A holding action is a force of far kinds on the move at long range, retiring and shifting. Its objective is every enemy of the force down; near threats run alongside by elapsed time. An Advance's objective is the halt line.
+
+**Main gun.**
+- Elevation runs −12 … +30°.
+- Far shells fly at 560 m/s under 70 m/s² (real speed, gravity × 7, so the barrel visibly lays 5–16°): 800 m takes 1.43 s, 2200 m 4.06 s. `TankBallistics.far_lead` solves lead from the target's range rate.
+- Auto-aim picks by priority and fires on target (never at a near threat).
+- Dispersion widens on a low bank and × 1.5 in the dark (Lights seat empty or unlit). The shell lands where the error sends it: a direct hit inside the target's `hit_half_m`, else splash within `splash_m`, else a `splash` event.
+- Near arcs stay for barricades and drill wrecks.
+- Damage: light shell 14, heavy 35, Overpressure 70, against each enemy's armour factor.
+
+**The shell's path.** Ours leaves the near panel as a tracer, flies on the shell screen and drops into the far panel. Theirs leaves the far panel, flies on the shell screen and comes in on the near panel: that is the telegraph to read.
+
+**Loader.** The Loader in band builds one shell per 1750 J of P_eff into a ready rack of 3 (full at the start, and again when the crew leaves the depot). At 100% pressure the shell is stowed: a heavy shell, or a light one if latched from 40%. Inside the 5 s window after a stow the rider may surge (`over`) to take the shell back to the boiler and overpressure it (100 → 150% on 1300 J while the sprint rule holds, a double-damage shell). The Gun chambers the oldest shell in 1 s, then auto-aim lays again. A solo rider's rack is restocked to 3 at each checkpoint.
+
+**Gun bank (Gun).** The bank fills in band (+1 per 180 J of P_eff) and drains for stabilizing (2.25 a second while a fight is on), elevation (0.5 per degree) and traverse (15 each). A low bank widens dispersion. The ERG target climbs as it drains (pattern 1). A rescue freezes the bank and the turret.
+
+**Lights.** While the Lights rider is in band the searchlights are lit and the gun has its full range at normal dispersion. Empty or dark, the gun reaches only 2300 m with dispersion × 1.5. Rescue: the searchlights dim (toast "Arc generator stalled").
+
+**Secondaries.** The Secondaries rider fires 6 rounds per pedal revolution (`TankFeedState.ROUNDS_PER_REV`; 540 a minute at 90 rpm), alternating the two bow guns, at the nearest near threat whose near edge is 4–200 px off the hull front, else at a barricade there. 0.375 damage a round. Power in band sets the slew speed (8 or 40°/s); a round hits within 3° of the target. Near threats and barricades are scaled to this rate: at 90 rpm a recon car (22.5 HP) takes about 6.7 s, a tankette (13.5 HP) and a barricade (36 rounds that hit) about 4 s. The bow guns never hit far enemies.
+
+**Repairs.** The Repairs rider rebuilds 3 hull HP per kJ of P_eff in band (× the difficulty's repair rate), one patch per 4 HP, only while the hull is below its maximum. A crank-driven rivet hammer strikes once per revolution and a press closes on each patch.
+
+**Hull and breakdown.** Hull HP is 150, and each checkpoint raises it by 30 and heals 30 (Ambush starts at 90 and adds 20). The berm (Drive, at a holding action) absorbs hits first: 250 J of P_eff a HP, up to 40 HP.
+
+**Telegraphs.** A telegraphed shot warns before it flies:
+
+| Shooter | Telegraph (before difficulty) |
+| --- | --- |
+| Light flank shot (first shot at its hold; 10 damage, 70%) | 6.5 s |
+| Tank destroyer | 5 s |
+| Heavy | 5 s |
+| Behemoth main gun | 6 s |
+
+The telegraph plus the shell's minimum flight is at least 6 s at Hard. Mediums fire without a telegraph.
+
+**Surge to evade.**
+- **Who sees the prompt:** during a telegraph, every peer shows the world tag "SURGE TO EVADE" over the shooter with countdown pips. The instruction line ("SURGE nnn+ W s") shows only to riders who can evade: in a SIM WORK phase of their own plan, past its first 300 s.
+- **How the shot misses:** if any such rider holds the sprint rule (the last 3 s average ≥ 1.2 × FTP, BRIEF 3.5, raw W) for ≥ 2 s between the telegraph's start and the landing (≥ 3 s for the Behemoth), the shot misses. The shot is decided at landing, so a dead shooter's shell still resolves.
 - **Events and results:** event `evade` `{e, ok}`. Results count evades.
 - **No intent.** Autopilot never sprints, so a zero-input crew takes the hit.
 
-**Gun:**
-- Elevation runs −12 … +30° (v1: −5).
-- **Bow guns:** two short guns in the nose, as in the reference, on every tank. They replace the Citadel's fore and aft secondaries.
-- A burst does 5 damage every 2 s at the nearest enemy ahead from 40 to 220 px off the hull front, auto-aimed. Mediums take 50%; heavies, destroyers and Behemoth parts take 25%.
-- **Power source by tank:**
+**Crew scaling.** Enemy counts scale with crew size: 0.5, 0.7, 0.85 and 1.0 for 1–4 riders (rounded, at least 1), taken from each list in order, so each list puts first what a smaller crew must meet. A mission entry with `min_crew` is there only for crews of that size and up. Enemy HP is the same for every crew size. A crew takes a share of the damage: 0.62, 0.57, 0.74 and 0.74. A solo rider meets none of the missions' near threats or barricades that `min_crew` leaves out, a Behemoth with its bogies already wrecked, and a rack restocked at each checkpoint.
 
-  | Tank | Bow guns run on |
-  | --- | --- |
-  | Bastion | the arc generator: full rate in band, half rate under band, none while AFK |
-  | Rampart and Citadel | the dynamo bank, 2 units per burst, none below 10 |
-  | Bulwark | its gearbox, at half rate, free |
+**Difficulty.** The lobby option `difficulty` is set by the host: `auto` (the mission's `difficulty_default`), `easy`, `normal` or `hard`. It multiplies enemy HP, damage, accuracy, counts, telegraph length and the repair rate, and sets whether a tank can be lost. It never touches an effort number, a plan or a governor input: the schema refuses any other key in a difficulty row, a static test finds no difficulty read under `effort/`, and the plans are identical at all three levels.
 
-- Shell code 4 is the bow-gun round (`SHELL_BOW`, formerly `SHELL_SECONDARY`).
-- The main gun traverses for rear enemies, as in v1 (auto-aim).
+| | Easy | Normal | Hard |
+| --- | --- | --- | --- |
+| HP | × 0.6 | × 1 | × 1.25 |
+| Damage | × 0.55 | × 1 | × 1.5 |
+| Accuracy | × 0.75 | × 1 | × 1.2 |
+| Count | × 0.6 | × 1 | × 1 |
+| Telegraph | × 1.25 | × 1 | × 0.75 |
+| Repair rate | × 1.5 | × 1 | × 0.7 |
+| Hull at 0 | breakdown | TANK LOST | TANK LOST |
 
-**Arc generator (Bastion):**
-- **Arc load:** `duty` (2.3) rises while the bow guns fire.
-- **Searchlights:** while the arc rider is in band, the searchlights are lit, which halves the main gun's dispersion.
-- **Rescue:** the bow guns stop and the searchlights dim (toast "Arc generator stalled").
+**TANK LOST.** The crew is towed back (no movement, no fire, nothing spawns, 8 s), then the stage restarts from its start with its enemies back and 70% of the hull. Rules only: same plan phase, same clock, no directive, no replan, no lap. Riders keep pedalling and the HUD says KEEP RIDING. `max_s` still cuts the phase, so a failed stage may be skipped when its time runs out. Each loss costs survival score and caps the grade at A. In free roam the field clears and the tank drives on, at the breakdown's points. A rider in rescue, AFK or dropped holds the hull at 1 HP on every difficulty (BRIEF 4.6.3), as do a won stage and every phase but WORK.
 
-**Enemies:**
-- **Scale:** HP and counts are scaled by tank: Bulwark 0.75, Rampart 0.8, Citadel 1.0, Bastion 1.2 (counts rounded, at least 1).
-- **Spacing:** enemies keep their own depth lanes and spacing, so none overlap at a gun line (the round 2 mock's fix).
-- **Caps:** 16 enemies, 24 shells.
+**Breakdown (Easy).** No movement or fire, damage ignored, until the mean P_eff of the manned seats has paid 5000 J; then the tank runs on 40 HP.
+
+**Obstacles.** Wire, wrecks and tank traps stop the tank short until a heavy shell, three light shells or 36 bow-gun rounds clear them.
+
+**Caps:** 16 enemies, 24 shells.
 
 **Tuning targets:**
-- **T1–T5:** as in v1, including crew 4 (T1 crews 1–4; T2 crews 2–4).
-- **T6:** every Advance has at least one sprint prompt (a telegraphed shot) and one medium. Stages 2 and 3 end in a heavy-tank duel lasting 90–180 s for a compliant crew.
-- **T7 (arc):** a compliant arc rider's applied target spends ≥ 30 s above 72% FTP per stage and is back to ≤ 68% within 60 s of a fight's end.
+- **T1:** a compliant crew's phase times, grade and losses on each difficulty. On Ashfall Road a crew of two may hold a holding action up to 180 s, the 90% limit of the schema; every other crew 160 s.
+- **T2:** the Gun's bank climbs during fights for crews 2–4.
+- **T3:** shells per stage.
+- **T4:** the solo loop drives and works each holding action.
+- **T5:** the mean score falls strictly with rider compliance (100, 85, 70%).
+- **T6:** telegraphs and duels.
+- **T7:** the Lights' searchlight load.
+- **T8:** near threats are killed or escape, none left unresolved.
+- **T9:** no fire in checkpoints, and every tank loss lies in WORK and is followed by a restart.
 
-### 2.5 Autopilot and zero input
+Targets by difficulty, for a compliant crew: Easy wins with no losses and grade A or S; Normal usually wins with 0–1 losses and grades B or A (S with no losses); Hard shows 1–2 losses on most seeds and grades C to A, never S with a loss. A crew riding at 85% of compliance loses more tanks than a compliant one. The sim matrix checks these (S14–S17); `src/games/tank/README.md` lists the shortfalls that remain open. Hard Ambush is all but unwinnable for the Autopilot, which never sprints; it is tuned for riders who evade.
 
-As in v1, minus the Ram:
-- auto-aim aims and fires;
-- the boiler latches a heavy shell when the window ends;
-- the auto-lever runs the Bulwark;
-- the bow guns fire on their own;
-- in free roam, Autopilot turns the tank at the map's ends (2.10).
+### 2.5 Autopilot, bots and automatic seating
 
-Autopilot never sprints, never Overpressures and never changes effort targets. A human counts as Autopilot until their first `lever`, `aim`, `target`, `traverse`, `fire`, `latch` or `turn` intent; `over` never ends it. `local_intents` turns `surge` only into `over`.
+**Autopilot.** A human counts as Autopilot until their first deliberate intent (`aim`, `target`, `fire`, `latch`, `turn` or `seat`); `over` never ends it, and neither does an intent flagged as Autopilot output. `local_intents` turns `surge` only into `over`. Autopilot:
+- aims and fires the main gun;
+- latches a shell when the window ends;
+- seats the rider (below);
+- in free roam, turns the tank at the map's ends (2.10).
+
+It never sprints, never Overpressures and never changes effort targets.
+
+**Automatic seating** covers Autopilot riders and humans who never sent a deliberate intent. At most once a second, never inside the minimum stay (30 s solo, 60 s in a crew), in a fight only for a move whose trainer follows at once, and never an ERG ↔ SIM move inside a warm-up. A crew's riders hold the most needed seats through a segment's opening, unless a near threat is alive or an Advance has nobody on Drive. The solo loop:
+1. Drive while nothing is in reach (one stay off Drive per Advance).
+2. The Loader until the rack is full, or straight to the Gun with 2 shells.
+3. The Gun while it has shells and a target.
+4. Repairs with the hull below 35% and nothing laid.
+5. The Secondaries only with no round for the main gun.
+
+**Bots.** `TankBots` seats bots around the humans. A bot reads their seats and how they are doing. It never holds a seat against a human and never causes an effort change for one: it acts on its own seat, on cover and on being evicted, and its trainer follows through the same seat plan. Enemy counts scale with the crew, bots included. A bot stays 30 s on a seat, moves only to an empty seat and, in a fight, only when its trainer follows at once.
+
+| Situation | A bot goes to |
+| --- | --- |
+| Rack at 1 or less, human on the Gun, no human loading | Loader |
+| Hull below 60%, more urgently below 35% | Repairs |
+| Human on the Gun in band, a far target, no human on the Lights | Lights |
+| A near threat alive, no human on the Secondaries | Secondaries |
+| Human in rescue, or out of band 15 s on the Gun | Loader if the rack has room, else Lights |
+| Human out of band 15 s on the Loader | Repairs, more urgently |
+| Human on reserve 10 s on Drive, Gun or Loader (WORK only) | Swaps seats to cover, and gives the seat back the tick the human returns. The human's plan is untouched |
+
+**Controls.**
+- Gun: up and down lay the gun, swap (R / LB) cycles targets, OK fires.
+- Loader: OK stows a light shell from 40%; ability 1 or a surge overpressures.
+- Drive, in free roam: ability 1 (or OK) turns the tank.
+- Every seat: `<` `>` opens the seat picker.
 
 ### 2.6 Multiplayer and network
 
-As in v1 (host-authoritative, 10 Hz full snapshots ≤ 4 KB at the caps with 4 riders, ordered events ≤ 10/s, client prediction of your own room).
-- **Intents:** `lever`, `aim`, `target`, `traverse`, `fire`, `latch`, `over`, `turn`.
-- **Events:** `segment`, `rotation`, `shot`, `hit`, `kill`, `evade`, `breakdown`, `repaired`, `overrun`, `boss_phase`, `turn`, `time_up`.
+Host-authoritative, 10 Hz full snapshots ≤ 4 KB at the caps with 4 riders, ordered events ≤ 10/s, client prediction of your own room.
+- **Intents** (at most 5 a second per peer): `seat`, `aim`, `target`, `fire`, `latch`, `over`, `turn`. Each seat owns only its own: the Gun aims, targets and fires; the Loader latches and overpressures; Drive turns; every seat may ask to move.
+- **Events:** `segment`, `shot`, `hit`, `kill`, `evade`, `splash`, `latch`, `breakdown`, `repaired`, `overrun`, `boss_phase`, `turn`, `time_up`, `seat`, `tank_lost`, `stage_restart`, `ambush`, `escaped`.
 - **Per-peer prompts:** each peer raises its own rider's prompts from snapshots, events and local telemetry.
 - **Telegraph timing:** the snapshot carries each telegraphing enemy's remaining time (and the boss's), so every peer's HUD counts down.
 
@@ -337,48 +319,56 @@ As in v1 (host-authoritative, 10 Hz full snapshots ≤ 4 KB at the caps with 4 r
 
 | Event | Receivers | `haptic` | `duration_s` | `reason` |
 | --- | --- | --- | --- | --- |
-| Hit of ≥ 8 damage | every rider in SIM | 2.0 | 1.5 | `hit` |
+| Hit of ≥ 4 damage (read before the difficulty) | every rider in SIM | 2.0 | 1.5 | `hit` |
 | Behemoth main-gun hit | every rider in SIM | 3.0 | 2.0 | `boss_hit` |
 
-The v1 rules otherwise hold (never in WARMUP, the first 300 s or the cool-down, or to an ERG rider; opt-out respected; 15 s spacing). The Ram haptic is gone.
+Never in WARMUP, the first 300 s or the cool-down, never to an ERG rider, never to a rider who opted out, never to a rider on reserve, and at least 15 s apart per receiver.
 
 ### 2.8 Results and progression
 
-**Missions:** as in v1. Ram counts are replaced by evades (tried and successful), and bow-gun hits are added. Score, grades, XP and unlocks are unchanged.
+**Missions:**
+- **Score** = 1000 × (0.3 band + 0.2 accuracy + 0.3 objectives + 0.2 survival). Accuracy is the main gun's alone. Survival falls with breakdowns and tank losses. Weights and cut-offs are in `scoring.json`.
+- **Grade:** S ≥ 900, A ≥ 800, B ≥ 650, C ≥ 500, else D.
+- **Rewards:** XP = kJ / 10 plus a grade bonus (S 60, A 40, B 25, C 10). Hull finishes unlock into `ctx.progress`: one for finishing, three by grade (B, A, S), and a machinery finish for killing the Behemoth with no breakdown and no loss. They cannot yet be equipped or seen: the garage is not built.
+- **Results page:** per-rider stats and team values, with evades (tried and successful), bow-gun hits and tank losses.
 
 **Free roam:**
 - **Score:** team points (2.10), kills by type, distance, evades, breakdowns.
-- **Grade:** by points per minute of WORK time: S ≥ 22.5, A ≥ 17.5, B ≥ 12.5, C ≥ 7.5, else D (tuned in P5 so a compliant 30-min crew of 3 earns B or A).
+- **Grade:** by points per minute of WORK time: S ≥ 22.5, A ≥ 17.5, B ≥ 12.5, C ≥ 7.5, else D.
 - **Outcome:** `finished("time_up")`.
 - **Rewards:** XP = round(kJ / 10) plus the grade bonus. Unlocks as for missions, minus the Behemoth one.
 - **Strava `ride_tag`:** "Free Roam N min".
 
 ### 2.9 Content
 
-- **Missions:** Ashfall Road (v1's stages, retuned for evade and the bow guns) and `drill` (e2e, 130 s inside warm-up limits; the arc rider rides ERG 50 → 55% with `range_pct` [55, 65]).
-- **Free roam:** `roam_10`, `roam_20`, `roam_30`, `roam_45`, `roam_60` (2.10).
-- **Files:** `tanks.json` (4 tanks), `stations.json` (+ arc), `enemies.json`, `missions/*.json` (`kind` "mission" or "roam"), `roam/valley.json` (the map), `scoring.json`, `cosmetics.json` and `strings.csv` (`TANK_*`), all validated at load.
+- **Missions:**
+  - `ashfall_road` (default, zero-input): 30 min nominal, 41 at most. Normal by default.
+  - `ambush_15` (featured): depot 300 s, one Advance (80–160 s), one holding action (60–120 s), a checkpoint, the Behemoth (100–190 s), cool-down 180 s. 15 min nominal. Hard by default. It starts short of plates (hull 90, 20 per checkpoint).
+  - `drill` (e2e): 130 s inside the warm-up limits (depot 30 s, skirmish 70 s, checkpoint 30 s); every seat rides ERG 50 → 55% with `range_pct` [55, 65] or SIM; at most one mode switch per rider; no haptics.
+- **Free roam:** `roam_10`, `roam_20`, `roam_30` (featured), `roam_45`, `roam_60` (2.10).
+- **Files:** `tanks.json` (the one tank), `stations.json`, `enemies.json`, `missions/*.json` (`kind` "mission" or "roam"), `roam/valley.json` (the map), `scoring.json`, `cosmetics.json` and `strings.csv` (`TANK_*`), all validated at load by `TankContentSchema`, which also holds every effort number to BRIEF 4.6 (a bad value is a load error).
 
 ### 2.10 Free roam
 
-**Map:** one long seeded valley road, about 6 km, built at the session start from `ctx.rng` and `content/tank/roam/valley.json`.
-- **Zones:** pine forest road, lake shore under the cliffs, a village, a quarry, open meadow, each with its own terrain points (−3 … +5%) and backdrop set.
-- **The tank drives back and forth.** At either end the road stops at a turning place; a `turn` intent flips the travel direction anywhere (the diesel or Bulwark rider only, 30 s cooldown). Autopilot turns at the ends after 3 s.
-- **A turn:** an 8 s stop, during which the view mirrors the tank behind a dust cloud. The camera follows the tank, and the world scrolls with the travel direction.
-- **No rotation:** each rider keeps one engine for the whole session.
+**Map:** one long seeded valley road, about 6 km, built at the session start from `ctx.rng` and `content/tank/roam/valley.json`, and carried in the snapshot so clients rebuild it.
+- **Zones:** pine forest at both ends, then a fir hollow, a forest camp, a lumber yard and a birch glade once each in a seeded order, each with its own terrain (−3 … +5%) and backdrop. The zone ids `lake`, `village`, `quarry` and `meadow` stay in the wire and the map.
+- **The tank drives back and forth.** At either end the road stops at a turning place. A `turn` intent flips the travel direction anywhere (the Drive rider only, 30 s cooldown). Autopilot turns at the ends after 3 s, and the crew turns on its own after 12 s when a hand-playing driver does not, so a session never stalls.
+- **A turn:** an 8 s stop. At its midpoint the rules mirror the frame and clear everything that moves, with no credit, so nothing is ever behind the tank. The view mirrors the tank behind a dust cloud; driving west the near stage draws mirrored and the far panel lands on the left.
+- **No rotation:** each rider keeps the seat they choose; seats can change any time (2.2).
 
-**Patrols:** seeded random patrols every 50–110 s of WORK time, entering ahead in the travel direction (most) or behind.
+**Patrols:** seeded patrols every 90–110 s of WORK time, always ahead in the travel direction, scaled by crew and difficulty.
 
 | Patrol | Weight |
 | --- | --- |
-| 1–2 lights | 45% |
-| a medium (± a light) | 30% |
-| a tank destroyer | 15% |
-| a heavy tank (only after 10 min, at most one at a time) | 10% |
+| A light tank | 45% |
+| A medium | 30% |
+| A tank destroyer | 15% |
+| A heavy (only after 10 min of WORK, at most one at a time) | 10% |
+| A recon car, with a tankette at times, from the bushes | 25% |
 
-- At most 6 enemies alive. Patrols use the mission rules (holds, telegraphs, evade, bow guns).
-- Dug-in strongpoints sit at fixed map spots and come back 10 min after they fall.
-- The tank halts while a strongpoint or a heavy is within range ("Engage"). Otherwise it drives on.
+- At most 6 enemies alive. Patrols use the mission rules (holds, telegraphs, evade, near threats).
+- Strongpoints are holding forces of one heavy at seeded spots in the camp, the yard and the forest (at least 900 m apart, 700 m from the ends). They come onto the field within 500 m ahead and back 10 min after they fall.
+- The tank halts ("Engage") while a strongpoint stands or a heavy holds within 2000 m. Otherwise it drives on.
 
 **Effort plan per rider:**
 
@@ -387,28 +377,22 @@ The v1 rules otherwise hold (never in WARMUP, the first 300 s or the cool-down, 
 | Drive-out | WARMUP | 300 s: the depot's targets and models, no enemies |
 | Roam | WORK, open-ended | `min_s` = minutes × 60 − 300, `max_s` = `min_s` + 300 |
 
-| Engine | Roam phase |
-| --- | --- |
-| Diesel | SIM `game` on the map's grade |
-| Dynamo | ERG, `range_pct` [55, 85] |
-| Steam | SIM `flat` + boiler |
-| Arc generator | ERG, [65, 80] |
-| Bulwark | the Advance's |
+Each seat's roam row is in 2.3. The roam phase is over 300 s, so the 105% cap applies, and every bound is ≤ 85%.
 
-- The roam phase is over 300 s, so the 105% cap applies, and every bound is ≤ 100%.
-- **Time up** at `min_s`: no new patrols. A fight in progress (an enemy within 400 px) may finish, up to `max_s`. Then `end_phase` for everyone in one step, the cool-down, and `finished("time_up")`.
+**Time up** at `min_s`: no new patrols. A fight in progress (a far enemy within 2200 m, or a near threat) may finish, up to `max_s`. Then `end_phase` for everyone in one step, the cool-down, and `finished("time_up")`.
 
 **Points:**
 
 | Kill | Points |
 | --- | --- |
+| Recon car | 8 |
+| Tankette | 6 |
 | Light | 10 |
 | Medium | 25 |
 | Destroyer | 30 |
-| Dug-in | 20 |
 | Heavy | 60 |
 
-- Evade +5; breakdown −40; every full kilometre +2.
+- Evade +5; breakdown −40 (a lost tank costs the same); every full kilometre +2.
 - Points are the crew's.
 
 **HUD:** the map strip across the top (zones in profile, the tank, patrols, strongpoints), and a board with time left, points and kills (3.6).
@@ -417,84 +401,69 @@ The v1 rules otherwise hold (never in WARMUP, the first 300 s or the cool-down, 
 
 ### 3.1 Look and resolution
 
-The reference, at 960 × 540 art px (2× at 1080p, 4× at 4K, nearest filtering). Through `pixel_flex` (min 852 × 480), wider or narrower windows show more world (2560 × 1440 → 3× 853 × 480; 3440 × 1440 → 3× 1146 × 480). Rules px × 1.5 = art px. Nothing important sits only at the far edges, and the HUD rects use the SDK's anchoring.
+The reference, at 960 × 540 art px (2× at 1080p, 4× at 4K, nearest filtering). Through `pixel_flex` (min 852 × 480), wider or narrower windows show more world. Rules px × 1.5 = art px. Nothing important sits only at the far edges, and the HUD rects use the SDK's anchoring.
 
-**Planes, back to front:**
+**World:** the road runs through a pine forest at night, bluer and greener than the reference, with moderate tilt-shift. The road and tank sit low (ground line 385 art px), with a soft verge between the road and the foreground blur. Little bases (a fenced clearing with a bunker, lamp, crates and a barrier) stand at the depot and at free-roam strongpoints; a holding force's base stands in the far panel. Backdrops: `forest`, `forest_firs`, `forest_birches` and `base`. No people outside the tank.
 
-| Plane | Treatment |
-| --- | --- |
-| Starry sky with the Milky Way | blurred |
-| Dark mountains | blurred |
-| The pale cliff and the misty lake (a landmark piece) | blurred |
-| Soft pine forest | blurred |
-| The road band | sharp; the tank, enemies and props live here |
-| Dark foreground shrubs, pines and rocks | strongly blurred and darkened |
+**Split screen** (`TankFarMap`): at 960 wide, the near panel is 622 px, an 8 px riveted seam carries the range plate, and the far panel is 330 px. The far panel is a SubViewport with its own parallax, light and haze, and never runs the depth of field. A small shell screen in the far panel's top shows shells in flight. The tank's scale and place do not depend on the far panel and it stays whole.
 
-- **Sources:** the planes start from the reference's own layers (round 1 kit) and extend procedurally into long seamless strips.
-- **Free roam:** zones swap the near planes (village, quarry, meadow, lake shore) from the same procedural kit.
-
-**Tilt-shift, strong:**
-- each plane is blurred once at load (radii in the kit manifest);
-- a light per-frame depth-of-field pass on the art-resolution frame softens moving things outside the road band (smoke, shells, far enemies);
+**Tilt-shift:**
+- each plane is blurred once at load;
+- a light per-frame depth-of-field pass on the near panel softens moving things outside the road band (smoke, shells);
 - the per-frame pass is a rider-facing setting (`player_options` toggle `miniature`, default on) and switches itself off if the frame time stays above 16.7 ms for 5 s.
 
 **Light:**
-- additive glows and volumetric cones for the headlight and searchlights;
+- additive glows and volumetric cones for the headlight and the searchlights;
 - warm incandescent room lamps and amber lamps;
 - cold blue-white arcs (dynamo, arc generator);
 - small green and red position lights;
 - fire and muzzle flashes that light the scene for a few frames.
 
-Lights are the only near-saturated pixels.
+Lights are the only near-saturated pixels. The world's lights draw on their own layer behind the tank. The tank's lights:
+- the headlight, always on;
+- the turret searchlight, forward and about 11° down, and the rear searchlight, aft and about 13° down: both on while the Lights seat is manned and powered, with a 0.4 s fade and a 2 s hold, and a dim standby lens glow while off. An empty seat, a breakdown or a stalled arc puts them out at once;
+- the room lamps. Unpowered, the rooms fade over 0.5 s to backup lighting: a dim multiply layer and one red emergency lamp per room;
+- the position lights.
 
 ### 3.2 The tank
 
-- **Cut from the reference:** the tank is cut from the reference's pixels at its bulkheads into modules: rear (engine), rooms, front (glacis, bow guns, headlight, sprocket), turret body and barrel. The variants 1–4 are assembled from them and stay extremely close to the reference (the Citadel is the reference tank). This is the round 1 kit, `assets/tank/v2/` (formerly the mock's `v2mock`), with its generator scripts in `assets/tank/v2/tools_src/` (`.gdignore`d) and `kit.json` (rects, anchors, rooms, muzzles, lights).
-- **Code on top:** machines, crew, lamps, beams, exhaust, track motion, the barrel at its elevation and the turret's traverse.
-- **Rooms:** each station's room has a small enamel plaque with a lamp in the rider's slot colour. The warm room glow is lit by in band.
-- **Running gear:** wheels and track links move with tank speed. Hits shake the hull. A breakdown kills the lamps, and the crew work the repair.
+- **Base:** the reference landship rebuilt as pixel art (475 × 216 art px, 63 colours), baked once from the generators in `assets/tank/v3/tools_src/` into `assets/tank/v3/` with its manifest `kit.json`. The hitboxes, trunnion, muzzle and bow-gun muzzles come from the drawn tank (`r6_hitbox.json`, art px / 1.5).
+- **Live parts, drawn each frame:**
+  - the track and the road wheels on per-wheel suspension (`TankSuspension`);
+  - the whole tank rotated as one sprite to fit the terrain (nearest filtering), bobbing on its springs;
+  - the main gun with recoil, and the bow guns tilting in their armoured box;
+  - each seat's lit room with its machine and rider turning on that rider's cadence, and a bare saddle and still crank on an empty seat;
+  - the turret's two windows: the ready rack with its manipulator, and the breech with its rammer, following the rules' rack and loader state.
+- **Terrain relief:** the view follows the rules' terrain with a height profile plus small seeded cosmetic bumps.
+- **Firing:**
+  - the main-gun blast: star flash, brake jets, fireball, smoke, dust, pebbles;
+  - 11 px recoil, a 2° hull rock, a short screen shake and a scene flash;
+  - the bow guns' per-round flashes, tracers and casings.
+- **Rooms:** each seat's room has a small enamel plaque with a lamp in the rider's slot colour. The warm room glow is lit by in band.
+- **Running gear:** wheels and track links move with tank speed. Hits shake the hull. A breakdown kills the lamps.
 
-### 3.3 Crew
+### 3.3 Riders
 
-Crewmen are about 20 art px tall, procedural, from the mock's `crew20` sheet. Their poses follow the state:
+Riders are about 20 art px tall, procedural, and sit in each manned room working that seat's machine: pedalling, shovelling, loading, working the panel. Their poses follow the state. They never carry text or insignia.
 
-| Crewman | Action |
-| --- | --- |
-| Engineer | works the diesel with a wrench |
-| Stoker | shovels coal at the firebox on cadence |
-| Loader | carries a shell up the hoist |
-| Gunner | at the breech, recoils with each shot |
-| Dynamo tech | at the panel |
-| Arc tech | at the switchboard |
-| Commander | on the turret roof, sweeping the searchlight |
+### 3.4 Machines in sync with the riders
 
-They never carry text or insignia.
+One machine per seat: `view/tank_mech.gd` (`TankMech`) over one class per machine (`TankMechDiesel` to `TankMechRepair`), pure Image painters. They paint the room overlay in the world and the machine card on the HUD.
 
-### 3.4 Engines in sync with the riders
-
-One machine per station: `view/tank_mech.gd` (`TankMech`, from the mock's `TankV2MockMech`), a pure Image painter for diesel, dynamo, steam and arc. It paints the room overlay in the world and the engine window on the HUD.
-
-- **Phase:** `phase` is the integral of rpm / 60 per second times a gear ratio per machine:
-
-  | Machine | Gear ratio |
-  | --- | --- |
-  | Diesel | ×2, three firings per revolution |
-  | Dynamo armature | ×3 |
-  | Steam | 1 shell-hoist step per revolution |
-  | Arc | 2 ladder climbs per revolution |
-
-  It runs from local telemetry for your own room (client prediction) and from snapshots for the others.
-- **Power:** `power` = watts / the rider's target (in band 0.84–1.17).
+- **Phase:** `phase` is the integral of rpm / 60 per second times a gear ratio per machine. It runs from local telemetry for your own room (client prediction) and from snapshots for the others.
+- **Power:** `power` = watts / the rider's target.
   - Under band: dim, sooty, needles low.
   - In band: warm and steady, the lamp in the slot colour.
   - Over band: shaking, red needles, vapour, overflowing jars, the safety valve blowing.
 - **Stopped:** at 0 rpm everything stands still.
-- **Cost:** painting is about 1 ms per machine per frame, so in-world overlays repaint at most at 30 Hz.
+- **Cost:** painting is about 1 ms per machine per frame, so in-world overlays repaint at most at 30 Hz, at most two a frame.
 
 ### 3.5 Enemies, props and effects
 
-- **Enemies and the Behemoth:** procedural sprites in the reference's style (the mock's enemy kit). Each has its own silhouette: low wedge lights, tall slab mediums, long heavies, turretless destroyers, dug-in turrets behind concrete, and the multi-bogie Behemoth.
-- **Wrecks and the halt line:** wrecks age on sim time into debris heaps. The halt line is concrete teeth with a post and a hooded amber lamp.
+- **The Foundry Pact.** The enemy is one faction in our tank's hand on the opposite side: the same 1 px outline, plate-edge rule and rivet pixel, but ours is patched and open and theirs is sealed factory slab. Field grey with bands of dark yellow, grime, a mud line, welded seams, flat decks, long guns, stowage, no windows. Hatches are shut: warmth lives only in vents, the exhaust and the Behemoth's furnace, so nothing mimics our lit rooms. Slits are the cold foe signal. They are drawn by `assets/tank/v4/tools_src/` and baked into one atlas (`assets/tank/v4/enemies.json`).
+- **Marks:** the Pact's mark is an invented hollow diamond. Numbers use only 0, 1 and 8, drawn to read the same mirrored (a turret's traverse and a flip mirror them), and a test refuses any that could read as a known number code or a real unit's number in either direction (`tests/games/tank/art/test_tank_v4_pact.gd`).
+- **Silhouettes:** low wedge lights, tall slab mediums, long heavies, turretless destroyers, the multi-bogie Behemoth, and the small recon car and tankette.
+- **Wrecks and props:** far wrecks dim and burn. Near wrecks age on sim time. The halt line is concrete teeth with a post and a hooded amber lamp.
 - **Particles:**
   - muzzle flashes, smoke rings, casings, tracers and impacts;
   - the diesel exhaust by watts;
@@ -507,106 +476,100 @@ One machine per station: `view/tank_mech.gd` (`TankMech`, from the mock's `TankV
 
 ### 3.6 HUD, the game's own
 
-No kit widgets: `hud_spec()` adds the game's own Controls with `add_control(control, Rect2i)` in art px of the 960 × 540 base and sets `shows_power = true`. The toasts and banners are placed and themed through `spec.palette`, and `help` has 3–6 entries.
+No kit widgets: `hud_spec()` adds the game's own Controls with `add_control(control, Rect2i)` in art px of the 960 × 540 base and sets `shows_power = true`. The toasts and banners are placed and themed through `spec.palette`. F1 help has eight entries (nine in free roam), and the platform shows it once on a rider's first session.
 
 **Look:**
 - riveted dark-iron plates, panel `#17140f`, a 1 px brass frame `#8a6a3a` with a darker inner line and corner rivets;
 - text `#e8dcc0` and dim `#a3937a`, amber accent `#e3a24a`, bar tracks `#3a3128`, red over `#c4553c`;
 - rider identity only in slot colours;
-- own bitmap fonts: `tank_stencil_5x7`, `tank_stencil_5x9` (rider-facing text cap ≥ 9 art px) and `tank_digits_14x24` (key numbers 24 art px tall, 48 px at 1080p), drawn procedurally into PNGs under `assets/tank/v2/hud/`.
+- own bitmap fonts: `tank_stencil_5x7`, `tank_stencil_5x9` (rider-facing text cap ≥ 9 art px) and `tank_digits_14x24` (key numbers 24 art px tall, 48 px at 1080p), drawn procedurally by `TankHudFont`.
 
-**Layout** (art px; the bottom-right 200 × 60 stays clear; the tank band, y 150–360, stays clear):
+**Layout** (the bottom-right 200 × 60 stays clear):
 
 | Area | Contents |
 | --- | --- |
-| Bottom left, my numbers | big watts with %FTP and a gauge against the band, coloured under/in/over; big cadence with its band gauge; one instruction line: HOLD 152–210 W, SPIN 60+ RPM, SURGE 240+ W 0:04, LATCH, RESERVE; W′ and the virtual gear (SIM) as small bars; the station name |
-| Bottom middle, crew row | one card per rider in room order (rear to front = left to right): a live engine window (`TankMech`, 112 × 64) in a riveted frame, the rider's name in their slot colour (truncated with an ellipsis to fit), watts, and an in-band strip (green in band, blue under, red over); yours is marked YOU |
-| Top left, mission plate | stage name, stage clock, a compact stage strip and the objective; in free roam, the map strip across the top |
-| Top right | the hull plate (HP bar and number), kills; the boss bars when the Behemoth is up; in free roam, the time left, points and kills board |
+| Bottom left, my numbers | big watts with %FTP and a gauge against the band, coloured under/in/over; big cadence with its band gauge; one instruction line: HOLD 152–210 W, SPIN 60+ RPM, SURGE 240+ W 0:04, LATCH, RESERVE; SPRINT and the virtual gear (SIM) as small bars; the seat's name; your heart rate when a strap is connected. All follow your seat |
+| Bottom middle, seat row | six live machine cards (Drive, Gun, Loader, Lights, Secondaries, Repairs), each with a live machine window, the rider's name in their slot colour, watts, an in-band strip and a tiny ERG or SIM tag. Empty seats are dark and marked EMPTY; bot seats say BOT. Your card carries YOU, the hint plate "< > seat  OK sit" and the switch to come ("ERG in 12 s"). Rack pips show on the Gun and Loader cards, rounds a minute on the Secondaries card and the repair rate on Repairs |
+| Top left | the mission plate: stage name, stage clock, a compact stage strip, the objective, a difficulty tag and losses; in free roam, the map strip across the top |
+| Top right | the hull plate (HP bar and number), kills; the Behemoth's bars under it; in free roam, the time left, points and kills board |
 
 **In the world, not in panels:**
 - the speed tag on the road behind the tank;
-- the halt line's post with its distance plate;
+- the halt line's post with its distance plate, and the range plate on the seam;
 - SURGE TO EVADE over a telegraphing shooter with countdown pips;
-- the gun's elevation as a thin arc at the turret while the gunner aims (drawn clear of the barrel, with its label);
+- the gun's elevation as a thin arc at the turret while the gunner aims, and a small blue-white dial for the bow guns while the Secondaries are manned (both fade in and out);
 - the turn marker at the map's ends.
 
-**Toasts and banners:** toasts sit under the mission plate, banners in the centre, and both carry the prompts ("Surge to overpressure", "Dynamo stalled", "Arc generator stalled", "Turn around").
+**Toasts and banners:** toasts sit under the mission plate, banners in the centre, and both carry the prompts ("Surge to overpressure", "Dynamo stalled", "Arc generator stalled", "Turn around"). TANK LOST and KEEP RIDING sit above the banners.
 
 ### 3.7 Audio
 
-As in v1 (diesel rumble by cadence, dynamo whine, steam chuff and hiss, cannon, shells, casings, explosions, tracks, lever, hoist), plus:
-- the arc's crackle and hum;
-- the bow guns' rattle;
-- night ambience (crickets, wind in the pines).
-
-Sounds are synthesized or CC0.
+Every sound is rendered from the recipes in the repository (`assets/tank/audio/audio.json`, `tools/audio`, `docs/AUDIO_PIPELINE.md`). There are no third-party samples. `TankAudio` only maps state to parameters and events to cues.
+- **Each seat, 1:1 with its crank:** the machine's picture and sound read the same phase, so they cannot drift. Your strokes are never thinned. Other riders' machines play 10 dB under yours, without their small details. A seat that stops, stops dead.
+- **The machines:** the diesel's rumble by cadence with a turbo whistle by watts, the dynamo's whine and jars, the steam chuff and hiss, the arc's warm low thrum and relay tock (nothing it plays has much above 2 kHz, since a rider may hear it for an hour), the belt feed's machine-gun rattle, the repair hammer and press.
+- **The gun and the far fight:** the main gun, shells in flight, casings, landings and kills heard after the flash at twice real sound speed.
+- **Near threats** are heard before they are seen: a burst from the bushes, a small high engine, a sharp crack.
+- **The track,** locked to the distance drawn.
+- **The night:** wind in the pines and crickets, frogs, an owl, a far battle that stays out of the depot and the cool-down.
 
 ## 4. Testing and gates
 
 Unit tests (GUT, `tests/games/tank/`) cover every rule and number in 2.2–2.10, including:
-- plans for crews 1–4 × rotation on/off × FTP {80, 200, 400} × verified/unverified, plus `drill` and every roam length;
-- the arc pattern and its sub-steps;
+- plans for crews 1–4 × content × FTP {80, 200, 400} × verified/unverified, plus `drill` and every roam length;
+- seat moves and the trainer following them (split, replan, waiting switches, the PlanValidator with no warning);
+- the bank, arc, repair and boiler patterns and their sub-steps;
 - evade (every telegraph type, the SIM-only rule, the first 300 s, ERG riders);
-- bow guns per tank and power source;
-- elevation −12°, with the solver able to hit a light tank at its hold distance;
+- far ballistics and the aim solver, the near field, the bow guns (6 rounds a revolution, the times to kill);
+- difficulty (identical plans at every level) and tank loss, including the rescue shield;
+- bots and automatic seating;
 - the roam map generation (seeded, deterministic), patrols, the turn, time up and overtime, and roam points;
 - snapshots ≤ 4 KB at the caps with 4 riders;
-- intent ownership for `turn`;
-- every tank's view built headless from fixtures;
-- the HUD's controls for crews 1–4 in mission and roam;
+- intent ownership;
+- every view and the HUD's controls built headless from fixtures, for crews 1–4 in mission and roam;
+- the enemy art (the palette, the marks, the number codes);
 - no missing string keys.
 
-The Ram's tests go with it.
-
-**Static tests:** as in v1, without the art.json palette checks (the art is procedural):
+**Static tests:**
 - no trainer-path references;
 - no wall clock or global RNG in `rules/`, `effort/` or `combat/`;
+- no difficulty read under `effort/`;
 - no kit-widget kinds in `hud/`.
 
 **Simulation matrix** (`bash tests/games/tank/sim/run_sims.sh`, `node tests/games/tank/sim/check_sims.mjs build/tank/sims`):
 
 | Scenario | Coverage |
 | --- | --- |
-| S1–S8 | as in v1, extended to crew 4 |
-| S9 | crew 1 sprinting rider: successful evades and no SIM → ERG entry above target |
-| S10 | crew 3 network paths: a client's intents (aim, over, turn in roam) applied by the host |
-| S11 | free roam: `roam_10` for crews 1 and 4, `roam_30` for crew 3 (time up, overtime bound, no patrol after time up, FIT laps, grade) |
-| S12 | `roam_10` crew 3 at 0 W: no kills by crew fire, grade D |
+| S1 | compliant crews 1–4: T1–T9 |
+| S2 | zero riders: the shared pause, a 10 W crew overruns every stage |
+| S3 | compliance 100 / 85 / 70%: T5 |
+| S4 | every directive, plan and trace rule of BRIEF 4.5 and 4.6, on every content and crew |
+| S5, S10 | rescue and AFK; a client's intents applied by the host |
+| S6, S7 | haptics off; the same seed twice is identical |
+| S8 | enemy counts × 3: at most 16 enemies, snapshots under 4 KB |
+| S9 | a scripted sprinter evades |
+| S11, S12 | free roam: time up, laps, nothing behind, grade; the zero crew |
+| S13 | seat switching: every move's trainer follows within 30 s |
+| S14–S17 | the difficulty targets (Easy, Hard, Ambush, a crew at 85% and 70%) |
+| S18 | bots, 1 + 3 and 2 + 2: nothing refused, bots act only through their seats |
 
 **Gates (all must pass):**
 1. Tank unit and static tests;
 2. `check_scripts`, gdlint and gdformat;
-3. SDK conformance at 1 and 4 riders;
+3. SDK conformance at 1 and 4 riders, with bots;
 4. the simulation matrix;
 5. `tools/fit_check` on every FIT the sims wrote;
 6. `node tools/e2e/run.mjs --games=tank`;
-7. the full `tools/run_tests` at or above the floor (the floor is lowered once, by exactly the removed v1 art, Ram and kit-HUD tests, with an ADR).
+7. the full `tools/run_tests` at or above the green-count floor.
 
-**Screenshots:** `tools/screenshot` frames of crews 1, 3 and 4 in the depot, an Advance, a gun line, the boss and free roam, reviewed by an adversarial art critic against the reference. The perf gate is set aside for v2 (Simon, 2026-10-26); the per-frame DoF auto-off (3.1) protects slow machines.
+**Screenshots:** `tools/screenshot` frames of crews 1, 3 and 4 in the depot, an Advance, a holding action, the boss and free roam, compared against the reference.
 
-## 5. Orchestration (v2)
+**Frame cost:** the gate is relative. The split-screen view may cost about what the older single-screen view did, with no more draw calls; the per-frame depth-of-field auto-off (3.1) protects slow machines.
 
-The lead integrates on `game/tank2` and runs builders in their own worktrees from the P0 commit. Each builder touches only its listed paths, reports conflicts and requests instead of editing outside them, and commits locally. Phases:
-
-| Phase | What | Owner |
-| --- | --- | --- |
-| P0 | this brief and the ADRs | lead |
-| P1 + P2 | the art kit (`assets/tank/v2/`, cleaned from the mock kit, the 4 tank variants, planes, crew, enemies, the Behemoth, the picker card) and the view rebuild (planes and tilt-shift, the modular tank, rooms and lamps, `TankMech`, crew, beams, effects, `pixel_flex`); the old art and its tests are removed | view builder |
-| P3 | the custom HUD (plates, fonts, crew row, world tags, toasts and banners, help); the kit HUD is removed | hud builder |
-| P4 | gameplay (Ram out, evade, −12°, bow guns, enemy spacing, the 4th rider and the arc plan, contracts, net, autopilot, content, sims) | rules builder |
-| P5 | free roam, full stack | roam builder after the P2–P4 merge |
-| P6 | cleanup (the removal table on the plan page), local worktrees and branches of v1 and the mocks | lead |
-| P7 | the critic, balance (T1–T7), sims, e2e, the full suite, export, smoke, merge, tag `tank-v0.2.0`, the GitHub release | lead |
-
-## 6. Definition of Done
+## 5. Definition of Done
 
 - **Reachable:** every item in 2.2–2.10 is implemented, reachable from the game picker and tested. Every gate in section 4 is green, with nothing weakened.
 - **Zero input:** a solo rider plays Ashfall Road and `roam_10` to the results with zero input. Crews of 2–4 play joined by code, and the e2e run passes.
 - **Safety:** every plan passes the PlanValidator, and every directive is clamped and matches 2.3 or 2.7. No Tank code reaches the trainer except through `ctx.directives`.
-- **Look:** the game looks like the reference: an art critic scores fidelity, HUD, engine windows and variants ≥ 7/10 on the final screenshots.
-- **Docs:** `src/games/tank/README.md`, `HARDWARE_TEST.md` (adds the arc ERG pattern, evade sprints and the roam phase), `docs/decisions/tank.md`, `docs/credits.d/tank.md` and `docs/changelog.d/tank.md` are current.
-- **Released:**
-  - `game/tank2` is merged into `main` (`--no-ff`) and the GUT floor is updated;
-  - `main` and the tag `tank-v0.2.0` are pushed;
-  - a GitHub release `tank-v0.2.0` carries the Windows build (zip) and screenshots.
+- **Look:** the game looks like the reference, judged on real rendered frames, not on fixtures alone.
+- **Docs:** `src/games/tank/README.md`, `HARDWARE_TEST.md`, `docs/decisions/tank.md`, `docs/credits.d/tank.md` and `docs/changelog.d/tank.md` are current.
+- **Released:** merged into `main` and published as a GitHub release with the Windows build (zip).
