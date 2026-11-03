@@ -400,6 +400,8 @@ func test_drop_and_rejoin() -> void:
 	(b["hub"] as RefCounted).call("rejoin", 3)
 	Kit.step(b, 1)
 	var types: Array[String] = host_net.call("sent_types", 3)
+	# The host's "rider is back" toast (a hud message) goes out with the state; it is no part of it.
+	types = types.filter(func(t: String) -> bool: return t != "hud")
 	assert_eq(
 		types.slice(0, 4),
 		["session_start", "plan", "phase", "snapshot"] as Array[String],
