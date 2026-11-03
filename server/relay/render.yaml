@@ -15,5 +15,7 @@ services:
     healthCheckPath: /health
     autoDeploy: false
     envVars:
+      # "1" reads the last X-Forwarded-For entry, the one Render's proxy appended. With another
+      # layer in front of Render (Cloudflare, say) use "2". See README.md, "Behind a proxy".
       - key: RELAY_TRUST_PROXY
         value: "1"

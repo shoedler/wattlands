@@ -27,7 +27,11 @@ export interface Limits {
   msgsPerSecond: number;
   /** ... with this burst (120), as a token bucket. */
   msgBurst: number;
-  /** A connection that sends nothing (no message, ping or pong) this long is closed (60 s). */
+  /**
+   * A connection that sends no relay message (text or binary) this long is closed (60 s).
+   * WebSocket-level ping and pong frames do not count: only what a client sends to the
+   * relay itself (the `ping` message every 15 s, for one) keeps a socket alive.
+   */
   idleTimeoutMs: number;
   /** Join attempts per IP address ... (10) */
   joinAttemptsPerWindow: number;
@@ -41,6 +45,20 @@ export interface Limits {
   maxBufferedBytes: number;
   /** At most one rate_limited error per connection per this interval. */
   rateErrorIntervalMs: number;
+  /** Open sockets on the whole relay (500); over it a new socket is refused. 0 = no cap. */
+  maxConnections: number;
+  /** Open sockets from one IP address (64: a venue of eight rooms). 0 = no cap. */
+  maxConnectionsPerIp: number;
+  /** Open rooms on the whole relay (200); over it `create` gets rate_limited. 0 = no cap. */
+  maxRooms: number;
+  /** Open rooms (held ones included) whose host connected from one IP address (8). 0 = no cap. */
+  maxRoomsPerIp: number;
+  /** Room creates per IP address ... (10) 0 = no cap. */
+  roomCreatesPerWindow: number;
+  /** ... per sliding window (60 s). */
+  roomCreateWindowMs: number;
+  /** A socket that has not sent a valid `hello` this long after opening is closed (10 s). 0 = no deadline. */
+  helloDeadlineMs: number;
 }
 
 export const DEFAULT_LIMITS: Readonly<Limits> = Object.freeze({
@@ -55,12 +73,21 @@ export const DEFAULT_LIMITS: Readonly<Limits> = Object.freeze({
   reconnectMs: 120_000,
   maxBufferedBytes: 1024 * 1024,
   rateErrorIntervalMs: 1000,
+  maxConnections: 500,
+  maxConnectionsPerIp: 64,
+  maxRooms: 200,
+  maxRoomsPerIp: 8,
+  roomCreatesPerWindow: 10,
+  roomCreateWindowMs: 60_000,
+  helloDeadlineMs: 10_000,
 });
 
 /** WebSocket close codes the relay itself sends. */
 export const CLOSE_CODES = Object.freeze({
   SHUTDOWN: 1001,
   TOO_BIG: 1009,
+  /** The relay is over its connection caps (normally refused before the handshake). */
+  TRY_AGAIN: 1013,
   IDLE_TIMEOUT: 4000,
   REPLACED: 4001,
   VERSION_MISMATCH: 4002,
@@ -90,7 +117,10 @@ export interface RelayConn {
 export interface ConnHandlers {
   onText(text: string): void;
   onBinary(): void;
-  /** Any frame arrived (WebSocket ping or pong included): resets the idle timer. */
+  /**
+   * Any frame arrived (WebSocket ping or pong included). It runs the slow-consumer check
+   * but does not reset the idle timer: only a relay message does (onText, onBinary).
+   */
   onActivity(): void;
   /** The socket is gone (after a close handshake, an error or a reset). */
   onClose(): void;
@@ -126,6 +156,8 @@ interface Seat {
 
 interface Room {
   readonly code: string;
+  /** The IP address the host created it from (for the rooms-per-IP cap). */
+  readonly ownerIp: string;
   readonly serial: number;
   readonly max: number;
   readonly createdAt: number;
@@ -139,6 +171,7 @@ class Client {
   readonly ip: string;
   readonly conn: RelayConn;
   readonly bucket: TokenBucket;
+  readonly openedAt: number;
   lastSeen: number;
   lastRateError = Number.NEGATIVE_INFINITY;
   hello = false;
@@ -151,6 +184,7 @@ class Client {
     this.ip = ip;
     this.conn = conn;
     this.bucket = new TokenBucket(limits.msgsPerSecond, limits.msgBurst, now);
+    this.openedAt = now;
     this.lastSeen = now;
   }
 }
@@ -167,6 +201,12 @@ export class Relay {
     joinsLimited: 0,
     badRequests: 0,
     roomsCreated: 0,
+    /** Sockets refused over a connection cap. */
+    connectionsRefused: 0,
+    /** Creates refused over a room cap or the create rate. */
+    createsLimited: 0,
+    /** Sockets closed for sending no valid hello in time. */
+    helloTimeouts: 0,
   };
 
   #clock: Clock;
@@ -176,6 +216,10 @@ export class Relay {
   #rooms = new Map<string, Room>();
   #clients = new Set<Client>();
   #joins: SlidingWindowLimiter;
+  #creates: SlidingWindowLimiter;
+  #connsByIp = new Map<string, number>();
+  #roomsByIp = new Map<string, number>();
+  #refusalsLogged = { at: 0, connections: 0, creates: 0, hello: 0 };
   #nextClientId = 1;
   #nextRoomSerial = 1;
   #closing = false;
@@ -187,21 +231,51 @@ export class Relay {
     this.#generateCode = opts.generateCode ?? (() => randomCode());
     this.#generateToken = opts.generateToken ?? (() => randomBytes(18).toString('base64url'));
     this.#joins = new SlidingWindowLimiter(this.limits.joinAttemptsPerWindow, this.limits.joinWindowMs);
+    this.#creates = new SlidingWindowLimiter(this.limits.roomCreatesPerWindow, this.limits.roomCreateWindowMs);
+    this.#refusalsLogged.at = this.#clock.now();
+  }
+
+  /**
+   * Whether a new socket from `ip` fits under the connection caps: "ok", "ip" (that address
+   * holds its share) or "total" (the relay is full). The server asks before the WebSocket
+   * handshake, so a refused socket costs no WebSocket state; open() asks again.
+   */
+  admit(ip: string): 'ok' | 'ip' | 'total' {
+    const { maxConnections, maxConnectionsPerIp } = this.limits;
+    if (maxConnections > 0 && this.#clients.size >= maxConnections) return 'total';
+    if (maxConnectionsPerIp > 0 && (this.#connsByIp.get(ip) ?? 0) >= maxConnectionsPerIp) return 'ip';
+    return 'ok';
+  }
+
+  /** The server refused a socket before the handshake (counted for the log line). */
+  noteRefused(): void {
+    this.counters.connectionsRefused++;
   }
 
   /** Register a new socket from `ip`; the WebSocket layer calls the returned handlers. */
   open(conn: RelayConn, ip: string): ConnHandlers {
+    if (!this.#closing && this.admit(ip) !== 'ok') {
+      this.counters.connectionsRefused++;
+      try {
+        conn.close(CLOSE_CODES.TRY_AGAIN, 'too many connections');
+      } catch {
+        // The socket is already gone.
+      }
+      return { onText: () => {}, onBinary: () => {}, onActivity: () => {}, onClose: () => {} };
+    }
     const c = new Client(this.#nextClientId++, ip, conn, this.limits, this.#clock.now());
     this.#clients.add(c);
+    this.#connsByIp.set(ip, (this.#connsByIp.get(ip) ?? 0) + 1);
     if (this.#closing) this.#close(c, CLOSE_CODES.SHUTDOWN, 'relay shutting down');
     return {
       onText: (text: string) => this.#guard(c, () => this.#onText(c, text)),
       onBinary: () => this.#guard(c, () => this.#onBinary(c)),
       onActivity: () => {
         if (c.closed) return;
-        c.lastSeen = this.#clock.now();
         // Both layers answer WebSocket pings themselves, outside the rate limit: a client
         // that floods pings and never reads must not grow this socket's backlog forever.
+        // They are not activity: a socket that only answers WebSocket pings (any proxy,
+        // browser or script can) is still idle, so it can't hold a connection slot forever.
         if (c.conn.bufferedAmount > this.limits.maxBufferedBytes) this.#close(c, CLOSE_CODES.SLOW_CONSUMER, 'slow consumer');
       },
       onClose: () => this.#onSocketClosed(c),
@@ -211,11 +285,31 @@ export class Relay {
   /** Apply the time rules: idle sockets, reconnect-token expiry, host hold, room lifetime. */
   sweep(): void {
     const now = this.#clock.now();
+    const { helloDeadlineMs, idleTimeoutMs } = this.limits;
     for (const c of [...this.#clients]) {
-      if (now - c.lastSeen >= this.limits.idleTimeoutMs) this.#close(c, CLOSE_CODES.IDLE_TIMEOUT, 'idle timeout');
+      if (!c.hello && helloDeadlineMs > 0 && now - c.openedAt >= helloDeadlineMs) {
+        this.counters.helloTimeouts++;
+        this.#close(c, CLOSE_CODES.IDLE_TIMEOUT, 'no hello');
+      } else if (now - c.lastSeen >= idleTimeoutMs) this.#close(c, CLOSE_CODES.IDLE_TIMEOUT, 'idle timeout');
     }
     for (const room of [...this.#rooms.values()]) this.#sweepRoom(room, now);
     this.#joins.sweep(now);
+    this.#creates.sweep(now);
+    this.#logRefusals(now);
+  }
+
+  /** At most one line a minute, with counts only (no addresses, codes or tokens). */
+  #logRefusals(now: number): void {
+    const prev = this.#refusalsLogged;
+    if (now - prev.at < 60_000) return;
+    const { connectionsRefused: conns, createsLimited: creates, helloTimeouts: hello } = this.counters;
+    if (conns > prev.connections || creates > prev.creates || hello > prev.hello) {
+      this.#log(
+        `last minute: ${conns - prev.connections} sockets refused over a connection cap, ` +
+          `${creates - prev.creates} room creates refused, ${hello - prev.hello} sockets closed without a hello`,
+      );
+    }
+    this.#refusalsLogged = { at: now, connections: conns, creates, hello };
   }
 
   stats(): RelayStats {
@@ -240,6 +334,7 @@ export class Relay {
     this.#closing = true;
     for (const c of [...this.#clients]) this.#close(c, CLOSE_CODES.SHUTDOWN, 'relay shutting down');
     this.#rooms.clear();
+    this.#roomsByIp.clear();
   }
 
   // --- input -------------------------------------------------------------------
@@ -363,6 +458,7 @@ export class Relay {
       return;
     }
     const now = this.#clock.now();
+    if (!this.#roomCapsAllow(c, now)) return;
     // P1: a host may ask for its previous code; it gets it when no open room has it.
     let code: string | null = typeof m.code === 'string' ? normalizeCode(m.code) : null;
     if (code !== null) {
@@ -373,6 +469,7 @@ export class Relay {
     if (code === null) code = this.#newCode();
     const room: Room = {
       code,
+      ownerIp: c.ip,
       serial: this.#nextRoomSerial++,
       max: Math.min(max, this.limits.maxPeers),
       createdAt: now,
@@ -381,10 +478,39 @@ export class Relay {
       tokens: new Map(),
     };
     this.#rooms.set(code, room);
+    this.#roomsByIp.set(c.ip, (this.#roomsByIp.get(c.ip) ?? 0) + 1);
     const seat = this.#addSeat(room, c);
     this.counters.roomsCreated++;
     this.#send(c, { t: 'created', code, peer: seat.peer, token: seat.token, max: room.max });
     this.#log(`room #${room.serial} created (max ${room.max}); rooms open: ${this.#rooms.size}`);
+  }
+
+  /**
+   * The room caps for a create from `c`: total rooms, rooms from its address, creates a
+   * minute from its address. A refusal is rate_limited and records nothing; an expired
+   * room that the sweep has not reached yet never counts against a new one.
+   */
+  #roomCapsAllow(c: Client, now: number): boolean {
+    const { maxRooms, maxRoomsPerIp, roomCreatesPerWindow } = this.limits;
+    const over = (): string | null => {
+      if (maxRooms > 0 && this.#rooms.size >= maxRooms) return 'the relay has no room for another room right now';
+      if (maxRoomsPerIp > 0 && (this.#roomsByIp.get(c.ip) ?? 0) >= maxRoomsPerIp) {
+        return `over ${maxRoomsPerIp} open rooms from one address`;
+      }
+      return null;
+    };
+    let why = over();
+    if (why !== null) {
+      for (const room of [...this.#rooms.values()]) this.#sweepRoom(room, now);
+      why = over();
+    }
+    if (why === null && roomCreatesPerWindow > 0 && !this.#creates.allow(c.ip, now)) {
+      why = `over ${roomCreatesPerWindow} room creates a minute`;
+    }
+    if (why === null) return true;
+    this.counters.createsLimited++;
+    this.#error(c, 'rate_limited', why, 'create');
+    return false;
   }
 
   #join(c: Client, m: Msg): void {
@@ -570,7 +696,12 @@ export class Relay {
 
   /** host_left to every connected peer; they stay connected, outside any room. */
   #closeRoom(room: Room, reason: string): void {
-    if (this.#rooms.get(room.code) === room) this.#rooms.delete(room.code);
+    if (this.#rooms.get(room.code) === room) {
+      this.#rooms.delete(room.code);
+      const left = (this.#roomsByIp.get(room.ownerIp) ?? 1) - 1;
+      if (left > 0) this.#roomsByIp.set(room.ownerIp, left);
+      else this.#roomsByIp.delete(room.ownerIp);
+    }
     const text = JSON.stringify({ t: 'host_left', reason });
     for (const s of room.seats.values()) {
       const cl = s.client;
@@ -589,6 +720,9 @@ export class Relay {
     if (c.closed) return;
     c.closed = true;
     this.#clients.delete(c);
+    const conns = (this.#connsByIp.get(c.ip) ?? 1) - 1;
+    if (conns > 0) this.#connsByIp.set(c.ip, conns);
+    else this.#connsByIp.delete(c.ip);
     const room = c.room;
     const seat = c.seat;
     c.room = null;

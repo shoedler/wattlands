@@ -122,10 +122,33 @@ describe('client IP for the join limit', () => {
     assert.equal(clientIp(req({}, '::1'), false), '::1');
   });
 
-  it('behind a trusted proxy uses Fly-Client-IP, then the first X-Forwarded-For entry', () => {
-    assert.equal(clientIp(req({ 'fly-client-ip': '5.6.7.8', 'x-forwarded-for': '1.2.3.4' }), true), '5.6.7.8');
-    assert.equal(clientIp(req({ 'x-forwarded-for': '1.2.3.4, 10.0.0.1' }), true), '1.2.3.4');
+  it('behind one trusted proxy uses the last X-Forwarded-For entry, the one the proxy appended', () => {
+    assert.equal(clientIp(req({ 'x-forwarded-for': '1.2.3.4' }), true), '1.2.3.4');
+    assert.equal(clientIp(req({ 'x-forwarded-for': '6.6.6.6, 1.2.3.4' }), true), '1.2.3.4', 'a forged first entry is ignored');
+    assert.equal(clientIp(req({ 'x-forwarded-for': ['6.6.6.6', '7.7.7.7, 1.2.3.4'] }), true), '1.2.3.4', 'repeated headers read as one list');
+    assert.equal(clientIp(req({ 'x-forwarded-for': '::ffff:1.2.3.4' }), true), '1.2.3.4');
+  });
+
+  it('with n trusted proxies uses the n-th entry from the right', () => {
+    const h = { 'x-forwarded-for': '6.6.6.6, 1.2.3.4, 172.16.0.9' };
+    assert.equal(clientIp(req(h), 2), '1.2.3.4');
+    assert.equal(clientIp(req(h), 3), '6.6.6.6');
+    assert.equal(clientIp(req(h), 1), '172.16.0.9');
+  });
+
+  it('falls back to the socket address when the header is missing, short, blank or too long', () => {
     assert.equal(clientIp(req({}), true), '10.1.2.3');
+    assert.equal(clientIp(req({ 'x-forwarded-for': '1.2.3.4' }), 2), '10.1.2.3', 'fewer entries than proxies');
+    assert.equal(clientIp(req({ 'x-forwarded-for': '1.2.3.4,' }), true), '10.1.2.3', 'an empty last slot is not from a proxy');
+    assert.equal(clientIp(req({ 'x-forwarded-for': 'x'.repeat(100) }), true), '10.1.2.3');
+  });
+
+  it('"fly" reads Fly-Client-IP and ignores X-Forwarded-For; the other modes ignore Fly-Client-IP', () => {
+    const h = { 'fly-client-ip': '5.6.7.8', 'x-forwarded-for': '1.2.3.4' };
+    assert.equal(clientIp(req(h), 'fly'), '5.6.7.8');
+    assert.equal(clientIp(req({ 'x-forwarded-for': '1.2.3.4' }), 'fly'), '10.1.2.3', 'no Fly header, no Fly proxy');
+    assert.equal(clientIp(req(h), true), '1.2.3.4', 'a client behind Render can send Fly-Client-IP itself');
+    assert.equal(clientIp(req(h), false), '10.1.2.3');
   });
 });
 
@@ -184,6 +207,29 @@ describe('node src/main.ts', () => {
     const h = await help.exited;
     assert.equal(h.code, 0);
     assert.match(h.out, /usage: node src\/main\.ts/);
+  });
+
+  it('applies the limit flags and variables to the running relay', async (t) => {
+    const run = startMain(RELAY_DIR, ['--impl=builtin', '--port=0', '--host=127.0.0.1', '--max-connections-per-ip=1'], { RELAY_MAX_ROOMS: '0' });
+    t.after(() => run.child.kill());
+    const url = await run.url;
+    const first = await TestClient.connect(url);
+    t.after(() => first.close());
+    await assert.rejects(() => TestClient.connect(url), /could not connect/);
+    assert.equal((await healthOf(url)).connections, 1);
+  });
+
+  it('exits non-zero on a bad limit or a bad RELAY_TRUST_PROXY', async () => {
+    const limit = startMain(RELAY_DIR, ['--max-rooms=lots', '--port=0']);
+    limit.url.catch(() => {});
+    const l = await limit.exited;
+    assert.equal(l.code, 1);
+    assert.match(l.err(), /invalid --max-rooms "lots"/);
+    const trust = startMain(RELAY_DIR, ['--port=0'], { RELAY_TRUST_PROXY: 'cloudflare' });
+    trust.url.catch(() => {});
+    const r = await trust.exited;
+    assert.equal(r.code, 1);
+    assert.match(r.err(), /invalid RELAY_TRUST_PROXY/);
   });
 
   it('exits non-zero when the port is taken', async (t) => {

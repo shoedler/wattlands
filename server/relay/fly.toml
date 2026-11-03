@@ -11,7 +11,9 @@ primary_region = "fra"
 
 [env]
   PORT = "8787"
-  RELAY_TRUST_PROXY = "1"
+  # Fly's proxy sets Fly-Client-IP itself; the relay reads only that header in this mode.
+  # (Not "1": that reads the last X-Forwarded-For entry. See README.md, "Behind a proxy".)
+  RELAY_TRUST_PROXY = "fly"
 
 [http_service]
   internal_port = 8787
