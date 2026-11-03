@@ -144,7 +144,7 @@ Short ADRs for Castellum Rotae's audio (`assets/siege/audio/audio.json`, `SiegeA
 
 ## 2026-11-01 After the critics: whose shot, a pass and not a bed, hits that rise
 
-Two critics read the first overhaul at 1e795326, with probes on the real rules and a real-wave recording, and the owner had not heard it yet. What they found was true, and this is what changed.
+Two critics read the first overhaul at caf2b4fe, with probes on the real rules and a real-wave recording, and the owner had not heard it yet. What they found was true, and this is what changed.
 
 - A killing blow sounded like a miss: the rules take a killed body off the list in the step that kills it, before any view runs. Against `station.hits` over 700 s: stones 57 of 67 struck, 60 of 67 played dirt; ballista 28 of 34 struck, 34 of 34 played dirt. Now `SiegeShotSounds` keeps each body for 0.3 s after it was last seen alive, which also covers a client's picture running behind its snapshots: stones 57 struck, 10 dirt; ballista 5 dirt. A bolt that struck home plays no dirt. Test: `test_a_real_wave_hears_what_the_host_hit`, within 10 % of the host's counts for stones, bolts and Scorpions and a quarter for arrows, whose first arrow can kill a body the rest then still count.
 - Kills were all in the middle on a host: 715 of 715 cues found no body. The same cache gives them their side, the same on a client.

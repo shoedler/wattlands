@@ -88,7 +88,7 @@
 - In the sprint: `crowd_loop` -8 from -6, `crowd_clap` -4 from -6, so the crowd stops taking the mids from your rhythm. A test holds 8 dB peak over median in 300-1500 Hz and 1.5-4 kHz, on 110 rpm in the preview's sprint.
 - The dog reads alike at every speed: `dog_far` [-11, -7], plus `db_by` speed -4 at 5, 0 at 8.5, +3 at 13 m/s. Its median play's best third-octave reads +0.3, -1.1, -2.3, -2.2 dB at 5.5, 8.5, 11, 13 m/s, was +1.1, -3.8, -6.4, -7.6.
 - The fatigue rule, read as a group: seven riders, ticks rate-weighted, stay at least 16 dB above 2 kHz under your two presses. A test holds it.
-- SPEC_AUDIO 3.4 allows WAVs to be committed twice a branch, and this branch has three (a346a45c, 70a49c3c, 5c60609d): the third carried the group's own tick and the road's new tiles. An exception, named here. This round changes runtime JSON only and renders nothing.
+- SPEC_AUDIO 3.4 allows WAVs to be committed twice a branch, and this branch has three (219d569e, 40cd8e23, 1ab07748): the third carried the group's own tick and the road's new tiles. An exception, named here. This round changes runtime JSON only and renders nothing.
 
 ## 2026-10-31: The UI cannot cover a prompt, and D5 reads it
 

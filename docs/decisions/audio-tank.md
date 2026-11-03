@@ -13,7 +13,7 @@ Short ADRs for Diesel Domestiques' sound on the audio kit. "SPEC" is the run's S
 - Decision: the track machine reads the view's `travel`, which advances by `render_dt` and so stalls and catches up on a client (SPEC 2.2 moved the cranks to frame time for that reason, not the tread). Accepted; links and squeak lurch when the tread does.
 - Alternatives: a frame-time `travel` for the audio on clients, which is a second integrator.
 - Reason: S1 is one number for picture and sound. A snapshot stall stalls the tread on screen too, the squeak is a texture rather than a rider's rhythm, and the kit's `plan()` accounts for every stroke as fired or dropped (a jump past 80 ms is dropped by design). The hardware test's step 121 asks a person to judge it.
-- Measured through the real view as a client, 10 Hz state ticks in the probe (the critic's, on 8a7faf06): track links 7-8 per s steady, every seat exact over 30 revolutions, dropped 0. A 1 s snapshot stall gives 0 links in that second and no burst on resume, and the tread skips the same 6 m.
+- Measured through the real view as a client, 10 Hz state ticks in the probe (the critic's, on 77dac347): track links 7-8 per s steady, every seat exact over 30 revolutions, dropped 0. A 1 s snapshot stall gives 0 links in that second and no burst on resume, and the tread skips the same 6 m.
 
 ## 2026-10-31 A shot's flight comes from its event
 
@@ -46,7 +46,7 @@ Short ADRs for Diesel Domestiques' sound on the audio kit. "SPEC" is the run's S
 - Decision: `diesel_fire_hard` and `bolt_clack` are `lead_only`, which SPEC 4.1 does not ask, so other riders ask for fewer strokes before `other_min_gap_s` starts choosing.
 - Alternatives: leave the ask and let the gap thin it. An earlier version of this ADR said "the smallest details go first". That was wrong: thinning ignores priority and is first come in `at_s` order. Measured over 5 minutes of bots at 90 rpm: `chuff_a` 10-31 of 90 a minute, `diesel_fire_a` 21-90, and `bolt_clack` 0 while the bow guns fired; with identical cadence and phase some machines passed nothing in 100 revolutions.
 - Reason: a level cut in the bank is the only fix in reach. Fairness between tied strokes and a per-seat start offset are in the kit and outside the three allowed edit sites, so they went to the lead as requests. Bots' cadence noise keeps the exact tie from lasting.
-- Measured after the `lead_only` cut (the critic's, on 8a7faf06), 5 minutes at 90 rpm +-1.5, Gun leading, per minute: `diesel_fire_a` 68-71 of 90, `_b` 28-38, `_c` 56-61, `cap_dump` 90, `chuff_a` 43-49, `arc_zap` 91-105 of 180, `bow_shot` 95-106 of 180, `rivet_hit` 38-45 of 90. Much more even than the 10-90 before it. `diesel_fire_b` is the weakest: tie fairness stays the lead's call.
+- Measured after the `lead_only` cut (the critic's, on 77dac347), 5 minutes at 90 rpm +-1.5, Gun leading, per minute: `diesel_fire_a` 68-71 of 90, `_b` 28-38, `_c` 56-61, `cap_dump` 90, `chuff_a` 43-49, `arc_zap` 91-105 of 180, `bow_shot` 95-106 of 180, `rivet_hit` 38-45 of 90. Much more even than the 10-90 before it. `diesel_fire_b` is the weakest: tie fairness stays the lead's call.
 - CPU (D10), the same review: `TankAudio.update` with 6 seats and the track at 110 rpm averages 0.13 ms (p99 0.24, max 1.28) with real players on the dummy driver, under the 0.5 ms bench limit; setup takes 76 ms.
 
 ## 2026-10-31 Variation without bytes, and where the bytes went
@@ -116,7 +116,7 @@ Short ADRs for Diesel Domestiques' sound on the audio kit. "SPEC" is the run's S
 
 ## 2026-10-31 What the critic measured with no change asked
 
-- On 8a7faf06, for the record. Cricket trains hold pitch and pan. `night_forest` has no bed loop: under the adapter's real gust the highest envelope autocorrelation is 0.38 at 26 s, LRA 4.1. `turbo_whistle` is 7.7 dB over its neighbours in the mix at power 1. Limiter load is low: 7.6 % of the time at most at power 1.3, 110 rpm with the gun, gain reduction at most 2.3 dB. Family: mix -19.31 to -19.89 LUFS across the four games, A10 7.32-8.94 dB, above 4 kHz 2.1-3.3 %, Ambience -29.8 to -33.4.
+- On 77dac347, for the record. Cricket trains hold pitch and pan. `night_forest` has no bed loop: under the adapter's real gust the highest envelope autocorrelation is 0.38 at 26 s, LRA 4.1. `turbo_whistle` is 7.7 dB over its neighbours in the mix at power 1. Limiter load is low: 7.6 % of the time at most at power 1.3, 110 rpm with the gun, gain reduction at most 2.3 dB. Family: mix -19.31 to -19.89 LUFS across the four games, A10 7.32-8.94 dB, above 4 kHz 2.1-3.3 %, Ambience -29.8 to -33.4.
 - With every machine scored as lead on that head: D2 at most 0.32 ms, D3 at most 0.19 %, D4 digital silence at 400 ms, D5 6.34..8.14, D6 at most 8/0/13, D7 at most 11.4. Its one exception, repair at 110 rpm (`rivet_ring@0.03`: 9 onsets, 9 planned, 10 in the pattern), is the offline harness's first frame priming past that fraction, not the game: `test_tank_audio_patterns.gd` counts every seat exact past the first revolution, at its fraction.
 
 ## 2026-10-31 v4: a near threat is near, a far one stays far

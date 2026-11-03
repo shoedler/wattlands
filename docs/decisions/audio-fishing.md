@@ -51,7 +51,7 @@ Short ADRs for Turbo Reel's sound (`assets/fishing/audio/audio.json`, `FishingAu
 - Reason: BRIEF 4.6 first. The old claim here, +5.4 to +12.9 LU, came from 11 samples; a sweep every 0.5 s across the preview, states and cues says otherwise.
 - Numbers, sweep of D5's metric on this bank, `warning` (rescue reads about 0.25 LU more):
 
-| Where | Today's duck, main | Deeper duck, 9db55bc |
+| Where | Today's duck, main | Deeper duck, 8cfcb3b |
 |---|---|---|
 | Scorecard D5 | +6.12, midpoint only | +7.81, midpoint and loudest |
 | Preview, 212 points | 41 under +6, worst +1.90 (bite) | 0 under +6, worst +8.24 |
@@ -64,9 +64,9 @@ Short ADRs for Turbo Reel's sound (`assets/fishing/audio/audio.json`, `FishingAu
 
 ## 2026-10-31 This branch carries the platform's duck itself
 
-- Decision: `audio/fishing` cherry-picks the six `platform:` commits of `audio/workout` (9db55bc, dd5f83e, 39939eb, 43effbf, 635de98, 0daaa2b), with `-x`, so the branch stands on its own and scores on the platform it will ship with. The `floorLu` fallback in `fishing_bank.test.mjs` is gone.
+- Decision: `audio/fishing` cherry-picks the six `platform:` commits of `audio/workout` (8cfcb3b, eee5a68, 84a6423, bd1bc7c, ea8d743, 4f7b6d0), with `-x`, so the branch stands on its own and scores on the platform it will ship with. The `floorLu` fallback in `fishing_bank.test.mjs` is gone.
 - Alternatives: wait for the commit on main (a builder never lands on main); merge all of `audio/workout` here (lands Workout's sound with Fishing's); a merge-order rule alone (nothing enforces it, and the floors would stay at +1.2 LU meanwhile).
-- Reason: BRIEF 4.6 first, and the merge order then cannot put a thin prompt on main. The six are all that `audio/workout` holds in `addons`, `tools/audio`, `tests/audio` and `docs/AUDIO_PIPELINE.md`, so those paths are identical on both branches and either can land first. `git merge-tree` of this branch with `audio/workout` at 0daaa2b has no conflicts. A later platform commit there on the same lines would conflict: take that branch's side.
+- Reason: BRIEF 4.6 first, and the merge order then cannot put a thin prompt on main. The six are all that `audio/workout` holds in `addons`, `tools/audio`, `tests/audio` and `docs/AUDIO_PIPELINE.md`, so those paths are identical on both branches and either can land first. `git merge-tree` of this branch with `audio/workout` at 4f7b6d0 has no conflicts. A later platform commit there on the same lines would conflict: take that branch's side.
 - Numbers on this tip, D5's metric every 0.5 s over the preview: `warning` 0 of 213 points under +6, worst +8.11; `rescue` worst +8.37. Scorecard D5 +7.94. Steady riding, 7 boats, and every cue at the six offsets before and after it: over +6, by the test.
 
 ## 2026-10-31 Preview seed 8

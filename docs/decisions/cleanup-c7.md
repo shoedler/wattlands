@@ -2,7 +2,7 @@
 
 ## 2026-10-31: Siege's PROPOSAL.md goes, though the Siege brief still cites it
 
-- **Decision:** delete `src/games/siege/art/PROPOSAL.md` and its clause in `src/games/siege/README.md`. `docs/games/siege.md:3` still names the file, and that path is never edited, so the citation dangles. Git holds the file: `git show c885d4ed~1:src/games/siege/art/PROPOSAL.md`.
+- **Decision:** delete `src/games/siege/art/PROPOSAL.md` and its clause in `src/games/siege/README.md`. `docs/games/siege.md:3` still names the file, and that path is never edited, so the citation dangles. Git holds the file: `git show 460a1fa9~1:src/games/siege/art/PROPOSAL.md`.
 - **Alternatives:** keep the file so the citation resolves.
 - **Reason:** it says of itself "mockup stage, not approved" and that once approved it becomes sections of the brief, which has happened. A stale proposal next to the art tools misleads more than one historical citation does.
 
