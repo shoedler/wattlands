@@ -69,6 +69,10 @@ extends RefCounted
 
 const VERSION := 2
 const KEYS: Array[String] = ["v", "k", "R", "T", "C"]
+## Most rider rows a snapshot may hold, and the most entries in one of a row's lists (menu, hints,
+## a catch): check() refuses more, whatever a peer sends.
+const MAX_RIDERS := 8
+const MAX_LIST := 16
 
 const R_SLOT := 0
 const R_X_DM := 1
@@ -108,6 +112,8 @@ const R_TOW := 34
 const R_PROP_CM := 35
 const R_REEL := 36
 const R_COLUMNS := 37
+## The rider row columns that hold a list, not a number.
+const LIST_COLUMNS: Array[int] = [R_MENU, R_COSMETICS, R_HINTS]
 
 ## Hint entry columns (R_HINTS rows).
 const H_SPECIES := 0
@@ -178,17 +184,31 @@ static func check(snap: Dictionary) -> String:
 	for k in KEYS:
 		if not snap.has(k):
 			return "missing %s" % k
-	if int(snap["v"]) != VERSION:
+	if not (WireRead.is_number(snap["v"]) and WireRead.is_number(snap["k"])):
+		return "v and k are numbers"
+	if WireRead.int_of(snap["v"]) != VERSION:
 		return "version %s" % snap["v"]
-	if not snap["R"] is Array:
-		return "R is not an array"
+	if not snap["R"] is Array or (snap["R"] as Array).size() > MAX_RIDERS:
+		return "R is not an array of at most %d riders" % MAX_RIDERS
 	for row: Variant in snap["R"]:
 		if not row is Array or (row as Array).size() != R_COLUMNS:
 			return "a rider row needs %d columns" % R_COLUMNS
-		if not row[R_COSMETICS] is Array or not row[R_HINTS] is Array or not row[R_MENU] is Array:
-			return "rider cosmetics, menu and hints are arrays"
-	if not snap["T"] is Array or (snap["T"] as Array).size() != T_COLUMNS:
-		return "T needs %d values" % T_COLUMNS
+		for col in R_COLUMNS:
+			if not LIST_COLUMNS.has(col) and not WireRead.is_number(row[col]):
+				return "rider column %d is not a number" % col
+		for col: int in [R_COSMETICS, R_MENU]:
+			if not WireRead.is_flat_numbers(row[col]) or (row[col] as Array).size() > MAX_LIST:
+				return "rider cosmetics and menu are short lists of numbers"
+		if not row[R_HINTS] is Array or (row[R_HINTS] as Array).size() > MAX_LIST:
+			return "rider hints are a short list"
+		for h: Variant in row[R_HINTS]:
+			if not WireRead.is_flat_numbers(h) or (h as Array).size() <= H_SIZE:
+				return "a hint needs %d numbers" % (H_SIZE + 1)
+	if not WireRead.is_flat_numbers(snap["T"]) or (snap["T"] as Array).size() != T_COLUMNS:
+		return "T needs %d numbers" % T_COLUMNS
 	if not snap["C"] is Array or (snap["C"] as Array).size() > FishingConst.CATCH_BOARD:
 		return "C holds at most 5 catches"
+	for c: Variant in snap["C"]:
+		if not WireRead.is_flat_numbers(c) or (c as Array).size() > MAX_LIST:
+			return "a catch is a short list of numbers"
 	return ""

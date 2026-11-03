@@ -43,7 +43,7 @@ static func normalize(raw: Variant) -> Dictionary:
 	var d: Dictionary = raw
 	match str(d.get("k", "")):
 		SPOT:
-			var dir := signi(int(d.get("dir", 0)))
+			var dir := signi(WireRead.int_of(d.get("dir")))
 			return {} if dir == 0 else {"k": SPOT, "dir": dir, "via": VIA_ACTION}
 		CONFIRM:
 			var via := str(d.get("via", VIA_ACTION))
@@ -56,13 +56,15 @@ static func normalize(raw: Variant) -> Dictionary:
 			if raw_rec is Dictionary:
 				for k: Variant in raw_rec:
 					if FishingConst.SPECIES.has(str(k)):
-						rec[str(k)] = maxi(int(raw_rec[k]), 0)
+						rec[str(k)] = maxi(WireRead.int_of(raw_rec[k]), 0)
 			var cos: Array[int] = [0, 0, 0, 0]
 			var raw_cos: Variant = d.get("cos", [])
 			if raw_cos is Array:
 				for i in mini((raw_cos as Array).size(), 4):
-					cos[i] = maxi(int(raw_cos[i]), 0)
-			return {"k": SUMMARY, "xp": maxi(int(d.get("xp", 0)), 0), "rec": rec, "cos": cos}
+					cos[i] = maxi(WireRead.int_of(raw_cos[i]), 0)
+			return {
+				"k": SUMMARY, "xp": maxi(WireRead.int_of(d.get("xp")), 0), "rec": rec, "cos": cos
+			}
 	return {}
 
 

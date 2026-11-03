@@ -73,9 +73,9 @@ static func cast_ints(event: Dictionary) -> Dictionary:
 		if not out.has(key):
 			continue
 		if path.ends_with("[]") and out[key] is Array:
-			out[key] = (out[key] as Array).map(func(v: Variant) -> int: return int(v))
+			out[key] = (out[key] as Array).map(func(v: Variant) -> int: return WireRead.int_of(v))
 		elif out[key] is float or out[key] is int or out[key] is bool:
-			out[key] = int(out[key])
+			out[key] = WireRead.int_of(out[key])
 	return out
 
 
@@ -84,9 +84,9 @@ static func check(event: Dictionary) -> String:
 	var type := str(event.get("type", ""))
 	if not INT_FIELDS.has(type):
 		return "unknown type %s" % type
-	for path: String in INT_FIELDS[type]:
-		if not event.has(path.trim_suffix("[]")):
-			return "%s: missing %s" % [type, path.trim_suffix("[]")]
+	var problem := WireRead.int_path_problem(event, INT_FIELDS[type])
+	if problem != "":
+		return "%s: %s" % [type, problem]
 	return ""
 
 

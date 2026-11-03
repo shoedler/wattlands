@@ -407,6 +407,10 @@ func apply_snapshot(snap: Dictionary) -> void:
 func apply_event(event: Dictionary) -> void:
 	if ctx == null:
 		return
+	var why := FishingEvents.check(event)
+	if why != "":
+		push_warning("fishing: event ignored: %s" % why)
+		return
 	var e := FishingEvents.cast_ints(event)
 	fx_event.emit(e)
 	if state == null or ctx.hud == null:
