@@ -61,15 +61,19 @@ APP_LOBBY_REMOVE_BOT,Remove bot
 APP_LOBBY_BOT_FTP,Bot FTP: {0} W
 APP_LOBBY_BOT_FTP_LABEL,Bot FTP
 APP_LOBBY_BOT_DETAIL,Bot · FTP {0}
-APP_LOBBY_BOT_TRAINER,Mock trainer
+APP_LOBBY_BOT_TRAINER,Bot
 APP_LOBBY_YOU,{0} (you)
 APP_LOBBY_LEAVE,Leave room
 APP_LOBBY_NEED_PLAYERS,This game needs at least {0} riders: add bots or wait for friends.
-APP_LOBBY_WAITING_READY,Waiting for every rider to ready up (pedal or press confirm).
-APP_LOBBY_WAITING_FOR,Waiting for {0} to ready up (pedal or press confirm).
-APP_LOBBY_SHARE_RELAY,Friends: choose Join a room and type this code.
-APP_LOBBY_SHARE_BUILTIN,"Friends on your network: choose Join a room and type this code. If Windows asks, allow Wattlands through the firewall."
-APP_LOBBY_SHARE_ELSEWHERE,"Room not showing up, or a friend on a VPN like Tailscale? They set Settings > Network > Relay to {0}"
+APP_LOBBY_WAITING_READY,Waiting for every rider to ready up.
+APP_LOBBY_WAITING_FOR,Waiting for {0} to ready up.
+APP_LOBBY_WAITING_DROPPED,{0} lost the connection. Holding their seat for up to 2 minutes.
+APP_LOBBY_SHARE_RELAY,"Friends: set the same Relay in Settings > Network, choose Join a room and type this code."
+APP_LOBBY_SHARE_BUILTIN,"Friends on your network: choose Join a room and type this code. If Windows asks about the firewall, allow Wattlands, for public networks too if yours counts as one."
+APP_LOBBY_SHARE_ELSEWHERE,"Room not showing up, or a friend on a VPN like Tailscale? They enter this in Settings > Network > Relay: {0}"
+APP_LOBBY_ADDRESS_LAN,{0} (this network)
+APP_LOBBY_ADDRESS_VPN,{0} (Tailscale)
+APP_LOBBY_RELEASE_MISMATCH,"You have Wattlands {0}, the host has {1}. Get the same release to ride together."
 APP_LOBBY_YOU_READY,You're ready. The host starts the ride.
 APP_LOBBY_READY_HINT,Pedal or press confirm to ready up. The host starts the ride.
 APP_LOBBY_RETRY,Try again
@@ -86,13 +90,13 @@ APP_SCALING_RAW,Raw watts
 APP_NET_ERROR,Network problem: {0}
 APP_NET_LOST,Lost the connection to the room.
 APP_NET_NO_ROOM_HERE,"Couldn't open a room on this PC. Check that your firewall allows Wattlands, then try again."
-APP_NET_NO_RELAY,"Couldn't reach the relay at {0}. Check Settings > Network > Relay, or clear it to host on this PC."
-APP_NET_NO_HOST_PC,Found the room but couldn't reach the host's PC. Ask them to allow Wattlands through their firewall.
+APP_NET_NO_RELAY,"Couldn't reach {0}. Check Settings > Network > Relay, or clear it to play on your own network."
+APP_NET_NO_HOST_PC,"Found the room but couldn't reach the host's PC. Ask them to allow Wattlands through their firewall, for public networks too."
 APP_ROOM_LOST_HOST,"Your room is gone: the connection to it was lost. Try again for a new room, and your friends join with its code."
 APP_REFUSED_IN_PROGRESS,This ride has already started. Ask the host to open a new room when it ends.
 APP_REFUSED_VERSION,Your WATTLANDS version doesn't match the host's. Update both to the same version.
 APP_REFUSED_NOT_FOUND,No room with that code. Check it with the host.
-APP_REFUSED_NOT_ON_NETWORK,"No room with that code on your network. Check the code and that you're on the host's network. For a room further away, set Settings > Network > Relay."
+APP_REFUSED_NOT_ON_NETWORK,"No room with that code on your network. Check the code, and that your firewall allows Wattlands (Windows Security > Firewall > Allow an app). Or ask the host for the address in their lobby and enter it in Settings > Network > Relay."
 APP_REFUSED_DROPPED,Lost the connection to the room and couldn't get back in. Ask the host whether it's still open.
 APP_REFUSED_MISSING_GAME,You don't have the host's game. Get the host's Wattlands release to ride in this room.
 APP_REFUSED_FULL,That room is full.

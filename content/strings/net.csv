@@ -13,7 +13,7 @@ NET_REFUSED_ROOM_NOT_FOUND,No room with that code. Check the code and try again.
 NET_REFUSED_ROOM_FULL,That room is full.
 NET_REFUSED_VERSION_MISMATCH,This version of WATTLANDS can't play with the host's. Update both to the same version.
 NET_REFUSED_RATE_LIMITED,Too many attempts. Wait a minute and try again.
-NET_REFUSED_BAD_REQUEST,The relay rejected the request.
+NET_REFUSED_BAD_REQUEST,The room refused that request.
 NET_REFUSED_HOST_LEFT,The host ended the session.
 NET_REFUSED_DROPPED,Lost the connection to the room.
 NET_READY_MISSING_GAME,"You don't have {game} installed, so you can't ready up."
@@ -25,6 +25,7 @@ NET_REFUSED_TIMEOUT,The relay server stopped answering.
 NET_REFUSED_ERROR,The connection to the room failed.
 NET_ROOM_LOST_CLIENT,The room is gone. Riding the cool-down here; your ride is saved.
 NET_ROOM_LOST_HOST,"The room is gone, so other riders can't come back. Your ride carries on."
-NET_RIDER_DROPPED,{0} lost the connection. Their seat stays open.
+NET_RIDER_DROPPED,{0} lost the connection. They have 2 minutes to get back.
+NET_RECONNECTING_LONG,"Still trying to reach the room. It may be gone, so keep riding: your ride is saved either way."
 NET_RIDER_BACK,{0} is back.
 NET_READY_APP_MISMATCH,"You have Wattlands {mine}, the host has {theirs}. Get the same release to ready up."

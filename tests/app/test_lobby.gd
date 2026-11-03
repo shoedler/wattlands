@@ -507,6 +507,43 @@ func test_a_late_joiner_is_told_and_goes_back_to_the_code_page() -> void:
 	assert_eq(s.message_label.text, AppScreen.t("APP_REFUSED_IN_PROGRESS"))
 
 
+func test_a_rate_limited_host_is_told_so() -> void:
+	var s := _host_lobby()
+	fx.fake_net().refuse("rate_limited")
+	assert_eq(s.page, AppLobbyScreen.PAGE_FAILED)
+	assert_eq(s.message_label.text, AppScreen.t("APP_REFUSED_RATE"))
+
+
+func test_the_start_names_a_dropped_rider_apart() -> void:
+	var s := _host_lobby()
+	var net := fx.fake_net()
+	net.add_human(2, "Bea")
+	net.lobby["players"] = [{"peer_id": 2, "connected": false, "game_issue": ""}]
+	assert_eq(s.waiting_text(), AppScreen.t("APP_LOBBY_WAITING_DROPPED").format(["Bea"]))
+	net.lobby["players"] = [{"peer_id": 2, "connected": true, "game_issue": ""}]
+	assert_eq(s.waiting_text(), AppScreen.t("APP_LOBBY_WAITING_FOR").format(["Bea"]))
+
+
+func test_another_release_is_said_before_readying_up() -> void:
+	var lobby := workout_lobby()
+	lobby["settings"] = {"app": "9.9.9"}
+	var s := _client_lobby(lobby)
+	assert_true(menu(s).is_disabled_id("ready"))
+	assert_eq(
+		s.message_label.text,
+		AppScreen.t("APP_LOBBY_RELEASE_MISMATCH").format([WlNetSession.app_version(), "9.9.9"])
+	)
+	s._handle_gesture(Wl.G_PEDAL_START)
+	assert_false(s.local_ready, "a pedal start doesn't ready up either")
+
+
+func test_addresses_name_their_network() -> void:
+	assert_eq(
+		AppLobbyScreen.addresses_text(PackedStringArray(["192.168.1.20:8790", "100.64.1.2:8790"])),
+		"192.168.1.20:8790 (this network), 100.64.1.2:8790 (Tailscale)"
+	)
+
+
 func test_the_lobby_says_when_it_is_reconnecting() -> void:
 	var s := _client_lobby(workout_lobby())
 	var net := fx.fake_net()

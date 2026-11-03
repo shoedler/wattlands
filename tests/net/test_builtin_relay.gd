@@ -219,6 +219,21 @@ func test_one_address_cannot_fill_the_relay() -> void:
 	server.stop()
 
 
+func test_a_relay_can_be_typed_the_short_way() -> void:
+	assert_eq(RelayTransport.normalize_url(" 192.168.1.20:8790 "), "ws://192.168.1.20:8790/v1")
+	assert_eq(RelayTransport.normalize_url("ws://10.0.0.5:8787/v1"), "ws://10.0.0.5:8787/v1")
+	assert_eq(
+		RelayTransport.normalize_url("wss://relay.example.test"), "wss://relay.example.test/v1"
+	)
+	assert_eq(
+		RelayTransport.normalize_url("wss://relay.example.test/x"), "wss://relay.example.test/x"
+	)
+	assert_eq(RelayTransport.normalize_url("   "), "", "blank means no relay")
+	assert_true(LanDiscovery.is_tailnet("100.64.1.2:8790"))
+	assert_false(LanDiscovery.is_tailnet("192.168.1.20:8790"))
+	assert_false(LanDiscovery.is_tailnet("100.63.0.1"))
+
+
 func test_shareable_addresses_are_private_then_tailscale() -> void:
 	var got := LanDiscovery.shareable_addresses(
 		PackedStringArray(

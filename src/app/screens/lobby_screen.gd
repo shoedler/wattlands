@@ -577,9 +577,8 @@ func lobby_items() -> Array:
 	)
 	if role == Wl.CLIENT:
 		var ready_text := t("APP_LOBBY_UNREADY") if local_ready else t("APP_LOBBY_READY_UP")
-		items.append(
-			{"id": "ready", "text": ready_text, "disabled": problem != "" or current_game() == ""}
-		)
+		var cannot_ready := problem != "" or current_game() == "" or _release_mismatch()
+		items.append({"id": "ready", "text": ready_text, "disabled": cannot_ready})
 	else:
 		var start_text := t("APP_LOBBY_CANCEL_START") if start_requested else t("APP_LOBBY_START")
 		items.append({"id": "start", "text": start_text, "disabled": m.is_empty()})
@@ -1003,12 +1002,21 @@ func _tick(_dt: float) -> void:
 		try_launch()
 
 
-## "Waiting for Bo, Ana to ready up (...)": the riders the start waits for, by name.
+## "Waiting for Bo, Ana to ready up.": the riders the start waits for, by name. A rider whose
+## connection dropped comes first: their seat is held, and nobody can ready up for them.
 func waiting_text() -> String:
 	var names: PackedStringArray = []
+	var dropped: PackedStringArray = []
 	for s: PlayerSlot in AppLobbyModel.humans(slots()):
-		if s.peer_id != local_peer() and not AppLobbyModel.is_ready(lobby(), s.peer_id):
+		if s.peer_id == local_peer() or AppLobbyModel.is_ready(lobby(), s.peer_id):
+			continue
+		var entry := AppLobbyModel.player_entry(lobby(), s.peer_id)
+		if not bool(entry.get("connected", true)):
+			dropped.append(s.name)
+		else:
 			names.append(s.name)
+	if not dropped.is_empty():
+		return t("APP_LOBBY_WAITING_DROPPED").format([", ".join(dropped)])
 	if names.is_empty():
 		return t("APP_LOBBY_WAITING_READY")
 	return t("APP_LOBBY_WAITING_FOR").format([", ".join(names)])
@@ -1021,6 +1029,7 @@ func _handle_gesture(gesture: StringName) -> bool:
 				not local_ready
 				and AppLobbyModel.game_problem(services.registry, lobby()) == ""
 				and current_game() != ""
+				and not _release_mismatch()
 			):
 				_set_ready(true)
 		elif role == Wl.SOLO and not start_requested:
@@ -1100,7 +1109,7 @@ func _on_lobby_changed(_lobby: Dictionary) -> void:
 func _on_refused(reason: String) -> void:
 	var text := refusal_text(reason, _builtin_relay())
 	if role == Wl.HOST:
-		_show_failed_page(t("APP_ROOM_LOST_HOST"))
+		_show_failed_page(text if reason == "rate_limited" else t("APP_ROOM_LOST_HOST"))
 	elif role == Wl.CLIENT:
 		_back_to_join_page(text)
 	else:
@@ -1250,7 +1259,12 @@ func _refresh_all() -> void:
 	_refresh_preview()
 	if role == Wl.CLIENT and page == PAGE_LOBBY:
 		var problem := AppLobbyModel.game_problem(services.registry, lobby())
-		if problem == AppLobbyModel.MISSING_GAME:
+		if _release_mismatch():
+			var host_app := str(AppLobbyModel.settings_of(lobby()).get("app", ""))
+			_set_message(
+				t("APP_LOBBY_RELEASE_MISMATCH").format([WlNetSession.app_version(), host_app])
+			)
+		elif problem == AppLobbyModel.MISSING_GAME:
 			_set_message(t("APP_LOBBY_MISSING_GAME").format([str(lobby().get("game_id", ""))]))
 		elif problem == AppLobbyModel.VERSION_MISMATCH:
 			var have := str(services.registry.manifest(current_game()).get("version", ""))
@@ -1360,15 +1374,34 @@ func hint_text() -> String:
 		if not _builtin_relay():
 			return t("APP_LOBBY_SHARE_RELAY")
 		var text := t("APP_LOBBY_SHARE_BUILTIN")
-		var urls := services.net.shareable_relay_urls()
-		if not urls.is_empty():
-			text += "\n" + t("APP_LOBBY_SHARE_ELSEWHERE").format([", ".join(urls)])
+		var addresses := services.net.shareable_relay_addresses()
+		if not addresses.is_empty():
+			text += "\n" + t("APP_LOBBY_SHARE_ELSEWHERE").format([addresses_text(addresses)])
 		return text
 	if role == Wl.CLIENT:
 		if services.trainer == null or services.trainer.device() == null:
 			return t("APP_ERR_NO_TRAINER")
 		return t("APP_LOBBY_YOU_READY") if local_ready else t("APP_LOBBY_READY_HINT")
 	return ""
+
+
+## "192.168.1.20:8790 (this network), 100.64.1.2:8790 (Tailscale)".
+static func addresses_text(addresses: PackedStringArray) -> String:
+	var parts: PackedStringArray = []
+	for a: String in addresses:
+		var key := (
+			"APP_LOBBY_ADDRESS_VPN" if LanDiscovery.is_tailnet(a) else "APP_LOBBY_ADDRESS_LAN"
+		)
+		parts.append(AppScreen.t(key).format([a]))
+	return ", ".join(parts)
+
+
+## This rider can't ready up here because of the release (the host says so in lobby_state).
+func _release_mismatch() -> bool:
+	if role != Wl.CLIENT:
+		return false
+	var host_app := str(AppLobbyModel.settings_of(lobby()).get("app", ""))
+	return host_app not in ["", WlNetSession.app_version()]
 
 
 func _refresh_info() -> void:

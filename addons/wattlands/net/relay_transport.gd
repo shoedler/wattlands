@@ -59,6 +59,20 @@ static func default_url(context: Node = null) -> String:
 	return DEFAULT_URL
 
 
+## What a rider typed as their Relay, as a URL: "192.168.1.20:8790" reads as ws://192.168.1.20:8790/v1.
+## A URL with a scheme keeps it, and "" stays "".
+static func normalize_url(typed: String) -> String:
+	var u := typed.strip_edges()
+	if u == "":
+		return ""
+	if not u.contains("://"):
+		u = "ws://" + u
+	var after_scheme := u.substr(u.find("://") + 3)
+	if not after_scheme.contains("/"):
+		u += "/v1"
+	return u
+
+
 static func is_valid_url(u: String) -> bool:
 	return u.begins_with("ws://") or u.begins_with("wss://")
 

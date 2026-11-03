@@ -88,10 +88,18 @@ static func shareable_addresses(addresses: PackedStringArray) -> PackedStringArr
 			or (first == 172 and second >= 16 and second <= 31)
 		):
 			lan.append(a)
-		elif first == 100 and second >= 64 and second <= 127:
+		elif is_tailnet(a):
 			tailnet.append(a)
 	lan.append_array(tailnet)
 	return lan
+
+
+## True for an address in Tailscale's range, with or without a port.
+static func is_tailnet(address: String) -> bool:
+	var parts := address.split(".")
+	if parts.size() != 4 or parts[0] != "100" or not parts[1].is_valid_int():
+		return false
+	return int(parts[1]) >= 64 and int(parts[1]) <= 127
 
 
 ## A beacon's JSON text ("game" only when game_id is set).

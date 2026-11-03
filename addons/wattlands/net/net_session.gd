@@ -1028,13 +1028,14 @@ func uses_builtin_relay() -> bool:
 	return _chosen_relay() == ""
 
 
-## While hosting on the built-in relay, the addresses a rider elsewhere types as their Relay.
-func shareable_relay_urls() -> PackedStringArray:
+## While hosting on the built-in relay, the addresses a rider elsewhere types as their Relay, as
+## "<ip>:<port>": this network's first, then a Tailscale one (LanDiscovery.is_tailnet).
+func shareable_relay_addresses() -> PackedStringArray:
 	var out: PackedStringArray = []
 	if transport is LanTransport and (transport as LanTransport).serving_port() > 0:
 		var p := (transport as LanTransport).serving_port()
 		for a: String in LanDiscovery.shareable_addresses(IP.get_local_addresses()):
-			out.append("ws://%s:%d/v1" % [a, p])
+			out.append("%s:%d" % [a, p])
 	return out
 
 
@@ -1747,6 +1748,7 @@ func _publish_lobby() -> void:
 	settings["max_players"] = max_players
 	settings["min_players"] = min_players
 	settings["bots_allowed"] = bots_allowed
+	settings["app"] = app_version()
 	_lobby_seq += 1
 	var msg := (
 		Protocol

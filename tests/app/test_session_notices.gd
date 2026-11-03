@@ -49,6 +49,17 @@ func test_client_shows_the_host_dropped_notice_until_the_host_is_back() -> void:
 	assert_false(s.net_notice.visible, "the host is back")
 
 
+func test_a_long_reconnect_says_the_room_may_be_gone() -> void:
+	var s := _client_session()
+	fx.net.state_changed.emit(WlNetSession.STATE_RECONNECTING, "dropped")
+	assert_eq(s.net_notice.text, AppScreen.t("NET_STATE_RECONNECTING"))
+	s.count_reconnect(AppSessionScreen.RECONNECT_LONG_S + 0.1)
+	assert_eq(s.net_notice.text, AppScreen.t("NET_RECONNECTING_LONG"))
+	fx.net.state_changed.emit(WlNetSession.STATE_JOINED, "K7QX2M")
+	assert_false(s.net_notice.visible)
+	assert_eq(s.reconnecting_s, 0.0)
+
+
 func test_a_lost_room_says_so_and_the_results_repeat_it() -> void:
 	var s := _client_session()
 	fx.fake_net().refuse("dropped")
