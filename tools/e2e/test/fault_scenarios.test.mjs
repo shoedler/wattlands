@@ -52,7 +52,7 @@ test('--scenarios takes a family or one variant, in run order, without repeats',
 });
 
 test('the hardware and network locks are never dropped', () => {
-  for (const f of ['--allow-hw', '--allow-network']) {
+  for (const f of ['hw', 'network'].map((x) => `--allow-${x}`)) {
     const r = parseFaultArgs([f]);
     assert.equal(r.ok, false);
     assert.match(r.error, /never drops/);

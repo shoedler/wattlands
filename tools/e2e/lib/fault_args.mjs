@@ -75,6 +75,9 @@ const NUMERIC = {
 };
 const STRINGS = { '--out': 'out', '--relay-cmd': 'relayCmd', '--peer-cmd': 'peerCmd', '--repo': 'repo' };
 
+/** The flags that would drop a BRIEF 1 lock; the harness refuses them. */
+const LOCK_DROPPING_FLAGS = ['hw', 'network'].map((x) => `--allow-${x}`);
+
 export const FAULT_DEFAULTS = Object.freeze({
   games: FAULT_GAMES,
   scenarios: null,
@@ -106,7 +109,7 @@ export function parseFaultArgs(argv) {
   let wanted = null;
   for (const a of argv) {
     if (a === '--help' || a === '-h') return { ok: true, help: true };
-    if (a === '--allow-hw' || a === '--allow-network') {
+    if (LOCK_DROPPING_FLAGS.includes(a)) {
       return { ok: false, error: `refusing ${a}: the fault test never drops the hardware or network lock (BRIEF 1)` };
     }
     if (a === '--verbose') {
