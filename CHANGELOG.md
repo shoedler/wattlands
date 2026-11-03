@@ -2,6 +2,13 @@
 
 Releases, newest first. Modules and games write fragments in `docs/changelog.d/<module or game id>.md`; they are merged here at each release and the fragments are emptied.
 
+## v1.0.0 (2026-11-03)
+
+The first release. It's v1.0.0-rc.4 with the version changed, so everything listed under rc.4 and before is in it. Everyone in a room needs this release: v1.0.0 and rc.4 can't ride together.
+
+- The game design notes in `docs/games/` describe the games as they ship.
+- Issues start from a form, and `CLAUDE.md` says how issues and outside pull requests are handled.
+
 ## v1.0.0-rc.4 (2026-11-03)
 
 The release candidate for opening the project up.
