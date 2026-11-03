@@ -302,6 +302,10 @@ func _refresh_prompts() -> void:
 func apply_event(event: Dictionary) -> void:
 	if state == null:
 		return
+	var why := SiegeEvents.check(event)
+	if why != "":
+		push_warning("siege: event ignored: %s" % why)
+		return
 	var e := SiegeEvents.cast(event)
 	_client_state(e)
 	_local_effects(e)
