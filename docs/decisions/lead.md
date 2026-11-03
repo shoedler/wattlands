@@ -145,3 +145,9 @@ Reason: a stricter gate; no threshold moved. The re-pin also took Tank v4's addi
 - Decision: every workflow's `push` trigger gets `branches: ["**"]`, and `tools/new_game` writes the same, so branches behave as before and tags run nothing. `lead.yml`'s limit rises from 120 to 150 minutes.
 - Alternatives: `branches: [main]` (a pushed branch would lose its CI); `tags-ignore` (the same effect, with a less obvious reading); keep 120 (rc.3's `lead` passed on main in 119 minutes, and its run on the tag was cancelled at the limit).
 - Reason: a release pushes main and then the tag, one commit, so all seven workflows ran twice and paid for it. GitHub ignores `paths` on a new tag, so even the games the release didn't touch ran. The time limit is a machine's, not a BRIEF 4.6 or 7 threshold, and no gate changed.
+
+## 2026-11-03: personal email addresses out of the history
+
+- Decision: before the repository went public, the owner had every commit and tag rewritten with `git filter-repo --mailmap`, so authors, committers and taggers carry the GitHub noreply address. Trees are unchanged (rc.4's tree hash is the same). Commit IDs quoted in the docs were mapped to the new ones, and `tools/gate pin-safety` re-pinned at the new history, since `safety_pins.json` names its pinning commit. The game briefs in `docs/games/` were brought up to the shipped games with the owner's leave.
+- Alternatives: keep the history (the addresses would be public for good); a fresh repository with one squashed commit (loses the history every ADR points into).
+- Reason: the owner's call. No file hash in the pins changed, so no BRIEF 4.6 or 7 path moved.
