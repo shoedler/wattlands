@@ -32,7 +32,7 @@ A game session changes the platform only under the platform-change policy in `CL
 | --- | --- |
 | `content/strings/<module>.csv` | Platform strings, one file per module, each registered in `project.godot`. Platform keys never start with `WORKOUT_`, `SIEGE_`, `TANK_`, `FISHING_` or `_TEMPLATE_`. |
 | `docs/decisions/`, `docs/deps.d/`, `docs/credits.d/`, `docs/changelog.d/` | One `<agent or game id>.md` per owner. The lead merges them: changelog fragments are emptied at each release; decision fragments stay as the source. |
-| `.github/workflows/` | Eight workflows: `check.yml` runs `tools/gate check --contributor` on every pull request, `lead.yml` runs every gate, `game-<id>.yml` per game (`tools/new_game` writes it), `relay.yml` builds the relay's Docker image, `trainer-bridge.yml` runs the Python bridge's tests. |
+| `.github/workflows/` | Nine workflows: `check.yml` runs `tools/gate check --contributor` on every pull request, `lead.yml` runs every gate, `game-<id>.yml` per game (`tools/new_game` writes it), `relay.yml` builds the relay's Docker image, `trainer-bridge.yml` runs the Python bridge's tests, `faults.yml` runs `tools/e2e/faults.mjs` on main. |
 
 ### 1.3 Frozen seams
 

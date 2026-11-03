@@ -1,0 +1,54 @@
+# Multiplayer failure paths with real peers (tools/e2e/faults.mjs): a wrong code, a late join, a
+# dying or restarting relay and a killed host, on the relay and on the built-in relay, for every
+# game. About half an hour, so it runs on main and by hand, not on every pull request.
+name: faults
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "addons/wattlands/net/**"
+      - "addons/wattlands/sdk/game_host.gd"
+      - "src/app/**"
+      - "server/relay/**"
+      - "tools/e2e/**"
+      - ".github/workflows/faults.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  faults:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GODOT_VERSION: "4.7.2"
+      WATTLANDS_NO_HW_CONTROL: "1"
+      WATTLANDS_NO_NETWORK_INTEGRATIONS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Godot
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/godot.zip" \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
+          echo "GODOT=$RUNNER_TEMP/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" >> "$GITHUB_ENV"
+      - name: Import
+        run: tools/godot.sh --headless --path . --import || echo "import exited non-zero (not a gate)"
+      - name: Faults
+        run: node tools/e2e/faults.mjs
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: faults-report
+          path: build/e2e_faults/report.json
+          if-no-files-found: ignore
