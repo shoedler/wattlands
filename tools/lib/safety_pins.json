@@ -1,7 +1,7 @@
 {
- "reason": "v1.0.0-rc.4: gate --contributor; owner's name out of tool comments; new_game's workflow runs on main",
- "pinned_at": "74e1e13d7c60a3037407dad1c18d92d9a37f7c8d",
- "date": "2026-11-02",
+ "reason": "re-pin after the history rewrite that removed personal emails: same files, the pinning commit got a new ID",
+ "pinned_at": "103c35f189dae6ef591aefa178cca6bb4dfd682e",
+ "date": "2026-11-03",
  "globs": [
   "addons/wattlands/trainer/**",
   "addons/wattlands/core/locks.gd",
