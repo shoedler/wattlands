@@ -3,7 +3,7 @@ extends RefCounted
 ## What stands in each segment (brief 2.4 mission P0, 2.9; v4): the Advance's obstacles and its fixed
 ## encounter list keyed by metres driven (far kinds through TankFar, near kinds through TankNear), a
 ## holding action's force (the UI's name for a gun line) and its props, near threats by seconds into a
-## holding action or the boss fight, the Behemoth, the depot's drill wrecks. Counts scale with the crew
+## holding action or the boss fight, the Behemoth, the hangar's drill wrecks. Counts scale with the crew
 ## and difficulty.count (TankContent.crew_count). No random spawns: the mission file lists everything,
 ## so the plan builder knows every segment before the ride starts. Owner: rules (combat).
 ##
@@ -261,7 +261,7 @@ static func crew_counts(state: TankState, entries: Array) -> Array[int]:
 
 
 ## The hangar's aim drill: its wrecks stand ahead of the tank on its stand once the drill starts.
-static func depot_wrecks(state: TankState, aux: TankAux) -> void:
+static func hangar_wrecks(state: TankState, aux: TankAux) -> void:
 	if state.seg.seg != TankIds.SEG_HANGAR or aux.drill_wrecks:
 		return
 	for d: Variant in aux.drills:

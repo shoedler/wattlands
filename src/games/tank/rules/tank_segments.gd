@@ -189,9 +189,9 @@ static func on_stand(state: TankState) -> bool:
 	return state.seg.seg == TankIds.SEG_HANGAR
 
 
-## The tank may move over the ground now: never on the stand. The Roll-out never halts, and the
-## depot of free roam's drive-out always rolls (it has no drills).
-static func depot_driving(state: TankState) -> bool:
+## The warm-up segments that may roll the tank over the ground: never the Hangar (the stand). The
+## Roll-out never halts, and the depot of free roam's drive-out always rolls (it has no drills).
+static func warmup_rolls(state: TankState) -> bool:
 	if state.seg.seg == TankIds.SEG_HANGAR:
 		return false
 	return state.seg.seg == TankIds.SEG_ROLLOUT or TankAux.of(state).drills.is_empty()

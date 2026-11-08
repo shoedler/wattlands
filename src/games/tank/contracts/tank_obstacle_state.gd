@@ -1,6 +1,6 @@
 class_name TankObstacleState
 extends TankRecord
-## An obstacle or prop fixed in world space (G0 contract): wire, a wreck barricade, the depot's
+## An obstacle or prop fixed in world space (G0 contract): wire, a wreck barricade, the hangar's
 ## drill wrecks, a gun line's tank traps. Wire and wrecks stop the tank until a heavy shell,
 ## three light shells or 4 s of bow-gun fire within range clears them (brief 2.4).
 

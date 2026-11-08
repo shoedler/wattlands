@@ -42,7 +42,7 @@ static func _may_move(state: TankState) -> bool:
 		return false
 	match sg.seg:
 		TankIds.SEG_DEPOT, TankIds.SEG_HANGAR, TankIds.SEG_ROLLOUT:
-			return TankSegments.depot_driving(state)
+			return TankSegments.warmup_rolls(state)
 		TankIds.SEG_ADVANCE, TankIds.SEG_SKIRMISH:
 			return not sg.objective_done and state.hull.distance_m < sg.length_m
 		TankIds.SEG_COOLDOWN, TankIds.SEG_ROAM:

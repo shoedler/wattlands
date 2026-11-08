@@ -91,6 +91,6 @@ func in_first_window() -> bool:
 	return TankConst.in_first_window(plan_elapsed_s)
 
 
-## This rider's phase is a WARMUP kind (the depot, the drill's skirmish): warm-up numbers apply.
+## This rider's phase is a WARMUP kind (the hangar, the roll-out, the drill's skirmish): warm-up numbers apply.
 func in_warmup() -> bool:
 	return phase_kind == Wl.WARMUP

@@ -7,7 +7,7 @@ extends TankRecord
 
 ## TankIds.SEG_* (the snapshot carries its code).
 var seg: String = TankIds.SEG_NONE
-## [snap] Stage 1..3, 4 for the boss, 0 for the depot.
+## [snap] Stage 1..3, 4 for the boss, 0 for the hangar and the roll-out.
 var stage: int = 0
 ## [snap] The plan phase index (the group's: the lowest any rider is in); -1 before the start.
 var phase_index: int = -1
