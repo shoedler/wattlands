@@ -3,11 +3,13 @@ extends RefCounted
 ## hud_spec() for Turbo Reel, in art pixels of the current art size (layout(): every rect from
 ## the view's art size, 640 x 360 at the base; the ocean runs under it all):
 ##  - top: FishingMinimap (the ocean in profile, every rider's action icon; as wide as the board
-##    leaves) and FishingBoard (time left, the leaderboard) at the right;
+##    leaves) and FishingBoard (time left, the leaderboard) at the right, with FishingCrewStrips
+##    stacked under the board: one strip per other rider with a fish on;
 ##  - bottom left: FishingCruisePanel (watts, cadence, %FTP, heart rate, a power graph, the zone
 ##    tag bottom-aligned right of it) outside a fight, the kit gear (shown in SIM) right above
 ##    the tag, and in a workout the kit timeline above them;
-##  - FishingFightPanel under the boat in a fight and the Landing; FishingSpeedTag on the water
+##  - FishingFightPanel under the boat in a fight and the Landing, FishingJigPanel in its place
+##    while the lure is out in Free Roam; FishingSpeedTag on the water
 ##    behind the stern; FishingChips over the view (the stopped menu next to the boat);
 ##  - toasts under the minimap, banners over the middle of the view;
 ##  - help (F1): what each of these is, with arrows (help()).
@@ -77,9 +79,11 @@ static func spec(game: FishingGame) -> HudSpec:
 		spec
 		. add_control(FishingMinimap.make(game, l["minimap"]), l["minimap"])
 		. add_control(FishingBoard.make(game, l["board"]), l["board"])
+		. add_control(FishingCrewStrips.make(game, l["crew"]), l["crew"])
 		. add_control(FishingChips.make(game, l["chips"]), l["chips"])
 		. add_control(FishingSpeedTag.make(game, l["speed"]), l["speed"])
 		. add_control(FishingFightPanel.make(game, l["fight"]), l["fight"])
+		. add_control(FishingJigPanel.make(game, l["jig"]), l["jig"])
 		. add_control(FishingCruisePanel.make(game, l["cruise"]), l["cruise"])
 		. add(HudSpec.GEAR, l["gear"])
 	)
@@ -106,7 +110,7 @@ static func art_size(game: FishingGame) -> Vector2i:
 	return Vector2i(FishingConst.PIXEL_W, FishingConst.PIXEL_H)
 
 
-## Every rect for art size `art` (art px), by name: minimap, board, chips, speed, fight,
+## Every rect for art size `art` (art px), by name: minimap, board, crew, chips, speed, fight, jig,
 ## cruise, gear, timeline, toasts, banners; and the help overlay's targets menu and stop.
 static func layout(art: Vector2i) -> Dictionary:
 	var w := maxi(art.x, 1)
@@ -116,14 +120,17 @@ static func layout(art: Vector2i) -> Dictionary:
 	var cruise := Rect2i(MARGIN, h - CRUISE_H - MARGIN, CRUISE_W, CRUISE_H)
 	var gear_y := cruise.end.y - FishingCruisePanel.TAG_H - 2 - GEAR_H
 	var gear := Rect2i(MARGIN + FishingCruisePanel.tag_x(), gear_y, GEAR_W, GEAR_H)
+	var crew_h := FishingCrewStrips.rect_h(FishingSnapshotSchema.MAX_RIDERS)
 	var tw := mini(TOAST_W, minimap.size.x - 16)
 	var bw := mini(BANNER_W, w - 2 * MARGIN)
 	return {
 		"minimap": minimap,
 		"board": board,
+		"crew": Rect2i(board.position.x, board.position.y, BOARD_W, crew_h),
 		"chips": Rect2i(0, 0, w, h - 60),
 		"speed": Rect2i(0, FishingScenery.SURF_Y + FishingScenery.SURFACE_ROWS, w, 30),
 		"fight": Rect2i(0, 0, w, h),
+		"jig": Rect2i(0, 0, w, h),
 		"cruise": cruise,
 		"gear": gear,
 		"timeline": Rect2i(MARGIN, cruise.position.y - TIMELINE_H - 4, TIMELINE_W, TIMELINE_H),
@@ -167,6 +174,7 @@ static func rects(art: Vector2i = Vector2i(FishingScenery.W, FishingScenery.H)) 
 	for key: String in [
 		"minimap",
 		"board",
+		"crew",
 		"chips",
 		"speed",
 		"cruise",
