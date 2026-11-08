@@ -1041,3 +1041,13 @@ func test_a_client_view_hears_the_rider_the_snapshot_carries() -> void:
 			assert_gt(v.cranks[slot].revs, 0.0)
 			moving += 1
 	assert_gt(moving, 0)
+
+
+func test_the_receipt_is_silent() -> void:
+	assert_true(SiegeAudio.SILENT_EVENTS.has(SiegeIds.EV_RECEIPT))
+	for act in SiegeIds.RC_ACTS:
+		assert_eq(SiegeAudio.cue_for(SiegeIds.EV_RECEIPT, {"act": act}), "")
+	var v := _solo(0.0)
+	v.audio.kit.clear_played()
+	v.audio.on_cue(SiegeIds.EV_RECEIPT, {"slot": 0, "act": SiegeIds.RC_REJECT})
+	assert_eq(v.audio.played.size(), 0)

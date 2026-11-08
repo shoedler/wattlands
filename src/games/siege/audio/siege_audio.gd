@@ -26,7 +26,8 @@ const CUE_GOLD := "gold"
 const CUE_TAR_HISS := "tar_hiss"
 const CUE_KILL_ENGINE := "kill_engine"
 ## Events with no sound of their own. Every other event type maps to a cue (cue_for).
-const SILENT_EVENTS: Array[String] = []
+## The receipt changes under the list's own click; a voted-off item speaks as a toast.
+const SILENT_EVENTS: Array[String] = [SiegeIds.EV_RECEIPT]
 const HOOF_EVERY_S := 0.4
 ## Hooves only for a chariot this near the gate: all along the road they ran 75 % of a wave, at 2.5 Hz against the
 ## footfalls' 3 Hz.
