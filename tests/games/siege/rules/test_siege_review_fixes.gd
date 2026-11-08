@@ -25,9 +25,9 @@ func test_a_breach_ending_in_a_break_keeps_the_break_s_repairs_and_bands() -> vo
 	s.role = SiegeIds.ROLE_BREAK
 	s.phase_kind = Wl.RECOVERY
 	s.rider(1).gold = 500.0
-	var it := SiegeIntents.normalize(SiegeIntents.buy(SiegeIds.ITEM_IRON_BANDS))
+	var it := SiegeIntents.normalize(SiegeIntents.pick(SiegeIds.ITEM_IRON_BANDS))
 	assert_eq(int(SiegeShop.buy(s, s.rider(1), it)["ok"]), 1)
-	var rep := SiegeIntents.normalize(SiegeIntents.buy(SiegeIds.ITEM_REPAIR))
+	var rep := SiegeIntents.normalize(SiegeIntents.pick(SiegeIds.ITEM_REPAIR))
 	assert_eq(int(SiegeShop.buy(s, s.rider(1), rep)["ok"]), 1)
 	assert_eq(s.gate_hp, 45.0, "25 from the bands, 20 from the repair")
 	SiegeKit.run_combat(s, 10.5)
@@ -64,7 +64,7 @@ func test_buying_first_cannot_dodge_the_cut() -> void:
 	s.gate_hp = 1.0
 	SiegeCombat.damage_gate(s, 5.0, ev)
 	s.role = SiegeIds.ROLE_BREAK
-	var it := SiegeIntents.normalize(SiegeIntents.buy(SiegeIds.ITEM_MINE))
+	var it := SiegeIntents.normalize(SiegeIntents.pick(SiegeIds.ITEM_MINE))
 	SiegeShop.buy(s, s.rider(1), it)
 	assert_almost_eq(s.rider(1).gold, 70.0 - 60.0, 1e-6, "cut first, then the 60 gold level")
 	SiegeKit.run_combat(s, 10.05)

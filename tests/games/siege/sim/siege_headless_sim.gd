@@ -372,7 +372,7 @@ func _raw_intents(i: int, t: float) -> Array:
 	if tick == 0 and r.route != "":
 		out.append(SiegeIntents.route(int(r.route) if r.route.is_valid_int() else r.route))
 	if tick == 1 and r.manual_shop:
-		out.append(SiegeIntents.buy(SiegeIds.ITEM_REPAIR))
+		out.append(SiegeIntents.pick(SiegeIds.ITEM_REPAIR))
 	if _next_surge.has(peer) and t >= float(_next_surge[peer]) - 1e-9:
 		out.append(SiegeIntents.overdrive(SiegeIds.VIA_SURGE))
 		_next_surge[peer] = float(_next_surge[peer]) + r.surge_every_s

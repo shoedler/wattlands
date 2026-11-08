@@ -35,8 +35,8 @@ func test_a_human_who_only_pedals_plays_the_whole_shift_on_autopilot() -> void:
 		var intents: Array = []
 		if g.state.shop_open() and tick % 40 == 0:
 			# What the PedalScanList sends when its ERG auto-confirm picks the highlighted item.
-			intents.append(SiegeIntents.buy(SiegeIds.ITEM_SCORPION, 2, true))
-			intents.append(SiegeIntents.buy(SiegeIds.ITEM_MINE, 0, true))
+			intents.append(SiegeIntents.pick(SiegeIds.ITEM_SCORPION, 2, true))
+			intents.append(SiegeIntents.pick(SiegeIds.ITEM_MINE, 0, true))
 			auto_buys += 2
 		elif g.state.in_wave() and tick % 100 == 0:
 			intents.append(SiegeIntents.overdrive("surge"))

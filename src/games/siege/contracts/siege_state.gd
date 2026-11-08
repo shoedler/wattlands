@@ -98,6 +98,11 @@ var team_earned: float = 0.0
 ## The team's planned P_eff in kJ from the warm-up to the last wave (par = 0.75 x it).
 var planned_kj: float = 0.0
 
+# --- The shared receipt (brief 2.4 "Shop") ------------------------------------------------------------
+## [snap] (rc) The items picked in this break and not yet bought, in the order they were added.
+## Bought in that order when the break ends; each picker's gold for them is held meanwhile.
+var receipt: Array[SiegeReceiptLine] = []
+
 ## Peers whose Overdrive the rules started this tick (OD_PENDING): the module sends each one's
 ## directive and resolves it (SiegeOverdrive.on_request_result) in the same sim_step.
 var od_requests: Array[int] = []
@@ -358,6 +363,53 @@ func rush_on() -> bool:
 	return wave.rush_s > 0.0
 
 
+# --- The receipt ---------------------------------------------------------------------------------------
+
+
+## The receipt's line for `item` at `at`, or null.
+func receipt_line(item: String, at: int) -> SiegeReceiptLine:
+	for line in receipt:
+		if line.item == item and line.at == at:
+			return line
+	return null
+
+
+## Gold of the rider in `slot` held by their lines on the receipt.
+func held_by(slot: int) -> int:
+	var n := 0
+	for line in receipt:
+		if line.slot == slot:
+			n += line.cost
+	return n
+
+
+## The receipt's total.
+func receipt_total() -> int:
+	var n := 0
+	for line in receipt:
+		n += line.cost
+	return n
+
+
+## What `r` can still put on the receipt: their gold less what it already holds (never below 0).
+func spendable(r: SiegeRiderState) -> float:
+	return maxf(r.gold - float(held_by(r.slot)), 0.0)
+
+
+## The slots that vote on the receipt: the riders who are connected (bots always), in slot order.
+func voter_slots() -> Array[int]:
+	var out: Array[int] = []
+	for r in riders:
+		if r.connected:
+			out.append(r.slot)
+	return out
+
+
+## The vote on `line` as it stands: the connected riders vote, the picker counts yes.
+func vote_on(line: SiegeReceiptLine) -> TeamVote:
+	return TeamVote.from_wire(voter_slots(), line.no)
+
+
 ## The peers to send an Overdrive directive for, emptied (the module calls it once per tick).
 func take_od_requests() -> Array[int]:
 	var out := od_requests.duplicate()
@@ -376,6 +428,7 @@ func to_dict() -> Dictionary:
 	d["enemies"] = enemies.map(func(x: SiegeRecord) -> Dictionary: return x.to_dict())
 	d["projectiles"] = projectiles.map(func(x: SiegeRecord) -> Dictionary: return x.to_dict())
 	d["queue"] = queue.map(func(x: SiegeRecord) -> Dictionary: return x.to_dict())
+	d["receipt"] = receipt.map(func(x: SiegeRecord) -> Dictionary: return x.to_dict())
 	d["tar"] = tar.to_dict()
 	d["wave"] = wave.to_dict()
 	return d
@@ -400,6 +453,8 @@ static func from_dict(d: Dictionary, p_content: SiegeContent = null) -> SiegeSta
 		s.projectiles.append(SiegeProjectile.new().load_dict(x) as SiegeProjectile)
 	for x: Variant in d.get("queue", []):
 		s.queue.append(SiegeSpawn.new().load_dict(x) as SiegeSpawn)
+	for x: Variant in d.get("receipt", []):
+		s.receipt.append(SiegeReceiptLine.new().load_dict(x) as SiegeReceiptLine)
 	if d.get("tar") is Dictionary:
 		s.tar.load_dict(d["tar"])
 	if d.get("wave") is Dictionary:

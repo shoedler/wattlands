@@ -53,6 +53,27 @@ func test_a_refused_purchase_toasts_only_the_buyers_peer() -> void:
 	_free(client)
 
 
+func test_a_vote_that_takes_an_item_off_toasts_only_its_picker() -> void:
+	var rejected := SiegeEvents.receipt(1, SiegeIds.ITEM_MINE, 0, 0, SiegeIds.RC_REJECT, 1, 1, 1)
+	var host := _host()
+	host._local_effects(rejected)
+	assert_eq(K.toasts(host), [], "slot 1 picked it, the host rides slot 0")
+	host._local_effects(SiegeEvents.receipt(0, "mine", 0, 0, SiegeIds.RC_REJECT, 0, 1, 1))
+	assert_eq(_keys(K.toasts(host)), ["SIEGE_TOAST_RECEIPT_REJECTED"])
+	assert_eq(K.toasts(host)[0][2], 1)
+	host._local_effects(SiegeEvents.receipt(0, "mine", 0, 0, SiegeIds.RC_NO, 1, 1, 1))
+	host._local_effects(SiegeEvents.receipt(0, "mine", 0, 0, SiegeIds.RC_DROP, 0, 1, 1))
+	assert_eq(K.toasts(host).size(), 1, "a vote or a rider leaving is no toast")
+	_free(host)
+	var client := _client(2)
+	client.apply_event(rejected)
+	var toasts := K.toasts(client)
+	assert_eq(_keys(toasts), ["SIEGE_TOAST_RECEIPT_REJECTED"])
+	assert_eq(toasts[0][1], ["Mine level 1 (+20% gold)"])
+	assert_eq(toasts[0][2], Wl.ALL_PEERS)
+	_free(client)
+
+
 func test_a_purchase_and_a_route_speak_to_their_own_rider_only() -> void:
 	var client := _client(2)
 	client.apply_event(SiegeEvents.buy(1, SiegeIds.ITEM_UPGRADE, 2, 0, true, "", 2))
@@ -267,6 +288,50 @@ func test_at_most_five_intents_a_second_per_peer() -> void:
 	var clean := g._collect_intents(F.frame(g.ctx, g.plans, 400, 100.0, {1: mixed}))
 	assert_eq(clean[1].size(), 1, "junk is dropped before it counts")
 	_free(g)
+
+
+func test_junk_and_auto_picks_never_reach_the_receipt() -> void:
+	var g := K.game(2, 0, "short")
+	var tick := K.run_to(g, 0, F.phase_start(g.plans[1], 1) + 2.0)
+	for r in g.state.riders:
+		r.gold = 500.0
+	assert_true(g.state.shop_open())
+	var junk: Array = [
+		{"k": "pick", "item": "nope"},
+		{"k": "pick", "item": "upgrade", "station": 9},
+		{"k": "pick", "item": "scorpion", "pad": 0},
+		{"k": "pick", "item": "mine", "auto": 1},
+		{"k": "pick", "item": "mine", "via": "auto"},
+		{"k": "pick"},
+	]
+	K.step(g, tick, {1: junk, 2: junk})
+	assert_eq(g.state.receipt.size(), 0)
+	K.step(g, tick + 1, {1: [SiegeIntents.pick(SiegeIds.ITEM_MINE)]})
+	assert_eq(g.state.receipt.size(), 1)
+	_free(g)
+
+
+func test_a_pick_reaches_the_client_in_the_snapshot_and_a_vote_takes_it_off() -> void:
+	var host := K.game(2, 0, "short", Wl.HOST, 1)
+	var client := K.game(2, 0, "short", Wl.CLIENT, 2)
+	var link := K.Link.new(host, client)
+	var tick := link.run(0, F.phase_start(host.plans[1], 1) + 2.0)
+	for r in host.state.riders:
+		r.gold = 500.0
+	link.step(tick, {1: [SiegeIntents.pick(SiegeIds.ITEM_MINE)]})
+	tick = link.run(tick + 1, (tick + 4) * Wl.SIM_DT)
+	assert_eq(client.state.receipt.size(), 1, "the client sees the same receipt")
+	assert_eq(client.state.receipt[0].key(), "mine/0")
+	assert_eq(client.state.held_by(0), 60)
+	var adds := link.sent.filter(func(e: Dictionary) -> bool: return e["type"] == "receipt")
+	assert_eq(adds.size(), 1)
+	link.step(tick, {2: [SiegeIntents.pick(SiegeIds.ITEM_MINE)]})
+	tick = link.run(tick + 1, (tick + 4) * Wl.SIM_DT)
+	assert_eq(host.state.receipt.size(), 0, "two riders: a no is a tie")
+	assert_eq(client.state.receipt.size(), 0, "and the client's receipt is empty again")
+	assert_eq(K.toasts(host)[K.toasts(host).size() - 1][0], "SIEGE_TOAST_RECEIPT_REJECTED")
+	_free(host)
+	_free(client)
 
 
 func test_a_dropped_client_is_afk_until_it_reconnects() -> void:

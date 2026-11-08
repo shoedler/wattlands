@@ -557,6 +557,11 @@ func _local_effects(e: Dictionary) -> void:
 					_toast("SIEGE_TOAST_BUY_OK", [_item_name(e)])
 				else:
 					_toast("SIEGE_TOAST_BUY_REFUSED", [_refusal(str(e.get("why", "")))])
+		SiegeIds.EV_RECEIPT:
+			if int(e["act"]) == SiegeIds.RC_REJECT and int(e["picker"]) == me.slot:
+				var at := int(e["pad"]) if int(e["pad"]) > 0 else int(e["station"])
+				var name := SiegeShopModel.text_of(state, ctx.strings, str(e["item"]), at)
+				_toast("SIEGE_TOAST_RECEIPT_REJECTED", [name])
 		SiegeIds.EV_ROUTE:
 			if mine:
 				_toast("SIEGE_TOAST_ROUTE", [_route_name(int(e["to"]))])

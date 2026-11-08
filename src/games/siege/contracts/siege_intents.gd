@@ -8,16 +8,19 @@ extends RefCounted
 ## Wire forms (what local_intents() and the shop panel send):
 ##   {"k": "route", "to": "mine" | 0..4 | "next" | "prev" | "hot", "via"?: String}  ("gen" is
 ##    accepted as "mine")
-##   {"k": "buy", "item": <SiegeIds.ITEMS>, "station": 1..4 (upgrade only), "pad": 1..4
-##    (scorpion and pad_upgrade only), "auto"?: 1, "via"?: String}  -- "auto": 1 when the
-##    PedalScanList auto-confirmed it (item_picked via "auto")
+##   {"k": "pick", "item": <SiegeIds.ITEMS>, "station": 1..4 (upgrade only), "pad": 1..4
+##    (scorpion and pad_upgrade only), "auto"?: 1, "via"?: String}  -- one pick: the host adds
+##    the item to the shared receipt, takes your own back, or votes on someone else's (the next
+##    pick of it returns the vote). Nothing is spent until the break ends. "auto": 1 when the
+##    PedalScanList auto-confirmed it (item_picked via "auto"): the rules ignore it. "buy" is
+##    the old wire word and reads as "pick".
 ##   {"k": "overdrive", "via": "action" | "surge" | "button"}  -- ability_1, a surge, the HUD button
 ## Normalized form (what SiegeRiderInput.intents holds):
 ##   {"k": String, "to": int (route: a station 0..4, ROUTE_NEXT / PREV / HOT; else 0),
-##    "item": String ("" unless buy), "station": int (0 unless a station item), "pad": int (0
+##    "item": String ("" unless pick), "station": int (0 unless a station item), "pad": int (0
 ##    unless a pad item), "auto": bool, "via": String}
 ## `auto` is true for "auto": 1 (any non-zero number or true) or "via": "auto". Auto intents
-## never end a zero-input fallback and never start Overdrive.
+## never end a zero-input fallback, never start Overdrive and never touch the receipt.
 
 const MAX_KEYS := 8
 
@@ -29,6 +32,8 @@ static func normalize(raw: Variant) -> Dictionary:
 		return {}
 	var d: Dictionary = raw
 	var k: Variant = d.get("k")
+	if k is String and k == SiegeIds.INTENT_BUY_WIRE:
+		k = SiegeIds.INTENT_PICK
 	if not (k is String) or not SiegeIds.INTENT_KINDS.has(k):
 		return {}
 	var via := str(d.get("via", SiegeIds.VIA_ACTION)) if d.get("via", "") is String else ""
@@ -49,7 +54,7 @@ static func normalize(raw: Variant) -> Dictionary:
 				out["to"] = int(to)
 			else:
 				return {}
-		SiegeIds.INTENT_BUY:
+		SiegeIds.INTENT_PICK:
 			var item: Variant = d.get("item")
 			if not (item is String) or not SiegeIds.ITEMS.has(item):
 				return {}
@@ -74,9 +79,9 @@ static func route(to: Variant, via: String = SiegeIds.VIA_ACTION) -> Dictionary:
 	return {"k": SiegeIds.INTENT_ROUTE, "to": to, "via": via}
 
 
-## A buy intent; `at` is the station (upgrade) or the pad (scorpion, pad_upgrade), else unused.
-static func buy(item: String, at: int = 0, auto: bool = false) -> Dictionary:
-	var d := {"k": SiegeIds.INTENT_BUY, "item": item}
+## A pick intent; `at` is the station (upgrade) or the pad (scorpion, pad_upgrade), else unused.
+static func pick(item: String, at: int = 0, auto: bool = false) -> Dictionary:
+	var d := {"k": SiegeIds.INTENT_PICK, "item": item}
 	if SiegeIds.STATION_ITEMS.has(item):
 		d["station"] = at
 	if SiegeIds.PAD_ITEMS.has(item):
@@ -84,6 +89,16 @@ static func buy(item: String, at: int = 0, auto: bool = false) -> Dictionary:
 	if auto:
 		d["auto"] = 1
 	return d
+
+
+## The station or pad a normalized pick names (0 for an item with neither).
+static func at_of(it: Dictionary) -> int:
+	var item := str(it.get("item", ""))
+	if SiegeIds.PAD_ITEMS.has(item):
+		return int(it.get("pad", 0))
+	if SiegeIds.STATION_ITEMS.has(item):
+		return int(it.get("station", 0))
+	return 0
 
 
 static func overdrive(via: String) -> Dictionary:

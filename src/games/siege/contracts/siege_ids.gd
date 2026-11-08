@@ -159,9 +159,13 @@ const BUY_REASONS: Array[String] = [
 
 # --- Intents (Telemetry.intents; brief 2.6) ----------------------------------------------------
 const INTENT_ROUTE := "route"
-const INTENT_BUY := "buy"
+## Picks a shop item: adds it to the shared receipt, takes your own back, or votes on someone
+## else's (nothing is spent until the break ends).
+const INTENT_PICK := "pick"
+## The wire word the shop used before the receipt; it still reads as a pick.
+const INTENT_BUY_WIRE := "buy"
 const INTENT_OVERDRIVE := "overdrive"
-const INTENT_KINDS: Array[String] = [INTENT_ROUTE, INTENT_BUY, INTENT_OVERDRIVE]
+const INTENT_KINDS: Array[String] = [INTENT_ROUTE, INTENT_PICK, INTENT_OVERDRIVE]
 ## Where an intent came from (normalized "via"). VIA_AUTO: Autopilot or a PedalScanList
 ## auto-confirm; such intents never end a zero-input fallback and never start Overdrive.
 const VIA_ACTION := "action"
@@ -184,6 +188,8 @@ const EV_LEAK := "leak"
 const EV_BREACH := "breach"
 const EV_GATE_RESTORED := "gate_restored"
 const EV_BUY := "buy"
+## Something happened on the shared receipt (an item added, taken back, voted on, voted off).
+const EV_RECEIPT := "receipt"
 const EV_ROUTE := "route"
 const EV_OVERDRIVE := "overdrive"
 const EVENT_TYPES: Array[String] = [
@@ -199,9 +205,25 @@ const EVENT_TYPES: Array[String] = [
 	EV_BREACH,
 	EV_GATE_RESTORED,
 	EV_BUY,
+	EV_RECEIPT,
 	EV_ROUTE,
 	EV_OVERDRIVE,
 ]
+
+# --- The receipt (receipt event "act"; snapshot "rc") ---------------------------------------------
+## An item went on the receipt.
+const RC_ADD := 1
+## Its picker took it back.
+const RC_TAKE := 2
+## A rider voted no on it.
+const RC_NO := 3
+## A rider took their no back.
+const RC_YES := 4
+## The vote rejected it: it left the receipt and its gold went back to the picker.
+const RC_REJECT := 5
+## Its picker left the session: it left the receipt.
+const RC_DROP := 6
+const RC_ACTS: Array[int] = [RC_ADD, RC_TAKE, RC_NO, RC_YES, RC_REJECT, RC_DROP]
 
 # --- Overdrive (SiegeRiderState.od_state; overdrive event "st") -------------------------------
 const OD_READY := 0
@@ -213,6 +235,15 @@ const OD_COOLDOWN := 3
 const OD_EV_END := 0
 const OD_EV_START := 1
 const OD_EV_REFUSED := 2
+
+
+## The snapshot's code of a shop item (1..9; 0: unknown) and back ("" for a bad code).
+static func item_code(item: String) -> int:
+	return ITEMS.find(item) + 1
+
+
+static func item_of(code: int) -> String:
+	return ITEMS[code - 1] if code >= 1 and code <= ITEMS.size() else ""
 
 
 static func enemy_code(name: String) -> int:

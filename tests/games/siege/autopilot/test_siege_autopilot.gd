@@ -244,8 +244,35 @@ func test_then_an_upgrade_for_the_station_that_did_the_most_damage() -> void:
 func test_the_second_pick_sees_the_first() -> void:
 	_s.station(SiegeIds.STATION_ONAGER).damage_wave = 300.0
 	var picks := _shop(500.0)
-	assert_eq(_items(picks), [SiegeIds.ITEM_UPGRADE, SiegeIds.ITEM_UPGRADE])
-	assert_eq(picks[1]["station"], SiegeIds.STATION_ONAGER, "level 2 next")
+	assert_eq(_items(picks), [SiegeIds.ITEM_UPGRADE, SiegeIds.ITEM_SCORPION])
+	assert_eq(picks[0]["station"], SiegeIds.STATION_ONAGER)
+	assert_eq(
+		picks[1]["pad"], 2, "the receipt holds one line per item: no level 2 in the same break"
+	)
+
+
+func test_an_item_on_the_receipt_is_not_picked_again() -> void:
+	_s.station(SiegeIds.STATION_ONAGER).damage_wave = 300.0
+	var line := SiegeReceiptLine.new()
+	line.item = SiegeIds.ITEM_UPGRADE
+	line.at = SiegeIds.STATION_ONAGER
+	line.cost = 40
+	line.slot = 1
+	_s.receipt.assign([line])
+	var picks := _shop(500.0)
+	assert_eq(picks[0]["item"], SiegeIds.ITEM_SCORPION, "someone else's upgrade counts as taken")
+	var blind := SiegeAutopilot.shop_picks(_s, _s.riders[0], 1, true)
+	assert_eq(blind[0]["item"], SiegeIds.ITEM_UPGRADE, "the list's blind pick ignores the receipt")
+
+
+func test_picks_use_the_gold_left_after_what_the_receipt_holds() -> void:
+	_s.station(SiegeIds.STATION_ONAGER).damage_wave = 300.0
+	var line := SiegeReceiptLine.new()
+	line.item = SiegeIds.ITEM_MINE
+	line.cost = 60
+	line.slot = _s.riders[0].slot
+	_s.receipt.assign([line])
+	assert_eq(_shop(70.0).size(), 0, "70 gold, 60 of it held")
 
 
 func test_then_a_scorpion_on_the_first_empty_pad() -> void:
@@ -348,15 +375,22 @@ func test_bots_never_leave_autopilot() -> void:
 	assert_true(rig.rider(-1).autopilot)
 
 
-func test_a_zero_input_break_buys_once_per_pick_with_auto_confirms_ignored() -> void:
+func test_a_zero_input_break_adds_autopilots_two_and_none_of_the_auto_confirms() -> void:
 	var rig := SiegeRig.new("short", 1)
 	rig.enter(1, 0.0)
 	rig.rider().gold = 300.0
-	var buys := 0
+	var adds := 0
 	for i in roundi(30.0 / Wl.SIM_DT):
 		if i % 20 == 0:
-			rig.send(1, SiegeIntents.buy(SiegeIds.ITEM_MINE, 0, true))
+			rig.send(1, SiegeIntents.pick(SiegeIds.ITEM_MINE, 0, true))
 		for e in rig.step():
-			if e["type"] == SiegeIds.EV_BUY and int(e["ok"]) == 1:
-				buys += 1
-	assert_eq(buys, 2, "Autopilot's two, none of the auto-confirms")
+			if e["type"] == SiegeIds.EV_RECEIPT and int(e["act"]) == SiegeIds.RC_ADD:
+				adds += 1
+	assert_eq(adds, 2, "Autopilot's two, none of the auto-confirms")
+	assert_eq(rig.state.mine_level, 0, "nothing bought until the break ends")
+	rig.goto(rig.phase_start(2))
+	var buys := 0
+	for e in rig.step():
+		if e["type"] == SiegeIds.EV_BUY and int(e["ok"]) == 1:
+			buys += 1
+	assert_eq(buys, 2, "and bought then, once each")

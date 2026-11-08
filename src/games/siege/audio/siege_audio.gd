@@ -157,8 +157,9 @@ func _on_paused_changed(paused: bool, _reason: String) -> void:
 	_paused = paused
 
 
-## The cue of an event, "" when this one stays silent (a rush's end, a refused purchase). The
-## shot's kind and the Overdrive's state choose among several.
+## The cue of an event, "" when this one stays silent (a rush's end, a refused purchase, a change
+## on the receipt: the list's own click covers it). The shot's kind and the Overdrive's state
+## choose among several.
 static func cue_for(kind: String, data: Dictionary) -> String:
 	match kind:
 		SiegeIds.EV_SHOT:
@@ -169,6 +170,8 @@ static func cue_for(kind: String, data: Dictionary) -> String:
 			return "rush" if int(data.get("on", 0)) != 0 else ""
 		SiegeIds.EV_BUY:
 			return "buy" if int(data.get("ok", 0)) != 0 else ""
+		SiegeIds.EV_RECEIPT:
+			return ""
 		SiegeIds.EV_OVERDRIVE:
 			return _overdrive_cue(int(data.get("st", SiegeIds.OD_EV_END)))
 	return kind
