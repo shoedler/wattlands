@@ -182,6 +182,8 @@ var mirrored: bool = false
 var plane_x: float = 0.0
 var map_m: float = 0.0
 var hull_x: float = 0.0
+## The hangar's look this frame (TankHangar.look): empty-ish outside the Hangar and the Roll-out.
+var hangar_look: Dictionary = {}
 var _dir_seen: int = 0
 
 var _built: bool = false

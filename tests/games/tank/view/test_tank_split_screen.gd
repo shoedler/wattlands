@@ -342,6 +342,16 @@ func test_a_far_wreck_closes_in_with_the_hull_and_drops_out_at_the_near_edge() -
 	assert_eq(v.far.wrecks.size(), 0, "past RANGE_NEAR_M it is gone")
 
 
+func test_a_far_wreck_does_not_close_in_while_the_hull_sits_on_the_stand() -> void:
+	var v := _view("far_duel")
+	var s := v.game.state
+	s.seg.seg = TankIds.SEG_HANGAR
+	s.hull.speed_mps = 20.0
+	v.far.wrecks.append({"range": 1000.0, "lane": 0, "kind": "medium", "t": s.t})
+	U.run(v, 60)
+	assert_eq(float(v.far.wrecks[0]["range"]), 1000.0, "tracks spinning in the air go nowhere")
+
+
 func test_a_boss_kill_and_hits_stay_in_the_far_panel() -> void:
 	var v := _view("boss_far")
 	var s := v.game.state

@@ -93,12 +93,14 @@ static func draw_back(ci: CanvasItem, v: TankView) -> void:
 	for p3 in v.rig.planes:
 		if str(p3["layer"]) == "near":
 			tile(ci, v, p3)
+	if bool(v.hangar_look.get("on", false)):
+		TankHangar.draw_back(ci, v, v.hangar_look)
 
 
 static func draw_front(ci: CanvasItem, v: TankView) -> void:
 	for p in v.rig.planes:
 		if str(p["layer"]) == "front":
-			tile(ci, v, p)
+			tile(ci, v, p, Color.WHITE, TankHangar.clip_x(v.hangar_look))
 	var bottom := v.canvas.y - v.y_off + 4.0
 	if bottom > TankView.BASE.y:
 		ci.draw_rect(
@@ -106,13 +108,28 @@ static func draw_front(ci: CanvasItem, v: TankView) -> void:
 		)
 
 
-## A plane tiled across the canvas at its parallax (scrolled by TankView.plane_x), tinted `mod`.
-static func tile(ci: CanvasItem, v: TankView, p: Dictionary, mod: Color = Color.WHITE) -> void:
+## A plane tiled across the canvas at its parallax (scrolled by TankView.plane_x), tinted `mod`, none of it
+## left of stage x `x_min` (the hangar's end wall).
+static func tile(
+	ci: CanvasItem, v: TankView, p: Dictionary, mod: Color = Color.WHITE, x_min: float = -INF
+) -> void:
 	var w: float = p["w"]
 	var x := -fposmod(v.plane_x * TankView.S * float(p["parallax"]), w)
 	var tex: Texture2D = p["tex"]
 	while x < v.canvas.x:
-		ci.draw_texture(tex, Vector2(roundf(x), float(p["y0"])), mod)
+		var at := roundf(x)
+		if at + w > x_min:
+			if at >= x_min:
+				ci.draw_texture(tex, Vector2(at, float(p["y0"])), mod)
+			else:
+				# The hangar's end wall hides the plane's left part: draw only what is past it.
+				var cut := roundf(x_min - at)
+				ci.draw_texture_rect_region(
+					tex,
+					Rect2(Vector2(at + cut, float(p["y0"])), Vector2(w - cut, tex.get_height())),
+					Rect2(Vector2(cut, 0), Vector2(w - cut, tex.get_height())),
+					mod
+				)
 		x += w
 
 
@@ -279,9 +296,10 @@ static func bases(v: TankView, state: TankState) -> Array[float]:
 	return out
 
 
-## The base a mission's stage shows in the far panel, its left end in panel px; NAN for none: the depot's
-## and a holding action's, whole in the panel (the near panel's road has no room for one), sliding away
-## at the far parallax as the hull drives off.
+## The base a mission's stage shows in the far panel, its left end in panel px; NAN for none: a holding
+## action's, whole in the panel (the near panel's road has no room for one), sliding away at the far
+## parallax as the hull drives off. (The Hangar and the Roll-out show TankHangar's gate instead; free
+## roam's drive-out has no base.)
 static func far_base(v: TankView, state: TankState) -> float:
 	if state.roam.active or not state.seg.seg in [TankIds.SEG_DEPOT, TankIds.SEG_GUN_LINE]:
 		return NAN

@@ -400,7 +400,7 @@ func _emit(state: TankState, feed: Dictionary, step_dt: float) -> void:
 			0.3
 		)
 	# Dust and grit from the tracks at speed (thick while the tank turns).
-	var px_s := hull.speed_mps * TankConst.PX_PER_M * S
+	var px_s := TankSegments.ground_mps(state) * TankConst.PX_PER_M * S
 	_dust_acc += step_dt * clampf(px_s / 8.0, 0.0, 6.0)
 	_dust_acc += step_dt * 12.0 * turn_dust(state)
 	while _dust_acc >= 1.0:

@@ -90,6 +90,8 @@ static func _near_lights(ci: CanvasItem, v: TankView, state: TankState) -> void:
 
 
 static func draw_world(ci: CanvasItem, v: TankView, state: TankState) -> void:
+	if bool(v.hangar_look.get("on", false)):
+		TankHangar.draw_light(ci, v, v.hangar_look)
 	_ground_pools(ci, v, state)
 	_world_lamps(ci, v, state)
 	for bx in TankForest.bases(v, state):

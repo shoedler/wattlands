@@ -42,6 +42,8 @@ const GRAVEL_DK := Color(0.12, 0.11, 0.09)
 static func draw_world(ci: CanvasItem, v: TankView, state: TankState) -> void:
 	for bx in TankForest.bases(v, state):
 		TankForest.draw_base(ci, v, bx)
+	if bool(v.hangar_look.get("on", false)):
+		TankHangar.draw_stand(ci, v, v.hangar_look)
 	_tank_contact(ci, v)
 	if state.roam.active and state.roam_map != null:
 		_turning_places(ci, v, state)
@@ -121,6 +123,8 @@ static func _bushes(ci: CanvasItem, v: TankView) -> void:
 		var h := TankDraw.hash01(float(n) * 1.91 + 3.0)
 		var src := rects[mini(int(h * float(rects.size())), rects.size() - 1)]
 		var x := roundf(float(b["x"]))
+		if TankHangar.covers_x(v.hangar_look, x):
+			continue
 		var foot := roundf(v.ground_y(x)) - BUSH_VERGE
 		var at := Vector2(x - roundf(src.size.x * 0.5), foot - src.size.y)
 		var dst := Rect2(at, src.size)

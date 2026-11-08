@@ -613,7 +613,7 @@ func _wreck_hatch(w: Dictionary) -> Vector2:
 	return r.position + r.size * Vector2(0.45, 0.25)
 
 
-## A far wreck stands where it fell: the hull's travel since the last call (its speed over the sim time
+## A far wreck stands where it fell: the hull's travel since the last call (its ground speed over the sim time
 ## that passed) brings it nearer, and one that has come inside RANGE_NEAR_M is behind the panel's near
 ## edge, so it goes. Sim time, so a pause or a client's snapshot step moves it exactly as far as the hull went.
 func close_wrecks(state: TankState) -> void:
@@ -621,7 +621,7 @@ func close_wrecks(state: TankState) -> void:
 	_close_t = state.t
 	if step_s <= 0.0 or step_s > 1.0 or wrecks.is_empty():
 		return
-	var travelled := state.hull.speed_mps * step_s
+	var travelled := TankSegments.ground_mps(state) * step_s
 	if travelled <= 0.0:
 		return
 	var keep: Array[Dictionary] = []
@@ -873,6 +873,7 @@ func _draw_world() -> void:
 		return
 	var state := v.game.state
 	var ci := _world
+	TankHangar.draw_far(ci, self, v.hangar_look)
 	if boss_box.size != Vector2.ZERO:
 		TankEnemyDraw.draw(ci, kit, TankIds.BOSS_ID, boss_foot, boss_pose(state))
 	for row: Dictionary in _depth_order(state):
@@ -935,6 +936,7 @@ func _draw_light() -> void:
 		return
 	var state := v.game.state
 	var ci := _light
+	TankHangar.draw_far_light(ci, self, v.hangar_look)
 	_search_pool(ci, state)
 	var burning := burning_shots(state)
 	for e in state.enemies:
