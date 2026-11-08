@@ -244,10 +244,10 @@ func test_then_an_upgrade_for_the_station_that_did_the_most_damage() -> void:
 func test_the_second_pick_sees_the_first() -> void:
 	_s.station(SiegeIds.STATION_ONAGER).damage_wave = 300.0
 	var picks := _shop(500.0)
-	assert_eq(_items(picks), [SiegeIds.ITEM_UPGRADE, SiegeIds.ITEM_SCORPION])
+	assert_eq(_items(picks), [SiegeIds.ITEM_UPGRADE, SiegeIds.ITEM_UPGRADE])
 	assert_eq(picks[0]["station"], SiegeIds.STATION_ONAGER)
 	assert_eq(
-		picks[1]["pad"], 2, "the receipt holds one line per item: no level 2 in the same break"
+		picks[1]["station"], SiegeIds.STATION_BALLISTA, "no level 2 of the onager: the next one"
 	)
 
 
@@ -260,9 +260,29 @@ func test_an_item_on_the_receipt_is_not_picked_again() -> void:
 	line.slot = 1
 	_s.receipt.assign([line])
 	var picks := _shop(500.0)
-	assert_eq(picks[0]["item"], SiegeIds.ITEM_SCORPION, "someone else's upgrade counts as taken")
+	assert_eq(picks[0]["item"], SiegeIds.ITEM_UPGRADE)
+	assert_eq(
+		picks[0]["station"], SiegeIds.STATION_BALLISTA, "someone else's upgrade counts as taken"
+	)
 	var blind := SiegeAutopilot.shop_picks(_s, _s.riders[0], 1, true)
 	assert_eq(blind[0]["item"], SiegeIds.ITEM_UPGRADE, "the list's blind pick ignores the receipt")
+
+
+func test_a_taken_upgrade_passes_to_the_next_weapon_by_damage() -> void:
+	_s.station(SiegeIds.STATION_ARROWS).damage_wave = 900.0
+	_s.station(SiegeIds.STATION_ONAGER).damage_wave = 300.0
+	var line := SiegeReceiptLine.new()
+	line.item = SiegeIds.ITEM_UPGRADE
+	line.at = SiegeIds.STATION_ARROWS
+	line.cost = 40
+	line.slot = 1
+	_s.receipt.assign([line])
+	var picks := _shop(500.0)
+	assert_eq(picks[0]["item"], SiegeIds.ITEM_UPGRADE)
+	assert_eq(
+		picks[0]["station"], SiegeIds.STATION_ONAGER, "the arrow organ's is taken: the onager"
+	)
+	assert_eq(SiegeAutopilot.weapons_by_damage(_s), [3, 2, 1])
 
 
 func test_picks_use_the_gold_left_after_what_the_receipt_holds() -> void:

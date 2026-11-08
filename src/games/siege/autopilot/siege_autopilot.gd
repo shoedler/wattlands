@@ -159,6 +159,20 @@ static func top_weapon(state: SiegeState) -> int:
 	return best
 
 
+## The weapon stations by the damage they did in the current or last wave, most first (ties to the
+## lower id; the first is top_weapon).
+static func weapons_by_damage(state: SiegeState) -> Array[int]:
+	var out: Array[int] = []
+	out.assign(SiegeIds.WEAPONS)
+	out.sort_custom(
+		func(a: int, b: int) -> bool:
+			var da := state.station(a).damage_wave
+			var db := state.station(b).damage_wave
+			return da > db + 1e-6 or (absf(da - db) <= 1e-6 and a < b)
+	)
+	return out
+
+
 ## A throwaway copy of what a rider could buy, so the second pick sees the first.
 class ShopPlan:
 	extends RefCounted
@@ -222,15 +236,21 @@ class ShopPlan:
 		gate_hp = minf(gate_hp + c.num("gate.repair_hp", 20.0), gate_max)
 		return {"item": SiegeIds.ITEM_REPAIR, "at": 0, "cost": cost}
 
+	## The upgrade for the weapon that did the most damage; when its upgrade is already on the receipt
+	## (one line per item), for the next weapon by damage that has one free. A weapon at its top level
+	## ends the step as before.
 	func _upgrade() -> Dictionary:
-		var id := SiegeAutopilot.top_weapon(state)
-		if levels[id] >= SiegeIds.MAX_LEVEL or not _free(SiegeIds.ITEM_UPGRADE, id):
-			return {}
-		var cost := float(state.content.station_upgrade_cost(levels[id] + 1))
-		if not _spend(cost):
-			return {}
-		levels[id] += 1
-		return {"item": SiegeIds.ITEM_UPGRADE, "at": id, "cost": cost}
+		for id in SiegeAutopilot.weapons_by_damage(state):
+			if levels[id] >= SiegeIds.MAX_LEVEL:
+				return {}
+			if not _free(SiegeIds.ITEM_UPGRADE, id):
+				continue
+			var cost := float(state.content.station_upgrade_cost(levels[id] + 1))
+			if not _spend(cost):
+				return {}
+			levels[id] += 1
+			return {"item": SiegeIds.ITEM_UPGRADE, "at": id, "cost": cost}
+		return {}
 
 	func _scorpion() -> Dictionary:
 		var free := pads.find(SiegeIds.PAD_NONE)
