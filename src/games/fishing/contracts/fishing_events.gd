@@ -94,6 +94,14 @@ static func cast(l: int, sp: int, dx_m: float, depth_m: float) -> Dictionary:
 	return {"type": CAST, "l": l, "sp": sp, "dx": roundi(dx_m * 10.0), "z": roundi(depth_m * 10.0)}
 
 
+## The jig's automatic recast: a cast with "rc": 1 (an optional extra, not in INT_FIELDS: events
+## without it are first casts), so the sound can be a quiet one.
+static func recast(l: int, sp: int, dx_m: float, depth_m: float) -> Dictionary:
+	var e := cast(l, sp, dx_m, depth_m)
+	e["rc"] = 1
+	return e
+
+
 static func bite(l: int, sp: int) -> Dictionary:
 	return {"type": BITE, "l": l, "sp": sp}
 

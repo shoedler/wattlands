@@ -391,7 +391,7 @@ func _fighting_crew(n: int = 4) -> FishingGame:
 		r.reel = 0.2 * i
 		r.applied_target_w = 180.0 + 20.0 * i
 		r.power_w = r.applied_target_w
-		r.points = 50 - i
+		r.points = 10 * i  # the board ranks them 3, 2, 1: the strips keep slot order
 	return g
 
 
@@ -403,9 +403,11 @@ func test_a_crew_strip_for_every_other_rider_in_a_fight_in_board_order() -> void
 	var g := _fighting_crew()
 	var crew := FishingHudModel.crew(g)
 	assert_eq(crew.size(), 3)
-	assert_eq(int(crew[0]["slot"]), 1, "most points first, like the board")
+	assert_eq(int(crew[0]["slot"]), 1, "slot order, whatever the leaderboard says")
+	assert_eq(int(FishingHudModel.board(g)[0]["slot"]), 3, "the board has them the other way")
 	assert_eq(int(crew[2]["slot"]), 3)
-	assert_eq(str(crew[0]["species"]), FishingHudModel.species_name(g, 4))
+	assert_eq(str(crew[0]["species"]), "Tuna", "the short name: the strip is narrow")
+	assert_eq(str(crew[2]["species"]), FishingHudModel.species_short(g, 6))
 	assert_eq(int(crew[0]["target_w"]), 200)
 	assert_eq(int(crew[0]["now_w"]), 200)
 	assert_false(bool(crew[0]["off"]), "on target")
@@ -440,12 +442,17 @@ func test_the_crew_strips_draw_under_the_board_with_the_boards_width() -> void:
 	assert_eq(c.strip_rects.size(), 2)
 	var board_w := FishingBoard.width_px(g, b.rows, b.time_text, 1.0) / 3.0
 	var first := c.strip_rects[0]
-	assert_gte(float(first.size.x), board_w - 1.0, "as wide as the board")
+	var inset := 2.0 * FishingCrewStrips.INSET
+	assert_gte(float(first.size.x), board_w - inset - 1.0, "as wide as the board, less the insets")
 	assert_eq(first.size.y, FishingCrewStrips.H)
-	assert_eq(first.end.x, (l["board"] as Rect2i).end.x, "flush with the board's right edge")
+	assert_eq(
+		first.end.x,
+		(l["board"] as Rect2i).end.x - FishingCrewStrips.INSET,
+		"inset from the board's right edge"
+	)
 	assert_eq(c.strip_rects[1].position.y - first.end.y, FishingCrewStrips.GAP, "stacked")
 	var board_bottom := 2.0 + FishingBoard.height_px(3, 1.0) / 3.0
-	assert_almost_eq(float(first.position.y), board_bottom + FishingCrewStrips.GAP, 1.0)
+	assert_almost_eq(float(first.position.y), board_bottom + FishingCrewStrips.BOARD_GAP, 1.0)
 	assert_true(Rect2i(0, 0, 640, 360).encloses(c.strip_rects[1]))
 
 
@@ -551,3 +558,91 @@ func test_the_spec_carries_the_crew_strips_and_the_jig_panel() -> void:
 	assert_has(names, "FishingCrewStrips")
 	assert_has(names, "FishingJigPanel")
 	_free_controls(spec)
+
+
+func test_every_species_fits_a_strip_title_with_a_rider_name_and_three_digits() -> void:
+	var g := _fighting_crew(4)
+	var b := (
+		_ctl(FishingBoard.make(g, FishingHud.layout(Vector2i(640, 360))["board"])) as FishingBoard
+	)
+	b.refresh()
+	var inner := FishingBoard.width_px(g, b.rows, b.time_text, 1.0) - 4.0 * 3.0 - 6.0 * 3.0
+	var dist := FishingHudDraw.text_w("120 m", 1.0)
+	for sp in FishingConst.SPECIES.size():
+		var title := "Rider 4" + FishingCrewStrips.DOT + FishingHudModel.species_short(g, sp)
+		assert_lte(
+			FishingHudDraw.text_w(title, 1.0) + dist + 12.0, inner, "%s fits: %s" % [sp, title]
+		)
+		assert_false(FishingHudModel.species_short(g, sp).ends_with("…"))
+
+
+func test_the_short_species_names_exist_and_are_shorter_or_equal() -> void:
+	var keys := _keys()
+	var g := _fighting_crew(2)
+	for sp: String in FishingConst.SPECIES:
+		assert_true(keys.has("FISHING_SPECIES_%s_SHORT" % sp.to_upper()), sp)
+		var i := FishingConst.species_index(sp)
+		assert_lte(
+			FishingHudModel.species_short(g, i).length(),
+			FishingHudModel.species_name(g, i).length()
+		)
+	assert_eq(FishingHudModel.species_short(g, -1), "")
+
+
+func test_the_jig_is_never_ready_without_an_ftp() -> void:
+	var g := FX.make_game(1)
+	add_child_autofree(g)
+	var r := g.state.rider(0)
+	FX.set_wait(r, 2600.0, 4, -30.0, 12.0)
+	r.pub_lo = 72
+	r.pub_hi = 88
+	r.ftp = 0.0
+	var row := FishingHudModel.jig_row(g, r, 30.0, 500.0, 80.0)
+	assert_false(bool(row["ready"]), "no FTP: not at any power")
+	assert_false(bool(row["on"]))
+	assert_eq(int(row["hold_w"]), 0)
+
+
+func test_the_jig_row_is_ready_for_power_and_band_and_on_only_when_bites_open() -> void:
+	var g := FX.make_game(1)
+	add_child_autofree(g)
+	var r := g.state.rider(0)
+	r.ftp = 200.0
+	FX.set_wait(r, 2600.0, 4, -30.0, 12.0)
+	r.pub_lo = 72
+	r.pub_hi = 88
+	assert_true(bool(FishingHudModel.jig_row(g, r, 30.0, 180.0, 80.0)["ready"]))
+	assert_false(bool(FishingHudModel.jig_row(g, r, 30.0, 79.0, 80.0)["ready"]), "under the hold")
+	assert_false(bool(FishingHudModel.jig_row(g, r, 30.0, 180.0, 95.0)["ready"]), "out of the band")
+	r.phase_kind = Wl.WARMUP
+	var warm := FishingHudModel.jig_row(g, r, 30.0, 180.0, 80.0)
+	assert_true(bool(warm["ready"]), "ready, but")
+	assert_false(bool(warm["on"]), "no bite in the drive-out")
+
+
+func test_the_now_number_is_in_the_accent_for_either_reason_and_the_in_line_bright_only_when_on(
+) -> void:
+	var g := FX.make_game(1)
+	add_child_autofree(g)
+	var r := g.state.rider(0)
+	r.ftp = 200.0
+	FX.set_wait(r, 2600.0, 4, 30.0, 12.0)
+	r.pub_lo = 72
+	r.pub_hi = 88
+	_view(g)
+	var p := (
+		_ctl(FishingJigPanel.make(g, FishingHud.layout(Vector2i(640, 360))["jig"]))
+		as FishingJigPanel
+	)
+	# (power, cadence, ready): on, under the hold, out of the band
+	for scenario: Array in [[180.0, 80.0, true], [60.0, 80.0, false], [180.0, 100.0, false]]:
+		p.set_telemetry(_tm(float(scenario[0]), float(scenario[1]), 0))
+		p.refresh()
+		assert_eq(bool(p.row["ready"]), bool(scenario[2]), str(scenario))
+		assert_eq(
+			p.now_color(), FishingPalette.HUD_DIM if bool(scenario[2]) else FishingHudDraw.ALERT
+		)
+		assert_eq(
+			p.in_line_color(),
+			FishingPalette.HUD_TEXT if bool(scenario[2]) else FishingPalette.HUD_DIM
+		)

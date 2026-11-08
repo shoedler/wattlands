@@ -8,6 +8,8 @@ extends RefCounted
 ## A cue is {"k": CUE_*, "l": slot, ...}: jump {leaps}, landed {grade}, hookup {replacement}.
 
 const CUE_CAST := "cast"
+## The jig's automatic recast at the boat: the cast's sounds, quieter and shorter.
+const CUE_RECAST := "recast"
 const CUE_BITE := "bite"
 const CUE_HOOKUP := "hookup"
 const CUE_RUN := "run"
@@ -38,7 +40,7 @@ static func from_event(raw: Dictionary) -> Array[Dictionary]:
 	var k := ""
 	match str(e.get("type", "")):
 		FishingEvents.CAST:
-			k = CUE_CAST
+			k = CUE_RECAST if int(e.get("rc", 0)) == 1 else CUE_CAST
 		FishingEvents.BITE:
 			k = CUE_BITE
 		FishingEvents.HOOKUP:
@@ -100,7 +102,7 @@ func diff(state: FishingState) -> Array[Dictionary]:
 		var was := _action[i]
 		if r.action != was:
 			if r.action == FishingConst.A_CAST:
-				out.append({"k": CUE_CAST, "l": i})
+				out.append({"k": CUE_RECAST if was == FishingConst.A_WAIT else CUE_CAST, "l": i})
 			elif r.action == FishingConst.A_FIGHT and was != FishingConst.A_LAND:
 				out.append({"k": CUE_HOOKUP, "l": i})
 			elif r.action == FishingConst.A_LAND and r.fish.sp >= 0:

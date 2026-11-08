@@ -19,10 +19,10 @@ extends RefCounted
 ##   CAST   the wobbler dives to the fish (1.5 s + depth / 60 m/s, <= 8 s); confirm reels in.
 ##   WAIT   the lure band (preferred + species offset +- 8 rpm); the jig: the lure is retrieved to
 ##          the boat over 40 s and recast there (CAST, then WAIT again, the wait still counting);
-##          a bite comes with hazard 1 / 10 s (a wait of 15 s on average with the 5 s minimum) while the jig is on (in band at 40 % of FTP or
-##          more), else 1 / 25 s in band (a quarter outside), never in the first 5 s, forced at
-##          90 s; never in the drive-out, before the Roam phase's min_s, after time-up or while
-##          staggered. SIM throughout: no directive, no replan until the bite.
+##          a bite comes with hazard 1 / 10 s (a wait of 15 s on average with the 5 s minimum)
+##          while the jig is on (in band at 40 % of FTP or more), else 1 / 25 s in band (a quarter
+##          outside), never in the first 5 s, forced at 90 s; never in the drive-out, before the Roam
+##          phase's min_s, after time-up or while staggered. SIM throughout: no directive, no replan until the bite.
 ##          The bite builds the fight (FishingPreroll.roam_slot), replans the rest of the plan
 ##          (FishingPlanBuilder.fight_tail) and ends the Roam phase; confirm reels in.
 ##   FIGHT, LAND   FishingFight. The Landing's end leads to the next Roam: MENU with fresh hints.
@@ -67,6 +67,7 @@ static func new_state(
 	if st.roam:
 		st.world = FishingWorld.from_map(content.map, seed)
 		st.play_end_t = trip.minutes * 60.0
+		st.bite_min_s = trip.bite_min_s
 		st.overtime_end_t = st.play_end_t + FishingConst.OVERTIME_S
 		st.total_s = st.play_end_t
 	else:
@@ -636,7 +637,7 @@ static func _tick_wait(
 	r.wait_t += dt
 	r.jig_t += dt
 	r.lure_dx = r.jig_dx0 * maxf(1.0 - r.jig_t / FishingConst.JIG_HOME_S, 0.0)
-	if bites_open(st, r, inp) and r.wait_t + EPS >= FishingConst.ROAM_BITE_MIN_S:
+	if bites_open(st, r, inp) and r.wait_t + EPS >= st.bite_min_s:
 		if r.wait_t + EPS >= FishingConst.ROAM_FORCED_BITE_S or r.rng.unit() < wait_hazard(r) * dt:
 			_roam_bite(st, r, def, out)
 			request_end(r, inp, out)
@@ -646,13 +647,15 @@ static func _tick_wait(
 
 
 ## The jig is on: the cadence is in the lure band and the power at JIG_FTP_FRAC of the rider's
-## FTP or more.
+## FTP or more (never without an FTP).
 static func jig_on(r: FishingRiderState) -> bool:
+	if r.ftp <= 0.0:
+		return false
 	return r.in_band and r.power_w + EPS >= FishingConst.JIG_FTP_FRAC * r.ftp
 
 
-## A Free Roam bite's hazard (per second) at depth: 1 / 10 s with the jig on (5 s + 10 s: a 15 s wait on average), else 1 / 25 s in the
-## lure band and a quarter of that outside it.
+## A Free Roam bite's hazard (per second) at depth: 1 / 10 s with the jig on (5 s + 10 s: a 15 s
+## wait on average), else 1 / 25 s in the lure band and a quarter of that outside it.
 static func wait_hazard(r: FishingRiderState) -> float:
 	if jig_on(r):
 		return 1.0 / FishingConst.JIG_BITE_MEAN_S
@@ -673,7 +676,7 @@ static func _recast(r: FishingRiderState, out: FishingStepOut) -> void:
 		FishingConst.CAST_MAX_S
 	)
 	set_action(r, FishingConst.A_CAST)
-	out.events.append(FishingEvents.cast(r.slot, r.target_sp, r.lure_dx, r.lure_target_depth))
+	out.events.append(FishingEvents.recast(r.slot, r.target_sp, r.lure_dx, r.lure_target_depth))
 
 
 ## Free Roam bites need the Roam phase (not the drive-out) past its min_s, play time left and no

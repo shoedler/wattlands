@@ -234,7 +234,7 @@ test('the fanfare and the bells sit on C major pentatonic', () => {
 });
 
 test('routine cues carry the distance of the boat they come from; the news of a catch does not', () => {
-  for (const id of ['cast', 'bite', 'hookup', 'landing', 'thrown', 'run', 'jump', 'jump_1', 'jump_3', 'snap', 'turn']) {
+  for (const id of ['cast', 'recast', 'bite', 'hookup', 'landing', 'thrown', 'run', 'jump', 'jump_1', 'jump_3', 'snap', 'turn']) {
     for (const h of doc.cues[id].hits) assert.equal(h.db_var, 'far_db', `${id}: ${h.sound}`);
   }
   for (const id of ['double_hookup', 'landed', 'landed_trophy', 'time_up', 'trip_over', 'clutch']) {

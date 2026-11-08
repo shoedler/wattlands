@@ -144,3 +144,29 @@ Short ADRs for Turbo Reel (game id `fishing`): date, decision, alternatives, rea
 - Decision: `FishingWorld.ZONES` gets "bluewater" last (so no index moves), with its depth, colour, landmark, terrace and prop entries. Tuna and grouper list it beside their own zones, and no other species does. The trip gets an optional `map` field (a plain lower-case `*.json` name; missing means map.json; an invalid name is a trip error and an unknown file is a load error naming it). `content/fishing/map_big_game.json` is the dock then the biome, 9 km, 180 m deep at the end. Bots' strategy zone lists name bluewater last: on the roam map it does not exist and is skipped. The ride tag of a trip on its own map is the trip's label.
 - Alternatives: a new species mix per zone in the trip file (species.json stays the one source for what lives where); reusing the shelf and deep zones on a shorter map (the owner asked for one mixed biome where tuna and grouper both bite directly).
 - Reason: Free Roam on the open ocean means a 9 minute ride before the first tuna and a 13 minute one before a grouper; the big game trip puts both at the harbour mouth. The card is the Free Roam card until the card art is redrawn.
+
+## 2026-11-08 The jig's mean wait is 15 s, counted as a rider feels it
+
+- Decision: JIG_BITE_MEAN_S is 10: with the 5 s minimum at depth the whole wait averages 15 s while the jig is on (a test measures it over 60 seeds: 12.5-17.5 s; without the jig 24-36 s). The forced bite stays at 90 s with no other cap. The jig is never on without an FTP (FTP 0 or missing), in the rules and in the panel.
+- Alternatives: keep 1 / 15 s (a 20 s wait, the first reading of the owner's "15 s").
+- Reason: the owner's number is the wait a rider feels, not the hazard's mean. The sim matrix moved little: R1 7 fish (470 points before the jig change, 447 now), R2 8/7/7/8 fish, R3 median points small 359, vibe 400, mixed 472, big 683 (small 316, vibe 340 at 1 / 25 s), so the small : big ratio fell from 2.17 to 1.90.
+
+## 2026-11-08 The recast has its own quiet cue, and the jig panel says why it is off
+
+- Decision: the recast is the `cast` event with `rc: 1` (an optional extra, not a declared int field, so a first cast and old streams are unchanged) and plays the `recast` cue: the cast whip (a little higher) and the plop 12 dB under the cast's level, no clunk. The state-edge path does the same for WAIT to CAST. In the panel the "now" number is in the accent whenever the jig is off for a reason the rider can fix (under the hold, or out of the band), and "In: bites come sooner" stays bright only while the jig is on (ready and the bites open: not in the drive-out).
+- Reason: a full cast sound every 40 s of waiting would wear; being "on" should be readable at a glance without new words.
+
+## 2026-11-08 Crew strips: slot order, short species names, the mockup's colours
+
+- Decision: strips follow slot order (they never swap when the leaderboard re-ranks mid-fight), use `FISHING_SPECIES_<ID>_SHORT` names ("Grouper", "Tuna": the full names were cut to "Giant group..."; the ellipsis stays as the last fallback), sit 2 art px in from the board's edges, 5 art px under it, with the distance dim, "Target" and "now" dim labels around a bright target and a dim or accent now.
+- Reason: the art critic's list.
+
+## 2026-11-08 Bluewater is open deep water; the map's end is one wall
+
+- Decision: the big game map's floor lies at 150-300 m (the dark band) with rocks, ledges and basalt and almost no kelp; plants (kelp, grass) are not drawn under a fish on a line (`FishingScenery.fish_x`); the grouper's tail joins the body through a short stalk instead of a detached disc. The edge: the water bands and the floor run on to the wall (a lit foam strip standing the full height), the floor runs 8 m past `length_m` to reach it, and everything past the wall is one flat field of sky. This is shared code: the open sea map's edge had the same short bands, a haze gap and a stepped pool, and is fixed too.
+- Reason: the art critic's list.
+
+## 2026-11-08 Duty cycle of the big game trip, and what the minimum-wait knob did
+
+- Decision: trips get an optional `bite_min_s` (5..60, content only, default 5). big_game_30 keeps the default. In R7 (seed 5, 2 humans on erg+band, 2 bots) the human riders spent 87-89 % of the ride at or above 90 % FTP, which is above 80 %, but 29-44 % of that is the sim rider's SIM riding at exactly 90 % FTP (180 W of 200); the fights at or above 90 % are 45-56 % of the ride (roam_30's R2: 11-15 %), the fights 47-61 %. Raising the minimum wait to 20, 40 and 60 s changed the share by 1-2 points (fights at or above 90 %: 45/49, 45/50 and 45/50 against 45/56 at 5 s) and 60 s gives a 70 s wait against the owner's 15 s, so it is not set.
+- Reason: no value of the knob that keeps the jig's 15 s brings that figure under 80 %; the lead decides whether the trip is too hard.

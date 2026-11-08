@@ -43,6 +43,22 @@ static func off_target(power: float, target: float) -> bool:
 	return target > 0.0 and absf(power - target) > target * NOW_BAND
 
 
+## "label value unit" on one baseline from `at` (the baseline's left end, HUD px): the label and the
+## unit dim, the value in `col` (bright to hold, dim or the accent for "now"). Returns the width.
+static func pair(
+	c: CanvasItem, at: Vector2, label: String, value: String, unit: String, s: float, col: Color
+) -> float:
+	var x := FishingHudDraw.text(c, at, label + " ", s, FishingPalette.HUD_DIM)
+	x += FishingHudDraw.text(c, at + Vector2(x, 0), value, s, col)
+	x += FishingHudDraw.text(c, at + Vector2(x, 0), " " + unit, s, FishingPalette.HUD_DIM)
+	return x
+
+
+## The width pair() takes.
+static func pair_w(label: String, value: String, unit: String, s: float) -> float:
+	return FishingHudDraw.text_w(label + " " + value + " " + unit, s)
+
+
 ## The label row on baseline `y` (`labels` [left, right]: "Target" and "now", both dim) over the
 ## big numbers: `left` [value, unit]: the value big in the text colour with its dim unit after it,
 ## and the watts now at the right, big in `now_col` with the dim watts unit.

@@ -15,7 +15,7 @@ const BIG: Array = [
 	["kelp", "ledge", "kelp"],
 	["skeleton", "boulder", "ledge"],
 	["basalt", "basalt", "boulder"],
-	["kelp", "ledge", "boulder", "skeleton", "kelp", "ledge"],
+	["ledge", "boulder", "skeleton", "ledge", "boulder", "basalt"],
 ]
 const SMALL: Array = [
 	["chain", "crate", "crate"],
@@ -24,8 +24,11 @@ const SMALL: Array = [
 	["kelp_short", "rock"],
 	["rib", "rock"],
 	["rock", "column"],
-	["kelp_short", "rock", "rib", "kelp_short"],
+	["rock", "rib", "rock", "column", "kelp_short"],
 ]
+
+## The props that stand tall and sway: culled under a fish on a line (FishingFloor).
+const PLANTS: Array[String] = ["grass", "kelp", "kelp_short"]
 
 ## Every kind draw() knows.
 const KINDS: Array[String] = [

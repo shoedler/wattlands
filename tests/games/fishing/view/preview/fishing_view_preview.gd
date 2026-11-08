@@ -146,7 +146,7 @@ func _ready() -> void:
 			st.rider(2).reel = 0.2
 			me.points = 54
 		"bluewater":
-			FX.set_fight(me, 4100.0, 8, 30.0, 110.0, 0.4, 0.1)
+			FX.set_fight(me, 4100.0, 8, 30.0, 215.0, 0.4, 0.1)
 			FX.set_fight(other, 4050.0, 4, 24.0, 36.0, 0.2, 0.0)
 			other.applied_target_w = 188.0
 			other.power_w = 176.0

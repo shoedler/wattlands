@@ -3,9 +3,10 @@ extends FishingBoatPanel
 ## The jig panel (mockup "Jig it home"), in the fight panel's box style just under the local boat,
 ## on the side away from the lure, while the lure is out in Free Roam (the cast and the wait): the
 ## title and the line out, a bar that fills as the lure comes home, "Hold" the watts that count
-## (40 % of FTP) and "now" the watts now (in the accent while under), the cadence row with the
-## lure band lit, and what it does: bites come sooner (bright while the jig is on, dim while it
-## is not) and that the lure recasts at the boat. SIM throughout: it asks nothing of the trainer.
+## (40 % of FTP) and "now" the watts now (in the accent while the jig is off, under the hold or out
+## of the band), the cadence row with the lure band lit, and what it does: bites come sooner
+## (bright while the jig is on, dim while it is not) and that the lure recasts at the boat. SIM
+## throughout: it asks nothing of the trainer.
 
 const W := FishingPanelRows.W
 const PAD := FishingPanelRows.PAD
@@ -53,6 +54,17 @@ func refresh() -> void:
 	track_boat(r, "lure")
 
 
+## The colour of the "now" number: the accent whenever the jig is off for a reason you can fix
+## (under the hold or out of the band), else dim.
+func now_color() -> Color:
+	return FishingPalette.HUD_DIM if bool(row.get("ready", false)) else FishingHudDraw.ALERT
+
+
+## The colour of "In: bites come sooner": bright while the jig is on (ready and bites open).
+func in_line_color() -> Color:
+	return FishingPalette.HUD_TEXT if bool(row.get("on", false)) else FishingPalette.HUD_DIM
+
+
 func _draw() -> void:
 	panel_rect = Rect2i()
 	if not bool(row.get("visible", false)):
@@ -75,13 +87,13 @@ func _draw() -> void:
 	FishingHudDraw.bar(self, bar, float(row["fill"]), FishingHudDraw.STAMINA, false, u)
 	y += BAR_ROWS + 4 + CAP
 	var power := float(numbers["power"])
-	var under := roundi(power) < int(row["hold_w"])
 	var watts := FishingHudModel.tr_key(game, FishingHudModel.KEY_WATTS)
 	var labels := [
 		FishingHudModel.tr_key(game, FishingHudModel.KEY_JIG_HOLD),
 		FishingHudModel.tr_key(game, FishingHudModel.KEY_NOW)
 	]
-	var now_col := FishingHudDraw.ALERT if under else dim
+	# the accent whenever the jig is off for a reason you can fix: under the hold or off the band
+	var now_col := now_color()
 	FishingPanelRows.numbers(
 		self,
 		game,
@@ -97,6 +109,6 @@ func _draw() -> void:
 	var base := FishingPanelRows.cadence(self, game, o, y, s, float(numbers["cadence"]), band)
 	var jig_in := FishingHudModel.tr_key(game, FishingHudModel.KEY_JIG_IN)
 	var first := base + Vector2(PAD, TEXT_GAP) * u
-	FishingHudDraw.text(self, first, jig_in, s, text if bool(row["on"]) else dim)
+	FishingHudDraw.text(self, first, jig_in, s, in_line_color())
 	var recast := FishingHudModel.tr_key(game, FishingHudModel.KEY_JIG_RECAST)
 	FishingHudDraw.text(self, first + Vector2(0, float(CUE_ROW) * u), recast, s, dim)

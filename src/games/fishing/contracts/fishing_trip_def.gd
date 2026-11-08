@@ -31,6 +31,9 @@ var kind: String = ""
 var label: String = ""
 ## Free Roam: play minutes.
 var minutes: float = 0.0
+## Free Roam: seconds at depth before a bite can come ("bite_min_s", 5..60; a duty-cycle knob a
+## trip may raise: the jig's mean wait grows with it, the 90 s forced bite stands).
+var bite_min_s: float = FishingConst.ROAM_BITE_MIN_S
 ## Free Roam: the map file in the content folder.
 var map: String = DEFAULT_MAP
 var total_min: float = 0.0
@@ -57,6 +60,7 @@ static func from_dict(d: Dictionary) -> FishingTripDef:
 	t.label = str(d.get("label", "FISHING_CONTENT_%s" % t.id.to_upper()))
 	t.minutes = float(d.get("minutes", 0))
 	t.map = map_file_of(d)
+	t.bite_min_s = float(d.get("bite_min_s", FishingConst.ROAM_BITE_MIN_S))
 	t.total_min = float(d.get("total_min", 0))
 	var ro: Dictionary = d.get("ride_out", {})
 	t.ride_out_s = float(ro.get("duration_s", FishingConst.RIDE_OUT_S))
@@ -129,6 +133,14 @@ static func errors(d: Variant, species_ids: Array) -> Array[String]:
 		var m := float(e.get("minutes", 0))
 		if m < 10.0 or m > 120.0:
 			out.append("minutes must be 10..120")
+		if e.has("bite_min_s"):
+			var bm: Variant = e["bite_min_s"]
+			if (
+				not (bm is float or bm is int)
+				or float(bm) < FishingConst.ROAM_BITE_MIN_S
+				or float(bm) > 60.0
+			):
+				out.append("bite_min_s must be a number of 5..60 seconds")
 		if e.has("map") and not valid_map_file(e["map"]):
 			out.append("map must be a content file name like map_big_game.json")
 		return out

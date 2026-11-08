@@ -1,8 +1,8 @@
 extends GutTest
 ## The jig (Free Roam's wait): the lure comes home to the boat over JIG_HOME_S and is recast
-## there; holding the lure band at JIG_FTP_FRAC of FTP or more bites sooner (hazard 1 / 10 s after the 5 s minimum: a 15 s wait,
-## else 1 / 25 s in band and a quarter of that out of it). SIM throughout: nothing here asks
-## the trainer for load.
+## there; holding the lure band at JIG_FTP_FRAC of FTP or more bites sooner (hazard 1 / 10 s after
+## the 5 s minimum: a 15 s wait; else 1 / 25 s in band and a quarter of that out of it).
+## SIM throughout: nothing here asks the trainer for load.
 
 const H := preload("res://tests/games/fishing/rules/fishing_rules_harness.gd")
 
@@ -153,3 +153,46 @@ func test_the_forced_bite_still_comes_at_90_s_of_waiting_across_recasts() -> voi
 	var hooked := func() -> bool: return r.hook_set
 	assert_true(h.run_until(hooked, 130.0), "out of band the forced bite lands")
 	assert_lte(r.wait_t, FishingConst.ROAM_FORCED_BITE_S + 0.06)
+
+
+func test_the_jig_is_never_on_without_an_ftp() -> void:
+	var r := _rider(0.0)
+	r.power_w = 400.0
+	assert_false(FishingRules.jig_on(r), "no FTP: not at any power")
+	assert_almost_eq(FishingRules.wait_hazard(r), 1.0 / FishingConst.ROAM_BITE_MEAN_S, 1e-9)
+	r.ftp = -5.0
+	assert_false(FishingRules.jig_on(r))
+
+
+func test_a_recast_event_is_a_cast_with_the_rc_mark_and_a_first_cast_has_none() -> void:
+	var h := _waiting(100.0)
+	var r := h.rider()
+	var first := h.events_of(FishingEvents.CAST)[0] as Dictionary
+	assert_false(first.has("rc"))
+	r.wait_t = -100000.0
+	assert_true(h.run_until(func() -> bool: return r.action == FishingConst.A_CAST, 45.0))
+	var casts := h.events_of(FishingEvents.CAST)
+	assert_eq(int((casts[casts.size() - 1] as Dictionary).get("rc", 0)), 1)
+	assert_eq(FishingEvents.check(casts[casts.size() - 1]), "", "the wire check takes it")
+
+
+func test_a_trip_can_raise_the_minimum_wait_at_depth_but_not_past_the_forced_bite() -> void:
+	var good := {"id": "x", "kind": "roam", "minutes": 30, "bite_min_s": 20}
+	assert_eq(FishingTripDef.errors(good, []), [] as Array[String])
+	assert_eq(FishingTripDef.from_dict(good).bite_min_s, 20.0)
+	assert_eq(FishingTripDef.from_dict({"kind": "roam"}).bite_min_s, FishingConst.ROAM_BITE_MIN_S)
+	for bad: Variant in [4, 61, "9", true]:
+		var d := good.duplicate()
+		d["bite_min_s"] = bad
+		assert_eq(FishingTripDef.errors(d, []).size(), 1, "%s is refused" % [bad])
+
+
+func test_the_trips_minimum_wait_holds_the_bite_back() -> void:
+	var h := _waiting(100.0, 6)
+	h.state.bite_min_s = 30.0
+	var r := h.rider()
+	r.wait_t = 0.0
+	h.run(29.0)
+	assert_false(r.hook_set, "no bite before the trip's minimum")
+	assert_true(h.run_until(func() -> bool: return r.hook_set, 100.0))
+	assert_gte(r.wait_t, 30.0 - 0.06)

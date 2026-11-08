@@ -491,3 +491,26 @@ func test_floor_slopes_and_the_view_depth_hold_still_as_the_camera_scrolls() -> 
 			changes += 1
 		last = v.scenery.view_depth_m
 	assert_lt(changes, 90, "the view depth rests between retargets")
+
+
+func test_a_recast_is_its_own_cue_from_the_event_and_from_the_state() -> void:
+	var rc := FishingEvents.recast(0, 1, 5.0, 10.0)
+	assert_eq(str(FishingCues.from_event(rc)[0]["k"]), FishingCues.CUE_RECAST)
+	assert_eq(rc["type"], FishingEvents.CAST, "a cast with rc: 1")
+	assert_eq(
+		str(FishingCues.from_event(FishingEvents.cast(0, 1, 5.0, 10.0))[0]["k"]),
+		FishingCues.CUE_CAST
+	)
+	var wire := rc.duplicate()
+	wire["rc"] = 1.0
+	assert_eq(
+		str(FishingCues.from_event(wire)[0]["k"]), FishingCues.CUE_RECAST, "a float off the wire"
+	)
+	var g := FX.make_game(1)
+	add_child_autofree(g)
+	var r := g.state.rider(0)
+	FX.set_wait(r, 500.0)
+	var cues := FishingCues.new()
+	cues.diff(g.state)
+	r.action = FishingConst.A_CAST
+	assert_eq(str(cues.diff(g.state)[0]["k"]), FishingCues.CUE_RECAST, "WAIT to CAST is the jig")
