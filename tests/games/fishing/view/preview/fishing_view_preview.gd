@@ -152,7 +152,10 @@ func _ready() -> void:
 			other.power_w = 176.0
 			other.reel = 0.35
 		"bluewater_edge":
-			FX.set_menu(me, 8890.0, 3)
+			FX.set_menu(me, 8890.0, 2)
+			# Bluewater offers only tuna (4) and grouper (8): [sp, dx, depth, x] per hint.
+			me.hints.assign([4.0, 22.0, 12.0, 0.4, 8.0, -18.0, 40.0, 0.7])
+			me.menu.assign([0, 1, FishingConst.M_DRIVE_ON, FishingConst.M_TURN])
 			FX.set_drive(other, 8700.0, 15.0)
 		"edge":
 			FX.set_menu(me, 17890.0, 3)
