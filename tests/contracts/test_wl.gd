@@ -143,3 +143,8 @@ func test_actions_and_gestures() -> void:
 	assert_has(Wl.ACTIONS, &"panic")
 	assert_has(Wl.ACTIONS, &"help")
 	assert_eq(Wl.GESTURES, [&"pedal_start", &"surge", &"coast", &"stop_5s"])
+
+
+func test_app_version_is_the_project_version_not_the_network_tag() -> void:
+	assert_eq(Wl.app_version(), str(ProjectSettings.get_setting("application/config/version")))
+	assert_eq(Wl.BUILD, "0.3.0", "the relay hello tag is unchanged")
