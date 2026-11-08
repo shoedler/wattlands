@@ -22,7 +22,10 @@
 //   5. Overdrive events are well formed (each start closed before the next one, per slot) and, in
 //      the drill (a WARMUP-kind wave: no Overdrive), there are none and no Siege directive was
 //      requested; no shield bearer appears in the drill's spearmen-and-chariots mix;
-//   6. when fit_check's JSON is in the report, every FIT has the drill's 3 laps.
+//   6. when fit_check's JSON is in the report, every FIT has the drill's 3 laps;
+//   7. the shared receipt tells a consistent story: every item is added once by its picker, only
+//      the picker takes it back, a vote needs the item on the receipt, every purchase was on it
+//      and made by its picker, and nothing is left on it when the wave starts.
 // Zero dependencies besides tools/e2e/lib/checks.mjs. Exit 0 on pass, 1 on a failed check, 2 on
 // usage or I/O errors.
 
@@ -37,7 +40,7 @@ const isInt = (v) => Number.isInteger(v) || (typeof v === 'number' && Number.isF
 
 /** Siege's event types (SiegeIds.EVENT_TYPES). */
 export const EVENT_TYPES = [
-  'wave_start', 'wave_end', 'rush', 'push', 'dock', 'reach', 'shot', 'kill', 'leak', 'breach', 'gate_restored', 'buy', 'route', 'overdrive',
+  'wave_start', 'wave_end', 'rush', 'push', 'dock', 'reach', 'shot', 'kill', 'leak', 'breach', 'gate_restored', 'buy', 'receipt', 'route', 'overdrive',
 ];
 /** Declared int fields per type (SiegeEvents.INT_FIELDS; "name[]" is an array of ints). */
 export const INT_FIELDS = {
@@ -53,10 +56,13 @@ export const INT_FIELDS = {
   breach: ['n'],
   gate_restored: ['hp'],
   buy: ['slot', 'station', 'pad', 'ok', 'lvl'],
+  receipt: ['slot', 'station', 'pad', 'act', 'picker', 'yes', 'no'],
   route: ['slot', 'to'],
   overdrive: ['slot', 'st', 'scored'],
 };
-export const STRING_FIELDS = { wave_start: ['role'], buy: ['item', 'why'], overdrive: ['why'] };
+export const STRING_FIELDS = { wave_start: ['role'], buy: ['item', 'why'], receipt: ['item'], overdrive: ['why'] };
+/** receipt event acts (SiegeIds.RC_*). */
+export const RC = { ADD: 1, TAKE: 2, NO: 3, YES: 4, REJECT: 5, DROP: 6 };
 export const ITEMS = ['upgrade', 'mine', 'scorpion', 'pad_upgrade', 'iron_bands', 'repair', 'reserve_flywheel', 'aqueduct_drive', 'spare_cauldron'];
 export const BUY_REASONS = ['closed', 'funds', 'pad_taken', 'no_pad', 'no_station', 'max_level', 'limit', 'gate_full'];
 export const COMBAT_TYPES = new Set(['push', 'dock', 'reach', 'shot', 'kill', 'leak', 'breach', 'gate_restored', 'rush']);
@@ -149,6 +155,16 @@ export function eventErrors(e) {
       inRange('station', e.station, 0, 4);
       inRange('pad', e.pad, 0, 4);
       break;
+    case 'receipt':
+      inRange('slot', e.slot, 0, 7);
+      inRange('picker', e.picker, 0, 7);
+      inRange('act', e.act, RC.ADD, RC.DROP);
+      inRange('yes', e.yes, 0, 8);
+      inRange('no', e.no, 0, 8);
+      if (!ITEMS.includes(e.item)) errs.push(`receipt: unknown item ${JSON.stringify(e.item)}`);
+      inRange('station', e.station, 0, 4);
+      inRange('pad', e.pad, 0, 4);
+      break;
     case 'route':
       inRange('slot', e.slot, 0, 7);
       inRange('to', e.to, 0, 4);
@@ -177,6 +193,63 @@ export function overdrivePairing(events) {
     } else if (e.st === 0 || e.st === 2) {
       if (e.st === 0 && !open.has(e.slot)) errs.push(`overdrive: slot ${e.slot} ended without a start`);
       open.delete(e.slot);
+    }
+  }
+  return errs;
+}
+
+/**
+ * The shared receipt as the events tell it (contracts/siege_events.gd `receipt` and `buy`): an item
+ * is added once by its picker; only its picker takes it back and never votes on it; a vote needs
+ * the item on the receipt; a rejection or a rider leaving takes it off; a purchase needs it on the
+ * receipt and is made by its picker; and the receipt is empty when the wave starts (the break's end
+ * bought what was left). `tail` accepts a log that starts mid-break (a restarted client).
+ */
+export function receiptErrors(events, { tail = false } = {}) {
+  const errs = [];
+  const on = new Map();
+  const keyOf = (e) => `${e.item}/${e.pad > 0 ? e.pad : e.station}`;
+  const need = (e, what) => {
+    if (on.has(keyOf(e))) return true;
+    if (!tail) errs.push(`receipt: ${what} ${keyOf(e)} which is not on the receipt`);
+    return false;
+  };
+  for (const e of events) {
+    if (e.type === 'receipt') {
+      const k = keyOf(e);
+      switch (e.act) {
+        case RC.ADD:
+          if (on.has(k)) errs.push(`receipt: ${k} added twice`);
+          if (e.slot !== e.picker) errs.push(`receipt: ${k} added by slot ${e.slot} but picked by ${e.picker}`);
+          on.set(k, e.picker);
+          break;
+        case RC.TAKE:
+          if (need(e, 'slot took back') && on.get(k) !== e.slot) errs.push(`receipt: slot ${e.slot} took back ${k}, picked by ${on.get(k)}`);
+          on.delete(k);
+          break;
+        case RC.NO:
+        case RC.YES:
+          need(e, 'a vote on');
+          if (e.slot === e.picker) errs.push(`receipt: slot ${e.slot} voted on its own ${k}`);
+          break;
+        case RC.REJECT:
+        case RC.DROP:
+          need(e, 'removed');
+          on.delete(k);
+          break;
+        default:
+          break;
+      }
+    } else if (e.type === 'buy') {
+      const k = keyOf(e);
+      if (e.ok === 1) {
+        if (need(e, 'bought') && on.get(k) !== e.slot) errs.push(`receipt: slot ${e.slot} bought ${k}, picked by ${on.get(k)}`);
+        on.delete(k);
+      } else if (on.get(k) === e.slot) {
+        on.delete(k);
+      }
+    } else if (e.type === 'wave_start' && on.size > 0 && !tail) {
+      errs.push(`receipt: ${[...on.keys()].join(', ')} still on the receipt when the wave started`);
     }
   }
   return errs;
@@ -274,6 +347,9 @@ export function checkReport(report) {
       }
     }
     for (const m of overdrivePairing(logs[role].siege)) err(role, m);
+  }
+  for (const role of roles) {
+    for (const m of receiptErrors(logs[role].siege, { tail: role === victim && roles.length > 1 })) err(role, m);
   }
 
   // 2. the wave's order on the host and every unrestarted peer; the victim holds a tail.

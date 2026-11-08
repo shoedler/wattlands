@@ -237,6 +237,7 @@ test('every kind of event passes its own schema', () => {
     { type: 'breach', n: 1 },
     { type: 'gate_restored', hp: 30 },
     { type: 'buy', slot: 1, item: 'scorpion', station: 0, pad: 3, ok: 1, why: '', lvl: 0 },
+    { type: 'receipt', slot: 1, item: 'upgrade', station: 2, pad: 0, act: 3, picker: 0, yes: 2, no: 1 },
     { type: 'route', slot: 2, to: 4 },
     { type: 'shot', tk: 9, src: 13, kind: 3, o: [1, 2, 3], v: [4, 5, 6], n: 2, sd: 7 },
     { type: 'overdrive', slot: 3, st: 0, scored: 1, why: 'rescue' },
@@ -262,4 +263,53 @@ test('the CLI exits 0, 1 and 2', () => {
   assert.equal(run(path.join(d, 'missing.json')).status, 2);
   fs.writeFileSync(file, '{');
   assert.equal(run(file).status, 2);
+});
+
+const rc = (slot, act, item = 'mine', over = {}) => ({ type: 'receipt', slot, item, station: 0, pad: 0, act, picker: slot, yes: 2, no: 0, ...over });
+const bought = (slot, item = 'mine', ok = 1) => ({ type: 'buy', slot, item, station: 0, pad: 0, ok, why: ok ? '' : 'limit', lvl: ok ? 1 : 0 });
+const WAVE = { type: 'wave_start', ph: 1, role: 'wave', n: 1, waves: 1, b: 12 };
+
+test('a receipt that is added, voted on and bought as the rules say passes', () => {
+  const events = [
+    rc(0, ec.RC.ADD),
+    rc(1, ec.RC.NO, 'mine', { picker: 0, yes: 1, no: 1 }),
+    rc(1, ec.RC.YES, 'mine', { picker: 0 }),
+    rc(1, ec.RC.ADD, 'repair'),
+    rc(1, ec.RC.TAKE, 'repair'),
+    rc(0, ec.RC.ADD, 'spare_cauldron'),
+    rc(0, ec.RC.REJECT, 'spare_cauldron'),
+    rc(1, ec.RC.ADD, 'reserve_flywheel'),
+    rc(1, ec.RC.DROP, 'reserve_flywheel'),
+    bought(0),
+    WAVE,
+  ];
+  assert.deepEqual(ec.receiptErrors(events), []);
+});
+
+test('the receipt check catches a double add, a stranger taking back, a vote on nothing and an unbought leftover', () => {
+  const twice = [rc(0, ec.RC.ADD), rc(0, ec.RC.ADD)];
+  assert.match(ec.receiptErrors(twice).join(), /mine\/0 added twice/);
+  const stranger = [rc(0, ec.RC.ADD), rc(1, ec.RC.TAKE, 'mine', { picker: 0 })];
+  assert.match(ec.receiptErrors(stranger).join(), /slot 1 took back mine\/0, picked by 0/);
+  assert.match(ec.receiptErrors([rc(1, ec.RC.NO, 'mine', { picker: 0 })]).join(), /not on the receipt/);
+  assert.match(ec.receiptErrors([rc(0, ec.RC.ADD), rc(0, ec.RC.NO)]).join(), /voted on its own/);
+  assert.match(ec.receiptErrors([rc(0, ec.RC.ADD), WAVE]).join(), /still on the receipt when the wave started/);
+  assert.match(ec.receiptErrors([bought(0)]).join(), /bought mine\/0 which is not on the receipt/);
+  assert.match(ec.receiptErrors([rc(0, ec.RC.ADD), bought(1)]).join(), /slot 1 bought mine\/0, picked by 0/);
+  assert.match(ec.receiptErrors([rc(0, ec.RC.ADD, 'mine', { picker: 1 })]).join(), /picked by 1/);
+});
+
+test('a refused purchase of an item on the receipt takes it off, a refused pick leaves it alone', () => {
+  assert.deepEqual(ec.receiptErrors([rc(0, ec.RC.ADD), bought(0, 'mine', 0), WAVE]), []);
+  assert.deepEqual(ec.receiptErrors([bought(0, 'mine', 0), WAVE]), []);
+});
+
+test('a restarted client that joined mid-break only holds a tail', () => {
+  assert.deepEqual(ec.receiptErrors([rc(1, ec.RC.TAKE), bought(0), WAVE], { tail: true }), []);
+});
+
+test('the report check runs the receipt check on the host and the client that stayed', () => {
+  const bad = [rc(0, ec.RC.ADD), ...drillEvents()];
+  const m = errs(report({ host: bad, client1: bad }));
+  assert.match(m, /still on the receipt when the wave started/);
 });

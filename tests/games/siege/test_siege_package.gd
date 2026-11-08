@@ -13,7 +13,7 @@ const MANIFEST := {
 		"Co-op siege defense at a Roman wheel fort. Your watts turn a great treadwheel; couple it"
 		+ " to a ballista, an onager, an arrow organ, the tar works or the gold mine."
 	),
-	"version": "0.6.0",
+	"version": "0.7.0",
 	"min_players": 1.0,
 	"max_players": 4.0,
 	"bots": true,

@@ -135,7 +135,7 @@ Units are m, s and P_eff W. Every number below lives in `content/siege/*.json`, 
 **Economy (gold)**
 - The mine pays its riders 1 gold per kJ of P_eff, × (1 + 0.2 × mine level).
 - A kill pays its bounty × `bounty_scale` (0.115), split by P_eff share among the riders who were delivering to the killing station when the projectile left it. Pad kills and perk-driven shots pay nothing.
-- Gold is personal, and anyone may buy anything. Each rider starts with 40.
+- Gold is personal, and anyone may pick anything for the team's shared receipt (see the Shop). Each rider starts with 40.
 
 **Projectiles** (`combat/siege_ballistics.gd`, shared by the rules and the view)
 - Integrated at 0.05 s:
@@ -240,8 +240,15 @@ Units are m, s and P_eff W. Every number below lives in `content/siege/*.json`, 
 | Repair the gate: +20 HP, up to max | 20 | Any |
 | Reserve flywheel / Aqueduct drive / Spare cauldron (team perks) | 80 / 100 / 60 | Once each |
 
-- It runs on pedal-scan (BRIEF 3.5). The top entry is Autopilot's pick and the second is "Save gold". Picks auto-confirm after two scan cycles.
-- The host resolves purchases in arrival order. A refused one goes out as a `buy` event with `ok` 0, and only the buyer's peer toasts it.
+- It runs on pedal-scan (BRIEF 3.5). The top entry is Autopilot's pick and the second is "Save gold". Pedalling alone picks nothing: the list's ERG auto-confirm is off here, and a pick that still arrives tagged `auto` is ignored.
+- **The shared receipt.** A pick does not spend gold. It puts the item on a receipt every rider sees and holds the picker's gold for it ("40 ON RECEIPT" under GOLD).
+  - Picking your own item again takes it back and frees the gold.
+  - Picking someone else's item votes no on it, and picking it again returns your vote to yes.
+  - The voters are the connected riders and bots in slot order, everyone starting at yes (`TeamVote`, GAME_SDK 12.2), and the picker counts as yes. The moment "no" outnumbers "yes" or the two tie, the item leaves the receipt and its gold is the picker's again. A rejected item is never shown on the receipt. A solo rider's own pick can never be rejected.
+  - Bots and Autopilot add their picks like anyone and vote yes.
+  - When the break ends the host buys what is left in the order the items were added (slot order within a tick), each from its picker's gold. One line per item (item plus station or pad), so nothing is on the receipt twice or past its limit, and a pick never takes more than the picker has free, so gold never goes negative. A pick while the shop is closed is ignored.
+  - A rider who leaves (disconnects) takes their items off the receipt and their votes drop; their gold was never spent.
+- The host resolves picks in arrival order (slot order, then each rider's intents in order). A pick the shop would refuse goes out as a `buy` event with `ok` 0, and only the buyer's peer toasts it; each purchase at the break's end is a `buy` event too. Receipt changes are `receipt` events; a voted-off item toasts its picker.
 
 **Rescue and AFK:** `on_rescue` is a stagger: the walkers stumble, and Overdrive is unavailable. `on_afk` stops the wheel, keeping the routing, the gold and the slot's share of B.
 
@@ -271,14 +278,14 @@ Units are m, s and P_eff W. Every number below lives in `content/siege/*.json`, 
 7. save.
 
 **Zero input.**
-- A human counts as Autopilot for routing until their first `route` intent, and for the shop until their first non-auto `buy` intent. `overdrive` intents and auto-confirms never end either fallback.
-- While a rider is on the shop fallback, Autopilot buys for them and the host ignores their auto-confirmed buys.
+- A human counts as Autopilot for routing until their first `route` intent, and for the shop until their first non-auto `pick` intent. `overdrive` intents and auto-confirms never end either fallback.
+- While a rider is on the shop fallback, Autopilot adds picks to the receipt for them; an auto-confirmed pick never reaches the receipt, fallback or not. Autopilot picks with the gold the rider has free and never picks an item already on the receipt.
 
 ### 2.6 Multiplayer and network
 
 The host simulates everything (BRIEF 5). Clients send intents in `Telemetry.intents` at 5 Hz:
 - `{"k":"route","to":"mine"|0..4|"next"|"prev"|"hot"}` (`"gen"` is accepted as `"mine"`);
-- `{"k":"buy","item":"<id>","station":n}` or `"pad":n`;
+- `{"k":"pick","item":"<id>","station":n}` or `"pad":n` (adds the item to the receipt, takes your own back, or votes on someone else's; `"buy"` is the old word for it);
 - `{"k":"overdrive"}`.
 
 The host validates them and drops anything beyond 5/s per peer. No route or Overdrive intents are sent while the shop is open. Snapshots at 10 Hz carry ints only:
@@ -295,11 +302,11 @@ The host validates them and drops anything beyond 5/s per peer. No route or Over
 - `wind_pm` is the winding in per mille.
 - `arm_pm` is the station's animation phase in per mille (onager arm throw, ballista string, arrow rack reload), so the view can show it.
 - `dw` holds each station's damage in the current or last wave (Autopilot's upgrade pick on clients).
-- Optional keys, present only when not at their default: `"ru":[1,i,left_ms]` (a rush is on), `"rn":n` (the next rush's index) and `"rk":n` (the arrow organ's next rack).
+- Optional keys, present only when not at their default: `"ru":[1,i,left_ms]` (a rush is on), `"rn":n` (the next rush's index) `"rk":n` (the arrow organ's next rack) and `"rc":[[item_code,at,cost,slot,no_slot...]...]` (the shared receipt in the order the items were added: the item's code 1..9, the station or pad it is for, the gold held, the picker's slot, then the slots that voted no in slot order).
 - **Shots:** each fired projectile (a rack of arrows is one event with `n` 12) is an event `{"type":"shot","tk":tick,"src":station 1..3 or 10 + pad,"kind":0 bolt|1 stone|2 arrow|3 scorpion,"o":[x_cm,y_cm,z_cm],"v":[vx_mms,vy_mms,vz_mms],"n":count,"sd":seed}`.
   - Clients replay the flight with `SiegeBallistics` and the same seed.
   - Damage and kills come from the snapshot and `kill` events, never from the replay.
-- Events, batched and in order: `wave_start`, `wave_end`, `rush`, `push`, `reach` (a ram at the gate), `dock`, `shot`, `kill`, `leak`, `breach`, `gate_restored`, `buy`, `route`, `overdrive`.
+- Events, batched and in order: `wave_start`, `wave_end`, `rush`, `push`, `reach` (a ram at the gate), `dock`, `shot`, `kill`, `leak`, `breach`, `gate_restored`, `buy`, `receipt`, `route`, `overdrive`.
 - Every toast that follows a host-side rule is raised from these events.
 - Caps: 150 enemies, and snapshots ≤ 8 KB at the cap.
 - `client_predict` spins the local wheel and shows route changes at once. Everything else interpolates over 100 ms.
@@ -387,15 +394,16 @@ Materials: dark wax panels in a limestone frame with a brick course; tabula ansa
 | Under the cards (464, 69, 286 wide, 27 high) | The platform's banners, in the kit's colours and font; the toasts below them in the mock's palette |
 | Right column (804, 8, 148 wide, ending on the base's middle row) | Gate plate (a filled chip behind the number and an alarm frame when low) with the tar row; gold; stations card (your row in bronze, the hot station as a thin red bar on the left edge, slot shapes and hollow pegs, the coupling bar); Overdrive plate (ready, prompt, active, recharging, closed with its honest reason; a press sends the same intent as `ability_1`) |
 | Bottom centre (479, 420, 112 high) | Cockpit: interval clock, watts and cadence at 72 px (KEY36), one source for each value; the heart rate cell; the band gauge with a needle; the instruction line; the next line; W′ or, in SIM, the gear |
-| Bottom left, breaks only (8, 368, 364 wide, 150 high) | Shop, over the road's west loop, which is empty in breaks |
+| Bottom left, breaks only (8, 368, 364 wide, 150 high) | Shop, over the road's west loop, which is empty in breaks; its header reads "QUARTERMASTER  PICK TO ADD" and its rows are marked ADDED (yours) or with the picker's name |
+| Left, breaks only (8, 270, 364 wide, up to 209 high, growing up from just above the shop) | The shared receipt: "RECEIPT  EVERYONE SEES THIS", "BOUGHT WHEN THE BREAK ENDS (m:ss)", each item with its cost, its picker and YES n / NO n (your own no says YOUR NO), up to four rows (more fold into "+N more on the receipt"), the total and the two rules "A MAJORITY NO (OR A TIE) TAKES IT OFF AT ONCE." and "PICK YOURS AGAIN TO TAKE IT BACK." |
 | On the world | A red tag on the nearest live tower and ram within 200 m ("TOWER 110 M"); while the gate is failing in a wave, the oxblood banner with a leader to the gate |
 
 - **Cockpit rules.** The target caption is the applied target from telemetry (`applied_target_w`), never the plan, so rescue and caps are true. Displayed watts are a 3 s mean with in-band hysteresis; stale power shows `--`, not 0 (`HudRiderNumbers`, GAME_SDK 10.4). W/kg shows only if the rider opted in. The reserve is a thin bar with a number only below 50%. The gear shows only in SIM.
 - **Heart rate.** Sensor present: the cell, a muted heart and cream digits. Dropout (a sensor seen this session or known to the platform): `--`. No sensor: no cell, and the plate is 344 px wide instead of 404.
 - **The instruction line**, one line by state, first match wins: no data "NO TRAINER DATA: KEEP PEDALLING" (a silent stream also reads as coasting; a rider who is pedalling must not be told to pedal, and the target caption shows none); coasting "PEDAL: LOAD DROPPED" (its floor wins over rescue, BRIEF 4.6.12); rescue "RESCUE: SPIN 70+" with the caption RPM 70+; Overdrive by where the 3 s power sits in the real band: under "SPRINT 240-280 W, SHIFT UP", in "HOLD 240-280 W", over "EASE TO 240-280 W"; low cadence "SPIN UP: RESCUE AT 45", only while rescue is armed (ERG at 60% FTP or more), after 1.5 s under 70 rpm, half of rescue's 3 s under 45; cool-down "SPIN IT OUT"; the last 30 s before a step up "LOAD UP IN 0:30, SPIN UP" with the clock in gold; warm-up "SETTLE IN, SPIN 80-100"; else "SPIN 80-100". No data, coasting, rescue and low cadence sit on the red chip. A cadence of 70-79 in a wave gets a small up arrow and no chip.
 - **The next line.** "NEXT: BREAK, 3:00 AT 100 W", in applied-style watts: the plan's percent, this rider's FTP, the unverified factor, whole watts, floor and ceiling. In rescue "THEN: RAMP BACK TO 190 W", in Overdrive "THEN: ERG AT 190 W", at the end "NEXT: RESULTS".
-- **Gold's size.** NUM (28 px) in waves, where it can't be spent; KEY (48 px) while the shop is open, where it is the number that decides. The plate grows with it and the cards under it move down.
-- **Shop.** The platform's PedalScanList does the picking (2.4); the plate draws its rows in the BODY face (24 px cap height), five to a page, with the coin in a fixed column and BEST and "N MORE" notes.
+- **Gold's size.** NUM (28 px) in waves, where it can't be spent; KEY (48 px) while the shop is open, where it is the number that decides. The plate grows with it and the cards under it move down. The number is the gold the rider has free; while their items hold gold on the receipt, "N ON RECEIPT" sits under GOLD.
+- **Shop.** The platform's PedalScanList does the picking (2.4), with its ERG auto-confirm off; the plate draws its rows in the BODY face (24 px cap height), five to a page, with the coin in a fixed column and BEST and "N MORE" notes.
 - **Cadence band.** The host publishes 80-100 rpm once at the session's start with `ctx.directives.cadence_band`. It changes no load: the metronome, bots and a MockTrainer `band` rider follow it.
 - Budget: a plate redraws only when what it shows changes.
 - **Help overlay** (`HudSpec.help`, shown on F1 and on a rider's first Siege session). Short texts with arrows to:
@@ -429,9 +437,10 @@ Unit tests (GUT, `tests/games/siege/`) cover every rule and table number in 2.3�
 - B and par in FAIR_FTP, WKG and RAW, verified or not, without reading any weight.
 - Overdrive preconditions and the exact directive fields (no `mode_grade`, `haptic`, `target_*`, `crr` or `cw`), including refusal in warm-up, breaks, rescue, while coasting and with < 30 s left.
 - Grade edges, XP once per session (host, client, a restarted client), each unlock once.
-- Autopilot scores, hysteresis, shop order, never Overdrive, and the zero-input fallback with no double purchase.
+- Autopilot scores, hysteresis, shop order, never Overdrive, and the zero-input fallback with no double purchase (an auto-confirm never reaches the receipt).
+- The receipt: a pick holds the picker's gold, picking your own item again takes it back, someone else's votes no and again yes, a majority no or a tie (two riders) takes the item off at once with its gold, a solo rider's own pick never rejects, bots vote yes, an item is never on it twice or past its limit, a pick while the shop is closed is ignored, a rider who leaves takes their items and their votes with them, the break's end buys what is left in the order it was added (and an empty receipt buys nothing), gold never goes negative, and a replay gives the same events and state.
 - Snapshots come back as ints after a JSON round trip, ≤ 8 KB at the cap. Shot events replay identically.
-- A client's teammate strip shows raw W and %FTP from the snapshot, and a refused purchase toasts only on the buyer's peer.
+- A client's teammate strip shows raw W and %FTP from the snapshot, a refused purchase toasts only on the buyer's peer, a voted-off item toasts only its picker, and every peer's receipt follows the host's snapshot.
 - The map JSON is not stale (`export_map.mjs --check`), and the bake manifest matches its generator version.
 - The view builds headless from a fixture. Sprite anchors project to the right art pixels. The wheel and walker formulas hold.
 - No string keys are missing.

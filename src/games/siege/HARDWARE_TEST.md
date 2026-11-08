@@ -198,6 +198,20 @@ The HUD is Siege's own (`docs/games/siege.md` 3). Run `short` with the real trai
 | 81 | Maximise the window on every monitor you have, then drag it to other sizes during a wave | No black at any size; the fort, the wheels and the road stay on screen; no plate overlaps another; tags sit over their engines, the F1 arrows on what they name | |
 | 82 | Repeat step 80's fps check at a 1280 x 720 window and, if you have one, on an ultrawide | 60 fps at the largest canvas you can reach. Log the window and any dropped frames | |
 
+## 16. The shared receipt
+
+Use two PCs (host and client) or one PC and a bot for steps 83 to 88, in any break (the build break will do), with pedal navigation on for step 84. The receipt only changes what is bought and when; none of these steps may change the trainer's load.
+
+| # | Step | Expected | Result |
+| --- | --- | --- | --- |
+| 83 | In a break, pick an upgrade with the keys (or the surge), then check the trainer | The item appears on the receipt panel above the shop with your name, its cost, YES n and the total; "N ON RECEIPT" shows under your gold and your free gold drops by the cost; the shop row says ADDED. **No gold is spent yet and the trainer's load does not change** | |
+| 84 | With pedal navigation on, pedal in ERG for more than two scan cycles without picking anything | The lit row moves along the list, but nothing is picked: the receipt stays as it was, and the hint says pedalling alone adds nothing. Surging picks the lit row | |
+| 85 | Pick your own item again | It leaves the receipt and your held gold comes back at once | |
+| 86 | Two riders: the second picks the first's item (it shows the picker's name in the shop) | The receipt shows NO 1 and, on the voter's screen, YOUR NO. With two riders the tie takes the item off at once, the picker sees "Voted off" and their gold is back. Pick it again as the picker and then vote yes: it stays | |
+| 87 | Three or four riders: one no, then a second | One no leaves the item on (YES 2 NO 1 with three riders); the second no takes it off | |
+| 88 | Let the break end with two or three items on the receipt | Each is bought in the order it was added, once, with a "Bought" toast to its picker, the receipt empties and your gold drops by what was held. The wave starts at its ERG target as usual | |
+| 89 | A rider drops out mid-break (close their game) | Their items leave the receipt and their votes drop; the others' items stay and are bought at the end | |
+
 ## Log template
 
 Copy this block for every step.
