@@ -1021,6 +1021,63 @@ func test_the_reserved_events_sound_like_their_neighbours() -> void:
 	assert_has(_audio.played, "horn_segment")
 
 
+## The Hangar's countdown: the klaxon three times, at 10, 6.6 and 3.3 s before the door, never twice for one beat.
+func test_the_hangar_klaxon_sounds_three_times_in_the_countdown() -> void:
+	var s := TankFixtures._base(TankFixtures.content(), 2, 0, 100.0)
+	var a := _make(s)
+	for t in [100.0, 150.0, 169.9]:
+		s.seg.elapsed_s = t
+		a.update(s, DT, 1, {}, 0.0)
+	assert_eq(a.played.count(TankAudio.KLAXON_SOUND), 0, "nothing before the countdown")
+	var beats: Array[float] = []
+	var at := 169.9
+	while at < 180.0:
+		at += 0.1
+		s.seg.elapsed_s = at
+		var before := a.played.count(TankAudio.KLAXON_SOUND)
+		a.update(s, DT, 1, {}, 0.0)
+		if a.played.count(TankAudio.KLAXON_SOUND) > before:
+			beats.append(180.0 - at)
+	assert_eq(beats.size(), 3, "three beats")
+	for i in 3:
+		assert_almost_eq(beats[i], [10.0, 6.6, 3.3][i], 0.15, "beat %d" % (i + 1))
+	s.seg.elapsed_s = 179.9
+	a.update(s, DT, 1, {}, 0.0)
+	assert_eq(a.played.count(TankAudio.KLAXON_SOUND), 3, "never twice for one beat")
+	s.seg.seg = TankIds.SEG_ROLLOUT
+	s.seg.elapsed_s = 1.0
+	a.update(s, DT, 1, {}, 0.0)
+	assert_eq(a.played.count(TankAudio.KLAXON_SOUND), 3, "none in the roll-out")
+
+
+func test_a_rider_joining_late_in_the_countdown_misses_the_beats_gone_by() -> void:
+	var s := TankFixtures._base(TankFixtures.content(), 2, 0, 175.0)
+	var a := _make(s)
+	a.update(s, DT, 1, {}, 0.0)
+	assert_eq(
+		a.played.count(TankAudio.KLAXON_SOUND),
+		0,
+		"5 s left: the first two beats are gone, the third is not yet"
+	)
+	s.seg.elapsed_s = 176.8
+	a.update(s, DT, 1, {}, 0.0)
+	assert_eq(a.played.count(TankAudio.KLAXON_SOUND), 1, "the third")
+
+
+func test_the_klaxon_is_the_segment_horn_soft_short_and_high_enough_for_headphones() -> void:
+	var bank: Dictionary = JSON.parse_string(
+		FileAccess.get_file_as_string("res://assets/tank/audio/audio.json")
+	)
+	var recipe: Dictionary = bank["sounds"][TankAudio.KLAXON_SOUND]
+	assert_lte(float(recipe["dur"]) / TankAudio.KLAXON_PITCH, 1.2, "short at its pitch")
+	for layer: Dictionary in recipe["layers"]:
+		for fx: Dictionary in layer.get("fx", []):
+			if fx.has("lp"):
+				assert_lte(float(fx["lp"]["f"]) * TankAudio.KLAXON_PITCH, 2000.0, "nothing harsh")
+	assert_lte(TankAudio.KLAXON_DB, -10.0, "well under the segment horn's -6")
+	assert_eq(TankAudio.KLAXON_AT_S.size(), 3)
+
+
 func test_the_recorded_sounds_stay_bounded() -> void:
 	for _i in GameAudioKit.PLAYED_MAX * 2:
 		_audio.on_cue(TankEvents.SHOT, TankEvents.shot(0, TankIds.SHELL_LIGHT, 1))

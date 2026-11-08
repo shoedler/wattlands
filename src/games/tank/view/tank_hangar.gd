@@ -29,7 +29,7 @@ const VOID_X0 := 16.0
 const VOID_X1 := 114.0
 const VOID_TOP := 150.0
 const VOID_BOT := 380.0
-const DOOR_W := 18.0
+const DOOR_W := 98.0
 const DOOR_H := VOID_BOT - VOID_TOP
 ## The face-on gate in the far panel: its size, its stage y, the opening's x range in it, the facade's
 ## half width about the gate.
@@ -188,7 +188,9 @@ static func draw_back(ci: CanvasItem, v: TankView, lk: Dictionary) -> void:
 	var dark: float = lk["dark"]
 	if dark > 0.0:
 		var shade := Color(0.0, 0.01, 0.03, 0.58 * dark)
-		var hole := Rect2(end_x + VOID_X0, VOID_TOP, VOID_X1 - VOID_X0, VOID_BOT - VOID_TOP)
+		# The night shows through what the door has left open (it rises from the floor).
+		var gap := roundf(DOOR_H * float(lk["door"]))
+		var hole := Rect2(end_x + VOID_X0, VOID_BOT - gap, VOID_X1 - VOID_X0, gap)
 		_overlay_except(ci, Rect2(-8, top, end_x + END_W + 8.0, bottom - top), hole, shade)
 	_beacons(ci, v, lk, false)
 
@@ -200,7 +202,7 @@ static func _door(ci: CanvasItem, end_x: float, open: float) -> void:
 	var shown := roundf(DOOR_H * (1.0 - open))
 	if shown <= 0.0:
 		return
-	var x := roundf(end_x + VOID_X0 + (VOID_X1 - VOID_X0 - DOOR_W) * 0.5)
+	var x := roundf(end_x + VOID_X0)
 	ci.draw_texture_rect_region(
 		t, Rect2(x, VOID_TOP, DOOR_W, shown), Rect2(0, DOOR_H - shown, DOOR_W, shown)
 	)

@@ -8,7 +8,7 @@ extends SceneTree
 ##               the concrete floor with its safety line. Stage y 0..440, the wall meets the floor at y 380.
 ##   end.png     130 x 440, the cut end wall the tank rolls out through: a section of thick wall with a doorway (the
 ##               void, 98 x 230, transparent), steel jambs, the door's housing over it, the floor slab under it.
-##   door.png    18 x 230, the sliding door as it stands edge-on in the doorway: ribbed plates, hazard rim, two lamps.
+##   door.png    98 x 230, the sliding door filling the doorway: ribbed plates, a hazard band, three lamps.
 ##   gate.png    220 x 300 (stage y 100..400), the same doorway seen face on for the far panel: steel jambs, hazard
 ##               stripes, the housing over the opening (transparent 156 x 230) and the beacons' brackets.
 ##   shutter.png 32 x 8, one slat of the rolling shutter the far panel raises (tiled across the opening in code).
@@ -25,7 +25,7 @@ const VOID_X0 := 16
 const VOID_X1 := 114
 const VOID_TOP := 150
 const VOID_BOT := 380
-const DOOR_W := 18
+const DOOR_W := 98
 const GATE_W := 220
 const GATE_H := 300
 const GATE_Y0 := 100
@@ -397,23 +397,29 @@ func _door() -> Image:
 	for y in h:
 		for x in DOOR_W:
 			var c := PIL.lightened(0.06)
-			if y % 10 == 0:
-				c = PIL_LO
-			elif y % 10 == 1:
+			var m := y % 10
+			if m == 0:
 				c = PIL_HI
-			if x < 2:
-				c = PIL_HI
-			elif x > DOOR_W - 3:
+			elif m == 9:
 				c = PIL_LO
+			elif m == 8:
+				c = PIL.darkened(0.2)
+			# the guide rails the plate runs in, a lit edge each side
+			if x < 3:
+				c = PIL_HI if x == 0 else PIL
+			elif x > DOOR_W - 4:
+				c = PIL_LO if x == DOOR_W - 1 else PIL
 			Px.put(img, x, y, _noisy(c, x, y, 0.03, 31))
 	for ry in range(5, h - 4, 20):
-		_rivet(img, 3, ry, PIL_HI)
-		_rivet(img, DOOR_W - 6, ry, PIL_HI)
-	# the lower third is hazard-striped, a lamp near the top and one near the foot
-	_hazard(img, Rect2i(0, h - 40, DOOR_W, 40), 6)
-	Px.rect(img, Rect2i(0, h - 3, DOOR_W, 3), GIRDER_HI)
-	_lamp(img, Vector2i(DOOR_W / 2, 20), 3, LAMP_AMB.darkened(0.25))
-	_lamp(img, Vector2i(DOOR_W / 2, h - 50), 3, LAMP_RED.darkened(0.2))
+		for rx in range(8, DOOR_W - 8, 16):
+			_rivet(img, rx, ry, PIL_HI)
+	# a hazard-striped band across the lower part, a lamp at each upper corner and a bar at the foot
+	_hazard(img, Rect2i(0, h - 46, DOOR_W, 40), 6)
+	Px.rect(img, Rect2i(0, h - 6, DOOR_W, 6), GIRDER_HI)
+	Px.rect(img, Rect2i(0, h - 2, DOOR_W, 2), PIL_LO)
+	_lamp(img, Vector2i(10, 16), 3, LAMP_AMB.darkened(0.25))
+	_lamp(img, Vector2i(DOOR_W - 11, 16), 3, LAMP_AMB.darkened(0.25))
+	_lamp(img, Vector2i(DOOR_W / 2, h - 60), 3, LAMP_RED.darkened(0.2))
 	return img
 
 

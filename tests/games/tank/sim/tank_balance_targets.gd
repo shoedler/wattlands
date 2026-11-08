@@ -114,7 +114,10 @@ static func t3(results: Array) -> Dictionary:
 		runs += 1
 		var heavy := 0
 		for s: Dictionary in r["shells"]:
-			if int(s["shell"]) != TankIds.SHELL_HEAVY or str(s["seg"]) == TankIds.SEG_DEPOT:
+			if (
+				int(s["shell"]) != TankIds.SHELL_HEAVY
+				or str(s["seg"]) in [TankIds.SEG_DEPOT, TankIds.SEG_HANGAR, TankIds.SEG_ROLLOUT]
+			):
 				continue
 			heavy += 1
 			var at := "crew %d seed %d t=%.0f" % [r["crew"], r["seed"], s["t"]]

@@ -18,6 +18,14 @@ const MACHINE_OF_SEAT := {
 	"repair": "repair",
 }
 const TRACK := "track"
+## The Hangar's klaxon: the segment's own soft horn, pitched up a fifth and held down, three times in the
+## countdown (the seconds left it sounds at), a beat that is more than KLAXON_LATE_S gone is skipped. (The bank's
+## WAV budget has no room for a file of its own.)
+const KLAXON_SOUND := "horn_segment"
+const KLAXON_DB := -13.0
+const KLAXON_PITCH := 1.5
+const KLAXON_AT_S: Array[float] = [10.0, 6.6, 3.3]
+const KLAXON_LATE_S := 0.75
 ## The track machine's "revolution": 2.4 m of travel holds three links and one squeak.
 const TRACK_M_PER_REV := 2.4
 ## Sound runs at twice real speed here: the real 2.4-7 s would feel detached from the flash.
@@ -114,6 +122,7 @@ var bed_now: Dictionary = {}
 var _lift := LiftOffDetector.new()
 var _lift_was: float = 0.0
 var _patches_seen: int = -1
+var _klaxon_n: int = 0
 var _last_far_m: float = FALLBACK_RANGE_M
 var _far_kills: int = 0
 var _barrage_kills: int = 0
@@ -396,6 +405,7 @@ func update(
 	_drive_track(state, travel_m, _has_seat(feed))
 	_near_engines(state, dt)
 	_patches(state, feed.get("repair", {}))
+	_hangar_klaxon(state)
 	bed_now = _bed_params(state, far_fight)
 	kit.bed_params(bed_now)
 	kit.commit(dt)
@@ -516,6 +526,20 @@ func _near_escaped(code: int) -> void:
 	if _near_last.has(loop_id):
 		_near_gone[loop_id] = _near_last[loop_id]
 		_near_last.erase(loop_id)
+
+
+## The Hangar's countdown: a soft klaxon three times, at 10, 6.6 and 3.3 s before the door opens. A beat the
+## state is already well past (a rider who joined at 5 s) is skipped, not played late.
+func _hangar_klaxon(state: TankState) -> void:
+	var left := TankSegments.hangar_countdown_s(state)
+	if left < 0.0:
+		if state.seg.seg != TankIds.SEG_HANGAR:
+			_klaxon_n = 0
+		return
+	while _klaxon_n < KLAXON_AT_S.size() and left <= KLAXON_AT_S[_klaxon_n]:
+		if left > KLAXON_AT_S[_klaxon_n] - KLAXON_LATE_S:
+			kit.sound(KLAXON_SOUND, KLAXON_DB, KLAXON_PITCH)
+		_klaxon_n += 1
 
 
 ## The press closes when a patch is done: it follows the hull rebuilt, not the crank.
