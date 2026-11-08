@@ -60,7 +60,7 @@ static func solve_target(
 ) -> float:
 	if t.far:
 		return _solve_far(state, t)
-	var hull_v := Vector2(TankConst.m_to_px(state.hull.speed_mps), 0.0)
+	var hull_v := Vector2(TankConst.m_to_px(TankSegments.ground_mps(state)), 0.0)
 	for p in aim_points(t, facing):
 		var e := solve(state, aux, p, t.vel - hull_v, facing)
 		if not is_nan(e):

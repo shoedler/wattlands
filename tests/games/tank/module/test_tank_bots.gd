@@ -680,7 +680,7 @@ func test_in_a_fight_a_bot_moves_only_where_its_trainer_follows_at_once() -> voi
 	var s := _state(4)
 	var h := preload("res://tests/games/tank/effort/tank_effort_harness.gd").new()
 	h.build(4)
-	var ri: TankRiderInput = h.inputs(1, 10.0, 310.0).riders[3]
+	var ri: TankRiderInput = h.inputs(2, 10.0, 310.0).riders[3]
 	s.hull.hp = 50.0
 	var bot := _bot(s, LIGHTS)
 	ri.peer = bot.peer

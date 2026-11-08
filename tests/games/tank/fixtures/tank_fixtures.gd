@@ -70,7 +70,7 @@ static func engine_at(c: TankContent, crew: int, slot: int, _index: int) -> Stri
 
 static func state(crew: int) -> TankState:
 	var c := content()
-	var s := _base(c, crew, 4, 60.0)
+	var s := _base(c, crew, 5, 60.0)
 	s.hull.x_px = 3200.0
 	s.hull.distance_m = 400.0
 	s.hull.speed_mps = 7.4
@@ -107,7 +107,7 @@ static func state(crew: int) -> TankState:
 
 static func gun_line(crew: int) -> TankState:
 	var c := content()
-	var s := _base(c, crew, 5, 40.0)
+	var s := _base(c, crew, 6, 40.0)
 	s.hull.holding = true
 	s.hull.hp = 64.0
 	s.hull.hp_max = 120.0
@@ -137,7 +137,7 @@ static func gun_line(crew: int) -> TankState:
 
 static func boss(crew: int) -> TankState:
 	var c := content()
-	var s := _base(c, crew, 10, 150.0)
+	var s := _base(c, crew, 11, 150.0)
 	s.hull.holding = true
 	s.hull.hp = 90.0
 	s.hull.hp_max = 160.0
@@ -194,9 +194,9 @@ static func frame(crew: int) -> InputFrame:
 	var plans := TankPlanBuilder.build_all(c, slots(crew))
 	for p in slots(crew):
 		var plan: EffortPlan = plans[p.peer_id]
-		var ph := plan.phase(4)
+		var ph := plan.phase(5)
 		var ps := PhaseState.new()
-		ps.index = 4
+		ps.index = 5
 		ps.kind = ph.kind
 		ps.mode = ph.mode
 		ps.elapsed_s = 60.0
@@ -224,7 +224,7 @@ static func frame(crew: int) -> InputFrame:
 			tm.power_w = roundf(0.9 * p.ftp)
 		tm.p_eff_w = tm.power_w * p.p_eff_per_w
 		tm.ftp_pct = tm.power_w / p.ftp * 100.0
-		tm.phase_index = 4
+		tm.phase_index = 5
 		tm.connected = true
 		f.players[p.peer_id] = tm
 		f.phase[p.peer_id] = ps

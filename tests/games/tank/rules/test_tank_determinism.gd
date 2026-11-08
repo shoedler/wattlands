@@ -9,7 +9,7 @@ func _fingerprint(rig: TankRulesRig) -> String:
 func _play(crew: int, rng_seed: int, seconds: float) -> TankRulesRig:
 	var rig := TankRulesRig.new(crew, "ashfall_road", rng_seed)
 	rig.auto_phase = true
-	rig.enter(1, 0.0)
+	rig.enter(2, 0.0)
 	rig.run(seconds)
 	return rig
 
@@ -60,7 +60,7 @@ func test_the_rules_never_read_a_clock_or_a_global_random_source() -> void:
 ## A crew-3 stage-3 advance with 16 enemies and 24 shells in flight.
 func _capped() -> TankRulesRig:
 	var rig := TankRulesRig.new(3)
-	rig.enter(7, 50.0)
+	rig.enter(8, 50.0)
 	rig.state.enemies.clear()
 	return rig
 

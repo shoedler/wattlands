@@ -532,7 +532,11 @@ func _patches(state: TankState, f: Dictionary) -> void:
 ## combat: the depot and the cool-down hear no far battle, and neither does a real fight in the far panel: a far thump
 ## there is a shot at this tank, and must never be just the night.
 func _bed_params(state: TankState, far_fight: bool) -> Dictionary:
-	var quiet := state.seg.seg == TankIds.SEG_DEPOT or state.in_cooldown() or far_fight
+	var quiet := (
+		state.seg.seg in [TankIds.SEG_DEPOT, TankIds.SEG_HANGAR, TankIds.SEG_ROLLOUT]
+		or state.in_cooldown()
+		or far_fight
+	)
 	return {
 		"gust": 0.5 + 0.3 * sin(_t * GUST_RAD_S.x) + 0.2 * sin(_t * GUST_RAD_S.y + 1.3),
 		"speed": state.hull.speed_mps,

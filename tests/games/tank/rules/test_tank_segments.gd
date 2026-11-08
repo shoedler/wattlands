@@ -2,12 +2,13 @@ extends GutTest
 ## The crew's place in the mission (brief 2.3, 2.4): segment events, objectives and the hold before
 ## min_s, overruns at max_s, checkpoints, the depot's drills, the cool-down and the outcome.
 
-const DEPOT := 0
-const ADVANCE := 1
-const GUN_LINE := 2
-const CHECKPOINT := 3
-const STAGE2_ADVANCE := 4
-const BOSS := 10
+const HANGAR := 0
+const ROLLOUT := 1
+const ADVANCE := 2
+const GUN_LINE := 3
+const CHECKPOINT := 4
+const STAGE2_ADVANCE := 5
+const BOSS := 11
 
 
 static func _patch(index: int, props: Dictionary) -> Callable:
@@ -17,21 +18,21 @@ static func _patch(index: int, props: Dictionary) -> Callable:
 
 func test_each_new_segment_raises_a_segment_event_with_its_stage() -> void:
 	var rig := TankRulesRig.new(1)
-	rig.enter(DEPOT, 0.0)
+	rig.enter(HANGAR, 0.0)
 	rig.enter(ADVANCE, 0.0)
 	rig.enter(GUN_LINE, 0.0)
 	rig.enter(CHECKPOINT, 0.0)
 	rig.enter(BOSS, 0.0)
-	rig.enter(11, 0.0)
+	rig.enter(12, 0.0)
 	var seen := rig.of_type("segment")
 	assert_eq(seen.size(), 6)
 	var want := [
-		[0, TankIds.SEG_DEPOT, 0],
-		[1, TankIds.SEG_ADVANCE, 1],
-		[2, TankIds.SEG_GUN_LINE, 1],
-		[3, TankIds.SEG_CHECKPOINT, 1],
-		[10, TankIds.SEG_BOSS, 4],
-		[11, TankIds.SEG_COOLDOWN, 0],
+		[0, TankIds.SEG_HANGAR, 0],
+		[2, TankIds.SEG_ADVANCE, 1],
+		[3, TankIds.SEG_GUN_LINE, 1],
+		[4, TankIds.SEG_CHECKPOINT, 1],
+		[11, TankIds.SEG_BOSS, 4],
+		[12, TankIds.SEG_COOLDOWN, 0],
 	]
 	for i in want.size():
 		assert_eq(
@@ -64,11 +65,11 @@ func test_a_checkpoint_adds_its_hp_to_the_maximum_and_heals_that_much() -> void:
 	assert_eq(rig.hull().hp_max, base + bonus)
 	assert_eq(rig.hull().hp, 60.0 + bonus)
 	rig.hull().hp = base + 15.0
-	rig.enter(6, 0.0)
+	rig.enter(7, 0.0)
 	assert_eq(rig.hull().hp_max, base + 2.0 * bonus)
 	assert_eq(rig.hull().hp, minf(base + 15.0 + bonus, base + 2.0 * bonus))
 	rig.enter(STAGE2_ADVANCE, 0.0)
-	rig.enter(9, 0.0)
+	rig.enter(10, 0.0)
 	assert_eq(rig.hull().hp_max, base + 3.0 * bonus, "the third checkpoint")
 
 
@@ -154,7 +155,7 @@ func test_the_boss_objective_is_the_behemoth_dead() -> void:
 
 
 func test_fixed_phases_never_complete() -> void:
-	for index in [DEPOT, CHECKPOINT]:
+	for index in [HANGAR, CHECKPOINT]:
 		var rig := TankRulesRig.new(1)
 		rig.enter(index, 20.0)
 		rig.run(30.0)
@@ -224,7 +225,7 @@ func test_a_gun_line_overrun_falls_to_a_support_barrage_with_no_kill_credit() ->
 func test_a_boss_overrun_is_a_withdrawal_and_the_outcome_follows() -> void:
 	var rig := TankRulesRig.new(1)
 	rig.enter(BOSS, 10.0)
-	rig.enter(11, 0.0, Wl.ENDED_MAX_S)
+	rig.enter(12, 0.0, Wl.ENDED_MAX_S)
 	assert_eq(rig.state.outcome, TankIds.OUTCOME_WITHDRAWN)
 	assert_eq(rig.state.boss.phase, TankIds.BOSS_WITHDRAWN)
 	assert_eq(rig.state.score.overruns, 1)
@@ -236,7 +237,7 @@ func test_the_outcome_is_set_once_in_the_cooldown() -> void:
 	rig.enter(BOSS, 10.0)
 	rig.state.boss.phase = TankIds.BOSS_DEAD
 	rig.state.score.behemoth_killed = true
-	rig.enter(11, 0.0, Wl.ENDED_END_PHASE)
+	rig.enter(12, 0.0, Wl.ENDED_END_PHASE)
 	assert_eq(rig.state.outcome, TankIds.OUTCOME_VICTORY)
 	rig.state.score.behemoth_killed = false
 	rig.run(5.0)
@@ -248,7 +249,7 @@ func test_the_outcome_is_set_once_in_the_cooldown() -> void:
 
 func test_the_cooldown_has_no_enemies_and_the_tank_rolls_on_without_score() -> void:
 	var rig := TankRulesRig.new(1)
-	rig.enter(11, 0.0)
+	rig.enter(12, 0.0)
 	assert_eq(rig.state.enemies.size(), 0)
 	rig.run(10.0)
 	assert_gt(rig.hull().speed_mps, 1.0, "the tank rolls through the gate")
@@ -256,31 +257,68 @@ func test_the_cooldown_has_no_enemies_and_the_tank_rolls_on_without_score() -> v
 	assert_eq(rig.of_type("shot").size(), 0)
 
 
-# --- Depot ---------------------------------------------------------------------------------------
+# --- Hangar and roll-out -----------------------------------------------------------------------
 
 
-func test_the_depot_drives_for_120_s_then_the_tank_halts_for_the_aim_and_fire_drills() -> void:
+func test_the_hangar_spins_the_tracks_in_the_air_and_the_tank_goes_nowhere() -> void:
 	var rig := TankRulesRig.new(1)
-	rig.enter(DEPOT, 10.0)
+	rig.enter(HANGAR, 10.0)
 	rig.run(20.0)
-	assert_gt(rig.hull().speed_mps, 2.0, "drive drill")
-	assert_eq(TankSegments.drill_at(rig.state), "drive")
-	var grade := rig.hull().grade_pct
-	assert_between(grade, 0.0, 2.0, "terrain 0 to +2% in the depot")
-	rig.enter(DEPOT, 125.0)
-	rig.run(3.0)
-	assert_eq(rig.hull().speed_mps, 0.0)
+	assert_gt(rig.hull().speed_mps, 2.0, "the tracks turn: the drive drill")
+	assert_true(TankSegments.on_stand(rig.state))
+	assert_eq(TankSegments.ground_mps(rig.state), 0.0, "and the ground goes by at nothing")
+	assert_eq(rig.hull().distance_m, 0.0, "the hull sits on its stand")
+	assert_eq(rig.hull().x_px, 0.0)
 	assert_true(rig.hull().holding)
+	assert_eq(TankSegments.drill_at(rig.state), "drive")
+	assert_eq(rig.hull().grade_pct, 0.0, "flat: nothing under the tracks")
+
+
+func test_the_hangar_drills_run_drive_aim_fire_and_end_before_the_countdown() -> void:
+	var rig := TankRulesRig.new(1)
+	rig.enter(HANGAR, 65.0)
+	rig.run(3.0)
 	assert_eq(TankSegments.drill_at(rig.state), "aim")
 	assert_true(TankSegments.drill_targets(rig.state))
 	assert_false(TankSegments.fire_drill(rig.state))
-	rig.enter(DEPOT, 250.0)
+	rig.enter(HANGAR, 125.0)
 	assert_true(TankSegments.fire_drill(rig.state))
+	rig.enter(HANGAR, 172.0)
+	assert_eq(TankSegments.drill_at(rig.state), "", "the countdown has no drill")
+	assert_false(TankSegments.drill_targets(rig.state))
+
+
+func test_the_hangar_countdown_is_the_last_ten_seconds() -> void:
+	var rig := TankRulesRig.new(1)
+	rig.enter(HANGAR, 100.0)
+	assert_eq(TankSegments.hangar_countdown_s(rig.state), -1.0)
+	rig.enter(HANGAR, 169.0)
+	assert_eq(TankSegments.hangar_countdown_s(rig.state), -1.0)
+	rig.enter(HANGAR, 171.0)
+	assert_almost_eq(TankSegments.hangar_countdown_s(rig.state), 9.0, 0.1)
+	rig.enter(HANGAR, 179.9)
+	assert_between(TankSegments.hangar_countdown_s(rig.state), 0.0, 0.2)
+	rig.enter(ROLLOUT, 1.0)
+	assert_eq(TankSegments.hangar_countdown_s(rig.state), -1.0, "the roll-out has none")
+
+
+func test_the_rollout_drives_for_all_of_its_120_s_and_never_halts() -> void:
+	var rig := TankRulesRig.new(1)
+	rig.enter(ROLLOUT, 0.0)
+	var last := 0.0
+	for k in 12:
+		rig.run(10.0)
+		assert_gt(rig.hull().speed_mps, 2.0, "rolling at %d s" % ((k + 1) * 10))
+		assert_gt(rig.hull().distance_m, last + 5.0, "further at %d s" % ((k + 1) * 10))
+		assert_false(rig.hull().holding)
+		last = rig.hull().distance_m
+	assert_eq(TankSegments.ground_mps(rig.state), rig.hull().speed_mps, "over the ground now")
+	assert_between(rig.hull().grade_pct, 0.0, 2.0, "terrain 0 to +2% on the roll-out")
 
 
 func test_the_aim_drill_stands_two_wrecks_and_the_gun_slews_to_them() -> void:
 	var rig := TankRulesRig.new(2)
-	rig.enter(DEPOT, 125.0)
+	rig.enter(HANGAR, 65.0)
 	rig.run(1.0)
 	var wrecks := rig.state.obstacles.filter(
 		func(o: TankObstacleState) -> bool:
@@ -296,9 +334,9 @@ func test_the_aim_drill_stands_two_wrecks_and_the_gun_slews_to_them() -> void:
 
 func test_the_fire_drill_shoots_the_drill_wrecks_with_no_damage_and_no_score() -> void:
 	var rig := TankRulesRig.new(2)
-	rig.enter(DEPOT, 125.0)
+	rig.enter(HANGAR, 65.0)
 	rig.run(1.0)
-	rig.enter(DEPOT, 245.0)
+	rig.enter(HANGAR, 125.0)
 	rig.load_shell(TankIds.SHELL_HEAVY)
 	rig.run_until(
 		func() -> bool:
@@ -322,7 +360,7 @@ func test_the_fire_drill_shoots_the_drill_wrecks_with_no_damage_and_no_score() -
 
 func test_the_aim_drill_does_not_fire_a_loaded_shell_before_the_fire_drill() -> void:
 	var rig := TankRulesRig.new(2)
-	rig.enter(DEPOT, 125.0)
+	rig.enter(HANGAR, 65.0)
 	rig.load_shell(TankIds.SHELL_HEAVY)
 	rig.run(20.0)
 	assert_eq(rig.hull().loaded, TankIds.SHELL_HEAVY)

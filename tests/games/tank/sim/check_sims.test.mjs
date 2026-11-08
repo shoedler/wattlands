@@ -10,7 +10,8 @@ import * as C from './check_sims.mjs';
 // --- A synthetic report builder -------------------------------------------------------------------------
 
 const SEG_TABLE = [
-  ['depot', 0, 'WARMUP', 300],
+  ['hangar', 0, 'WARMUP', 180],
+  ['rollout', 0, 'WARMUP', 120],
   ['advance', 1, 'WORK', 180, 90, 300],
   ['gun_line', 1, 'WORK', 120, 60, 180],
   ['checkpoint', 1, 'RECOVERY', 60],
@@ -23,13 +24,14 @@ const SEG_TABLE = [
   ['boss', 4, 'WORK', 240, 120, 360],
 ];
 const DRILL_TABLE = [
-  ['depot', 0, 'WARMUP', 30],
+  ['hangar', 0, 'WARMUP', 30],
   ['skirmish', 1, 'WARMUP', 70],
   ['checkpoint', 1, 'RECOVERY', 30],
 ];
 // v4: the 15-minute session (SPEC_TANK 3.8), nominal 900 s with the cool-down.
 const AMBUSH_TABLE = [
-  ['depot', 0, 'WARMUP', 300],
+  ['hangar', 0, 'WARMUP', 180],
+  ['rollout', 0, 'WARMUP', 120],
   ['advance', 1, 'WORK', 120, 80, 160],
   ['gun_line', 1, 'WORK', 90, 60, 120],
   ['checkpoint', 1, 'RECOVERY', 60],
@@ -51,18 +53,20 @@ function planPhase(crew, slot, i, table = SEG_TABLE) {
   if (min !== undefined) Object.assign(base, { min_s: min, max_s: max, open_ended: true });
   if (seg === 'checkpoint') return { ...base, mode: 'ERG', target_pct: 50 };
   if (engine === 'dynamo') {
-    if (drill) return seg === 'depot' ? { ...base, mode: 'ERG', target_pct: 50 } : { ...base, mode: 'ERG', target_pct: 55, range_pct: [55, 65] };
-    if (seg === 'depot') return { ...base, mode: 'ERG', target_pct: 50, ramp_to_pct: 65 };
+    if (drill) return seg === 'hangar' ? { ...base, mode: 'ERG', target_pct: 50 } : { ...base, mode: 'ERG', target_pct: 55, range_pct: [55, 65] };
+    if (seg === 'hangar') return { ...base, mode: 'ERG', target_pct: 50, ramp_to_pct: 59 };
+    if (seg === 'rollout') return { ...base, mode: 'ERG', target_pct: 59, ramp_to_pct: 65 };
     return { ...base, mode: 'ERG', target_pct: 55, range_pct: [55, 100] };
   }
   if (engine === 'arc') {
-    if (drill) return seg === 'depot' ? { ...base, mode: 'ERG', target_pct: 50 } : { ...base, mode: 'ERG', target_pct: 55, range_pct: [55, 65] };
-    if (seg === 'depot') return { ...base, mode: 'ERG', target_pct: 50, ramp_to_pct: 65 };
+    if (drill) return seg === 'hangar' ? { ...base, mode: 'ERG', target_pct: 50 } : { ...base, mode: 'ERG', target_pct: 55, range_pct: [55, 65] };
+    if (seg === 'hangar') return { ...base, mode: 'ERG', target_pct: 50, ramp_to_pct: 59 };
+    if (seg === 'rollout') return { ...base, mode: 'ERG', target_pct: 59, ramp_to_pct: 65 };
     return { ...base, mode: 'ERG', target_pct: 65, range_pct: [65, 80] };
   }
   if (engine === 'steam' || engine === 'feed') return { ...base, mode: 'SIM', grade_source: 'flat' };
   // v3: Drive digs in at a gun line in SIM flat.
-  return { ...base, mode: 'SIM', grade_source: seg === 'boss' || seg === 'gun_line' ? 'flat' : 'game' };
+  return { ...base, mode: 'SIM', grade_source: seg === 'boss' || seg === 'gun_line' || seg === 'hangar' ? 'flat' : 'game' };
 }
 
 /**
@@ -229,27 +233,27 @@ test('loadReports keeps only schema-1 tank reports and names them by file', () =
 
 test('segmentsOf joins the plan and the spans', () => {
   const segs = C.segmentsOf(makeRun(3));
-  assert.equal(segs.length, 12);
-  assert.deepEqual(segs.slice(0, 3).map((s) => [s.seg, s.stage, s.dur]), [['depot', 0, 300], ['advance', 1, 200], ['gun_line', 1, 100]]);
-  assert.equal(segs[11].seg, 'cooldown');
-  assert.equal(C.planLaps(makeRun(3)), 12);
-  assert.equal(C.phaseIndexAt(makeRun(3), '1', 310), 1);
+  assert.equal(segs.length, 13);
+  assert.deepEqual(segs.slice(0, 4).map((s) => [s.seg, s.stage, s.dur]), [['hangar', 0, 180], ['rollout', 0, 120], ['advance', 1, 200], ['gun_line', 1, 100]]);
+  assert.equal(segs[12].seg, 'cooldown');
+  assert.equal(C.planLaps(makeRun(3)), 13);
+  assert.equal(C.phaseIndexAt(makeRun(3), '1', 310), 2);
 });
 
 /** Crew 3 where peer 1 moves from Drive to the Loader's seat 100 s into the stage 1 Advance (v3: a split phase). */
 function splitRun() {
   const r = makeRun(3);
   const plan = r.plans['1'].phases;
-  const rest = { ...plan[1], lap: false, mode: 'SIM', grade_source: 'flat', min_s: 0.05, max_s: 200, meta: { ...plan[1].meta, engine: 'feed', offset_s: 100 } };
-  plan.splice(2, 0, rest);
+  const rest = { ...plan[2], lap: false, mode: 'SIM', grade_source: 'flat', min_s: 0.05, max_s: 200, meta: { ...plan[2].meta, engine: 'feed', offset_s: 100 } };
+  plan.splice(3, 0, rest);
   const spans = r.phases['1'];
-  const adv = spans[1];
-  const second = { ...adv, index: 2, start: adv.start + 100 };
+  const adv = spans[2];
+  const second = { ...adv, index: 3, start: adv.start + 100 };
   adv.end = adv.start + 100;
   adv.ended_by = 'end_phase';
-  spans.splice(2, 0, second);
-  for (let i = 3; i < spans.length; i += 1) spans[i].index = i;
-  for (const row of r.trace['1']) if (row.phase >= 2 || (row.phase === 1 && row.t >= adv.end)) row.phase += 1;
+  spans.splice(3, 0, second);
+  for (let i = 4; i < spans.length; i += 1) spans[i].index = i;
+  for (const row of r.trace['1']) if (row.phase >= 3 || (row.phase === 2 && row.t >= adv.end)) row.phase += 1;
   r.events.push({ type: 'game_event', t: adv.end, pt: adv.end, event: { type: 'seat', s: 0, from: 1, to: 6 } });
   return r;
 }
@@ -257,15 +261,15 @@ function splitRun() {
 test('segmentsOf merges a split segment (v3 seats); phaseSpansOf keeps its phases', () => {
   const r = splitRun();
   const segs = C.segmentsOf(r, '1');
-  assert.equal(segs.length, 12, 'still one entry per segment');
-  assert.deepEqual([segs[1].seg, segs[1].dur, segs[1].phases.length], ['advance', 200, 2]);
-  assert.deepEqual(segs[1].phases.map((p) => p.engine), ['diesel', 'feed']);
-  assert.equal(segs[2].seg, 'gun_line');
-  assert.equal(C.phaseSpansOf(r, '1').length, 13);
-  assert.equal(C.planLaps(r, '1'), 12, 'the split continues the lap');
+  assert.equal(segs.length, 13, 'still one entry per segment');
+  assert.deepEqual([segs[2].seg, segs[2].dur, segs[2].phases.length], ['advance', 200, 2]);
+  assert.deepEqual(segs[2].phases.map((p) => p.engine), ['diesel', 'feed']);
+  assert.equal(segs[3].seg, 'gun_line');
+  assert.equal(C.phaseSpansOf(r, '1').length, 14);
+  assert.equal(C.planLaps(r, '1'), 13, 'the split continues the lap');
   assert.deepEqual(C.lapProblems('x', r), []);
   const bad = splitRun();
-  delete bad.plans['1'].phases[2].meta.offset_s;
+  delete bad.plans['1'].phases[3].meta.offset_s;
   assert.match(ids(C.lapProblems('x', bad)), /lap false that is no split/);
   assert.deepEqual(C.t1Problems('x', r), []);
 });
@@ -289,7 +293,7 @@ test('T1 catches a slow Advance, a short gun line, a long boss, an overrun, brea
   assert.match(ids(C.t1Problems('x', makeRun(3, { durations: { advance: 290 } }))), /advance 1 lasted 290/);
   assert.match(ids(C.t1Problems('x', makeRun(3, { durations: { gun_line: 170 } }))), /gun_line 1 lasted 170/);
   assert.match(ids(C.t1Problems('x', makeRun(3, { durations: { boss: 340 } }))), /boss 4 lasted 340/);
-  assert.match(ids(C.t1Problems('x', makeRun(3, { ended: { 2: 'max_s' }, durations: { gun_line: 180 } }))), /gun_line 1 overran/);
+  assert.match(ids(C.t1Problems('x', makeRun(3, { ended: { 3: 'max_s' }, durations: { gun_line: 180 } }))), /gun_line 1 overran/);
   const two = [{ type: 'game_event', t: 400, event: { type: 'breakdown' } }, { type: 'game_event', t: 800, event: { type: 'breakdown' } }];
   assert.match(ids(C.t1Problems('x', makeRun(3, { events: two }))), /2 breakdowns/);
   assert.match(ids(C.t1Problems('x', makeRun(3, { grade: 'C' }))), /grade C/);
@@ -355,12 +359,12 @@ test('T4 (v4) reads the solo loop: Drive share per Advance, main-gun shells per 
   const r = makeRun(1);
   const plan = r.plans['1'].phases;
   const spans = r.phases['1'];
-  const adv = spans[1];
-  plan.splice(2, 0, { ...plan[1], lap: false, mode: 'SIM', grade_source: 'flat', meta: { ...plan[1].meta, engine: 'steam', offset_s: 30 } });
-  plan.splice(3, 0, { ...plan[1], lap: false, meta: { ...plan[1].meta, offset_s: 170 } });
-  spans.splice(2, 0, { ...adv, index: 2, start: 330, end: 470 }, { ...adv, index: 3, start: 470, end: adv.end });
+  const adv = spans[2];
+  plan.splice(3, 0, { ...plan[2], lap: false, mode: 'SIM', grade_source: 'flat', meta: { ...plan[2].meta, engine: 'steam', offset_s: 30 } });
+  plan.splice(4, 0, { ...plan[2], lap: false, meta: { ...plan[2].meta, offset_s: 170 } });
+  spans.splice(3, 0, { ...adv, index: 3, start: 330, end: 470 }, { ...adv, index: 4, start: 470, end: adv.end });
   adv.end = 330;
-  for (let i = 4; i < spans.length; i += 1) spans[i].index = i;
+  for (let i = 5; i < spans.length; i += 1) spans[i].index = i;
   assert.match(ids(C.t4Problems('x', r)), /stage 1 Advance on Drive 30%/);
   const quiet = makeRun(1);
   quiet.events = quiet.events.filter((e) => !(e.event?.type === 'shot' && e.event.s === 0));
@@ -393,7 +397,7 @@ test('T6 needs a telegraphed shot and a medium per Advance and a 90-180 s heavy 
 
 // --- S2 --------------------------------------------------------------------------------------------------------------
 
-/** Crew 3 at 0 W: the shared pause (all_stopped) holds the depot until max_sim_seconds. */
+/** Crew 3 at 0 W: the shared pause (all_stopped) holds the hangar until max_sim_seconds. */
 function zeroCrew3() {
   const r = makeRun(3, { endReason: 'timeout', finished: '', grade: 'D', score: 0 });
   r.args.riders = ['zero'];
@@ -433,14 +437,14 @@ function zeroCrew1() {
 
 const allS2 = (over = {}) => ({ s2_c3_zero: zeroCrew3(), s2_c3_idle: idleCrew3(), s2_c1_zero: zeroCrew1(), ...over });
 
-test('S2 passes on zero riders: crew 3 held in the depot by the shared pause, crew 3 at 10 W overruns, crew 1 pauses', () => {
+test('S2 passes on zero riders: crew 3 held in the hangar by the shared pause, crew 3 at 10 W overruns, crew 1 pauses', () => {
   const r = C.checkS2(allS2());
   assert.equal(r.status, 'PASS', ids(r.details));
   assert.equal(C.checkS2({}).status, 'SKIP');
   assert.match(ids(C.checkS2({ s2_c3_zero: zeroCrew3(), s2_c1_zero: zeroCrew1() }).details), /missing report s2_c3_idle/);
 });
 
-test('S2 crew 3 at 0 W fails when the run completes, leaves the depot, never pauses for all_stopped, resumes, kills or grades above D', () => {
+test('S2 crew 3 at 0 W fails when the run completes, leaves the hangar, never pauses for all_stopped, resumes, kills or grades above D', () => {
   const done = zeroCrew3();
   done.end_reason = 'complete';
   assert.match(ids(C.checkS2(allS2({ s2_c3_zero: done })).details), /s2_c3_zero: end_reason complete, wanted timeout/);
@@ -469,7 +473,7 @@ test('S2 crew 3 at 0 W fails when the run completes, leaves the depot, never pau
 
 test('S2 crew 3 at 10 W fails on a stage that ended on its own, a pause, another outcome or a grade above D', () => {
   const ended = idleCrew3();
-  ended.phases['1'][1].ended_by = 'end_phase';
+  ended.phases['1'][2].ended_by = 'end_phase';
   assert.match(ids(C.checkS2(allS2({ s2_c3_idle: ended })).details), /s2_c3_idle: advance 1 ended by end_phase/);
   const paused = idleCrew3();
   paused.events.push({ type: 'paused', paused: true, reason: 'all_stopped', t: 400, pt: 400 });
@@ -490,7 +494,7 @@ test('S2 anchors the pause on the first not-pedaling sample: the first trainer n
   assert.equal(C.checkS2(allS2({ s2_c1_zero: lastRun })).status, 'PASS', 'sample at 1.0 s, paused 10 s later');
 });
 
-test('S2 crew 1: paused late, not paused, more than the depot, a kill or a grade fail', () => {
+test('S2 crew 1: paused late, not paused, more than the hangar, a kill or a grade fail', () => {
   const late = zeroCrew1();
   late.events[0].pt = 11.15;
   assert.match(ids(C.checkS2({ s2_c1_zero: late }).details), /paused at 11.15/);
@@ -591,9 +595,9 @@ test('S4 plan, trace, switch and lap rules', () => {
   const cool = makeRun(3, { extraRows: (row, peer) => (peer === '2' && row.t === 1700 ? { ...row, haptic: 2, mode: 'SIM' } : row) });
   assert.match(ids(C.traceProblems('x', cool)), /cool-down/);
   // A SIM -> ERG entry above the planned target: peer 1 (Drive) enters the checkpoint (ERG 50% = 100 W) at 600 s.
-  const spike = makeRun(3, { extraRows: (row, peer) => (peer === '1' && row.phase === 3 && row.t <= 602 ? { ...row, applied_target_w: 110 } : row) });
+  const spike = makeRun(3, { extraRows: (row, peer) => (peer === '1' && row.phase === 4 && row.t <= 602 ? { ...row, applied_target_w: 110 } : row) });
   assert.match(ids(C.traceProblems('x', spike)), /entered ERG at 600 s with 110 W/);
-  const fine = makeRun(3, { extraRows: (row, peer) => (peer === '1' && row.phase === 3 && row.t <= 602 ? { ...row, applied_target_w: 100 } : row) });
+  const fine = makeRun(3, { extraRows: (row, peer) => (peer === '1' && row.phase === 4 && row.t <= 602 ? { ...row, applied_target_w: 100 } : row) });
   assert.deepEqual(C.traceProblems('x', fine), []);
   // Two switches 20 s apart: an ERG blip inside the SIM Advance (0.3.1: BRIEF 4.5's 30 s).
   assert.equal(C.SWITCH_SPACING_S, 30);
@@ -603,15 +607,15 @@ test('S4 plan, trace, switch and lap rules', () => {
   assert.doesNotMatch(ids(C.traceProblems('x', spaced)), /switched/, '31 s apart');
   assert.deepEqual(C.lapProblems('x', makeRun(3)), []);
   const lap = makeRun(3);
-  lap.plans['1'].phases[3].lap = false;
-  assert.match(ids(C.lapProblems('x', lap)), /11 lap-true phases, wanted 12|lap false/);
+  lap.plans['1'].phases[4].lap = false;
+  assert.match(ids(C.lapProblems('x', lap)), /12 lap-true phases, wanted 13|lap false/);
   assert.deepEqual(C.lapProblems('x', { ...makeRun(1), content_id: 'other' }), []);
 });
 
 test('S4 trace: warm-up grade -2..+3%, warm-up ERG <= 65%, +16% total, +10% before the haptic', () => {
   const at = (peer, t, patch) => (row, p) => (p === peer && row.t === t ? { ...row, ...patch } : row);
   const probs = (peer, t, patch) => ids(C.traceProblems('x', makeRun(3, { extraRows: at(peer, t, patch) })));
-  // Peer 1 (diesel) is in the SIM depot at 100 s; peer 2 (dynamo) is in an ERG depot.
+  // Peer 1 (diesel) is in the SIM hangar at 100 s; peer 2 (dynamo) is in an ERG hangar.
   assert.match(probs('1', 100, { applied_grade_pct: 3.5 }), /applied grade 3.5% at 100 s \(-2 to \+3% in the first 300 s\)/);
   assert.match(probs('1', 100, { applied_grade_pct: -2.5 }), /applied grade -2.5% at 100 s/);
   assert.equal(probs('1', 100, { applied_grade_pct: 3 }), '');
@@ -743,7 +747,7 @@ test('S5 fails without rescue, with rescue that never ends, at the wrong power, 
   assert.match(ids(C.checkS5(set(bystander)).details), /peer 3 \(not the collapsing rider\)/);
   const unclamped = makeRun(3, { extraRows: (row, p) => (p === '2' && row.t >= 520 && row.t < 560 ? { ...row, rescue: true, applied_pct: 50 } : row) });
   assert.match(ids(C.checkS5(set(unclamped)).details), /clamped by rescue/);
-  // Rescue in a SIM phase (the Drive rider in the depot) is not the Gun's or the Lights'.
+  // Rescue in a SIM phase (the Drive rider in the hangar) is not the Gun's or the Lights'.
   const wrongPhase = makeRun(3, { extraRows: (row, p) => (p === '2' && row.t >= 100 && row.t < 140 ? { ...row, rescue: true, applied_pct: 50, clamped_by: ['rescue'] } : row) });
   wrongPhase.plans['2'].phases[0] = { ...wrongPhase.plans['2'].phases[0], mode: 'SIM', meta: { ...wrongPhase.plans['2'].phases[0].meta, engine: 'diesel' } };
   assert.match(ids(C.checkS5(set(wrongPhase)).details), /rescue began in a SIM phase of diesel/);
@@ -834,7 +838,7 @@ test('S9 passes on a sprinter that evades and enters every ERG phase at its targ
   assert.match(r.summary, /3 of 6 telegraphed shots evaded, 4 ERG entries \(1 after a sprint\)/);
   assert.equal(C.checkS9({}).status, 'SKIP');
   assert.deepEqual(C.successfulEvades(sprintRun()).map((e) => e.id), [10, 11, 12]);
-  const sw = C.switchesIntoErg(sprintRun(), '1').filter((x) => x.phase === 3);
+  const sw = C.switchesIntoErg(sprintRun(), '1').filter((x) => x.phase === 4);
   assert.equal(sw.length, 1);
   assert.ok(sw[0].trailingW >= 300 - 1e-6, 'the 3 s before the checkpoint are the sprint');
 });
@@ -852,8 +856,8 @@ test('S9 fails without an evade, or with a Ram event or haptic', () => {
 });
 
 test('S9 fails when an ERG phase is entered at the sprint power, or a haptic goes to an ERG rider', () => {
-  const spike = sprintRun({ rows: (row) => (row.phase === 3 && row.t <= 602 ? { ...row, applied_target_w: 300 } : row) });
-  assert.match(ids(C.checkS9({ s9_c1_sprint: spike }).details), /ERG phase 3 at 600 s entered after 300 W with a 300 W target \(planned 100 W\)/);
+  const spike = sprintRun({ rows: (row) => (row.phase === 4 && row.t <= 602 ? { ...row, applied_target_w: 300 } : row) });
+  assert.match(ids(C.checkS9({ s9_c1_sprint: spike }).details), /ERG phase 4 at 600 s entered after 300 W with a 300 W target \(planned 100 W\)/);
   const erg = [req(1, 620, { mode: "SIM", haptic: 2.0, duration_s: 1.5, reason: "hit" })];
   const r = sprintRun({ directives: erg });
   assert.match(ids(C.checkS9({ s9_c1_sprint: r }).details), /haptic to an ERG rider|SIM-mode\) in an ERG/);
@@ -988,7 +992,7 @@ const lostAt = (t, n = 1, restart = true) => [ge4(t, { type: 'tank_lost', n, sg:
 test('T1 ranges are keyed by content; ambush_15 has its own', () => {
   assert.deepEqual(C.T1_RANGES.ambush_15, { advance: [80, 160], gun_line: [60, 120], boss: [100, 190] });
   assert.deepEqual(C.T1_RANGES.ashfall_road, { advance: [120, 280], gun_line: [60, 160], boss: [120, 330] });
-  assert.deepEqual(C.EXPECTED_LAPS, { ashfall_road: 12, ambush_15: 6, drill: 4 });
+  assert.deepEqual(C.EXPECTED_LAPS, { ashfall_road: 13, ambush_15: 7, drill: 4 });
   assert.deepEqual(C.t1Problems('x', makeRun(3, { content: 'ambush_15' })), []);
   assert.match(ids(C.t1Problems('x', makeRun(3, { content: 'ambush_15', durations: { advance: 170 } }))), /advance 1 lasted 170 s \(80-160\)/);
   assert.deepEqual(C.t1Problems('x', makeRun(3, { durations: { advance: 170 } })), [], 'inside ashfall_road range');
@@ -996,7 +1000,7 @@ test('T1 ranges are keyed by content; ambush_15 has its own', () => {
 
 test('T1 lets a segment that lost the tank run long, holds at most one loss and no breakdown on Normal', () => {
   // The stage 1 Advance (300-590) would be over its range and overrun: it holds the loss, so neither counts.
-  const long = makeRun(3, { durations: { advance: 290 }, ended: { 1: 'max_s' }, events: lostAt(350) });
+  const long = makeRun(3, { durations: { advance: 290 }, ended: { 2: 'max_s' }, events: lostAt(350) });
   const probs = C.t1Problems('x', long);
   assert.doesNotMatch(ids(probs), /advance 1/);
   assert.match(ids(probs), /advance 2 lasted 290/, 'a segment without one still answers');
@@ -1026,9 +1030,9 @@ test('T8 needs an ambush in every Advance, each threat accounted for, and 40% ki
   assert.match(p, /killed or escaped with no ambush/);
   const open = makeRun(3);
   open.events = open.events.filter((e) => !(e.event?.type === 'escaped' && e.t < 600));
-  assert.match(ids(C.t8Problems('x', open, 3)), /near threat 951 from 372 s neither killed nor escaped/);
+  assert.match(ids(C.t8Problems('x', open, 3)), /near threat 952 from 372 s neither killed nor escaped/);
   const rows = C.nearLedger(makeRun(3)).rows;
-  assert.deepEqual(rows.slice(0, 2).map((x) => [x.id, x.out, x.seg.seg]), [[901, 'killed', 'advance'], [951, 'escaped', 'advance']]);
+  assert.deepEqual(rows.slice(0, 2).map((x) => [x.id, x.out, x.seg.seg]), [[902, 'killed', 'advance'], [952, 'escaped', 'advance']]);
 });
 
 test('T8 forgives only a threat young enough to be out when its segment ends or the tank is lost', () => {
@@ -1081,8 +1085,8 @@ test('S2 (v4): the idle crew may lose the tank; every stage still overruns, grad
 function repairRun(directives) {
   const r = makeRun(3, { directives });
   r.directives = r.directives.filter((d) => !(d.requested?.reason === 'boiler' && d.t >= 500 && d.t < 600));
-  const ph = r.plans['3'].phases[2];
-  r.plans['3'].phases[2] = { ...ph, mode: 'ERG', target_pct: 55, range_pct: [55, 70], grade_source: undefined, meta: { ...ph.meta, engine: 'repair' } };
+  const ph = r.plans['3'].phases[3];
+  r.plans['3'].phases[3] = { ...ph, mode: 'ERG', target_pct: 55, range_pct: [55, 70], grade_source: undefined, meta: { ...ph.meta, engine: 'repair' } };
   return r;
 }
 const repairReq = (t, pct, extra = {}) => ({
@@ -1202,9 +1206,9 @@ test('S4 (v4) reads the S14-S18 reports too, with their real content and bots', 
   const wrong = matrixReport('s15_hard_c1_seed1', { options: { difficulty: 'easy' } });
   assert.match(ids(C.checkS4({ ...set, s15_hard_c1_seed1: wrong }, { seeds: seedsOf }).details), /s15_hard_c1_seed1: difficulty easy, wanted hard/);
   const laps = matrixReport('s16_amb_hard_c1_seed1');
-  laps.plans['1'].phases[1].lap = false;
-  delete laps.plans['1'].phases[1].meta.offset_s;
-  assert.match(ids(C.checkS4({ ...set, s16_amb_hard_c1_seed1: laps }, { seeds: seedsOf }).details), /s16_amb_hard_c1_seed1: peer 1 plan has 5 lap-true phases, wanted 6/);
+  laps.plans['1'].phases[2].lap = false;
+  delete laps.plans['1'].phases[2].meta.offset_s;
+  assert.match(ids(C.checkS4({ ...set, s16_amb_hard_c1_seed1: laps }, { seeds: seedsOf }).details), /s16_amb_hard_c1_seed1: peer 1 plan has 6 lap-true phases, wanted 7/);
   const fast = matrixReport('s14_easy_c1_seed1', { extraRows: (row) => (row.mode === 'ERG' ? { ...row, applied_pct: 120, applied_target_w: 240 } : row) });
   assert.match(ids(C.checkS4({ ...set, s14_easy_c1_seed1: fast }, { seeds: seedsOf }).details), /s14_easy_c1_seed1: peer 1 applied ERG 120% FTP/);
 });
@@ -1291,7 +1295,7 @@ test('S16 ambush_15: Normal at most a loss and mostly wins, Hard 1-2 losses most
   const nn = (s) => `s16_amb_normal_c3_seed${s}`;
   assert.match(d({ [nn(1)]: matrixReport(nn(1), { events: [...lostAt(320), ...lostAt(500, 2)] }) }), /s16_amb_normal_c3_seed1: 2 tank losses \(at most 1 on Normal\)/);
   // One seed may fall short, and is not then held to T1's times; two may not.
-  const short = (s) => matrixReport(nn(s), { finished: 'withdrawn', grade: 'D', durations: { boss: 190 }, ended: { 4: 'max_s' } });
+  const short = (s) => matrixReport(nn(s), { finished: 'withdrawn', grade: 'D', durations: { boss: 190 }, ended: { 5: 'max_s' } });
   assert.equal(C.checkS16(s16Set({ [nn(1)]: short(1) }), { seeds: seedsOf }).status, 'PASS');
   assert.match(d({ [nn(1)]: short(1), [nn(2)]: short(2) }), /normal crew 3: 1 of 3 seeds won \(at least 2\)/);
   assert.match(d({ [nn(1)]: matrixReport(nn(1), { durations: { advance: 170 } }) }), /advance 1 lasted 170/, 'T1 holds a win');
@@ -1380,8 +1384,8 @@ test('fitGroups groups existing FIT files by expected laps and skips what is not
   fs.writeFileSync(path.join(dir, 'fit', 's2_c1_zero_slot0.fit'), 'x');
   const reports = { s1_c1_seed1: makeRun(1), s2_c1_zero: zeroCrew1(), s4_drill_c1: makeRun(1, { content: 'drill' }) };
   const groups = C.fitGroups(reports, dir);
-  assert.deepEqual([...groups.keys()].sort(), ['12', 'none']);
-  assert.equal(groups.get('12').length, 1);
+  assert.deepEqual([...groups.keys()].sort(), ['13', 'none']);
+  assert.equal(groups.get('13').length, 1);
   assert.equal(C.checkFit({}, dir, dir).status, 'SKIP');
 });
 

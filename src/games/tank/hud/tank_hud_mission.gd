@@ -12,6 +12,8 @@ const W := 200
 const H := 72
 const TYPE_COL := {
 	"depot": Color("#4a3f2e"),
+	"hangar": Color("#4a3f2e"),
+	"rollout": Color("#5a4c36"),
 	"advance": Color("#9c7a42"),
 	"gun_line": Color("#8c3b2a"),
 	"checkpoint": Color("#5c5446"),

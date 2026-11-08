@@ -116,7 +116,7 @@ static func rider_rule(state: TankState, ri: TankRiderInput) -> SprintRule:
 
 
 ## The Gun's capacitor bank: charges on its rider's P_eff in band, the stabilizer drains it while an
-## enemy is in range; full in the depot. An empty Gun seat leaves it as it is.
+## enemy is in range; full in the hangar, the roll-out and the depot. An empty Gun seat leaves it as it is.
 static func _dynamo(
 	state: TankState, aux: TankAux, st: TankDynamoState, ri: TankRiderInput, dt: float
 ) -> void:
@@ -126,7 +126,11 @@ static func _dynamo(
 	st.stalled = in_rescue(ri) and not state.all_afk
 	if not manned or state.all_afk or st.stalled:
 		return
-	if state.seg.seg == TankIds.SEG_DEPOT:
+	if (
+		state.seg.seg == TankIds.SEG_DEPOT
+		or state.seg.seg == TankIds.SEG_HANGAR
+		or state.seg.seg == TankIds.SEG_ROLLOUT
+	):
 		st.bank = c.num("tanks", "dynamo.bank_max", 100.0)
 		return
 	var bank := st.bank

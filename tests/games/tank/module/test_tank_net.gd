@@ -148,9 +148,9 @@ func test_apply_derives_what_the_snapshot_leaves_out() -> void:
 	client.apply_snapshot(_wire(host))
 	var c := client.state
 	assert_eq(c.seg.kind, Wl.WORK)
-	assert_eq(c.seg.segment_index, 4)
+	assert_eq(c.seg.segment_index, 5)
 	assert_true(c.seg.open_ended)
-	var seg_def := c.content.segment(4)
+	var seg_def := c.content.segment(5)
 	assert_eq(
 		[c.seg.min_s, c.seg.max_s, c.seg.length_m],
 		[90.0, 300.0, float(seg_def["length_m"])],
@@ -224,7 +224,7 @@ func test_all_afk_and_the_outcome_are_derived() -> void:
 	client.apply_snapshot(_wire(host))
 	assert_false(client.state.all_afk)
 	host.state.seg.seg = TankIds.SEG_COOLDOWN
-	host.state.seg.phase_index = 11
+	host.state.seg.phase_index = 12
 	client.apply_snapshot(_wire(host))
 	assert_eq(client.state.seg.kind, Wl.COOLDOWN)
 	assert_eq(client.state.seg.segment_index, -1)

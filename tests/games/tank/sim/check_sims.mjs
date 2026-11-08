@@ -9,14 +9,14 @@
 // One PASS / FAIL / SKIP line per scenario (details of a failure indented below it), exit 1 when any
 // scenario failed, 2 on usage or I/O errors. A scenario whose reports are all missing is SKIP (a
 // subset run); one that has some but not all is FAIL. `--fit` also runs tools/fit_check on every FIT
-// file the reports name (laps expected: ashfall_road 12, ambush_15 6, drill 4; none for a run that did not
+// file the reports name (laps expected: ashfall_road 13, ambush_15 7, drill 4; none for a run that did not
 // complete). Zero dependencies, so `node --test` in tests/games/tank/sim runs the unit tests
 // (check_sims.test.mjs) anywhere.
 //
 // Report names (written by run_sims.sh; the scenario is read from the name, the content, players and
 // seed are cross-checked against the report's own `args`):
 //   s1_c<crew>_seed<n>     ashfall_road, compliant `erg` riders, crews 1-4 (crews 2-4 as HOST)
-//   s2_c3_zero, s2_c1_zero crew 3 at 0 W (HOST: the shared pause holds the depot), crew 1 at 0 W (SOLO: paused)
+//   s2_c3_zero, s2_c1_zero crew 3 at 0 W (HOST: the shared pause holds the hangar), crew 1 at 0 W (SOLO: paused)
 //   s2_c3_idle             crew 3 spinning at 10 W and 25 rpm (pedaling for every detector, no effort): overruns
 //   s3_c3_c85_seed<n>, s3_c3_c70_seed<n>   crew 3 at compliance 0.85 / 0.70 (100% is s1_c3_seed<n>)
 //   s4_drill_c<crew>       the drill, compliant, crews 1-4 (S4 also reads every s1 report)
@@ -34,7 +34,7 @@
 //   s12_roam10_c3_zero     free roam roam_10, crew 3 at 0 W: the shared pause holds the drive-out, no kill, grade D
 //   s14_easy_c<crew>_seed<n>   ashfall_road on Easy, crews 1-4: victory, no loss, T1
 //   s15_hard_c<crew>_seed<n>   ashfall_road on Hard, crews 1-4: 1-2 losses on most seeds, phases, laps and S4 hold
-//   s16_amb_<normal|hard>_c<crew>_seed<n>   ambush_15, crews 1, 3, 4: 780-1010 game seconds, 6 laps, S4
+//   s16_amb_<normal|hard>_c<crew>_seed<n>   ambush_15, crews 1, 3, 4: 780-1010 game seconds, 7 laps, S4
 //   s17_hard_c3_c85_seed<n>    Hard, compliance 0.85: more losses than s15_hard_c3 (nobody rescues, the crew falls behind)
 //   s17_hard_c3_c70_seed1      Hard, compliance 0.70: the riders sink into rescue, and rescue shields the crew (BRIEF 4.6.3)
 //   s18_bots_h1b3, s18_bots_h2b2   ambush_15 on Hard with bots: complete, nothing refused, bots act only through their seats
@@ -94,7 +94,7 @@ import { pick, result } from '../../../../tools/lib/sim_report.mjs';
 export const CREWS = [1, 2, 3, 4];
 export const DEFAULT_SEEDS = [1, 2, 3];
 /** FIT laps: lap-true plan phases + the cool-down (the platform marks it lap true; ADR G0.2). */
-export const EXPECTED_LAPS = { ashfall_road: 12, ambush_15: 6, drill: 4 };
+export const EXPECTED_LAPS = { ashfall_road: 13, ambush_15: 7, drill: 4 };
 /** T1's segment ranges by content; a content not listed takes ashfall_road's. */
 export const T1_RANGES = {
   ashfall_road: { advance: [120, 280], gun_line: [60, 160], boss: [120, 330] },
@@ -774,12 +774,12 @@ export const SHARED_PAUSE_REASON = 'all_stopped';
 
 export function checkS2(reports) {
   const title =
-    'zero riders: crew 3 (the shared pause holds the depot), crew 3 spinning at 10 W (every stage overruns, grade D), crew 1 (paused in the depot)';
+    'zero riders: crew 3 (the shared pause holds the hangar), crew 3 spinning at 10 W (every stage overruns, grade D), crew 1 (paused in the hangar)';
   const { found, missing } = pick(reports, ['s2_c3_zero', 's2_c3_idle', 's2_c1_zero']);
   if (found.length === 0) return skip('S2', title, 'no s2_* reports');
   const probs = missing.map((m) => `missing report ${m}`);
   // Crew 3 at 0 W: (BRIEF 3.5) every rider ride-pauses after 10 s of not pedaling and the host
-  // pauses the shared game clock once all of them are, so the crew never leaves the depot. A HOST
+  // pauses the shared game clock once all of them are, so the crew never leaves the hangar. A HOST
   // run ends only at max_sim_seconds (`timeout`), still paused. The bound stays 10 s + 1 tick
   // after the last rider's first not-pedaling sample (notPedalingAnchor: the first trainer
   // notification, not the t = 0 trace row).
@@ -789,7 +789,7 @@ export function checkS2(reports) {
     probs.push(...argsProblems(n, r3, { content: 'ashfall_road', players: 3, bots: 0, role: 'HOST' }));
     if (r3.end_reason !== 'timeout') probs.push(`${n}: end_reason ${r3.end_reason}, wanted timeout (paused to the end)`);
     const spans = spansOf(r3, hostPeer(r3));
-    if (spans.length !== 1 || num(spans[0]?.index) !== 0) probs.push(`${n}: ${spans.length} phases started, wanted only the depot`);
+    if (spans.length !== 1 || num(spans[0]?.index) !== 0) probs.push(`${n}: ${spans.length} phases started, wanted only the hangar`);
     const pauses = (r3.events ?? []).filter((e) => e && e.type === 'paused');
     const firsts = humanPeers(r3).map((peer) => firstNotPedaling(r3, peer));
     if (firsts.some((f) => !f)) probs.push(`${n}: a rider without a not-pedaling sample in the trace`);
@@ -828,7 +828,7 @@ export function checkS2(reports) {
     probs.push(...argsProblems(n, r1, { content: 'ashfall_road', players: 1, bots: 0, role: 'SOLO' }));
     if (r1.end_reason !== 'paused') probs.push(`${n}: end_reason ${r1.end_reason}, wanted paused`);
     const spans = spansOf(r1, hostPeer(r1));
-    if (spans.length !== 1 || num(spans[0]?.index) !== 0) probs.push(`${n}: ${spans.length} phases started, wanted only the depot`);
+    if (spans.length !== 1 || num(spans[0]?.index) !== 0) probs.push(`${n}: ${spans.length} phases started, wanted only the hangar`);
     const first = firstNotPedaling(r1, hostPeer(r1));
     const paused = (r1.events ?? []).find((e) => e && e.type === 'paused' && e.paused === true);
     if (!first) probs.push(`${n}: no not-pedaling sample in the trace`);
@@ -1378,14 +1378,14 @@ export function checkS10(reports) {
     notes.push(`${n} ${overs.length} client Overpressure shells`);
   }
 
-  // Slot 1 stops pedaling on the Gun in stage 1's Advance (the dynamo, ERG 60% or more; v4's near threats can pull it off the Gun by plan phase 2): rescue, then AFK and a station on reserve, then back.
+  // Slot 1 stops pedaling on the Gun in stage 1's Advance (the dynamo, ERG 60% or more; v4's near threats can pull it off the Gun by plan phase 3): rescue, then AFK and a station on reserve, then back.
   const stop = reports.s10_c3_dynamo_stop;
   if (stop) {
     const n = 's10_c3_dynamo_stop';
     hygiene(n, stop);
     const peer = '2';
     const rows = traceOf(stop, peer);
-    const span = phaseSpansOf(stop, peer).find((x) => x.index === 1);
+    const span = phaseSpansOf(stop, peer).find((x) => x.index === 2);
     const zero = rows.find((row) => num(row.game_t) >= num(span?.start, 0) - EPS && num(row.power_w) <= 0 && num(row.cadence_rpm) <= 0);
     const afk = rows.filter((row) => row.afk === true);
     if (!zero) probs.push(`${n}: peer ${peer} never stopped pedaling in the gun line`);
@@ -1689,7 +1689,7 @@ export function checkS14(reports, opts = {}) {
 
 export function checkS15(reports, opts = {}) {
   const seeds = opts.seeds ?? DEFAULT_SEEDS;
-  const title = 'ashfall_road on Hard, crews 1-4: 1-2 losses on most seeds, none above 4, phases, 12 laps and S4 still hold';
+  const title = 'ashfall_road on Hard, crews 1-4: 1-2 losses on most seeds, none above 4, phases, 13 laps and S4 still hold';
   const names = [];
   for (const c of CREWS) for (const s of seeds) names.push(`s15_hard_c${c}_seed${s}`);
   const { found, missing } = pick(reports, names);
@@ -1713,7 +1713,7 @@ export function checkS15(reports, opts = {}) {
 
 export function checkS16(reports, opts = {}) {
   const seeds = opts.seeds ?? DEFAULT_SEEDS;
-  const title = 'ambush_15, crews 1, 3, 4: Normal at most 1 loss and wins on most seeds, Hard 1-2 losses on most seeds, 780-1010 game seconds, 6 laps, S4';
+  const title = 'ambush_15, crews 1, 3, 4: Normal at most 1 loss and wins on most seeds, Hard 1-2 losses on most seeds, 780-1010 game seconds, 7 laps, S4';
   const crews = [1, 3, 4];
   const names = [];
   for (const d of ['normal', 'hard']) for (const c of crews) for (const s of seeds) names.push(`s16_amb_${d}_c${c}_seed${s}`);

@@ -2,10 +2,10 @@
 	"1": {
 		"phase": {
 			"1": {
-				"count": 12,
+				"count": 13,
 				"duration_s": 180.0,
 				"elapsed_s": 60.0,
-				"index": 4,
+				"index": 5,
 				"kind": "WORK",
 				"label": "TANK_PHASE_ADVANCE_2",
 				"max_s": 300.0,
@@ -43,7 +43,7 @@
 				"p_eff_w": 225.0,
 				"paused": false,
 				"peer": 1,
-				"phase_index": 4,
+				"phase_index": 5,
 				"power_w": 180.0,
 				"rescue": false,
 				"s_left_105": 300.0,
@@ -58,10 +58,10 @@
 	"2": {
 		"phase": {
 			"1": {
-				"count": 12,
+				"count": 13,
 				"duration_s": 180.0,
 				"elapsed_s": 60.0,
-				"index": 4,
+				"index": 5,
 				"kind": "WORK",
 				"label": "TANK_PHASE_ADVANCE_2",
 				"max_s": 300.0,
@@ -74,10 +74,10 @@
 				"remaining_s": 240.0
 			},
 			"2": {
-				"count": 12,
+				"count": 13,
 				"duration_s": 180.0,
 				"elapsed_s": 60.0,
-				"index": 4,
+				"index": 5,
 				"kind": "WORK",
 				"label": "TANK_PHASE_ADVANCE_2",
 				"max_s": 300.0,
@@ -115,7 +115,7 @@
 				"p_eff_w": 225.0,
 				"paused": false,
 				"peer": 1,
-				"phase_index": 4,
+				"phase_index": 5,
 				"power_w": 180.0,
 				"rescue": false,
 				"s_left_105": 300.0,
@@ -147,7 +147,7 @@
 				"p_eff_w": 115.909090909091,
 				"paused": false,
 				"peer": 2,
-				"phase_index": 4,
+				"phase_index": 5,
 				"power_w": 102.0,
 				"rescue": false,
 				"s_left_105": 300.0,
@@ -162,10 +162,10 @@
 	"3": {
 		"phase": {
 			"1": {
-				"count": 12,
+				"count": 13,
 				"duration_s": 180.0,
 				"elapsed_s": 60.0,
-				"index": 4,
+				"index": 5,
 				"kind": "WORK",
 				"label": "TANK_PHASE_ADVANCE_2",
 				"max_s": 300.0,
@@ -178,10 +178,10 @@
 				"remaining_s": 240.0
 			},
 			"2": {
-				"count": 12,
+				"count": 13,
 				"duration_s": 180.0,
 				"elapsed_s": 60.0,
-				"index": 4,
+				"index": 5,
 				"kind": "WORK",
 				"label": "TANK_PHASE_ADVANCE_2",
 				"max_s": 300.0,
@@ -194,10 +194,10 @@
 				"remaining_s": 240.0
 			},
 			"3": {
-				"count": 12,
+				"count": 13,
 				"duration_s": 180.0,
 				"elapsed_s": 60.0,
-				"index": 4,
+				"index": 5,
 				"kind": "WORK",
 				"label": "TANK_PHASE_ADVANCE_2",
 				"max_s": 300.0,
@@ -235,7 +235,7 @@
 				"p_eff_w": 225.0,
 				"paused": false,
 				"peer": 1,
-				"phase_index": 4,
+				"phase_index": 5,
 				"power_w": 180.0,
 				"rescue": false,
 				"s_left_105": 300.0,
@@ -267,7 +267,7 @@
 				"p_eff_w": 115.909090909091,
 				"paused": false,
 				"peer": 2,
-				"phase_index": 4,
+				"phase_index": 5,
 				"power_w": 102.0,
 				"rescue": false,
 				"s_left_105": 300.0,
@@ -299,7 +299,7 @@
 				"p_eff_w": 225.0,
 				"paused": false,
 				"peer": 3,
-				"phase_index": 4,
+				"phase_index": 5,
 				"power_w": 216.0,
 				"rescue": false,
 				"s_left_105": 300.0,

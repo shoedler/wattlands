@@ -4,8 +4,8 @@ extends GutTest
 ## 2 s inside the telegraph and the shell's flight), who can evade (SIM WORK phases past the first
 ## 300 s, never ERG riders, reserve or rescue), the evade event at landing and the results counts.
 
-const ADVANCE := 1
-const GUN_LINE := 2
+const ADVANCE := 2
+const GUN_LINE := 3
 
 
 static func _quiet(index: int) -> Callable:

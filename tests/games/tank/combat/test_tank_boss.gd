@@ -2,7 +2,7 @@ extends GutTest
 ## The Behemoth (brief 2.4 Enemies and Foundry Gate): creep, push-back, the two phases, the main
 ## gun with its telegraph and "Surge to evade", the secondary, death and withdrawal.
 
-const BOSS := 10
+const BOSS := 11
 
 
 ## A rig in the boss segment; `quiet`: the crew's gun stays out of it (nothing loads or fires).
@@ -399,7 +399,7 @@ func test_the_secondary_fires_3_damage_every_5_seconds() -> void:
 
 func test_a_boss_alive_when_the_segment_ends_withdraws() -> void:
 	var rig := _rig(2)
-	rig.enter(11, 0.0, Wl.ENDED_MAX_S)
+	rig.enter(12, 0.0, Wl.ENDED_MAX_S)
 	assert_eq(rig.state.boss.phase, TankIds.BOSS_WITHDRAWN)
 	assert_eq(rig.of_type("boss_phase").back()["p"], TankIds.BOSS_WITHDRAWN)
 	assert_eq(rig.state.outcome, TankIds.OUTCOME_WITHDRAWN)
@@ -414,7 +414,7 @@ func test_a_dead_boss_stays_dead_through_the_cooldown_and_the_outcome_is_victory
 	for i in 3:
 		TankShells.damage_boss(rig.state, aux, i, 1000.0, 0, rig.events)
 	TankShells.damage_boss(rig.state, aux, TankBossState.TURRET_PART, 10000.0, 0, rig.events)
-	rig.enter(11, 0.0, Wl.ENDED_END_PHASE)
+	rig.enter(12, 0.0, Wl.ENDED_END_PHASE)
 	assert_eq(rig.state.boss.phase, TankIds.BOSS_DEAD)
 	assert_eq(rig.state.outcome, TankIds.OUTCOME_VICTORY)
 	assert_eq(rig.of_type("overrun").size(), 0)

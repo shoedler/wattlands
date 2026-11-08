@@ -7,7 +7,8 @@ extends GutTest
 
 ## Brief 2.3 segment table: [type, kind, duration_s, min_s, max_s, stage].
 const ASHFALL := [
-	["depot", Wl.WARMUP, 300.0, 0.0, 0.0, 0],
+	["hangar", Wl.WARMUP, 180.0, 0.0, 0.0, 0],
+	["rollout", Wl.WARMUP, 120.0, 0.0, 0.0, 0],
 	["advance", Wl.WORK, 180.0, 90.0, 300.0, 1],
 	["gun_line", Wl.WORK, 120.0, 60.0, 180.0, 1],
 	["checkpoint", Wl.RECOVERY, 60.0, 0.0, 0.0, 1],
@@ -21,7 +22,7 @@ const ASHFALL := [
 ]
 ## Brief 2.9.
 const DRILL := [
-	["depot", Wl.WARMUP, 30.0, 0.0, 0.0, 0],
+	["hangar", Wl.WARMUP, 30.0, 0.0, 0.0, 0],
 	["skirmish", Wl.WARMUP, 70.0, 0.0, 0.0, 1],
 	["checkpoint", Wl.RECOVERY, 30.0, 0.0, 0.0, 1],
 ]
@@ -30,35 +31,40 @@ const DRILL := [
 const ENGINE_TABLE := {
 	"diesel":
 	{
-		"depot": ["SIM", null, null, null, "game"],
+		"hangar": ["SIM", null, null, null, "flat"],
+		"rollout": ["SIM", null, null, null, "game"],
 		"advance": ["SIM", null, null, null, "game"],
 		"gun_line": ["SIM", null, null, null, "flat"],
 		"boss": ["SIM", null, null, null, "flat"],
 	},
 	"dynamo":
 	{
-		"depot": ["ERG", 50.0, 65.0, null, null],
+		"hangar": ["ERG", 50.0, 59.0, null, null],
+		"rollout": ["ERG", 59.0, 65.0, null, null],
 		"advance": ["ERG", 55.0, null, [55.0, 100.0], null],
 		"gun_line": ["ERG", 55.0, null, [55.0, 100.0], null],
 		"boss": ["ERG", 55.0, null, [55.0, 100.0], null],
 	},
 	"steam":
 	{
-		"depot": ["SIM", null, null, null, "flat"],
+		"hangar": ["SIM", null, null, null, "flat"],
+		"rollout": ["SIM", null, null, null, "flat"],
 		"advance": ["SIM", null, null, null, "flat"],
 		"gun_line": ["SIM", null, null, null, "flat"],
 		"boss": ["SIM", null, null, null, "flat"],
 	},
 	"arc":
 	{
-		"depot": ["ERG", 50.0, 65.0, null, null],
+		"hangar": ["ERG", 50.0, 59.0, null, null],
+		"rollout": ["ERG", 59.0, 65.0, null, null],
 		"advance": ["ERG", 65.0, null, [65.0, 80.0], null],
 		"gun_line": ["ERG", 65.0, null, [65.0, 80.0], null],
 		"boss": ["ERG", 65.0, null, [65.0, 80.0], null],
 	},
 	"feed":
 	{
-		"depot": ["SIM", null, null, null, "flat"],
+		"hangar": ["SIM", null, null, null, "flat"],
+		"rollout": ["SIM", null, null, null, "flat"],
 		"advance": ["SIM", null, null, null, "flat"],
 		"gun_line": ["SIM", null, null, null, "flat"],
 		"boss": ["SIM", null, null, null, "flat"],
@@ -68,27 +74,27 @@ const ENGINE_TABLE := {
 const DRILL_TABLE := {
 	"diesel":
 	{
-		"depot": ["SIM", null, null, null, "game"],
+		"hangar": ["SIM", null, null, null, "flat"],
 		"skirmish": ["SIM", null, null, null, "game"],
 	},
 	"dynamo":
 	{
-		"depot": ["ERG", 50.0, null, null, null],
+		"hangar": ["ERG", 50.0, null, null, null],
 		"skirmish": ["ERG", 55.0, null, [55.0, 65.0], null],
 	},
 	"steam":
 	{
-		"depot": ["SIM", null, null, null, "flat"],
+		"hangar": ["SIM", null, null, null, "flat"],
 		"skirmish": ["SIM", null, null, null, "flat"],
 	},
 	"arc":
 	{
-		"depot": ["ERG", 50.0, null, null, null],
+		"hangar": ["ERG", 50.0, null, null, null],
 		"skirmish": ["ERG", 55.0, null, [55.0, 65.0], null],
 	},
 	"feed":
 	{
-		"depot": ["SIM", null, null, null, "flat"],
+		"hangar": ["SIM", null, null, null, "flat"],
 		"skirmish": ["SIM", null, null, null, "flat"],
 	},
 }
@@ -288,7 +294,7 @@ func _min_switch_gap(plan: EffortPlan, open: Array[int], mask: int) -> float:
 
 ## BRIEF 4.6.8: every phase that can start in the first 300 s (open phases at min_s) asks ERG <=
 ## 65% (after the governor's floor at FTP 80 too) and no SIM grade source but flat or game with
-## warm-up terrain (0..+2%); the depot ramp climbs 15 points over its 300 s.
+## warm-up terrain (0..+2%); the hangar and the roll-out together climb the depot's ramp, 15 points over 300 s.
 func test_the_first_300_s_stay_within_the_warm_up_limits() -> void:
 	for case: Array in _matrix():
 		var c := _content(str(case[0]))
@@ -306,8 +312,9 @@ func test_the_first_300_s_stay_within_the_warm_up_limits() -> void:
 						assert_lte(ph.peak_pct(), 65.0, at)
 						assert_lte(_applied_pct(ph.peak_pct(), ftp, bool(case[3])), 65.0, at)
 						if ph.has_ramp():
-							assert_eq(ph.ramp_to_pct - ph.target_pct, 15.0, at + " ramp")
-							assert_eq(ph.duration_s, 300.0, at + " ramp length")
+							# One ramp of 0.05 points a second from 50 to 65 over the 300 s, cut in two.
+							var slope := (ph.ramp_to_pct - ph.target_pct) / ph.duration_s
+							assert_almost_eq(slope, 0.05, 1e-9, at + " ramp")
 					else:
 						assert_has([Wl.GRADE_FLAT, Wl.GRADE_GAME], ph.grade_source, at)
 						if ph.grade_source == Wl.GRADE_GAME:
@@ -405,7 +412,7 @@ func test_the_drill_is_130_s_with_at_most_one_switch() -> void:
 				assert_ne(plan.phase(i).kind, Wl.WORK, "no WORK phase in the drill")
 
 
-## FIT laps: every phase is lap-true; with the platform's cool-down lap that is 12 for
+## FIT laps: every phase is lap-true; with the platform's cool-down lap that is 13 for
 ## ashfall_road and 4 for the drill (notes).
 func test_one_lap_per_segment() -> void:
 	for mission: String in ["ashfall_road", "drill"]:
@@ -415,7 +422,7 @@ func test_one_lap_per_segment() -> void:
 			var laps := 0
 			for i in final.size():
 				laps += 1 if final.phase(i).lap else 0
-			assert_eq(laps, 12 if mission == "ashfall_road" else 4, mission)
+			assert_eq(laps, 13 if mission == "ashfall_road" else 4, mission)
 
 
 ## seg_of names each phase's segment and "" past the plan (the cool-down).

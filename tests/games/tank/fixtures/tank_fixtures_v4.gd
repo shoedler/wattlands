@@ -23,9 +23,9 @@ const NAMES: Array[String] = [
 	"cap_v4",
 ]
 ## Mission segment indexes in ashfall_road (TankFixtures' numbers).
-const SEG_ADVANCE_2 := 4
-const SEG_HOLD_2 := 5
-const SEG_BOSS := 10
+const SEG_ADVANCE_2 := 5
+const SEG_HOLD_2 := 6
+const SEG_BOSS := 11
 ## The far frame's numbers (tanks.json gun.far) when a state has no content.
 const V0 := 560.0
 const G := 70.0

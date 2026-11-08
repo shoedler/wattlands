@@ -96,7 +96,7 @@ func _fuzz(crew: int, rng_seed: int) -> TankRulesRig:
 	rig.bank_director = true
 	var label := "crew %d seed %d" % [crew, rng_seed]
 	# Hop around the mission so every segment type runs with the fuzz on.
-	var hops := [0, 1, 2, 3, 4, 5, 7, 8, 10, 11]
+	var hops := [0, 1, 2, 3, 4, 5, 6, 8, 9, 11, 12]
 	for hop in hops:
 		rig.enter(hop, 0.0, Wl.ENDED_MAX_S if hop % 3 == 0 else Wl.ENDED_END_PHASE)
 		var ticks := roundi(40.0 / Wl.SIM_DT)
@@ -168,7 +168,7 @@ func test_a_twenty_minute_hard_run_keeps_the_frame() -> void:
 		rig.state.difficulty = TankIds.DIFF_HARD
 		rig.auto_phase = true
 		rig.bank_director = true
-		rig.enter(1, 0.0)
+		rig.enter(2, 0.0)
 		for i in roundi(1200.0 / Wl.SIM_DT):
 			rig.step()
 			if i % 100 == 0:

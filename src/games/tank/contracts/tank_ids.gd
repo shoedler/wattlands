@@ -74,6 +74,11 @@ const SEAT_LABELS := {
 }
 
 # --- Segments (brief 2.3 segment table; the drill's skirmish, 2.9) -----------------------------------
+## v1.1.0: the mission's first 300 s are two WARMUP segments, the Hangar (the hull on its stand, tracks
+## spinning in the air, every station working, the drills; the last 10 s the door opens) and the
+## Roll-out (out of the door, never halting). The depot remains as free roam's drive-out only.
+const SEG_HANGAR := "hangar"
+const SEG_ROLLOUT := "rollout"
 const SEG_DEPOT := "depot"
 const SEG_ADVANCE := "advance"
 const SEG_GUN_LINE := "gun_line"
@@ -87,7 +92,15 @@ const SEG_ROAM := "roam"
 const SEG_COOLDOWN := "cooldown"
 const SEG_NONE := ""
 const SEGMENTS: Array[String] = [
-	SEG_DEPOT, SEG_ADVANCE, SEG_GUN_LINE, SEG_CHECKPOINT, SEG_BOSS, SEG_SKIRMISH, SEG_ROAM
+	SEG_DEPOT,
+	SEG_HANGAR,
+	SEG_ROLLOUT,
+	SEG_ADVANCE,
+	SEG_GUN_LINE,
+	SEG_CHECKPOINT,
+	SEG_BOSS,
+	SEG_SKIRMISH,
+	SEG_ROAM
 ]
 const SEG_CODES := {
 	SEG_NONE: 0,
@@ -99,6 +112,8 @@ const SEG_CODES := {
 	SEG_SKIRMISH: 6,
 	SEG_COOLDOWN: 7,
 	SEG_ROAM: 8,
+	SEG_HANGAR: 9,
+	SEG_ROLLOUT: 10,
 }
 
 # --- Contents and free roam (brief 2.9, 2.10) ------------------------------------------------------
@@ -127,7 +142,12 @@ const BACKDROP_BIRCHES := "forest_birches"
 ## A little base: a fenced clearing with a bunker, a lamp, crates and barrier stands (the depot,
 ## gun lines where it fits, free-roam strongpoints and the camp zones).
 const BACKDROP_BASE := "base"
-const BACKDROPS: Array[String] = [BACKDROP_FOREST, BACKDROP_FIRS, BACKDROP_BIRCHES, BACKDROP_BASE]
+## The hangar's inside (TankHangar): the Hangar segment, and the Roll-out's first seconds while the
+## hangar's end wall slides past.
+const BACKDROP_HANGAR := "hangar"
+const BACKDROPS: Array[String] = [
+	BACKDROP_FOREST, BACKDROP_FIRS, BACKDROP_BIRCHES, BACKDROP_BASE, BACKDROP_HANGAR
+]
 
 # --- Enemies (brief 2.4 table) ----------------------------------------------------------------------
 const ENEMY_LIGHT := "light"

@@ -6,11 +6,12 @@ extends GutTest
 
 const H := preload("res://tests/games/tank/effort/tank_effort_harness.gd")
 
-const DEPOT := 0
-const ADV1 := 1
-const GUN1 := 2
-const CP1 := 3
-const BOSS := 10
+const HANGAR := 0
+const ROLLOUT := 1
+const ADV1 := 2
+const GUN1 := 3
+const CP1 := 4
+const BOSS := 11
 const RATE := 10.0 / 3.0
 
 
@@ -112,7 +113,7 @@ func test_the_arc_slew_and_range() -> void:
 func test_the_arc_load_only_runs_in_arc_phases_with_a_range() -> void:
 	var h := _h()
 	_arc(h).duty = 1.0
-	h.run_s(DEPOT, 12.0)
+	h.run_s(HANGAR, 12.0)
 	h.run_s(CP1, 12.0)
 	for r: Array in h.requests:
 		assert_ne(str(r[2].get("reason")), "arc", "no arc load in the depot or a checkpoint")

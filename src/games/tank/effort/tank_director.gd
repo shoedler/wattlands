@@ -227,7 +227,9 @@ static func _load_phase(ph: PlanPhase) -> bool:
 	if ph == null or ph.mode != Wl.ERG or ph.range_pct.size() != 2:
 		return false
 	var seg := str(ph.meta.get("seg", ""))
-	return seg != TankIds.SEG_DEPOT and seg != TankIds.SEG_CHECKPOINT
+	return not (
+		seg in [TankIds.SEG_DEPOT, TankIds.SEG_HANGAR, TankIds.SEG_ROLLOUT, TankIds.SEG_CHECKPOINT]
+	)
 
 
 ## Patterns 1, 2 and 10 share one schedule: every <key>.every_s an update toward the engine's goal,

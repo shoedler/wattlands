@@ -1,22 +1,21 @@
 {
-	"_doc": "The e2e drill (brief 2.9): 130 s inside the warm-up limits (BRIEF 4.6.8). A 30 s depot, a fixed 70 s skirmish of WARMUP kind against 2 light tanks and 1 medium, a 30 s checkpoint at 50%. No haptics (every phase lies in the first 300 s); at most one mode switch per rider. Owner: rules. Schema: TankContentSchema.validate_mission.",
+	"_doc": "The e2e drill (brief 2.9): 130 s inside the warm-up limits (BRIEF 4.6.8). A 30 s hangar (the hull on its stand, a 20 s drive drill, the door opening in the last 10 s), a fixed 70 s skirmish of WARMUP kind against 2 light tanks and 1 medium, a 30 s checkpoint at 50%. No haptics (every phase lies in the first 300 s); at most one mode switch per rider. Owner: rules. Schema: TankContentSchema.validate_mission.",
 	"id": "drill",
 	"difficulty_default": "easy",
 	"label": "TANK_CONTENT_DRILL",
 	"plan_table": "drill_plans",
 	"segments": [
 		{
-			"id": "depot",
-			"type": "depot",
+			"id": "hangar",
+			"type": "hangar",
 			"stage": 0,
 			"kind": "WARMUP",
 			"duration_s": 30,
-			"label": "TANK_PHASE_DEPOT",
-			"name": "TANK_PLACE_DEPOT",
-			"backdrop": "base",
-			"terrain": [[0, 0], [100, 1], [200, 2], [300, 0.5]],
+			"label": "TANK_PHASE_HANGAR",
+			"name": "TANK_PLACE_HANGAR",
+			"backdrop": "hangar",
 			"drills": [
-				{"from_s": 0, "to_s": 30, "drill": "drive"}
+				{"from_s": 0, "to_s": 20, "drill": "drive"}
 			]
 		},
 		{

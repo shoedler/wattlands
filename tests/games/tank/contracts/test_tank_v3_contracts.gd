@@ -373,7 +373,7 @@ func test_the_content_has_the_one_tank_and_six_seats() -> void:
 	for table: String in ["plans", "drill_plans", "roam_plans"]:
 		for e: String in TankIds.ENGINES:
 			assert_true((c.value("stations", table) as Dictionary).has(e), "%s.%s" % [table, e])
-	for seg: String in ["depot", "advance", "gun_line", "boss"]:
+	for seg: String in ["hangar", "rollout", "advance", "gun_line", "boss"]:
 		assert_eq(c.plan_entry("feed", seg), {"mode": "SIM", "grade_source": "flat"}, seg)
 
 
@@ -489,7 +489,7 @@ func test_the_height_agrees_with_the_grade_sampler_on_every_mission_segment() ->
 
 func test_a_solo_rider_drives_and_the_empty_gun_stays_silent() -> void:
 	var rig := TankRulesRig.new(1)
-	rig.enter(1, 5.0)
+	rig.enter(2, 5.0)
 	var x0 := rig.hull().x_px
 	rig.spawn(TankIds.ENEMY_MEDIUM, 1, 280.0)
 	rig.run(20.0)

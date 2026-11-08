@@ -3,11 +3,12 @@ extends GutTest
 ## rack (a shell per steam.full_j of P_eff in band, the rack of 3, Overpressure, the light latch)
 ## and the Gun chambering from the rack. (v3 retired the gearbox and the gunner's hoist.)
 
-const DEPOT := 0
-const ADVANCE := 1
-const GUN_LINE := 2
-const CHECKPOINT := 3
-const STAGE2_ADVANCE := 4
+const HANGAR := 0
+const ROLLOUT := 1
+const ADVANCE := 2
+const GUN_LINE := 3
+const CHECKPOINT := 4
+const STAGE2_ADVANCE := 5
 
 
 ## A mission patch: segment `index` gets `props` merged in.
@@ -106,7 +107,7 @@ func test_elevation_slows_linearly_to_2_degrees_a_second_at_an_empty_bank() -> v
 
 func test_the_depot_fills_the_bank_on_a_script() -> void:
 	var rig := TankRulesRig.new(2)
-	rig.enter(DEPOT, 5.0)
+	rig.enter(HANGAR, 5.0)
 	rig.dynamo().bank = 10.0
 	rig.run(0.2)
 	assert_eq(rig.dynamo().bank, 100.0)
@@ -284,7 +285,7 @@ func test_the_window_opens_on_a_stowed_shell_past_300_s_only() -> void:
 	early.steam().pressure_pct = 99.9
 	early.run(0.3)
 	assert_eq(early.steam().window_s, 0.0, "plan_elapsed_s < 300")
-	var depot := _loader(1, DEPOT, 100.0)
+	var depot := _loader(1, HANGAR, 100.0)
 	depot.steam().pressure_pct = 99.9
 	depot.run(0.3)
 	assert_eq(depot.steam().rack, 2)
@@ -438,13 +439,13 @@ func test_a_shot_starts_the_next_chambering_and_an_empty_rack_chambers_nothing()
 ## v3 solo balance (tanks.json steam.checkpoint_rack_by_crew [3, 0, 0, 0]): a solo rider's rack is
 ## restocked to 3 at each checkpoint; a crew loads its own.
 func test_a_solo_riders_rack_is_restocked_at_each_checkpoint() -> void:
-	var solo := _quiet(1, 2, 5.0)
+	var solo := _quiet(1, GUN_LINE, 5.0)
 	solo.set_rack(0)
-	solo.enter(3, 0.0)
+	solo.enter(CHECKPOINT, 0.0)
 	solo.run(0.1)
 	assert_eq(solo.steam().rack, TankConst.RACK_MAX)
-	var crew := _quiet(2, 2, 5.0)
+	var crew := _quiet(2, GUN_LINE, 5.0)
 	crew.set_rack(1)
-	crew.enter(3, 0.0)
+	crew.enter(CHECKPOINT, 0.0)
 	crew.run(0.1)
 	assert_eq(crew.steam().rack, 1, "crews 2-4 load their own")

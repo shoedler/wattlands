@@ -9,12 +9,13 @@ extends GutTest
 const H := preload("res://tests/games/tank/effort/tank_effort_harness.gd")
 
 ## ashfall_road phase indexes.
-const DEPOT := 0
-const ADV1 := 1
-const GUN1 := 2
-const CP1 := 3
-const BOSS := 10
-const COOLDOWN := 11
+const HANGAR := 0
+const ROLLOUT := 1
+const ADV1 := 2
+const GUN1 := 3
+const CP1 := 4
+const BOSS := 11
+const COOLDOWN := 12
 ## 10 / 3: a bank update of <= 10 points in three sub-steps 1 s apart (brief: "<= 3.3% FTP/s").
 const BANK_RATE := 10.0 / 3.0
 
@@ -201,7 +202,7 @@ func test_bank_slew_is_at_most_a_third_of_ten_points_a_second() -> void:
 func test_bank_only_in_dynamo_phases_with_a_range() -> void:
 	var h := _h()
 	_dyn(h).bank = 0.0
-	h.run_s(DEPOT, 12.0)
+	h.run_s(HANGAR, 12.0)
 	h.run_s(CP1, 12.0)
 	for r: Array in h.requests:
 		assert_ne(str(r[2].get("reason")), "bank", "no bank in the depot or a checkpoint")
@@ -369,7 +370,7 @@ func test_boiler_spacing_and_rise_limit() -> void:
 func test_boiler_in_the_depot_stays_within_3_percent() -> void:
 	var h := _h()
 	_steam(h).pressure_pct = 104.0
-	h.run_s(DEPOT, 15.0)
+	h.run_s(HANGAR, 15.0)
 	var rows := h.sent(3, "boiler")
 	assert_eq(rows.size(), 6, "0.5 .. 3.0")
 	for r: Array in rows:
@@ -415,8 +416,11 @@ func test_terrain_at_2_hz_in_game_phases() -> void:
 	h.run_s(BOSS, 3.0)
 	assert_eq(h.grades, [], "no terrain in the ERG gun line or the flat boss")
 	h.state.hull.distance_m = 400.0
-	h.run_s(DEPOT, 1.0)
-	assert_eq(h.grades_of(1), [[h.tick - 20, 2.0], [h.tick - 10, 2.0]], "depot")
+	h.run_s(ROLLOUT, 1.0)
+	assert_eq(h.grades_of(1), [[h.tick - 20, 1.5], [h.tick - 10, 1.5]], "roll-out")
+	h.clear()
+	h.run_s(HANGAR, 2.0)
+	assert_eq(h.grades_of(1), [], "no terrain under the hull on its stand: the hangar rides flat")
 	var b := _h(1)
 	b.state.hull.distance_m = 1000.0
 	b.run_s(ADV1, 1.0)
@@ -429,18 +433,18 @@ func test_terrain_grade_math() -> void:
 	assert_almost_eq(TankDirector.terrain_grade_pct(c, ADV1, 250.0, false), 3.0, 1e-9)
 	assert_almost_eq(TankDirector.terrain_grade_pct(c, ADV1, 510.0, false), -2.0, 1e-9)
 	assert_almost_eq(TankDirector.terrain_grade_pct(c, ADV1, 9999.0, false), 0.0, 1e-9)
-	var peak: Array = c.segment(7)["terrain"][2]
+	var peak: Array = c.segment(8)["terrain"][2]
 	assert_eq(float(peak[1]), 6.0, "stage 3's steepest point, +6%")
-	assert_almost_eq(TankDirector.terrain_grade_pct(c, 7, float(peak[0]), false), 6.0, 1e-9)
+	assert_almost_eq(TankDirector.terrain_grade_pct(c, 8, float(peak[0]), false), 6.0, 1e-9)
 	assert_almost_eq(TankDirector.terrain_grade_pct(c, ADV1, 250.0, true), 2.0, 1e-9, "warm-up")
 	assert_almost_eq(TankDirector.terrain_grade_pct(c, GUN1, 50.0, false), 0.0, 1e-9, "no terrain")
 	assert_eq(TankTerrain.grade_at([], 10.0), 0.0)
 	assert_eq(TankTerrain.grade_at([[0, -9], [10, 20]], 5.0), 5.5)
-	for seg in [0, 1, 4, 7]:
+	for seg in [1, 2, 5, 8]:
 		for m in range(0, 1600, 25):
-			var g := TankDirector.terrain_grade_pct(c, seg, float(m), seg == 0)
-			assert_between(g, 0.0 if seg == 0 else -3.0, 2.0 if seg == 0 else 6.0)
-			assert_eq(g, TankTerrain.for_segment(c, seg, float(m), seg == 0), "one sampler")
+			var g := TankDirector.terrain_grade_pct(c, seg, float(m), seg == 1)
+			assert_between(g, 0.0 if seg == 1 else -3.0, 2.0 if seg == 1 else 6.0)
+			assert_eq(g, TankTerrain.for_segment(c, seg, float(m), seg == 1), "one sampler")
 
 
 # --- Pattern 5: cadence bands; the power band ----------------------------------------------------
@@ -451,7 +455,7 @@ func test_terrain_grade_math() -> void:
 func test_cadence_bands() -> void:
 	var h := _h()
 	_steam(h).loaded = true
-	h.run_s(DEPOT, 2.0)
+	h.run_s(HANGAR, 2.0)
 	for peer in [1, 2, 3]:
 		assert_eq(h.bands_of(peer), [[0, 60.0, 120.0]], "depot peer %d" % peer)
 	h.clear()
@@ -479,7 +483,7 @@ func test_cadence_bands() -> void:
 ## once at each segment start.
 func test_power_band_at_each_segment_start() -> void:
 	var h := _h()
-	for index in [DEPOT, ADV1, GUN1, CP1, BOSS]:
+	for index in [HANGAR, ADV1, GUN1, CP1, BOSS]:
 		h.hud().power_band_at.clear()
 		h.run_s(index, 1.0)
 		var rows := h.hud().power_band_at
@@ -602,8 +606,8 @@ func test_haptic_gates() -> void:
 	var events := _ev([_hit(20.0), TankEvents.evade(5, 3, true, 0)])
 	var h := _h()
 	h.plan_start_s = 400.0
-	h.run_s(DEPOT, 1.0)
-	h.step(DEPOT, events)
+	h.run_s(HANGAR, 1.0)
+	h.step(HANGAR, events)
 	assert_eq(_haptics(h), [], "WARMUP kind, even past 300 s")
 	var w := _h()
 	w.plan_start_s = 120.0
@@ -656,9 +660,9 @@ func test_end_phase_all_riders_once_after_min_s() -> void:
 	h.run_s(ADV1, 5.0)
 	assert_eq(h.ended, [[1800, 1], [1800, 2], [1800, 3]], "all three at 90 s, one step")
 	h.state.seg.objective_done = false
-	h.run_s(DEPOT, 5.0)
+	h.run_s(HANGAR, 5.0)
 	h.state.seg.objective_done = true
-	h.run_s(DEPOT, 5.0)
+	h.run_s(HANGAR, 5.0)
 	assert_eq(h.ended.size(), 3, "a fixed phase never ends early")
 
 

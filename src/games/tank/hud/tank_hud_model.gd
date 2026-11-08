@@ -478,6 +478,13 @@ static func objective(state: TankState) -> Dictionary:
 	match state.seg.seg:
 		TankIds.SEG_DEPOT:
 			return {"key": "TANK_OBJ_DEPOT", "args": [], "warn": false}
+		TankIds.SEG_HANGAR:
+			var left := TankSegments.hangar_countdown_s(state)
+			if left >= 0.0:
+				return {"key": "TANK_OBJ_HANGAR_DOOR", "args": [ceili(left)], "warn": false}
+			return {"key": "TANK_OBJ_HANGAR", "args": [], "warn": false}
+		TankIds.SEG_ROLLOUT:
+			return {"key": "TANK_OBJ_ROLLOUT", "args": [], "warn": false}
 		TankIds.SEG_ADVANCE:
 			var m := halt_distance_m(state)
 			return {"key": "TANK_OBJ_ADVANCE", "args": [int(ceilf(maxf(m, 0.0)))], "warn": false}

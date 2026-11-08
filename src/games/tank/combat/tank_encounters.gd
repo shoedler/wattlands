@@ -260,9 +260,9 @@ static func crew_counts(state: TankState, entries: Array) -> Array[int]:
 	return out
 
 
-## The depot's aim drill: its wrecks stand ahead of the halted tank once the drill starts.
+## The hangar's aim drill: its wrecks stand ahead of the tank on its stand once the drill starts.
 static func depot_wrecks(state: TankState, aux: TankAux) -> void:
-	if state.seg.seg != TankIds.SEG_DEPOT or aux.drill_wrecks:
+	if state.seg.seg != TankIds.SEG_HANGAR or aux.drill_wrecks:
 		return
 	for d: Variant in aux.drills:
 		if str(d.get("drill", "")) != "aim" or state.seg.elapsed_s < float(d.get("from_s", 0.0)):

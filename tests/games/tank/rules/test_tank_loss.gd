@@ -5,11 +5,12 @@ extends GutTest
 ## won stage and every phase but WORK hold the hull at 1 HP.
 
 const Harness := preload("res://tests/games/tank/effort/tank_effort_harness.gd")
-const DEPOT := 0
-const ADVANCE := 1
-const HOLD := 2
-const CHECKPOINT := 3
-const BOSS := 10
+const HANGAR := 0
+const ROLLOUT := 1
+const ADVANCE := 2
+const HOLD := 3
+const CHECKPOINT := 4
+const BOSS := 11
 
 
 func _rig(
@@ -159,7 +160,7 @@ func test_a_won_stage_holds_the_hull_at_one_hp() -> void:
 
 func test_a_checkpoint_or_the_depot_holds_the_hull_at_one_hp() -> void:
 	_assert_holds_at_1(_rig(TankIds.DIFF_HARD, CHECKPOINT), "checkpoint")
-	_assert_holds_at_1(_rig(TankIds.DIFF_HARD, DEPOT), "depot")
+	_assert_holds_at_1(_rig(TankIds.DIFF_HARD, HANGAR), "depot")
 
 
 # --- The tow -------------------------------------------------------------------------------------
@@ -396,7 +397,7 @@ func test_max_s_during_a_tow_ends_it_and_the_next_segment_starts_clean() -> void
 func test_a_tow_into_the_cool_down_withdraws_with_no_error() -> void:
 	var rig := _rig(TankIds.DIFF_NORMAL, BOSS)
 	_kill_the_tank(rig)
-	rig.enter(11, 0.0, Wl.ENDED_MAX_S)
+	rig.enter(12, 0.0, Wl.ENDED_MAX_S)
 	assert_eq(rig.state.hull.tow_s, 0.0)
 	assert_eq(rig.state.outcome, TankIds.OUTCOME_WITHDRAWN)
 	assert_eq(rig.of_type(TankEvents.BOSS_PHASE).size(), 1, "just its start: nothing to withdraw")

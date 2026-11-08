@@ -195,7 +195,7 @@ static func fire(
 		var v0 := c.num("tanks", "gun.shell_speed_px_s", 360.0)
 		var muzzle := TankAim.muzzle_world(state, aux, hull.elev_deg, hull.facing)
 		var vel := TankBallistics.velocity(v0, hull.elev_deg + err, hull.facing)
-		vel.x += TankConst.m_to_px(hull.speed_mps)
+		vel.x += TankConst.m_to_px(TankSegments.ground_mps(state))
 		s.x = muzzle.x
 		s.y = muzzle.y
 		s.vx = vel.x
