@@ -9,6 +9,7 @@ extends Node
 ## two boats on the endless workout map, one fighting; cruise: driving at FTP; hump: about 70 %
 ## FTP, the stern squatting; plane: on the plane; towed: a tuna towing the boat stern first; card:
 ## tools/picker_cards' picker card, a giant grouper close under the boat, the other boat away;
+## jig: waiting with the lure part of the way home, two other riders fighting (crew strips);
 ## bluewater: the big game trip's biome, a grouper on the floor and a tuna under the other boat;
 ## bluewater_edge: stopped at the end of the big game map).
 ## `art` sets the art size (the flex PixelViewport's; capture at 3 screen px per art px with
@@ -32,7 +33,7 @@ var _t: float = 0.0
 
 
 func _ready() -> void:
-	var n := 4 if scenario == "dock" else 2
+	var n := 4 if scenario == "dock" else (3 if scenario == "jig" else 2)
 	var content_id := "roam_30"
 	if scenario == "workout":
 		content_id = "base_60"
@@ -128,6 +129,22 @@ func _ready() -> void:
 		"card":
 			FX.set_fight(me, 14150.0, 8, 26.0, 20.0, 0.3, 0.0)
 			FX.set_drive(other, 13150.0, 15.0)
+		"jig":
+			FX.set_wait(me, 5930.0, 3, 22.0, 14.0)
+			me.lure_dx = 22.0
+			me.cadence_ema = 91.0
+			me.pub_lo = 82
+			me.pub_hi = 98
+			me.power_w = 168.0
+			FX.set_fight(other, 5800.0, 4, 41.0, 40.0, 0.2, 0.0)
+			other.applied_target_w = 180.0
+			other.power_w = 158.0
+			other.reel = 0.45
+			FX.set_fight(st.rider(2), 6100.0, 3, 36.0, 20.0, 0.2, 0.0)
+			st.rider(2).applied_target_w = 202.0
+			st.rider(2).power_w = 205.0
+			st.rider(2).reel = 0.2
+			me.points = 54
 		"bluewater":
 			FX.set_fight(me, 4100.0, 8, 30.0, 110.0, 0.4, 0.1)
 			FX.set_fight(other, 4050.0, 4, 24.0, 36.0, 0.2, 0.0)
@@ -163,6 +180,8 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_t += delta
 	var r := game.state.rider(0)
+	if scenario == "jig":
+		r.lure_dx = maxf(22.0 - 14.0 * _t, 10.0)  # the lure comes home
 	var tm := Telemetry.new()
 	tm.t = 600.0 + _t * TIME_LAPSE
 	game.state.t = tm.t
