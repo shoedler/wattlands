@@ -96,9 +96,10 @@
 		"low_bank": 20
 	},
 	"steam": {
-		"_doc": "v3 (brief 'Combat changes'): the Loader in band (or on reserve) fills the ready rack, one shell per full_j joules of P_eff (pressure 0..100% is the shell's progress); at 100% the shell is stowed (a heavy, or a light shell latched from light_latch_pct); with window_s the rider may surge (`over`) within it to take the shell just stowed back to the boiler and overpressure it (100 -> over_max_pct on over_j while the sprint rule holds; bleeds over_bleed_pct_s otherwise; a heavy again after over_max_s), the double-damage Overpressure shell. The Gun fires the chambered round and chambers the next in chamber_s at gun.load_elev_deg.",
+		"_doc": "v3 (brief 'Combat changes'): the Loader in band (or on reserve) fills the ready rack, one shell per full_j joules of P_eff (pressure 0..100% is the shell's progress); at 100% the shell is stowed (a heavy, or a light shell latched from light_latch_pct); with window_s the rider may surge (`over`) within it to take the shell just stowed back to the boiler and overpressure it (100 -> over_max_pct on over_j while the sprint rule holds; bleeds over_bleed_pct_s otherwise; a heavy again after over_max_s), the double-damage Overpressure shell. The Gun fires the chambered round and chambers the next in chamber_s at gun.load_elev_deg. below_band_gain (2026-11-08): below the window (not in band, not on reserve) the boiler still gains this share of P_eff, so a rider a little under the band is not stuck at nothing; in_band stays false, so the score and the glow do not change.",
 		"full_j": 1750,
 		"rack_start": 3,
+		"below_band_gain": 0.2,
 		"checkpoint_rack_by_crew": [3, 0, 0, 0],
 		"chamber_s": 1,
 		"window_s": 5,

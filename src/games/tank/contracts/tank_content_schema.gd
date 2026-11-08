@@ -82,6 +82,7 @@ const TANKS_SPEC := {
 	"steam.over_j": "pos",
 	"steam.over_max_pct": "pos",
 	"steam.rack_start": "nonneg",
+	"steam.below_band_gain": "frac",
 	"steam.chamber_s": "pos",
 	"steam.light_latch_pct": "pos",
 	"gun.load_elev_deg": "num",

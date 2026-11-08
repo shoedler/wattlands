@@ -178,14 +178,59 @@ func test_the_rack_fills_to_three_and_then_the_loader_idles() -> void:
 	assert_gt(st.pressure_pct, 0.0)
 
 
-func test_only_p_eff_in_band_loads_and_the_reserve_loads_at_60_w() -> void:
+func test_below_the_window_the_loader_trickles_at_a_fifth_of_p_eff() -> void:
+	var rig := _loader()
+	var st := rig.steam()
+	var full_j := rig.content.num("tanks", "steam.full_j")
+	assert_eq(rig.content.num("tanks", "steam.below_band_gain"), 0.2, "a fifth of p_eff")
+	rig.power_w[3] = 0.8 * 240.0
+	rig.run(5.0)
+	assert_false(st.in_band, "under 90% FTP: still out of band, so no score, no glow")
+	assert_gt(st.p_eff_w, 0.0)
+	var want := 0.2 * st.p_eff_w * 5.0 / full_j * 100.0
+	assert_gt(st.pressure_pct, 0.0, "the shell creeps on")
+	assert_almost_eq(st.pressure_pct, want, want * 0.1, "20% of p_eff x 5 s")
+
+
+func test_a_gain_of_zero_is_the_old_rule_and_a_coasting_loader_gains_nothing() -> void:
+	var off := TankRulesRig.new(
+		3,
+		"ashfall_road",
+		7,
+		func(files: Dictionary) -> void:
+			(files["tanks"]["steam"] as Dictionary)["below_band_gain"] = 0.0
+			(files["mission"]["segments"][1] as Dictionary).merge(
+				{"encounters": [], "obstacles": []}, true
+			)
+	)
+	off.enter(ADVANCE, 5.0)
+	off.set_rack(0)
+	off.steam().pressure_pct = 0.0
+	off.power_w[3] = 0.8 * 240.0
+	off.run(10.0)
+	assert_eq(off.steam().pressure_pct, 0.0, "nothing loads under band")
+	var rig := _loader()
+	rig.power_w[3] = 0.0
+	rig.run(10.0)
+	assert_eq(rig.steam().pressure_pct, 0.0, "no power, no trickle")
+
+
+func test_the_trickle_never_lets_the_rack_overfill_or_the_shell_pass_100() -> void:
+	var rig := _loader()
+	rig.power_w[3] = 0.8 * 240.0
+	rig.run(300.0)
+	assert_lte(rig.steam().rack, TankConst.RACK_MAX)
+	assert_lt(rig.steam().pressure_pct, 100.0)
+
+
+func test_only_p_eff_in_band_loads_in_full_and_the_reserve_loads_at_60_w() -> void:
 	var rig := _loader()
 	var st := rig.steam()
 	rig.power_w[3] = 0.8 * 240.0
 	rig.run(5.0)
 	assert_false(st.in_band, "under 90% FTP")
-	assert_eq(st.pressure_pct, 0.0, "nothing loads under band")
 	rig.power_w.erase(3)
+	st.pressure_pct = 0.0
 	rig.afk[3] = true
 	rig.run(10.0)
 	var want := 600.0 / rig.content.num("tanks", "steam.full_j") * 100.0

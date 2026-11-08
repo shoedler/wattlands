@@ -209,7 +209,8 @@ static func _repair(state: TankState, st: TankRepairState, ri: TankRiderInput, d
 ## "Surge to overpressure" window opens for window_s: an `over` intent in it takes that shell back
 ## to the boiler and overpressures it (_overpressure); an `over` up to window_s before the stow
 ## (the surge came first) does the same at the stow. The `latch` intent stows a light shell from
-## light_latch_pct. With the rack full the loader idles (`loaded`: no boiler grade, cadence band
+## light_latch_pct. Below the window the boiler trickles on a share (steam.below_band_gain, 0.2) of
+## P_eff, and in_band stays false. With the rack full the loader idles (`loaded`: no boiler grade, cadence band
 ## 50). Pressure holds in checkpoints and the cool-down. An empty Loader seat loads nothing.
 static func _steam(
 	state: TankState,
@@ -260,6 +261,11 @@ static func _steam(
 		return
 	if st.in_band or st.reserve:
 		st.pressure_pct += st.p_eff_w * dt / c.num("tanks", "steam.full_j", 1750.0) * 100.0
+	elif st.slot >= 0:
+		# Below the window the boiler still creeps on: a fifth of P_eff (steam.below_band_gain).
+		# in_band stays false, so the score and the glow do not change.
+		var gain := c.num("tanks", "steam.below_band_gain", 0.0)
+		st.pressure_pct += gain * st.p_eff_w * dt / c.num("tanks", "steam.full_j", 1750.0) * 100.0
 	if st.pressure_pct >= 100.0:
 		st.pressure_pct = 0.0
 		_stow(aux, st, ri.slot, TankIds.SHELL_HEAVY, events)
