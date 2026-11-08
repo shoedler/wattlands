@@ -158,9 +158,10 @@ func test_a_won_stage_holds_the_hull_at_one_hp() -> void:
 	_assert_holds_at_1(rig, "objective done")
 
 
-func test_a_checkpoint_or_the_depot_holds_the_hull_at_one_hp() -> void:
+func test_a_checkpoint_the_hangar_or_the_rollout_holds_the_hull_at_one_hp() -> void:
 	_assert_holds_at_1(_rig(TankIds.DIFF_HARD, CHECKPOINT), "checkpoint")
-	_assert_holds_at_1(_rig(TankIds.DIFF_HARD, HANGAR), "depot")
+	_assert_holds_at_1(_rig(TankIds.DIFF_HARD, HANGAR), "hangar")
+	_assert_holds_at_1(_rig(TankIds.DIFF_HARD, ROLLOUT), "roll-out")
 
 
 # --- The tow -------------------------------------------------------------------------------------

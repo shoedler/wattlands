@@ -232,7 +232,7 @@ func test_the_report_names_the_difficulty_losses_and_near_threats() -> void:
 			var one := TankBalanceHarness.line(r)
 			assert_string_contains(one, "crew 2 seed 2 %s" % level)
 			assert_string_contains(one, "losses 0 breakdowns")
-			assert_string_contains(one, "times dep0:30")
+			assert_string_contains(one, "times han0:30")
 
 
 func test_the_kills_near_killed_counts_the_two_near_codes() -> void:
