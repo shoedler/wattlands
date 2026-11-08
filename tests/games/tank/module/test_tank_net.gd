@@ -142,6 +142,30 @@ func test_apply_rebuilds_the_replicated_state() -> void:
 	assert_gt(c.enemy(13).telegraph_s, 2.0)
 
 
+## v1.1.0: the hangar and the roll-out go over the wire by their codes, and a client derives the same segment from
+## its own content: the hangar's countdown and the stand read the same on both.
+func test_a_client_reads_the_hangar_and_the_rollout_from_the_wire() -> void:
+	for index: int in [0, 1]:
+		var host := _host(2, func(crew: int) -> TankState: return _hangar_state(crew, index))
+		var wire := _wire(host)
+		assert_eq(TankSnapshotSchema.check(host.snapshot()), "", "segment %d" % index)
+		var client := _client(2)
+		client.apply_snapshot(wire)
+		var want := TankIds.SEG_HANGAR if index == 0 else TankIds.SEG_ROLLOUT
+		assert_eq(client.state.seg.seg, want)
+		assert_eq(client.state.seg.kind, Wl.WARMUP)
+		assert_eq(client.state.seg.segment_index, index)
+		assert_false(client.state.seg.open_ended)
+	var late := _host(2, func(crew: int) -> TankState: return _hangar_state(crew, 0, 174.0))
+	var c2 := _client(2)
+	c2.apply_snapshot(_wire(late))
+	assert_almost_eq(TankSegments.hangar_countdown_s(c2.state), 6.0, 0.01, "the same countdown")
+
+
+func _hangar_state(crew: int, index: int, elapsed: float = 60.0) -> TankState:
+	return TankFixtures._base(TankFixtures.content(), crew, index, elapsed)
+
+
 func test_apply_derives_what_the_snapshot_leaves_out() -> void:
 	var host := _host(3)
 	var client := _client(3)

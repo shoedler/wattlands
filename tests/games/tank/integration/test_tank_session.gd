@@ -53,7 +53,7 @@ func test_a_solo_rider_plays_ashfall_road_to_the_results_with_zero_input() -> vo
 	var laps := 0
 	for ph: Variant in plan:
 		laps += 1 if bool(ph.get("lap", false)) else 0
-	assert_eq(laps, 12, "11 segments and the cool-down are the laps")
+	assert_eq(laps, 13, "12 segments and the cool-down are the laps")
 	assert_gt(hist.size(), 12, "the solo loop split segments")
 	assert_eq(r.get("plan_warnings", {}).get("1", []), [], "no switch warning")
 	var seats := _tank_events(r.get("events", [])).filter(
@@ -176,7 +176,7 @@ func test_the_solo_ashfall_road_keeps_its_snapshots_small_and_its_segments_in_or
 	for e: Dictionary in _tank_events(r["events"]):
 		if e["type"] == "segment":
 			idx.append(int(e["i"]))
-	assert_eq(idx.slice(0, 11), range(11), "the eleven segments, once each, in order")
+	assert_eq(idx.slice(0, 12), range(12), "the twelve segments, once each, in order")
 	assert_eq((r.get("fit_paths", []) as Array).size(), 1)
 	assert_true(FileAccess.file_exists(str((r["fit_paths"] as Array)[0])), "the ride was written")
 
@@ -211,7 +211,7 @@ func test_a_host_crew_of_4_plays_ashfall_road_to_the_results_with_zero_input() -
 	for sp: Dictionary in r["phases"]["4"]:
 		var meta: Dictionary = (plan[int(sp["index"])] as Dictionary).get("meta", {})
 		segs[int(meta.get("segment", -1))] = true
-	assert_eq(segs.size(), 12, "11 segments and the cool-down")
+	assert_eq(segs.size(), 13, "12 segments and the cool-down")
 	assert_lte(int(r.get("max_snapshot_bytes", 99999)), TankConst.SNAPSHOT_MAX_BYTES)
 	var arc := 0
 	for d: Dictionary in r.get("directives", []):
