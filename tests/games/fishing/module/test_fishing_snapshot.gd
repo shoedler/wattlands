@@ -278,3 +278,14 @@ func test_display_action_shows_away_and_paused_over_the_action() -> void:
 	host.state.riders[0].is_bot = false
 	var flags := int(host.snapshot()["R"][0][S.R_FLAGS])
 	assert_ne(flags & S.F_SPRINT, 0, "120 % FTP-equivalent sprints")
+
+
+func test_a_hostile_target_column_is_clamped_to_a_readable_number() -> void:
+	var host := _host(2)
+	var client := _client(2)
+	var snap := host.snapshot()
+	(snap["R"][0] as Array)[S.R_TARGET_W] = 1000000000000
+	(snap["R"][1] as Array)[S.R_TARGET_W] = -50
+	client.apply_snapshot(JSON.parse_string(JSON.stringify(snap)))
+	assert_eq(client.state.riders[0].applied_target_w, 9999.0)
+	assert_eq(client.state.riders[1].applied_target_w, 0.0)

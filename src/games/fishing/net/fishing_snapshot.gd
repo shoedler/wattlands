@@ -222,7 +222,7 @@ static func _apply_row(r: FishingRiderState, row: Array) -> void:
 	r.tow_n = S.unit(row[S.R_TOW]) * FishingConst.TOW_MAX_N
 	r.prop_depth_m = int(row[S.R_PROP_CM]) / 100.0
 	r.reel = S.unit(row[S.R_REEL])
-	r.applied_target_w = float(int(row[S.R_TARGET_W]))
+	r.applied_target_w = float(clampi(int(row[S.R_TARGET_W]), 0, 9999))
 	r.surging = fl & S.F_SURGE != 0
 
 
