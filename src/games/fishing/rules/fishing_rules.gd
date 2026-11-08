@@ -17,9 +17,12 @@ extends RefCounted
 ##          with a surge, and auto-confirm after two scan cycles; Autopilot picks after 1 s.
 ##          Pedaling >= 80 % for 2 s drives on (not for Autopilot).
 ##   CAST   the wobbler dives to the fish (1.5 s + depth / 60 m/s, <= 8 s); confirm reels in.
-##   WAIT   the lure band (preferred + species offset +- 8 rpm); a bite comes with hazard
-##          1 / 25 s in band (a quarter outside), never in the first 5 s, forced at 90 s; never
-##          in the drive-out, before the Roam phase's min_s, after time-up or while staggered.
+##   WAIT   the lure band (preferred + species offset +- 8 rpm); the jig: the lure is retrieved to
+##          the boat over 40 s and recast there (CAST, then WAIT again, the wait still counting);
+##          a bite comes with hazard 1 / 15 s while the jig is on (in band at 40 % of FTP or
+##          more), else 1 / 25 s in band (a quarter outside), never in the first 5 s, forced at
+##          90 s; never in the drive-out, before the Roam phase's min_s, after time-up or while
+##          staggered. SIM throughout: no directive, no replan until the bite.
 ##          The bite builds the fight (FishingPreroll.roam_slot), replans the rest of the plan
 ##          (FishingPlanBuilder.fight_tail) and ends the Roam phase; confirm reels in.
 ##   FIGHT, LAND   FishingFight. The Landing's end leads to the next Roam: MENU with fresh hints.
@@ -403,7 +406,9 @@ static func _tick_roam(
 				_enter_menu(st, r, false)
 			elif r.state_t + EPS >= r.cast_s:
 				r.lure_depth = r.lure_target_depth
-				r.wait_t = 0.0
+				if not r.recasting:
+					r.wait_t = 0.0
+				r.recasting = false
 				set_action(r, FishingConst.A_WAIT)
 		FishingConst.A_WAIT:
 			_tick_wait(st, r, inp, dt, confirm, out)
@@ -590,6 +595,9 @@ static func _cast(r: FishingRiderState, i: int, out: FishingStepOut) -> void:
 		FishingConst.CAST_MAX_S
 	)
 	r.selected = i
+	r.jig_dx0 = r.lure_dx
+	r.jig_t = 0.0
+	r.recasting = false
 	r.menu.clear()
 	set_action(r, FishingConst.A_CAST)
 	out.events.append(FishingEvents.cast(r.slot, r.target_sp, r.lure_dx, r.lure_target_depth))
@@ -626,14 +634,49 @@ static func _tick_wait(
 		_enter_menu(st, r, false)
 		return
 	r.wait_t += dt
-	if not bites_open(st, r, inp) or r.wait_t + EPS < FishingConst.ROAM_BITE_MIN_S:
-		return
+	r.jig_t += dt
+	r.lure_dx = r.jig_dx0 * maxf(1.0 - r.jig_t / FishingConst.JIG_HOME_S, 0.0)
+	if bites_open(st, r, inp) and r.wait_t + EPS >= FishingConst.ROAM_BITE_MIN_S:
+		if (
+			r.wait_t + EPS >= FishingConst.ROAM_FORCED_BITE_S
+			or r.rng.unit() < wait_hazard(r) * dt
+		):
+			_roam_bite(st, r, def, out)
+			request_end(r, inp, out)
+			return
+	if r.jig_t + EPS >= FishingConst.JIG_HOME_S:
+		_recast(r, out)
+
+
+## The jig is on: the cadence is in the lure band and the power at JIG_FTP_FRAC of the rider's
+## FTP or more.
+static func jig_on(r: FishingRiderState) -> bool:
+	return r.in_band and r.power_w + EPS >= FishingConst.JIG_FTP_FRAC * r.ftp
+
+
+## A Free Roam bite's hazard (per second) at depth: 1 / 15 s with the jig on, else 1 / 25 s in the
+## lure band and a quarter of that outside it.
+static func wait_hazard(r: FishingRiderState) -> float:
+	if jig_on(r):
+		return 1.0 / FishingConst.JIG_BITE_MEAN_S
 	var h := 1.0 / FishingConst.ROAM_BITE_MEAN_S
 	if not r.in_band:
 		h *= FishingConst.HAZARD_OUT_OF_BAND
-	if r.wait_t + EPS >= FishingConst.ROAM_FORCED_BITE_S or r.rng.unit() < h * dt:
-		_roam_bite(st, r, def, out)
-		request_end(r, inp, out)
+	return h
+
+
+## The lure is home: cast it out again to the same spot (the wait keeps counting).
+static func _recast(r: FishingRiderState, out: FishingStepOut) -> void:
+	r.lure_dx = r.jig_dx0
+	r.lure_depth = 0.0
+	r.jig_t = 0.0
+	r.recasting = true
+	r.cast_s = minf(
+		FishingConst.CAST_BASE_S + r.lure_target_depth / FishingConst.LURE_SINK_MPS,
+		FishingConst.CAST_MAX_S
+	)
+	set_action(r, FishingConst.A_CAST)
+	out.events.append(FishingEvents.cast(r.slot, r.target_sp, r.lure_dx, r.lure_target_depth))
 
 
 ## Free Roam bites need the Roam phase (not the drive-out) past its min_s, play time left and no

@@ -261,3 +261,21 @@ func test_the_overtime_ends_after_5_minutes_whatever_is_on() -> void:
 	assert_eq(h.finished, "trip_over")
 	assert_eq(h.rider().action, FishingConst.A_HOME)
 	assert_eq(h.rider().heading, -1, "everyone heads for the dock")
+
+
+func test_the_lure_is_jigged_home_and_recast_while_waiting() -> void:
+	var h := _human()
+	_stop_at(h, 800.0)
+	_pick(h, 0)
+	assert_true(h.run_to_action(0, FishingConst.A_WAIT, 10.0))
+	var r := h.rider()
+	var dx0 := r.jig_dx0
+	assert_almost_eq(r.lure_dx, dx0, absf(dx0) * 0.05, "the lure starts out at the hint")
+	r.wait_t = -100000.0  # this fish never bites
+	h.run(FishingConst.JIG_HOME_S / 2.0)
+	assert_lt(absf(r.lure_dx), absf(dx0) * 0.6, "on its way home")
+	assert_true(h.run_to_action(0, FishingConst.A_CAST, FishingConst.JIG_HOME_S), "recast")
+	assert_eq(h.events_of(FishingEvents.CAST).size(), 2, "the first cast and the recast")
+	assert_almost_eq(r.lure_dx, dx0, 1e-6)
+	assert_true(h.run_to_action(0, FishingConst.A_WAIT, 10.0))
+	assert_eq(h.replans.size(), 0, "no replan: the jig is SIM")

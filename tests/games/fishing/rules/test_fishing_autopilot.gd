@@ -148,3 +148,10 @@ func test_zero_input_roam_sessions_fish_with_every_strategy() -> void:
 		assert_eq(h.finished, "trip_over", id)
 		assert_gt(h.rider().fish_landed, 0, "%s landed fish" % id)
 		assert_eq(h.violations, [] as Array[String], id)
+
+
+func test_bots_rest_above_the_jigs_power_so_their_wait_is_a_jig() -> void:
+	assert_gte(FishingAutopilot.REST_EFFORT, FishingConst.JIG_FTP_FRAC)
+	var r := FishingRiderState.new()
+	r.action = FishingConst.A_WAIT
+	assert_gte(FishingAutopilot.effort_frac(r), FishingConst.JIG_FTP_FRAC)
