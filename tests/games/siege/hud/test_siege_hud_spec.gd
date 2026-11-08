@@ -77,6 +77,9 @@ func test_the_placements_match_the_mock() -> void:
 	var shop := _rect_of(spec, SiegeShopPanel)
 	assert_eq(shop.position.x, 8)
 	assert_eq(shop.end.y - 2, 532)
+	var receipt := _rect_of(spec, SiegeReceiptPanel)
+	assert_eq(receipt.position.x, 8)
+	assert_lt(receipt.end.y, shop.position.y, "the receipt sits above the shop")
 	# narrower than the mock: on the narrowest flex canvas it fits between the session and the column
 	assert_eq(spec.banner_area, Rect2i(464, 69, 286, 27))
 
@@ -109,8 +112,12 @@ func test_the_hud_stays_off_the_field() -> void:
 	var path := g.state.path
 	var rects: Array[Rect2i] = []
 	for c: Dictionary in spec.controls:
-		# the shop has the road's west loop in breaks, when nothing marches on it
-		if not (c["control"] is SiegeHudWorld or c["control"] is SiegeShopPanel):
+		# the shop and the receipt have the road's west loop in breaks, when nothing marches on it
+		if not (
+			c["control"] is SiegeHudWorld
+			or c["control"] is SiegeShopPanel
+			or c["control"] is SiegeReceiptPanel
+		):
 			rects.append(c["at"])
 	rects.append(spec.toast_area)
 	rects.append(spec.banner_area)
@@ -153,7 +160,7 @@ func test_the_palette_comes_from_the_mock() -> void:
 	assert_eq(p["grid_px"], 2)
 
 
-func test_help_covers_the_seven_entries_with_arrows_on_the_art() -> void:
+func test_help_covers_the_eight_entries_with_arrows_on_the_art() -> void:
 	var g := _g()
 	var help := SiegeHud.help(g)
 	var keys := []
@@ -176,12 +183,13 @@ func test_help_covers_the_seven_entries_with_arrows_on_the_art() -> void:
 			"SIEGE_HELP_GATE",
 			"SIEGE_HELP_ROUTE_CARD",
 			"SIEGE_HELP_SHOP",
+			"SIEGE_HELP_RECEIPT",
 		]
 	)
 	# the wheel arrow points at the local rider's own wheel
 	var me := g.state.rider(1)
 	assert_eq(help[0]["arrow_to"], g.state.path.to_art(g.state.path.wheels[me.slot]))
-	assert_eq(_spec(g).help.size(), 7)
+	assert_eq(_spec(g).help.size(), 8)
 
 
 func test_the_help_arrows_point_into_the_new_plates() -> void:
@@ -192,6 +200,8 @@ func test_the_help_arrows_point_into_the_new_plates() -> void:
 	var shop := _rect_of(spec, SiegeShopPanel)
 	assert_true(Rect2(column).has_point(help[5]["arrow_to"]), "the stations card")
 	assert_true(Rect2(shop).has_point(help[6]["arrow_to"]), "the shop")
+	var receipt := _rect_of(spec, SiegeReceiptPanel)
+	assert_true(Rect2(receipt).has_point(help[7]["arrow_to"]), "the receipt")
 
 
 func test_the_help_panels_do_not_cover_each_other() -> void:

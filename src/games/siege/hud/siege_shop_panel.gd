@@ -3,19 +3,22 @@ extends SiegeHudCtl
 ## The break shop (docs/games/siege.md 2.4 "Shop", 3 HUD), bottom left over the road's west loop,
 ## which is empty in breaks: a Quartermaster plate with its rows in the BODY face. The top entry is
 ## Autopilot's pick for the rider, the second "Save gold", then what else they could buy
-## (SiegeShopModel).
+## (SiegeShopModel). A pick adds the item to the shared receipt (SiegeReceiptPanel above this
+## plate), takes your own back, or votes on someone else's; a row marks your own items "ADDED" and
+## the others' with the picker's name.
 ##
-## The pick logic is the platform's PedalScanList, whole: it follows the local trainer mode, so in
-## an ERG break a rider with pedal navigation on (PlayerSlot.pedal_nav) who only pedals gets the
-## top entry auto-confirmed after two scan cycles; that pick goes out tagged "auto" and never ends
-## the rider's zero-input shop fallback. A pick sends SiegeIntents.buy(item, at, via == "auto")
-## through ctx.intents. The list stays in the tree (it must be visible to tick and to hear the
-## router) inside a zero-size clipped holder; this plate draws its rows and highlight instead.
+## The pick logic is the platform's PedalScanList (scanning, surge to pick, keys), with one
+## difference: its ERG auto-confirm is off here (follow_local_mode false, erg_auto_confirm false;
+## the local mode is still told to the list, so coasting in ERG never backs out). Pedalling alone
+## adds nothing: Autopilot's picks come from the host's rules for a rider who does nothing. A pick
+## that still arrives tagged "auto" is dropped. A pick sends SiegeIntents.pick(item, at) through
+## ctx.intents. The list stays in the tree (it must be visible to tick and to hear the router)
+## inside a zero-size clipped holder; this plate draws its rows and highlight instead.
 ## Everything the rules sell is reachable: the list shows SiegeShopModel.ROWS rows a page, and a
 ## page's last row "More items" turns to the next (the last page's back to the first). An
 ## auto-confirmed pick on a later page only turns back to the first page, so pedalling alone
-## never buys from deep in the list. With pedal navigation on, a hint row (with the ERG auto-pick
-## countdown) sits under the rows and the plate grows upward for it.
+## never changes the receipt. With pedal navigation on, a hint row sits under the rows and the
+## plate grows upward for it.
 
 ## The plate's rect in breaks; RECT holds its shadow and the hint row above it.
 const RECT := Rect2i(8, 368, 366, 166)
@@ -54,8 +57,8 @@ func _init() -> void:
 	list.name = "Items"
 	list.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	list.add_theme_constant_override("separation", 0)
-	list.follow_local_mode = true
-	list.erg_auto_confirm = true
+	list.follow_local_mode = false
+	list.erg_auto_confirm = false
 	list.item_picked.connect(_on_item_picked)
 	list.highlight_changed.connect(_on_highlight_changed)
 	_holder.add_child(list)
@@ -78,7 +81,9 @@ func build() -> Dictionary:
 	visible = true
 	var me := game.ctx.local_player() if game.ctx != null else null
 	list.pedal_nav = me != null and me.pedal_nav
-	list.show_hint = list.pedal_nav
+	list.show_hint = false
+	if tm != null and tm.mode != "":
+		list.set_local_mode(tm.mode)
 	var tx := SiegeHudModel.strings_of(game)
 	if _list_since >= LIST_REFRESH_S or entries.is_empty():
 		_list_since = 0.0
@@ -87,33 +92,31 @@ func build() -> Dictionary:
 	return {
 		"title": tx.t("SIEGE_SHOP_TITLE"),
 		"countdown": tx.t("SIEGE_SHOP_COUNTDOWN", [ceili(left)]) if left > 0.0 else "",
-		"hint": hint_text(),
+		"hint": tx.t("SIEGE_SHOP_HINT") if list.pedal_nav else "",
 		"highlight": list.highlighted(),
 		"rows": rows_face(tx, r),
 	}
 
 
-## The list's hint (how to pick, the ERG auto-pick countdown) while pedal navigation is on.
-func hint_text() -> String:
-	if not list.pedal_nav:
-		return ""
-	var hint := list.get_node_or_null("Hint") as Label
-	return hint.text if hint != null else ""
-
-
-## The rows as drawn: [{"text", "cost" (-1: none), "ok", "note"}].
+## The rows as drawn: [{"text", "cost" (-1: none), "ok", "note", "mark", "mark_no"}]. "note" is
+## what the row lacks or recommends, "mark" what the receipt says of it: ADDED for the rider's own
+## item, the picker's name for another's (red when the rider voted no on it).
 func rows_face(tx: GameStrings, r: SiegeRiderState) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	var gold := floori(r.gold)
+	var free := floori(game.state.spendable(r))
 	for it: Dictionary in list.items():
 		var id: Variant = it.get("id", {})
 		var e := _entry_of(id)
 		var item := str((id as Dictionary).get("item", "")) if id is Dictionary else ""
 		var plain := item == SiegeIds.ITEM_SAVE or item == SiegeShopModel.ITEM_MORE or e.is_empty()
 		var ok := not bool(it.get("disabled", false))
+		var added := not plain and bool(e.get("added", false))
 		var note := ""
-		if not ok and not plain:
-			note = tx.t("SIEGE_SHOP_SHORT", [maxi(int(e["cost"]) - gold, 0)])
+		var mark := ""
+		if added:
+			mark = tx.t("SIEGE_SHOP_ADDED") if bool(e["mine"]) else str(e["by"])
+		elif not ok and not plain:
+			note = tx.t("SIEGE_SHOP_SHORT", [maxi(int(e["cost"]) - free, 0)])
 		elif not plain and bool(e.get("recommended", false)):
 			note = tx.t("SIEGE_SHOP_BEST")
 		(
@@ -129,6 +132,9 @@ func rows_face(tx: GameStrings, r: SiegeRiderState) -> Array[Dictionary]:
 					"cost": -1 if plain else int(e["cost"]),
 					"ok": ok,
 					"note": note,
+					"mark": mark,
+					"mark_mine": added and bool(e["mine"]),
+					"mark_no": added and bool(e["my_no"]),
 				}
 			)
 		)
@@ -169,11 +175,17 @@ func _row(ry: int, index: int, row: Dictionary) -> void:
 	var cost := int(row["cost"])
 	var col := D.GOLD if ok else D.DIM
 	var note := str(row["note"])
+	var mark := str(row["mark"])
 	if cost >= 0:
 		SiegeHudType.draw_r(self, str(cost), right, ry + 5, "BODY", col)
 		D.icon(self, "denarius", COIN_X, ry + 6, col)
 		right = COIN_X - 6
-	if note != "":
+	if mark != "":
+		var mark_col := (
+			D.GOOD if bool(row["mark_mine"]) else (D.TERRA if bool(row["mark_no"]) else D.DIM)
+		)
+		right = SiegeHudType.draw_r(self, mark, right, ry + 7, "LABEL", mark_col) - 6
+	elif note != "":
 		right = SiegeHudType.draw_r(self, note, right, ry + 7, "LABEL", col) - 6
 	var text := SiegeHudType.fit(str(row["text"]), "BODY", right - TEXT_X)
 	SiegeHudType.draw(self, text, TEXT_X, ry + 5, "BODY", D.TEXT if ok else D.DIM)
@@ -195,8 +207,9 @@ func rebuild(tx: GameStrings, r: SiegeRiderState) -> void:
 	if picks_override is Array:
 		picks.assign(picks_override)
 	else:
-		picks = SiegeAutopilot.shop_picks(s, r, 1)
-	entries = SiegeShopModel.entries(s, r, tx, picks)
+		# blind to the receipt: the list keeps its order while items are added and taken back
+		picks = SiegeAutopilot.shop_picks(s, r, 1, true)
+	entries = SiegeShopModel.entries(s, r, tx, picks, _names())
 	var pages := SiegeShopModel.pages(entries, tx)
 	page_count = pages.size()
 	page = clampi(page, 0, page_count - 1)
@@ -205,6 +218,7 @@ func rebuild(tx: GameStrings, r: SiegeRiderState) -> void:
 	if sig == signature:
 		return
 	signature = sig
+	var was: Variant = list.highlighted_id()
 	var items: Array = []
 	for e: Dictionary in shown:
 		items.append(
@@ -216,6 +230,31 @@ func rebuild(tx: GameStrings, r: SiegeRiderState) -> void:
 			}
 		)
 	list.set_items(items)
+	_keep_highlight(was)
+
+
+## set_items puts the highlight on the first row; a refresh puts it back on the row it was on (by
+## its id, quietly), so a receipt change never moves the rider's cursor to another item.
+func _keep_highlight(was: Variant) -> void:
+	if was == null:
+		return
+	var rows := list.items()
+	for i in rows.size():
+		if rows[i].get("id") == was:
+			if i != list.highlighted() and list.is_item_enabled(i):
+				var loud := list.sounds
+				list.sounds = false
+				list.set_highlight(i)
+				list.sounds = loud
+			return
+
+
+## Slot -> name of every rider, for the "by" of an added item.
+func _names() -> Dictionary:
+	var out := {}
+	for rd in game.state.riders:
+		out[rd.slot] = SiegeHudModel.rider_name(game, rd)
+	return out
 
 
 func _turn_to(p: int) -> void:
@@ -244,7 +283,8 @@ func _on_item_picked(_index: int, id: Variant, via: String) -> void:
 	if item == SiegeShopModel.ITEM_MORE or (via == "auto" and page != 0):
 		_turn_to(at if item == SiegeShopModel.ITEM_MORE and via != "auto" else 0)
 		return
-	if item == SiegeIds.ITEM_SAVE or item == "":
+	# an auto-confirm (the list has it off here) never reaches the receipt
+	if via == "auto" or item == SiegeIds.ITEM_SAVE or item == "":
 		return
 	if game != null and game.ctx != null and game.ctx.intents != null:
-		game.ctx.intents.send(SiegeIntents.buy(item, at, via == "auto"))
+		game.ctx.intents.send(SiegeIntents.pick(item, at))

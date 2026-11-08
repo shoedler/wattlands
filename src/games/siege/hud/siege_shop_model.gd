@@ -8,10 +8,14 @@ extends RefCounted
 ## pages the result through a PedalScanList (pages(): ROWS rows, the last row of a page "More" when
 ## there is more).
 ##
-## An entry is {"id": {"item", "at"}, "name", "text", "detail", "cost", "disabled", "recommended"}
-## ("name" is the item alone, "text" the name with its price); `at`
-## is the station (upgrade) or the pad (scorpion, pad_upgrade). The Save entry (ITEM_SAVE) and
-## the More entry (ITEM_MORE) are never sent as intents.
+## An entry is {"id": {"item", "at"}, "name", "text", "detail", "cost", "disabled", "recommended",
+## "added", "mine", "by", "my_no"} ("name" is the item alone, "text" the name with its price); `at`
+## is the station (upgrade) or the pad (scorpion, pad_upgrade). "added": the item is on the shared
+## receipt, "mine": the rider put it there (picking it takes it back), "by": the picker's name,
+## "my_no": the rider has voted no on it. An item on the receipt stays pickable whatever the gold
+## (a pick votes or takes back); any other needs the gold the rider has free
+## (SiegeState.spendable). The Save entry (ITEM_SAVE) and the More entry (ITEM_MORE) are never sent
+## as intents.
 
 ## Rows a page shows (the Quartermaster plate holds five in the BODY face).
 const ROWS := 5
@@ -64,11 +68,14 @@ static func _entry(
 	rider: SiegeRiderState,
 	item: String,
 	at: int,
-	recommended: bool
+	recommended: bool,
+	names: Dictionary
 ) -> Dictionary:
 	var save := item == SiegeIds.ITEM_SAVE
 	var cost := 0 if save else cost_of(state, item, at)
-	var affordable := save or (cost >= 0 and float(cost) <= floorf(rider.gold))
+	var line := null if save else state.receipt_line(item, at)
+	var added := line != null
+	var affordable := save or added or (cost >= 0 and float(cost) <= floorf(state.spendable(rider)))
 	var item_name := text_of(state, strings, item, at)
 	var text := item_name
 	if not save:
@@ -81,13 +88,21 @@ static func _entry(
 		"cost": cost,
 		"disabled": not affordable,
 		"recommended": recommended,
+		"added": added,
+		"mine": added and line.slot == rider.slot,
+		"by": str(names.get(line.slot, "Rider %d" % (line.slot + 1))) if added else "",
+		"my_no": added and line.no.has(rider.slot),
 	}
 
 
-## The entries for `rider`. `picks` are Autopilot's (normalized buy intents, best first; only
-## the first is used).
+## The entries for `rider`. `picks` are Autopilot's (normalized pick intents, best first; only
+## the first is used). `names` is slot -> the rider's name for the "by" of an added item.
 static func entries(
-	state: SiegeState, rider: SiegeRiderState, strings: GameStrings, picks: Array[Dictionary]
+	state: SiegeState,
+	rider: SiegeRiderState,
+	strings: GameStrings,
+	picks: Array[Dictionary],
+	names: Dictionary = {}
 ) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if state == null or rider == null or state.content == null:
@@ -99,9 +114,9 @@ static func entries(
 		# a normalized intent carries both keys; the pad is the one that counts for pad items
 		var at := int(p.get("pad", 0)) if SiegeIds.PAD_ITEMS.has(item) else int(p.get("station", 0))
 		if SiegeIds.ITEMS.has(item) and cost_of(state, item, at) >= 0:
-			out.append(_entry(state, strings, rider, item, at, true))
+			out.append(_entry(state, strings, rider, item, at, true, names))
 			seen["%s/%d" % [item, at]] = true
-	out.append(_entry(state, strings, rider, SiegeIds.ITEM_SAVE, 0, false))
+	out.append(_entry(state, strings, rider, SiegeIds.ITEM_SAVE, 0, false, names))
 	for w: Array in candidates(state):
 		var item: String = w[0]
 		var at: int = w[1]
@@ -109,7 +124,7 @@ static func entries(
 			continue
 		if seen.has("%s/%d" % [item, at]) or cost_of(state, item, at) < 0:
 			continue
-		out.append(_entry(state, strings, rider, item, at, false))
+		out.append(_entry(state, strings, rider, item, at, false, names))
 	return out
 
 
@@ -158,6 +173,10 @@ static func pages(list: Array[Dictionary], strings: GameStrings) -> Array:
 					"cost": 0,
 					"disabled": false,
 					"recommended": false,
+					"added": false,
+					"mine": false,
+					"by": "",
+					"my_no": false,
 				}
 			)
 		)
@@ -170,5 +189,18 @@ static func signature(list: Array[Dictionary]) -> String:
 	var parts: Array[String] = []
 	for e in list:
 		var id: Dictionary = e["id"]
-		parts.append("%s/%d/%d/%s" % [id["item"], id["at"], int(bool(e["disabled"])), e["text"]])
+		parts.append(
+			(
+				"%s/%d/%d/%s/%d/%d/%s"
+				% [
+					id["item"],
+					id["at"],
+					int(bool(e["disabled"])),
+					e["text"],
+					int(bool(e.get("added", false))),
+					int(bool(e.get("my_no", false))),
+					e.get("by", "")
+				]
+			)
+		)
 	return "|".join(parts)

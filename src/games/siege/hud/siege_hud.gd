@@ -11,7 +11,8 @@ extends RefCounted
 ##  - right column: the gate and tar, the gold, the stations, Overdrive (SiegeHudColumn);
 ##  - bottom centre: the cockpit (SiegeHudCockpit: clock, watts, cadence, heart rate, one
 ##    instruction, what comes next), over the wadi;
-##  - bottom left, in breaks: the shop (SiegeShopPanel), over the road's west loop, empty then;
+##  - bottom left, in breaks: the shop (SiegeShopPanel), over the road's west loop, empty then, and
+##    above it the shared receipt (SiegeReceiptPanel) with the votes;
 ##  - pinned to the world, under the plates: the tags on rams and towers and the gate's banner
 ##    (SiegeHudWorld).
 ## The centre, the road in waves, the bridge and the plaza stay clear. The cockpit shows raw W and
@@ -47,6 +48,7 @@ const PALETTE := {
 ## Where the help panels point at the HUD's own cards (art pixels).
 const ROUTE_CARD_AT := Vector2(804, 150)
 const SHOP_AT := Vector2(178, 458)
+const RECEIPT_AT := Vector2(190, 312)
 ## Where the help panels sit (art pixels), clear of each other, the title and most plates.
 const HELP_AT := {
 	"SIEGE_HELP_WHEEL": Vector2(660, 112),
@@ -56,6 +58,7 @@ const HELP_AT := {
 	"SIEGE_HELP_GATE": Vector2(470, 362),
 	"SIEGE_HELP_ROUTE_CARD": Vector2(651, 158),
 	"SIEGE_HELP_SHOP": Vector2(178, 368),
+	"SIEGE_HELP_RECEIPT": Vector2(30, 120),
 }
 
 
@@ -66,6 +69,7 @@ static func spec(game: SiegeGame) -> HudSpec:
 	_add(hs, SiegeHudColumn.new(), game, SiegeHudColumn.RECT)
 	_add(hs, SiegeHudCockpit.new(), game, SiegeHudCockpit.RECT)
 	_add(hs, SiegeShopPanel.new(), game, SiegeShopPanel.RECT)
+	_add(hs, SiegeReceiptPanel.new(), game, SiegeReceiptPanel.RECT)
 	# the world's tags last and under the plates (its z_index): the plates come first so a help
 	# point on one follows that plate, and every other point follows the world
 	_add(hs, SiegeHudWorld.new(), game, SiegeHudWorld.RECT)
@@ -93,11 +97,12 @@ static func plate_rects() -> Array[Rect2i]:
 		SiegeHudColumn.RECT,
 		SiegeHudCockpit.RECT,
 		SiegeShopPanel.RECT,
+		SiegeReceiptPanel.RECT,
 	]
 
 
 ## The help overlay (art pixels on 960 x 540): your wheel, your powered path, the stations, the
-## road, the gate and its curtain, the stations card and the shop.
+## road, the gate and its curtain, the stations card, the shop and the receipt.
 static func help(game: SiegeGame) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var path: SiegePath = null
@@ -123,6 +128,7 @@ static func help(game: SiegeGame) -> Array[Dictionary]:
 	out.append(entry("SIEGE_HELP_GATE", gate))
 	out.append(entry("SIEGE_HELP_ROUTE_CARD", ROUTE_CARD_AT))
 	out.append(entry("SIEGE_HELP_SHOP", SHOP_AT))
+	out.append(entry("SIEGE_HELP_RECEIPT", RECEIPT_AT))
 	return out
 
 
