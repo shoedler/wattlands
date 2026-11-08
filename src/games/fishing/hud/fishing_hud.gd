@@ -32,6 +32,8 @@ const TOAST_H := 22
 const BANNER_W := 400
 const BANNER_H := 60
 const MARGIN := 4
+## The jig panel's rect is the view less this many rows, so it differs from the fight panel's.
+const JIG_RECT_TRIM := 4
 ## The help overlay's entries: [string key, layout rect it points at, text offset from it].
 const HELP: Array = [
 	["FISHING_HELP_MINIMAP", "minimap", Vector2(40, 46)],
@@ -130,7 +132,8 @@ static func layout(art: Vector2i) -> Dictionary:
 		"chips": Rect2i(0, 0, w, h - 60),
 		"speed": Rect2i(0, FishingScenery.SURF_Y + FishingScenery.SURFACE_ROWS, w, 30),
 		"fight": Rect2i(0, 0, w, h),
-		"jig": Rect2i(0, 0, w, h),
+		# not the fight panel's rect: the HudLayer stacks controls of one rect and halves their heights
+		"jig": Rect2i(0, 0, w, h - JIG_RECT_TRIM),
 		"cruise": cruise,
 		"gear": gear,
 		"timeline": Rect2i(MARGIN, cruise.position.y - TIMELINE_H - 4, TIMELINE_W, TIMELINE_H),

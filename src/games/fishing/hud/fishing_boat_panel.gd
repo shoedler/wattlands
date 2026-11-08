@@ -28,12 +28,13 @@ func track_boat(r: FishingRiderState, thing: String) -> void:
 			_toward_left = not (at is Vector2) or (at as Vector2).x < _anchor.x
 
 
-## The panel's rect (art px) for a panel `h` rows tall at the boat.
-func place_panel(h: int) -> Rect2i:
+## The panel's rect (art px) for a panel `h` rows tall at the boat, its near edge `over_pivot` art
+## px past the boat's pivot toward what is on the line (negative: short of it).
+func place_panel(h: int, over_pivot: int = OVER_PIVOT) -> Rect2i:
 	var aw := art_rect.size.x
 	var w := FishingPanelRows.W
 	var x := (aw - w) / 2
 	if _anchor.x >= 0.0:
-		x = int(_anchor.x) - OVER_PIVOT if _toward_left else int(_anchor.x) + OVER_PIVOT - w
+		x = int(_anchor.x) - over_pivot if _toward_left else int(_anchor.x) + over_pivot - w
 	x = clampi(x, 4, maxi(aw - w - 4, 4))
 	return Rect2i(x, FishingScenery.SURF_Y + BELOW_SURFACE, w, h)

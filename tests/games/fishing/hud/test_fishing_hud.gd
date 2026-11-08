@@ -519,6 +519,7 @@ func test_the_jig_panel_draws_under_the_boat_away_from_the_lure() -> void:
 	assert_gt(p.panel_rect.position.y, FishingScenery.SURF_Y, "under the surface")
 	assert_gt(lure.x, boat.x, "the lure is ahead of the boat")
 	assert_lt(float(p.panel_rect.get_center().x), boat.x, "so the panel sits behind it")
+	assert_lt(float(p.panel_rect.end.x), boat.x - 30.0, "clear of the boat and the line")
 	assert_true(Rect2i(0, 0, 640, 360).encloses(p.panel_rect))
 	r.action = FishingConst.A_DRIVE
 	p.refresh()

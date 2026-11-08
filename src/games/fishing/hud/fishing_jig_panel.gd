@@ -13,6 +13,11 @@ const CAP := FishingPanelRows.CAP
 const BIG_CAP := FishingPanelRows.BIG_CAP
 const BAR_ROWS := FishingPanelRows.BAR_ROWS
 const CUE_ROW := FishingPanelRows.CUE_ROW
+## The panel stops this far short of the boat's pivot on the lure's side, clear of the line.
+const SHORT_OF_PIVOT := -43
+## The gap above the first text line, and the padding under the second (art px).
+const TEXT_GAP := 2
+const FOOT := PAD + 4
 
 var row: Dictionary = {}
 var numbers: Dictionary = {}
@@ -33,7 +38,7 @@ static func make(p_game: FishingGame, rect: Rect2i) -> FishingJigPanel:
 static func panel_h() -> int:
 	# title, bar, labels, the big numbers, the cadence row, its limits, the two text lines
 	var rows: Array[int] = [PAD, CAP, 3, BAR_ROWS, 4, CAP, 2, BIG_CAP, 5, CAP, 3, CAP, CUE_ROW]
-	var out := PAD + CUE_ROW
+	var out := TEXT_GAP + CUE_ROW + FOOT
 	for r in rows:
 		out += r
 	return out
@@ -54,7 +59,7 @@ func _draw() -> void:
 		return
 	var s := k()
 	var u := float(FishingHudDraw.unit(s))
-	panel_rect = place_panel(panel_h())
+	panel_rect = place_panel(panel_h(), SHORT_OF_PIVOT)
 	var o := Vector2(panel_rect.position) * u
 	var inner := float(W - 2 * PAD) * u
 	FishingHudDraw.panel(self, Rect2(o, Vector2(panel_rect.size) * u), u)
@@ -83,6 +88,7 @@ func _draw() -> void:
 	y += 2 + BIG_CAP + 5 + CAP
 	var base := FishingPanelRows.cadence(self, game, o, y, s, float(numbers["cadence"]), band)
 	var jig_in := FishingHudModel.tr_key(game, FishingHudModel.KEY_JIG_IN)
-	FishingHudDraw.text(self, base + Vector2(PAD * u, 0), jig_in, s, text if bool(row["on"]) else dim)
+	var first := base + Vector2(PAD, TEXT_GAP) * u
+	FishingHudDraw.text(self, first, jig_in, s, text if bool(row["on"]) else dim)
 	var recast := FishingHudModel.tr_key(game, FishingHudModel.KEY_JIG_RECAST)
-	FishingHudDraw.text(self, base + Vector2(PAD * u, float(CUE_ROW) * u), recast, s, dim)
+	FishingHudDraw.text(self, first + Vector2(0, float(CUE_ROW) * u), recast, s, dim)
