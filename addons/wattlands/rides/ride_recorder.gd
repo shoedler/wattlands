@@ -271,7 +271,7 @@ func summary() -> Dictionary:
 		"fit_path": _saved_fit_path,
 		"sport": "cycling",
 		"sub_sport": "virtual_activity",
-		"app_build": Wl.BUILD,
+		"app_build": Wl.app_version(),
 	}
 	return out
 
@@ -597,7 +597,7 @@ func _serial_from_id() -> int:
 
 
 static func _software_version_x100() -> int:
-	var parts := Wl.BUILD.split(".")
+	var parts := Wl.app_version().split(".")
 	var major := int(parts[0]) if parts.size() > 0 else 0
 	var minor := int(parts[1]) if parts.size() > 1 else 0
 	return major * 100 + minor * 10

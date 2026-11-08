@@ -5,6 +5,7 @@ extends RefCounted
 ## Phase kinds, modes, roles, scaling modes and `clamped_by` rule names are plain
 ## Strings so they survive JSON (reports, network, content) unchanged.
 
+## The network build tag (relay `hello.build`, LAN beacons). Not the app version: read app_version().
 const BUILD := "0.3.0"
 ## Network protocol version (BRIEF 5.3 `hello.proto`, 5.5 schemas).
 const PROTO := 1
@@ -160,6 +161,13 @@ static func slot_look(slot_index: int) -> Dictionary:
 		"pattern": SLOT_PATTERNS[i],
 		"hollow": posmod(slot_index, MAX_SLOTS) >= 4,
 	}
+
+
+## The released app version, from project.godot `application/config/version` ("1.1.0"). Rides
+## report it (ride JSON `app_build`, the FIT device_info software version). BUILD when unset.
+static func app_version() -> String:
+	var v := str(ProjectSettings.get_setting("application/config/version", ""))
+	return v if v != "" else BUILD
 
 
 ## True for every phase kind a plan may contain.

@@ -511,3 +511,22 @@ func test_a_ride_without_heart_rate_writes_no_heart_rate_fields() -> void:
 	var d := Reader.read(rec.fit_bytes())
 	assert_false((Reader.of(d, 20)[0]["fields"] as Dictionary).has(3))
 	assert_false((Reader.of(d, 18)[0]["fields"] as Dictionary).has(16))
+
+
+## Playtest 2026-11-07: rides said app_build "0.3.0" (the network tag) on a 1.0.0 app. The ride
+## JSON and the FIT device_info report the released version from project.godot.
+func test_rides_report_the_released_app_version() -> void:
+	var version := str(ProjectSettings.get_setting("application/config/version"))
+	assert_ne(version, "", "project.godot has a version")
+	assert_eq(Wl.app_version(), version)
+	var rec := RideRecorder.new()
+	rec.start("workout", "e2e", START, 0.0)
+	rec.record(0.0, 100.0, 80.0, 20.0)
+	rec.stop(5.0)
+	assert_eq(rec.summary()["app_build"], version)
+	var parts := version.split(".")
+	assert_eq(
+		int(rec.fit_data()["software_version_x100"]),
+		int(parts[0]) * 100 + int(parts[1]) * 10,
+		"FIT software version x100"
+	)
