@@ -19,7 +19,7 @@ extends RefCounted
 ##   CAST   the wobbler dives to the fish (1.5 s + depth / 60 m/s, <= 8 s); confirm reels in.
 ##   WAIT   the lure band (preferred + species offset +- 8 rpm); the jig: the lure is retrieved to
 ##          the boat over 40 s and recast there (CAST, then WAIT again, the wait still counting);
-##          a bite comes with hazard 1 / 15 s while the jig is on (in band at 40 % of FTP or
+##          a bite comes with hazard 1 / 10 s (a wait of 15 s on average with the 5 s minimum) while the jig is on (in band at 40 % of FTP or
 ##          more), else 1 / 25 s in band (a quarter outside), never in the first 5 s, forced at
 ##          90 s; never in the drive-out, before the Roam phase's min_s, after time-up or while
 ##          staggered. SIM throughout: no directive, no replan until the bite.
@@ -651,7 +651,7 @@ static func jig_on(r: FishingRiderState) -> bool:
 	return r.in_band and r.power_w + EPS >= FishingConst.JIG_FTP_FRAC * r.ftp
 
 
-## A Free Roam bite's hazard (per second) at depth: 1 / 15 s with the jig on, else 1 / 25 s in the
+## A Free Roam bite's hazard (per second) at depth: 1 / 10 s with the jig on (5 s + 10 s: a 15 s wait on average), else 1 / 25 s in the
 ## lure band and a quarter of that outside it.
 static func wait_hazard(r: FishingRiderState) -> float:
 	if jig_on(r):

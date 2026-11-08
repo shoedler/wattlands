@@ -1,6 +1,6 @@
 extends GutTest
 ## The jig (Free Roam's wait): the lure comes home to the boat over JIG_HOME_S and is recast
-## there; holding the lure band at JIG_FTP_FRAC of FTP or more bites sooner (hazard 1 / 15 s,
+## there; holding the lure band at JIG_FTP_FRAC of FTP or more bites sooner (hazard 1 / 10 s after the 5 s minimum: a 15 s wait,
 ## else 1 / 25 s in band and a quarter of that out of it). SIM throughout: nothing here asks
 ## the trainer for load.
 
@@ -36,7 +36,7 @@ func test_the_jig_hazard_is_1_over_15_s_in_band_at_40_percent_ftp() -> void:
 	var r := _rider()
 	assert_true(FishingRules.jig_on(r), "exactly 40 % counts")
 	assert_almost_eq(FishingRules.wait_hazard(r), 1.0 / FishingConst.JIG_BITE_MEAN_S, 1e-9)
-	assert_eq(FishingConst.JIG_BITE_MEAN_S, 15.0)
+	assert_eq(FishingConst.JIG_BITE_MEAN_S, 10.0)
 
 
 func test_under_40_percent_the_old_hazard_stands_and_out_of_band_a_quarter() -> void:
@@ -122,10 +122,10 @@ func test_a_jig_never_asks_the_trainer_for_load() -> void:
 	assert_eq(h.violations, [] as Array[String])
 
 
-func test_holding_the_jig_bites_in_about_20_s_and_not_holding_in_about_30_s() -> void:
+func test_holding_the_jig_bites_in_about_15_s_and_not_holding_in_about_30_s() -> void:
 	var held := 0.0
 	var loose := 0.0
-	var n := 24
+	var n := 60
 	for s in n:
 		var a := _waiting(100.0, 200 + s)
 		var ra := a.rider()
@@ -139,8 +139,8 @@ func test_holding_the_jig_bites_in_about_20_s_and_not_holding_in_about_30_s() ->
 		loose += rb.wait_t
 	held /= n
 	loose /= n
-	assert_between(held, 12.0, 28.0, "jigging: 5 s at depth, then 1 / 15 s: %.1f s" % held)
-	assert_between(loose, 18.0, 45.0, "not jigging: 5 s, then 1 / 25 s: %.1f s" % loose)
+	assert_between(held, 12.5, 17.5, "jigging: 5 s at depth, then 1 / 10 s: %.1f s" % held)
+	assert_between(loose, 24.0, 36.0, "not jigging: 5 s, then 1 / 25 s: %.1f s" % loose)
 	assert_lt(held, loose, "the jig bites sooner")
 
 
