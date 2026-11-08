@@ -21,7 +21,7 @@ func test_s8_crew_3_with_tripled_enemy_counts_stays_within_the_caps() -> void:
 	var r := TankBalanceHarness.run(cfg)
 	assert_false(r.has("error"), str(r.get("error", "")))
 	assert_eq(int(r["enemy_mult"]), 3)
-	assert_eq((r["segments"] as Array).size(), 11, "the whole mission is played")
+	assert_eq((r["segments"] as Array).size(), 12, "the whole mission is played")
 	assert_lte(int(r["max_enemies"]), CAP_ENEMIES, "at most 16 enemies at once")
 	assert_lte(int(r["max_shells"]), CAP_SHELLS, "at most 24 shells at once")
 	assert_gt(int(r["snapshots"]), 1000, "a snapshot every 0.1 s of the whole session")

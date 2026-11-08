@@ -83,6 +83,15 @@ func test_the_rollout_keeps_the_hangar_behind_the_tank_and_then_drops_it() -> vo
 	assert_false(bool(_lk(adv)["far_on"]))
 
 
+func test_the_end_wall_stands_near_the_panels_edge_on_every_canvas() -> void:
+	for size: Vector2 in [Vector2(960, 540), Vector2(1280, 680), Vector2(852, 480)]:
+		var v := _view(HANGAR, 60.0, size)
+		var end_x := float(_lk(v)["end_x"])
+		assert_lte(end_x, TankFarMap.near_end_x(size.x), "inside the near panel at %s" % size)
+		assert_gte(end_x, v.tank_pos.x + TankHangar.END_NOSE_GAP - 0.5, "clear of the nose at %s" % size)
+	assert_eq(float(_lk(_view(HANGAR, 60.0))["end_x"]), TankHangar.END_X, "the base canvas")
+
+
 func test_the_end_wall_slides_left_with_the_hull() -> void:
 	var v := _view(ROLLOUT, 1.0)
 	var x0 := float(_lk(v)["end_x"])

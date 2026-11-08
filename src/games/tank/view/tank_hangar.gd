@@ -22,8 +22,12 @@ const SHUTTER := "res://assets/tank/hangar/shutter.png"
 const ROOM_W := 480.0
 const ROOM_H := 440.0
 const FLOOR_Y := 380.0
-## The end wall: its left edge at hull rest (stage x), its width, the doorway's x range and y range in it.
+## The end wall: its left edge at hull rest (stage x, at the base canvas; end_origin on any other), its width, the
+## doorway's x range and y range in it.
 const END_X := 548.0
+## How far in from the near panel's edge the wall stands, and the least room it keeps past the tank's nose.
+const END_FROM_EDGE := 74.0
+const END_NOSE_GAP := 480.0
 const END_W := 130.0
 const VOID_X0 := 16.0
 const VOID_X1 := 114.0
@@ -105,13 +109,19 @@ static func look(v: TankView, state: TankState) -> Dictionary:
 		out["door"] = 1.0
 		out["beacon"] = 1.0 - smooth(ROLL_BEACON_S, state.seg.elapsed_s)
 	var shift := (v.plane_x + float(TankConst.REAR_SCREEN_X)) * TankView.S
-	out["end_x"] = END_X - shift
+	out["end_x"] = end_origin(v) - shift
 	out["world_shift"] = shift
 	out["on"] = float(out["end_x"]) + END_W > -8.0
 	var slide := v.hull_x * TankView.S * TankFarPanel.PLANE_PARALLAX
 	out["far_x"] = v.far.far_w * 0.5 - slide if v.far != null else 0.0
 	out["far_on"] = float(out["far_x"]) + FACADE_HALF > -8.0
 	return out
+
+
+## The end wall's left edge at hull rest on this canvas: a fixed distance in from the near panel's edge (a wider canvas
+## shows more room), never closer than END_NOSE_GAP to the tank's left (its nose).
+static func end_origin(v: TankView) -> float:
+	return maxf(TankFarMap.near_end_x(v.canvas.x) - END_FROM_EDGE, v.tank_pos.x + END_NOSE_GAP)
 
 
 ## True while the hangar covers the near stage at stage x `x` (the world drawn there is the hangar's).
@@ -271,15 +281,15 @@ static func _bar(ci: CanvasItem, at: Vector2, dark: float) -> void:
 # --- The beacons ------------------------------------------------------------------------------------------------
 
 
-## World x (art px) of the two beacons on the near wall.
-static func beacon_world_x() -> Array[float]:
-	return [96.0, END_X - 46.0]
+## World x (art px) of the two beacons on the near wall: one near the tank's rear, one by the end wall.
+static func beacon_world_x(lk: Dictionary) -> Array[float]:
+	return [96.0, float(lk["end_x"]) + float(lk["world_shift"]) - 46.0]
 
 
 static func _beacons(ci: CanvasItem, v: TankView, lk: Dictionary, light: bool) -> void:
 	var k: float = lk["beacon"]
 	var shift: float = lk["world_shift"]
-	for wx in beacon_world_x():
+	for wx in beacon_world_x(lk):
 		var p := Vector2(roundf(wx - shift), BEACON_Y)
 		if p.x < -40.0 or p.x > float(lk["end_x"]):
 			continue
