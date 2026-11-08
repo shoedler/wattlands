@@ -149,6 +149,9 @@ var _y_off: float = 0.0
 var _seen: Dictionary = {}
 var _boss: Dictionary = {}
 var _smoke_acc: float = 0.0
+## The sim time the wrecks last closed in at (a wreck stands in the world, so the hull's travel brings it
+## nearer, close_wrecks).
+var _close_t: float = -1.0
 
 
 func _init(view: TankView, sd: int) -> void:
@@ -258,6 +261,7 @@ func frame(state: TankState, dt: float) -> void:
 	_track(state, dt)
 	_track_boss(state, dt)
 	_emit(state, dt)
+	close_wrecks(state)
 	fx.step(dt, 0.0)
 	shake = maxf(shake - dt * SHAKE_DECAY, 0.0)
 	var off := Vector2.ZERO
@@ -607,6 +611,25 @@ func _wreck_foot(w: Dictionary) -> Vector2:
 func _wreck_hatch(w: Dictionary) -> Vector2:
 	var r := _rect_of(str(w["kind"]), _wreck_foot(w))
 	return r.position + r.size * Vector2(0.45, 0.25)
+
+
+## A far wreck stands where it fell: the hull's travel since the last call (its speed over the sim time
+## that passed) brings it nearer, and one that has come inside RANGE_NEAR_M is behind the panel's near
+## edge, so it goes. Sim time, so a pause or a client's snapshot step moves it exactly as far as the hull went.
+func close_wrecks(state: TankState) -> void:
+	var step_s := state.t - _close_t if _close_t >= 0.0 else 0.0
+	_close_t = state.t
+	if step_s <= 0.0 or step_s > 1.0 or wrecks.is_empty():
+		return
+	var travelled := state.hull.speed_mps * step_s
+	if travelled <= 0.0:
+		return
+	var keep: Array[Dictionary] = []
+	for w in wrecks:
+		w["range"] = float(w["range"]) - travelled
+		if float(w["range"]) >= TankFarMap.RANGE_NEAR_M:
+			keep.append(w)
+	wrecks = keep
 
 
 ## Drops wrecks older than TankView.WRECK_GONE_S.

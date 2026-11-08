@@ -321,6 +321,27 @@ func test_a_killed_far_enemy_leaves_a_wreck_at_its_range() -> void:
 	assert_false(stray, "never stood here")
 
 
+func test_a_far_wreck_closes_in_with_the_hull_and_drops_out_at_the_near_edge() -> void:
+	var v := _view("far_duel")
+	var s := v.game.state
+	s.hull.speed_mps = 20.0
+	v.far.wrecks.append({"range": 1000.0, "lane": 0, "kind": "medium", "t": s.t})
+	var foot0 := v.far._wreck_foot(v.far.wrecks[0])
+	U.run(v, 60)
+	assert_almost_eq(float(v.far.wrecks[0]["range"]), 980.0, 0.5, "the hull drove 20 m")
+	var foot1 := v.far._wreck_foot(v.far.wrecks[0])
+	assert_lt(foot1.x, foot0.x, "it slides toward the near edge")
+	assert_gt(foot1.y, foot0.y, "and its foot comes down")
+	s.hull.speed_mps = 0.0
+	U.run(v, 60)
+	assert_almost_eq(float(v.far.wrecks[0]["range"]), 980.0, 0.5, "a halted hull leaves it be")
+	s.hull.speed_mps = 100.0
+	U.run(v, 120)
+	assert_almost_eq(float(v.far.wrecks[0]["range"]), 780.0, 1.0, "200 m on, still in view")
+	U.run(v, 60)
+	assert_eq(v.far.wrecks.size(), 0, "past RANGE_NEAR_M it is gone")
+
+
 func test_a_boss_kill_and_hits_stay_in_the_far_panel() -> void:
 	var v := _view("boss_far")
 	var s := v.game.state
