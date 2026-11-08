@@ -121,3 +121,26 @@ Short ADRs for Turbo Reel (game id `fishing`): date, decision, alternatives, rea
 - Decision: a run or jump by a fish of 30 kg or more requests haptic_pull +50 % FTP for 2 s (haptics on, not in the first 300 s or a stagger, one per 15 s) and shows F_SURGE for 2 s either way. The governor applies it: the sims and the e2e check want every surge pull applied (at most 3 s and +50 % FTP) or dropped only for haptics off, warm-up, the haptic cooldown or an unsafe rider, and at least one applied across the matrix.
 - Alternatives: a SIM haptic grade (not available in an ERG phase); a target change (would be a ride target, not a feel).
 - Reason: owner-approved BRIEF 4.6.6 amendment; the governor bounds and spaces it.
+
+## 2026-11-08 The jig: the wait gets something to do, in SIM
+
+- Decision: while a Free Roam lure waits at depth it is retrieved to the boat over JIG_HOME_S (40 s, `lure_dx` animated linearly from the cast hint's dx to 0) and recast to the same spot at the boat (a CAST, then WAIT again, cast event included). `wait_t` keeps counting across a recast, so the 90 s forced bite stands. The hazard is 1 / 15 s while the jig is on (EMA cadence in the lure band and power at 40 % of the rider's own FTP or more), else the old 1 / 25 s in band and a quarter of that outside it. Nothing goes to the trainer: no ERG, no replan, no new directive until the bite. Bots rest at 45 % FTP, so their wait is a jig.
+- Alternatives: retrieve only while jigging (a rider who stops pedaling would see the lure stall); an ERG load for the jig (the wait is a free phase, and ERG there would need a plan change); a toast to say "pedal harder".
+- Reason: the owner and a friend found the wait empty. The mean wait is 5 s at depth plus an exponential of 15 s (about 20 s) with the jig on, against about 30 s without it, so the jig is a clear reward without turning the wait into an effort block (BRIEF 4.6 is untouched). The 40 % threshold is a share of the rider's FTP, so it is fair across riders.
+
+## 2026-11-08 Crew strips and the target column
+
+- Decision: one strip per other rider with a fish on (the board's order, at most three) under the leaderboard, as wide as it, drawn by `FishingCrewStrips` from `FishingHudModel.crew()`. The snapshot gets R_TARGET_W (column 37, so R_COLUMNS is 38; schema v2 stays, the change is additive: both ends of a room run the same release) carrying `applied_target_w`. The worst-case four-rider snapshot is 941 bytes with the column, well under 2048.
+- Alternatives: a text line in the board's rows (no room for a bar); carrying the target as a share of FTP (the strip shows watts, and the rider's own FTP is the same on every peer, but a W column is simpler and cannot drift from the host's applied value).
+- Reason: seeing a friend's fight is half the fun of a room; "Target" and "now" use the fight panel's own 5 % NOW_BAND so the strip and the panel agree.
+
+## 2026-11-08 Shared panel rows, and the HudLayer stacks controls of one rect
+
+- Decision: the fight panel's metrics and rows (right-aligned text, the label row over the big numbers, the cadence row) moved into `FishingPanelRows`, and the panel placement into `FishingBoatPanel`, which the fight panel and the new jig panel share. The jig panel's rect is the view less 4 rows, not the fight panel's: the HudLayer stacks controls with an identical rect in one VBox and halves their heights. The panels read the cadence band from the published band (`pub_lo`, `pub_hi`), which every peer has, instead of the host-only fight band: a joined rider's fight panel had no band drawn before.
+- Reason: one drawing for the same rows keeps the boxes in step; the band fix is a real bug found while reading the code.
+
+## 2026-11-08 The big game trip: one new zone and a trip `map` field
+
+- Decision: `FishingWorld.ZONES` gets "bluewater" last (so no index moves), with its depth, colour, landmark, terrace and prop entries. Tuna and grouper list it beside their own zones, and no other species does. The trip gets an optional `map` field (a plain lower-case `*.json` name; missing means map.json; an invalid name is a trip error and an unknown file is a load error naming it). `content/fishing/map_big_game.json` is the dock then the biome, 9 km, 180 m deep at the end. Bots' strategy zone lists name bluewater last: on the roam map it does not exist and is skipped. The ride tag of a trip on its own map is the trip's label.
+- Alternatives: a new species mix per zone in the trip file (species.json stays the one source for what lives where); reusing the shelf and deep zones on a shorter map (the owner asked for one mixed biome where tuna and grouper both bite directly).
+- Reason: Free Roam on the open ocean means a 9 minute ride before the first tuna and a 13 minute one before a grouper; the big game trip puts both at the harbour mouth. The card is the Free Roam card until the card art is redrawn.

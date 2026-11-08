@@ -71,7 +71,9 @@ func _draw() -> void:
 		var bar := Rect2(o.x + float(PAD) * u, bar_top, inner, float(BAR_ROWS) * u)
 		FishingHudDraw.bar(self, bar, float(st["reel"]), FishingHudDraw.STAMINA, false, u)
 		var row_y := o.y + float(PAD + CAP + 3 + BAR_ROWS + 4 + CAP) * u
-		var target := FishingHudModel.tr_key(game, FishingHudModel.KEY_CREW_TARGET, [st["target_w"]])
+		var target := FishingHudModel.tr_key(
+			game, FishingHudModel.KEY_CREW_TARGET, [st["target_w"]]
+		)
 		FishingHudDraw.text(self, Vector2(o.x + float(PAD) * u, row_y), target, s, text)
 		var now := FishingHudModel.tr_key(game, FishingHudModel.KEY_CREW_NOW, [st["now_w"]])
 		var nw := FishingHudDraw.text_w(now, s)

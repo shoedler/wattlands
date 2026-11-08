@@ -75,7 +75,11 @@ static func from_dict(d: Dictionary) -> FishingTripDef:
 ## The map file a (parsed) roam trip names: its "map" field when that is a valid file name, else
 ## DEFAULT_MAP.
 static func map_file_of(d: Variant) -> String:
-	if d is Dictionary and (d as Dictionary).has("map") and valid_map_file((d as Dictionary)["map"]):
+	if (
+		d is Dictionary
+		and (d as Dictionary).has("map")
+		and valid_map_file((d as Dictionary)["map"])
+	):
 		return str((d as Dictionary)["map"])
 	return DEFAULT_MAP
 

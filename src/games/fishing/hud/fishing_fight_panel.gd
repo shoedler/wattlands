@@ -120,13 +120,23 @@ func _draw_fight(s: float, u: float) -> void:
 	var power := float(numbers["power"])
 	# the target is the bright number to hold; now is muted, the accent when off the target
 	var now_col := (
-		FishingHudDraw.ALERT if FishingPanelRows.off_target(power, target) else FishingPalette.HUD_DIM
+		FishingHudDraw.ALERT
+		if FishingPanelRows.off_target(power, target)
+		else FishingPalette.HUD_DIM
 	)
 	var target_label := FishingHudModel.tr_key(game, FishingHudModel.KEY_TARGET)
 	var now_label := FishingHudModel.tr_key(game, FishingHudModel.KEY_NOW)
 	var watts := FishingHudModel.tr_key(game, FishingHudModel.KEY_WATTS)
 	FishingPanelRows.numbers(
-		self, game, o, y, s, [target_label, now_label], [str(roundi(target)), watts], str(roundi(power)), now_col
+		self,
+		game,
+		o,
+		y,
+		s,
+		[target_label, now_label],
+		[str(roundi(target)), watts],
+		str(roundi(power)),
+		now_col
 	)
 	y += 2 + BIG_CAP + 5 + CAP
 	var base := FishingPanelRows.cadence(self, game, o, y, s, float(numbers["cadence"]), band)

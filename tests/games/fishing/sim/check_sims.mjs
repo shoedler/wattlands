@@ -14,6 +14,7 @@
 //   r4_roam10_autopilot       roam_10, 1 rider at erg:compliance=1.0 (no band), Autopilot
 //   r5_roam30_unverified      roam_30, 2 band-trackers, --ftp=300,200 --unverified --haptics-off=1
 //   r6_roam30_paused          roam_30, 2 band-trackers, slot 1 stops pedaling at 900 s for 60 s
+//   r7_biggame                big_game_30, 2 band-trackers + 2 bots: only tuna and grouper bite
 //   w1_threshold              threshold, 2 band-trackers
 //   w2_base60                 base_60, 2 band-trackers
 //   w3_e2e                    e2e_2min, 3 band-trackers
@@ -394,12 +395,31 @@ export function checkFit(reports, runner = defaultFitRunner) {
   return result('FIT', title, probs, `${n} files`);
 }
 
+export function checkR7(reports) {
+  const title = 'big_game_30, 2 riders + 2 bots: everyone fishes the bluewater, only tuna and grouper bite';
+  const name = 'r7_biggame';
+  const r = reports[name];
+  if (!r) return skip('R7', title, `no ${name} report`);
+  const probs = roamBasics(name, r, 'big_game_30');
+  const allowed = new Set([SP.tuna, SP.grouper]);
+  for (const type of ['cast', 'bite', 'hookup', 'landed']) {
+    for (const e of eventsOf(r, type)) if (!allowed.has(e.sp)) probs.push(`${name}: a ${type} of ${SPECIES[e.sp] ?? e.sp} at ${fmt(e._t)} s (tuna and grouper only)`);
+  }
+  const by = landedBy(r);
+  for (const [lane, l] of Object.entries(by)) if (l.length < 1) probs.push(`${name}: rider ${lane} landed nothing`);
+  if (lanes(r).length !== 4) probs.push(`${name}: ${lanes(r).length} riders`);
+  const firstBite = eventsOf(r, 'bite')[0]?._t ?? NaN;
+  if (!(firstBite >= 300 - TOL_S)) probs.push(`${name}: a bite at ${fmt(firstBite)} s, in the drive-out`);
+  const species = new Set(eventsOf(r, 'landed').map((e) => SPECIES[e.sp]));
+  return result('R7', title, probs, `fish ${Object.values(by).map((l) => l.length).join('/')}, ${[...species].join(' + ') || 'none'}`);
+}
+
 function defaultFitRunner(args) {
   const r = spawnSync(process.execPath, [path.join(REPO, 'tools', 'fit_check', 'check.mjs'), ...args], { encoding: 'utf8', cwd: REPO });
   return { status: r.status ?? 1, stdout: r.stdout ?? '' };
 }
 
-export const CHECKS = { ALL: checkAll, R1: checkR1, R2: checkR2, R3: checkR3, R4: checkR4, R5: checkR5, R6: checkR6, W1: checkW1, W2: checkW2, W3: checkW3, D: checkD };
+export const CHECKS = { ALL: checkAll, R1: checkR1, R2: checkR2, R3: checkR3, R4: checkR4, R5: checkR5, R6: checkR6, R7: checkR7, W1: checkW1, W2: checkW2, W3: checkW3, D: checkD };
 
 export function main(argv, out = process.stdout, err = process.stderr) {
   const dir = argv.find((a) => !a.startsWith('--'));

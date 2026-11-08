@@ -86,9 +86,7 @@ func test_it_recasts_at_the_boat_to_the_same_spot_and_keeps_waiting() -> void:
 	var dx0 := r.jig_dx0
 	var depth := r.lure_target_depth
 	var casts := h.events_of(FishingEvents.CAST).size()
-	assert_true(
-		h.run_until(func() -> bool: return r.action == FishingConst.A_CAST, 45.0), "recast"
-	)
+	assert_true(h.run_until(func() -> bool: return r.action == FishingConst.A_CAST, 45.0), "recast")
 	assert_almost_eq(r.lure_dx, dx0, 1e-6, "back out to the cast's spot")
 	assert_eq(r.lure_depth, 0.0, "it dives again")
 	assert_eq(h.events_of(FishingEvents.CAST).size(), casts + 1, "the cast cue goes out again")

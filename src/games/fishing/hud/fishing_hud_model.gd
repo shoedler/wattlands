@@ -279,7 +279,8 @@ static func jig_dx0(game: FishingGame, r: FishingRiderState, prev: float) -> flo
 
 ## The jig panel's row for the local rider `r`: {"visible", "d_m" (line out to the lure), "fill"
 ## (0..1 of the way home from `dx0`), "hold_w" (JIG_FTP_FRAC of FTP, rounded up), "on" (in the
-## lure band at `power` W, `cadence` rpm and the power at hold_w or more)}.
+## lure band at `power` W, `cadence` rpm and the power at hold_w or more, and the fish bite: not
+## in the drive-out)}.
 static func jig_row(
 	game: FishingGame, r: FishingRiderState, dx0: float, power: float, cadence: float
 ) -> Dictionary:
@@ -292,7 +293,7 @@ static func jig_row(
 		"d_m": roundi(r.line_m()),
 		"fill": clampf(1.0 - absf(r.lure_dx) / maxf(dx0, 1e-6), 0.0, 1.0) if dx0 > 0.0 else 0.0,
 		"hold_w": hold,
-		"on": in_band and roundi(power) >= hold,
+		"on": in_band and roundi(power) >= hold and r.phase_kind != Wl.WARMUP,
 	}
 
 
@@ -309,17 +310,20 @@ static func crew(game: FishingGame) -> Array[Dictionary]:
 		if r == null or (me != null and r.slot == me.slot) or not fight_panel_up(game, r):
 			continue
 		var f := fish_row(game, r)
-		out.append(
-			{
-				"slot": r.slot,
-				"name": str(row["name"]),
-				"species": str(f["name"]),
-				"d_m": int(f["d_m"]),
-				"reel": float(f["reel"]),
-				"target_w": roundi(r.applied_target_w),
-				"now_w": roundi(r.power_w),
-				"off": FishingPanelRows.off_target(r.power_w, r.applied_target_w),
-			}
+		(
+			out
+			. append(
+				{
+					"slot": r.slot,
+					"name": str(row["name"]),
+					"species": str(f["name"]),
+					"d_m": int(f["d_m"]),
+					"reel": float(f["reel"]),
+					"target_w": roundi(r.applied_target_w),
+					"now_w": roundi(r.power_w),
+					"off": FishingPanelRows.off_target(r.power_w, r.applied_target_w),
+				}
+			)
 		)
 		if out.size() >= CREW_MAX:
 			break

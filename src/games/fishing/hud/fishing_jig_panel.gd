@@ -83,7 +83,15 @@ func _draw() -> void:
 	]
 	var now_col := FishingHudDraw.ALERT if under else dim
 	FishingPanelRows.numbers(
-		self, game, o, y, s, labels, [str(int(row["hold_w"])), watts + "+"], str(roundi(power)), now_col
+		self,
+		game,
+		o,
+		y,
+		s,
+		labels,
+		[str(int(row["hold_w"])), watts + "+"],
+		str(roundi(power)),
+		now_col
 	)
 	y += 2 + BIG_CAP + 5 + CAP
 	var base := FishingPanelRows.cadence(self, game, o, y, s, float(numbers["cadence"]), band)

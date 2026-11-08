@@ -2,7 +2,8 @@
 
 Sport fishing for 1-4 riders (plus bots) on one shared ocean (docs/games/fishing.md). Your stationary bike drives a pedal boat and, once a fish bites, turns the big-game reel.
 
-- **Free Roam** (the headline mode, competitive): drive out from the harbour across the shallows, the reef, the shelf and the deep to the abyss at the edge of the world. Ease off below 20 % FTP-equivalent and the boat drifts to a stop; a light menu offers the fish you can see there (cast), Drive on and Turn around. A cast dives the wobbler to the fish, the bite starts a fight. Bigger fish live farther out and fight harder; points scale with weight, so many small fish near the dock and a few giants far out both pay. Most points when the clock runs out wins; a fight on at time-up may finish (at most 5 more minutes).
+- **Free Roam** (the headline mode, competitive): drive out from the harbour across the shallows, the reef, the shelf and the deep to the abyss at the edge of the world. Ease off below 20 % FTP-equivalent and the boat drifts to a stop; a light menu offers the fish you can see there (cast), Drive on and Turn around. A cast dives the wobbler to the fish, then you jig: the lure comes home to the boat over about 40 s and is recast there, and while you hold your lure band at 40 % of your FTP or more the bites come sooner. The bite starts a fight. Bigger fish live farther out and fight harder; points scale with weight, so many small fish near the dock and a few giants far out both pay. Most points when the clock runs out wins; a fight on at time-up may finish (at most 5 more minutes).
+- **Big game trip** (`big_game_30`): the same race on its own short map, the harbour and then one stretch of bluewater where only yellowfin tuna and giant grouper live, and both bite from the first cast.
 - **Workouts** (co-op): structured plans on an endless map; the boat trolls between fights and the plan's fish bite.
 
 The fight (both modes): in ERG the trainer holds the fish's pull, so cadence is the skill: keep it inside the tension band; too slow strains the line (snap), too fast throws the hook. The fish tires while you are in band; runs and jumps are surges. At the boat a 30 s Landing in SIM gives a 15 s gaff sprint (a full gaff meter is a Trophy, x1.5 points).
@@ -14,6 +15,7 @@ Safety first (BRIEF 4.6): the game changes trainer load only through `ctx.direct
 | Content | What |
 | --- | --- |
 | `roam_30` (default), `roam_10`, `roam_20`, `roam_45`, `roam_60` | Free Roam: N minutes from the start, the first 5 the drive-out |
+| `big_game_30` | Free Roam, 30 minutes on `map_big_game.json`: the dock, then bluewater with tuna and grouper only |
 | `base_60` | 52 min of fishing, mackerel and mahi, nothing above 100 %, fights <= 25 % |
 | `threshold` | 4 scheduled tuna at 95 % with 360 s Trolls between (55 min) |
 | `e2e_2min` | the e2e content: 15 s ride out, 20 s Troll, one scheduled mackerel per rider, Landing (<= 135 s) |
@@ -21,6 +23,8 @@ Safety first (BRIEF 4.6): the game changes trainer load only through `ctx.direct
 `roam_30` is the zero-input and the first-run content (`first_run_priority` 10). Rider options: `reel_pct` (the workouts' Troll target, 50-70 %) and `relaxed_band` (a 22 rpm band instead of 16).
 
 ## Playing
+
+Every other rider who is fighting gets a slim strip under the leaderboard: the fish and the line out, their target watts and the watts they ride now. While your lure is out a "Jig it home" panel sits under the boat: the bar is the lure coming home, "Hold" the watts that count (40 % of your FTP) and "now" yours. In band at that power, "In: bites come sooner" lights up.
 
 Pedal to drive, ease off to stop. In the menu: left / right and confirm (keyboard, gamepad); with pedal navigation on (`PlayerSlot.pedal_nav`) the menu also scans every 1.6 s, a `surge` confirms and it auto-confirms after two scan cycles. Pedaling hard from a stop drives on. Confirm while waiting reels in. Autopilot riders and bots make every choice themselves; bots play one of four strategies (vibe, small, mixed, big).
 
@@ -40,10 +44,10 @@ tools/godot.sh --path . -- --game=fishing --content=roam_30 --mock-trainer=erg+b
 | `rules/` | `FishingRules` (the Free Roam flow and the workouts), `FishingBoat` (rigid-body boat: surge, heave, pitch, planing, tow), `FishingFight` (fight, landing, points, hookups); pure, 0.05 s steps |
 | `plan/` | `FishingPlanBuilder` (the roam plan and its fight tails, workout plans), `FishingPreroll` (roam slots at the bite, workout slots), `FishingPullScheduler` |
 | `autopilot/` | `FishingAutopilot`: Autopilot's and the bots' choices and strategies |
-| `net/`, `results/` | Snapshots; results, Strava tag and lines, XP, unlocks, progress |
-| `view/`, `hud/`, `audio/` | The one-ocean view, the minimap HUD and synthesized audio |
+| `net/`, `results/` | Snapshots (schema v2, 38 columns); results, Strava tag and lines, XP, unlocks, progress |
+| `view/`, `hud/`, `audio/` | The one-ocean view, the HUD (minimap, leaderboard, crew strips, the fight and jig panels on one set of rows, `FishingPanelRows`) and synthesized audio |
 | `tools/` | `FishingArtGrids` and `fishing_write_sprites.gd`: the hand-authored art (see `assets/fishing/README.md`) |
-| `content/fishing/` | `species.json`, `map.json`, `trips/*.json`, `cosmetics.json`, `strings.csv` |
+| `content/fishing/` | `species.json`, `map.json`, `map_big_game.json`, `trips/*.json` (a roam trip may name its map with `"map"`), `cosmetics.json`, `strings.csv` |
 
 ## Testing
 
@@ -67,6 +71,7 @@ node tools/e2e/run.mjs --games=fishing
 | R4 | `roam_10`, `erg:compliance=1.0` (no band), Autopilot | the zero-input session plays through |
 | R5 | `roam_30`, `--ftp=300,200 --unverified --haptics-off=1` | x0.85 on every ERG target, no haptic to the opted-out rider |
 | R6 | `roam_30`, rider 2 stops pedaling at 900 s for 60 s | paused or AFK, no load meanwhile, fishes again |
+| R7 | `big_game_30`, 2 riders + 2 bots | everyone fishes, only tuna and grouper are cast at, bite and land, no bite in the drive-out |
 | W1 / W2 / W3 | `threshold` / `base_60` / `e2e_2min` | 4 tuna, 240-420 s fights / the plan's fish / one mackerel each by 135 s |
 | D | `roam_10` with bots, twice | the same `deterministic_hash` |
 | FIT | every FIT | `tools/fit_check` with one lap per lap phase that ran |

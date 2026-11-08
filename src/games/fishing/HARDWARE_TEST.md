@@ -13,6 +13,7 @@ Before you start: set your FTP and preferred cadence in your profile, haptics on
 ## 2. The menu, casting, waiting
 
 - [ ] Keyboard or gamepad: left / right moves the highlight, confirm picks. Cast at a fish: the wobbler dives (longer for deeper fish), then you wait in the lure band. Confirm while waiting reels in.
+- [ ] The jig: cast after 5:00 and pedal at about 60 % FTP inside the lure band. Expected: the trainer stays in SIM the whole wait, with no change in load at all (no ERG, no jolt) while the panel says "Jig it home"; the lure comes back to the boat over about 40 s (the bar fills, the distance counts down), then casts out again to the same spot and the wait goes on. "Hold" reads 40 % of your FTP in watts; "now" turns orange under it and "In: bites come sooner" dims when you leave the band or drop under it. Bites should come about every 15-20 s with the jig on and every 25-35 s without it.
 - [ ] Pedal hard (about 80 % FTP) for 2 s in the menu. Expected: Drive on.
 - [ ] Pedal navigation on (Settings): the menu scans every 1.6 s, a surge picks, nothing touched auto-picks after two cycles. Pedal navigation off: none of that.
 - [ ] Turn around, drive back to the dock wall. Expected: the boat stops at the wall and the menu opens.
@@ -70,5 +71,11 @@ No machine can judge these, so they stay open until someone has ridden with soun
 - [ ] Reach a Landing. Expected: a call at the start of the gaff sprint, and the catch's fanfare 15 s later. Snap a line in a fight: the new fish hooks itself aloud 5 s on.
 - [ ] Wait for a bite with another rider far off. Expected: the bell you hear loud is yours.
 - [ ] After an hour: is the tick a texture, or does it tire? Note the balance over your fan and trainer, and any setting you changed in the audio sliders.
+
+## 11. The crew strips and the big game trip
+
+- [ ] Two PCs: while the other rider fights, a strip under the leaderboard shows their fish, the line out, a reel bar, "Target N W" and "now N W" (orange when more than 5 % off their target); it stays up while you fight yourself, next to your own fight panel, and goes away when their fish is landed or lost.
+- [ ] A joined rider's fight panel shows the cadence band lit with its limits, like the host's.
+- [ ] `big_game_30` solo: the same 5 minute SIM drive-out; past it every cast is a tuna or a giant grouper (groupers on the floor), the zone tag says Bluewater, and the first giant grouper is the only one over 105 % FTP for the session, as in the open sea. Check the grouper's 3-4.5 minute fight against your comfort at 105-110 % before trusting it in a room.
 
 Log: date, trainer firmware, FTP (verified or not), preferred cadence, haptic intensity, pedal navigation on or off, and each step's result in the plan's template.

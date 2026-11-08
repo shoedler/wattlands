@@ -375,7 +375,9 @@ func test_the_crew_strips_sit_under_the_board_as_wide_as_it() -> void:
 		var crew: Rect2i = l["crew"]
 		assert_eq(crew.position, board.position, "the strips share the board's column at %s" % art)
 		assert_eq(crew.size.x, board.size.x)
-		assert_gt(float(crew.size.y), FishingBoard.height_px(8, 1.0) / 3.0, "room under a full board")
+		assert_gt(
+			float(crew.size.y), FishingBoard.height_px(8, 1.0) / 3.0, "room under a full board"
+		)
 		assert_true(FishingHud.rects(art).has(crew), "the PANIC test covers it")
 
 
@@ -476,6 +478,11 @@ func test_the_jig_row_follows_the_lure_home_and_holds_40_percent_of_ftp() -> voi
 	assert_false(bool(FishingHudModel.jig_row(g, r, 30.0, 85.0, 80.0)["on"]), "85 W is under 86")
 	assert_true(bool(FishingHudModel.jig_row(g, r, 30.0, 86.0, 80.0)["on"]))
 	assert_false(bool(FishingHudModel.jig_row(g, r, 30.0, 180.0, 95.0)["on"]), "out of the band")
+	r.phase_kind = Wl.WARMUP
+	assert_false(
+		bool(FishingHudModel.jig_row(g, r, 30.0, 180.0, 80.0)["on"]), "no bites in the drive-out"
+	)
+	r.phase_kind = Wl.FREE
 	r.action = FishingConst.A_MENU
 	assert_false(bool(FishingHudModel.jig_row(g, r, 30.0, 180.0, 80.0)["visible"]))
 	var w := FX.make_game(1, 0, Wl.SOLO, "base_60")

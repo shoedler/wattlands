@@ -44,7 +44,9 @@ func test_every_zone_table_has_an_entry_for_the_new_zone() -> void:
 	assert_eq(FishingFloor.RELIEF.size(), n)
 	assert_eq(FishingProps.BIG.size(), n)
 	assert_eq(FishingProps.SMALL.size(), n)
-	assert_eq(FishingWorld.ZONES.slice(0, 6), ["dock", "shallows", "reef", "shelf", "deep", "abyss"])
+	assert_eq(
+		FishingWorld.ZONES.slice(0, 6), ["dock", "shallows", "reef", "shelf", "deep", "abyss"]
+	)
 	var keys := FileAccess.get_file_as_string("res://content/fishing/strings.csv")
 	assert_string_contains(keys, "FISHING_ZONE_%s," % ZONE.to_upper())
 	assert_string_contains(keys, "FISHING_MAP_BIG_GAME,")
@@ -80,7 +82,9 @@ func test_hints_in_the_biome_are_tuna_and_grouper_with_the_groupers_on_the_floor
 			if FishingConst.SPECIES[sp] == "grouper":
 				assert_between(depth, floor_d - 10.0 - 1e-6, floor_d - 3.0 + 1e-6, "on the floor")
 			else:
-				assert_between(depth, 15.0 - 1e-6, minf(60.0, floor_d - 3.0) + 1e-6, "a tuna's depth")
+				assert_between(
+					depth, 15.0 - 1e-6, minf(60.0, floor_d - 3.0) + 1e-6, "a tuna's depth"
+				)
 	assert_eq(seen.keys().size(), 2, "both bite directly: %s" % [seen.keys()])
 	assert_true(seen.has("tuna") and seen.has("grouper"))
 
@@ -111,7 +115,9 @@ func test_the_trip_map_field_is_validated() -> void:
 	var no_map := {"id": "x", "kind": "roam", "minutes": 30}
 	assert_eq(FishingTripDef.errors(no_map, []), [] as Array[String], "missing: map.json")
 	assert_eq(FishingTripDef.from_dict(no_map).map, "map.json")
-	for bad: Variant in [5, "", "../map.json", "sub/map.json", "map.txt", "Map.json", "species.json"]:
+	for bad: Variant in [
+		5, "", "../map.json", "sub/map.json", "map.txt", "Map.json", "species.json"
+	]:
 		var d := good.duplicate()
 		d["map"] = bad
 		var errs := FishingTripDef.errors(d, [])
@@ -180,4 +186,6 @@ func test_bots_fish_the_biome() -> void:
 		r.strategy = [0, 3][i]
 		r.stop_x = NAN
 		FishingAutopilot.plan_stop(h.state, r)
-		assert_eq(h.state.world.zone_at(r.stop_x), ZONE, "strategy %d stops in the biome" % r.strategy)
+		assert_eq(
+			h.state.world.zone_at(r.stop_x), ZONE, "strategy %d stops in the biome" % r.strategy
+		)

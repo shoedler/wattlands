@@ -637,10 +637,7 @@ static func _tick_wait(
 	r.jig_t += dt
 	r.lure_dx = r.jig_dx0 * maxf(1.0 - r.jig_t / FishingConst.JIG_HOME_S, 0.0)
 	if bites_open(st, r, inp) and r.wait_t + EPS >= FishingConst.ROAM_BITE_MIN_S:
-		if (
-			r.wait_t + EPS >= FishingConst.ROAM_FORCED_BITE_S
-			or r.rng.unit() < wait_hazard(r) * dt
-		):
+		if r.wait_t + EPS >= FishingConst.ROAM_FORCED_BITE_S or r.rng.unit() < wait_hazard(r) * dt:
 			_roam_bite(st, r, def, out)
 			request_end(r, inp, out)
 			return

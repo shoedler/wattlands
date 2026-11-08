@@ -51,7 +51,12 @@ class Gov:
 static func content(trip_id: String) -> FishingContent:
 	var c := FishingContent.new()
 	var trip: Variant = _json("trips/%s.json" % trip_id)
-	c.parse(_json("species.json"), trip, _json(FishingTripDef.map_file_of(trip)), _json("cosmetics.json"))
+	c.parse(
+		_json("species.json"),
+		trip,
+		_json(FishingTripDef.map_file_of(trip)),
+		_json("cosmetics.json")
+	)
 	return c
 
 
