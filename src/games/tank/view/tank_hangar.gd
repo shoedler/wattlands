@@ -46,11 +46,17 @@ const FACADE_HALF := 250.0
 ## How far the stand lifts the hull (art px) and its look.
 const STAND_LIFT := 26.0
 ## The ceiling bars: stage y, size, world x of the first and the pitch between them.
-const BAR_Y := 28.0
-const BAR_W := 100.0
-const BAR_H := 8.0
-const BAR_X0 := 40.0
-const BAR_PITCH := 150.0
+const BAR_Y := 26.0
+const BAR_W := 120.0
+const BAR_H := 12.0
+const BAR_X0 := 30.0
+const BAR_PITCH := 190.0
+## The bars' light, warm white: the pool each makes on the floor (width, height, alpha) and the shade of the
+## countdown (alpha at full, and the share of it the night outside the door keeps).
+const WHITE := Color(1.0, 0.97, 0.9)
+const POOL := Vector3(230.0, 34.0, 0.2)
+const SHADE_A := 0.58
+const SHADE_OUTSIDE := 0.55
 ## The countdown's beats (s from its start): the bars dim, the beacons start, the hull is lowered, the door
 ## rises. Everything is done at the countdown's end (TankConst.HANGAR_COUNTDOWN_S).
 const DIM_S := Vector2(0.0, 1.5)
@@ -59,9 +65,8 @@ const LOWER_S := Vector2(1.0, 5.0)
 const DOOR_S := Vector2(4.0, 10.0)
 ## In the Roll-out the beacons keep turning while the hangar is still on screen and fade out over these seconds.
 const ROLL_BEACON_S := Vector2(7.0, 11.0)
-const BEACON_Y := 112.0
+const BEACON_Y := 84.0
 const BEACON_RPM := 50.0
-const WHITE := Color(0.9, 0.96, 1.0)
 const BAR_OFF := Color(0.1, 0.12, 0.14)
 const RED := Color(1.0, 0.18, 0.1)
 const STAND_YELLOW := Color(0.6, 0.45, 0.1)
@@ -197,11 +202,30 @@ static func draw_back(ci: CanvasItem, v: TankView, lk: Dictionary) -> void:
 	_bars(ci, v, lk)
 	var dark: float = lk["dark"]
 	if dark > 0.0:
-		var shade := Color(0.0, 0.01, 0.03, 0.58 * dark)
-		# The night shows through what the door has left open (it rises from the floor).
+		var shade := Color(0.0, 0.01, 0.03, SHADE_A * dark)
+		var soft := Color(0.0, 0.01, 0.03, SHADE_A * dark * SHADE_OUTSIDE)
+		# The night shows through what the door has left open (it rises from the floor), a little dimmer than
+		# the open air beyond the wall, with no hard column against the room: both keep a share of the shade.
 		var gap := roundf(DOOR_H * float(lk["door"]))
 		var hole := Rect2(end_x + VOID_X0, VOID_BOT - gap, VOID_X1 - VOID_X0, gap)
 		_overlay_except(ci, Rect2(-8, top, end_x + END_W + 8.0, bottom - top), hole, shade)
+		ci.draw_rect(hole, soft)
+		# The open air past the end wall is the same night as the room: no lighter column beside the doorway.
+		var past := end_x + END_W
+		if past < v.canvas.x:
+			# and it clears as the wall leaves the stage, so the shade never pops off
+			var keep := smoothstep(-8.0, 160.0, past)
+			ci.draw_rect(
+				Rect2(past, top, v.canvas.x - past, bottom - top), Color(shade, shade.a * keep)
+			)
+		# The room's shade feathers over 14 px into the doorway so its edge is not a line.
+		if hole.size.y > 0.0:
+			for i in 7:
+				var fall := (shade.a - soft.a) * (1.0 - float(i) / 7.0)
+				ci.draw_rect(
+					Rect2(hole.position.x + float(i) * 2.0, hole.position.y, 2.0, hole.size.y),
+					Color(shade, fall)
+				)
 	_beacons(ci, v, lk, false)
 
 
@@ -259,22 +283,22 @@ static func _bars(ci: CanvasItem, v: TankView, lk: Dictionary) -> void:
 		_bar(ci, Vector2(roundf(x), BAR_Y), dark)
 
 
-## One bar fixture: a dark housing, the tube white when lit and grey when dark.
+## One bar fixture: a dark housing and a thick tube, warm white with a bright core when lit, grey when dark.
 static func _bar(ci: CanvasItem, at: Vector2, dark: float) -> void:
 	ci.draw_rect(
-		Rect2(at + Vector2(-2, -2), Vector2(BAR_W + 4.0, BAR_H + 4.0)), Color(0.03, 0.04, 0.05)
+		Rect2(at + Vector2(-2, -2), Vector2(BAR_W + 4.0, BAR_H + 4.0)), Color(0.04, 0.045, 0.05)
 	)
-	ci.draw_rect(Rect2(at + Vector2(-2, -2), Vector2(BAR_W + 4.0, 1.0)), Color(0.22, 0.28, 0.32))
+	ci.draw_rect(Rect2(at + Vector2(-2, -2), Vector2(BAR_W + 4.0, 1.0)), Color(0.3, 0.34, 0.36))
 	var tube := WHITE.lerp(BAR_OFF, dark)
 	ci.draw_rect(Rect2(at, Vector2(BAR_W, BAR_H)), tube)
 	ci.draw_rect(
 		Rect2(at + Vector2(2, 2), Vector2(BAR_W - 4.0, BAR_H - 4.0)),
-		Color.WHITE.lerp(BAR_OFF, dark)
+		Color(1.0, 1.0, 0.97).lerp(BAR_OFF, dark)
 	)
 	for k in 5:
 		ci.draw_rect(
-			Rect2(at + Vector2(float(k) * 25.0 + 12.0, 0), Vector2(1, BAR_H)),
-			Color(0.0, 0.0, 0.0, 0.18)
+			Rect2(at + Vector2(float(k) * 24.0 + 12.0, 0), Vector2(1, BAR_H)),
+			Color(0.0, 0.0, 0.0, 0.16)
 		)
 
 
@@ -360,23 +384,38 @@ static func _trestle(ci: CanvasItem, x: float, floor_y: float, top: float, k: fl
 	var dk := STAND_DK
 	yellow.a = 1.0
 	steel.a = 1.0
-	# the foot plate, two legs splayed to the cradle, the jack's piston between them
-	ci.draw_rect(Rect2(x - 22.0, floor_y - 2.0, 44.0, 3.0), dk)
-	ci.draw_rect(Rect2(x - 21.0, floor_y - 2.0, 42.0, 1.0), steel.lightened(0.3))
+	# a soft shadow on the floor, then the foot plate
+	ci.draw_texture_rect(
+		TankDraw.soft_tex(),
+		Rect2(x - 46.0, floor_y - 5.0, 92.0, 12.0),
+		false,
+		Color(0, 0, 0, 0.55 * k)
+	)
+	ci.draw_rect(Rect2(x - 30.0, floor_y - 3.0, 60.0, 4.0), dk)
+	ci.draw_rect(Rect2(x - 29.0, floor_y - 3.0, 58.0, 1.0), steel.lightened(0.3))
 	var h := floor_y - top
+	# two splayed legs, each a dark tube with a yellow face
 	for side: float in [-1.0, 1.0]:
-		var foot := Vector2(x + side * 18.0, floor_y - 2.0)
-		var head := Vector2(x + side * 9.0, top + 4.0)
-		ci.draw_line(foot, head, dk, 4.0)
+		var foot := Vector2(x + side * 25.0, floor_y - 3.0)
+		var head := Vector2(x + side * 14.0, top + 4.0)
+		ci.draw_line(foot, head, dk, 6.0)
 		ci.draw_line(
-			foot + Vector2(side * -0.5, 0.0), head + Vector2(side * -0.5, 0.0), yellow, 2.0
+			foot + Vector2(side * -1.0, 0.0), head + Vector2(side * -1.0, 0.0), yellow, 3.0
 		)
-	ci.draw_rect(Rect2(x - 3.0, top + 6.0, 6.0, maxf(h - 8.0, 1.0)), dk)
-	ci.draw_rect(Rect2(x - 2.0, top + 6.0, 2.0, maxf(h - 8.0, 1.0)), steel.lightened(0.35))
-	# the cradle pad the track run rests on
-	ci.draw_rect(Rect2(x - 20.0, top + 1.0, 40.0, 4.0), dk)
-	ci.draw_rect(Rect2(x - 19.0, top + 1.0, 38.0, 2.0), yellow)
-	ci.draw_rect(Rect2(x - 19.0, top + 1.0, 38.0, 1.0), yellow.lightened(0.3))
+	# the cross-beam and its brace, where the legs are about 40% up
+	var by := floor_y - maxf(h * 0.42, 6.0)
+	var bx := 25.0 - 11.0 * (floor_y - by) / maxf(h, 1.0)
+	ci.draw_rect(Rect2(x - bx, by - 1.0, bx * 2.0, 3.0), dk)
+	ci.draw_rect(Rect2(x - bx, by - 1.0, bx * 2.0, 1.0), yellow)
+	ci.draw_line(Vector2(x - bx, by + 1.0), Vector2(x + 14.0, top + 6.0), dk, 1.0)
+	ci.draw_line(Vector2(x + bx, by + 1.0), Vector2(x - 14.0, top + 6.0), dk, 1.0)
+	# the jack's piston between the legs
+	ci.draw_rect(Rect2(x - 3.0, top + 6.0, 6.0, maxf(h - 9.0, 1.0)), dk)
+	ci.draw_rect(Rect2(x - 2.0, top + 6.0, 2.0, maxf(h - 9.0, 1.0)), steel.lightened(0.35))
+	# the wide cradle pad the track run rests on, with a rubber face
+	ci.draw_rect(Rect2(x - 28.0, top + 1.0, 56.0, 5.0), dk)
+	ci.draw_rect(Rect2(x - 27.0, top + 1.0, 54.0, 3.0), yellow)
+	ci.draw_rect(Rect2(x - 27.0, top + 1.0, 54.0, 1.0), yellow.lightened(0.3))
 
 
 # --- Light ---------------------------------------------------------------------------------------------------------
@@ -400,16 +439,16 @@ static func draw_light(ci: CanvasItem, v: TankView, lk: Dictionary) -> void:
 
 
 static func _cone(ci: CanvasItem, x: float, lit: float) -> void:
-	var c0 := Color(0.72, 0.86, 1.0, 0.1 * lit)
-	var clear := Color(0.72, 0.86, 1.0, 0.0)
-	var mid := Color(0.72, 0.86, 1.0, 0.035 * lit)
+	var c0 := Color(1.0, 0.96, 0.84, 0.17 * lit)
+	var clear := Color(1.0, 0.96, 0.84, 0.0)
+	var mid := Color(1.0, 0.96, 0.84, 0.07 * lit)
 	ci.draw_polygon(
 		PackedVector2Array(
 			[
 				Vector2(x, BAR_Y + BAR_H + 1.0),
 				Vector2(x + BAR_W, BAR_Y + BAR_H + 1.0),
-				Vector2(x + BAR_W + 60.0, 220.0),
-				Vector2(x - 60.0, 220.0)
+				Vector2(x + BAR_W + 70.0, 220.0),
+				Vector2(x - 70.0, 220.0)
 			]
 		),
 		PackedColorArray([c0, c0, mid, mid])
@@ -417,19 +456,30 @@ static func _cone(ci: CanvasItem, x: float, lit: float) -> void:
 	ci.draw_polygon(
 		PackedVector2Array(
 			[
-				Vector2(x - 60.0, 220.0),
-				Vector2(x + BAR_W + 60.0, 220.0),
-				Vector2(x + BAR_W + 120.0, FLOOR_Y + 4.0),
-				Vector2(x - 120.0, FLOOR_Y + 4.0)
+				Vector2(x - 70.0, 220.0),
+				Vector2(x + BAR_W + 70.0, 220.0),
+				Vector2(x + BAR_W + 130.0, FLOOR_Y + 4.0),
+				Vector2(x - 130.0, FLOOR_Y + 4.0)
 			]
 		),
 		PackedColorArray([mid, mid, clear, clear])
 	)
 	TankDraw.glow_at(
-		ci, Vector2(x + BAR_W * 0.5, BAR_Y + BAR_H * 0.5), 58.0, Color(0.8, 0.9, 1.0, 0.18 * lit)
+		ci, Vector2(x + BAR_W * 0.5, BAR_Y + BAR_H * 0.5), 70.0, Color(1.0, 0.95, 0.8, 0.26 * lit)
 	)
-	TankDraw.soft_at(
-		ci, Vector2(x + BAR_W * 0.5, FLOOR_Y + 14.0), 80.0, Color(0.7, 0.85, 1.0, 0.07 * lit)
+	# the pool on the floor under the bar, an ellipse a rider can see
+	var cx := x + BAR_W * 0.5
+	ci.draw_texture_rect(
+		TankDraw.soft_tex(),
+		Rect2(cx - POOL.x * 0.5, FLOOR_Y + 8.0, POOL.x, POOL.y),
+		false,
+		Color(1.0, 0.95, 0.82, POOL.z * lit)
+	)
+	ci.draw_texture_rect(
+		TankDraw.soft_tex(),
+		Rect2(cx - POOL.x * 0.3, FLOOR_Y + 12.0, POOL.x * 0.6, POOL.y * 0.55),
+		false,
+		Color(1.0, 0.97, 0.88, POOL.z * 0.8 * lit)
 	)
 
 
@@ -468,10 +518,7 @@ static func draw_far(ci: CanvasItem, far: TankFarPanel, lk: Dictionary) -> void:
 	ci.draw_texture_rect_region(room, Rect2(fr - 22.0, 0, 22, ROOM_H), Rect2(0, 0, 22, ROOM_H))
 	_shutter(ci, gl + AP_X0, float(lk["door"]))
 	var dark: float = lk["dark"]
-	for n in 3:
-		var bx := fl + 40.0 + float(n) * BAR_PITCH + 10.0
-		if bx + BAR_W > fr - 20.0:
-			continue
+	for bx in far_bar_xs(gx):
 		_bar(ci, Vector2(roundf(bx), BAR_Y), dark)
 	if dark > 0.0:
 		var shade := Color(0.0, 0.01, 0.03, 0.58 * dark)
@@ -481,6 +528,12 @@ static func draw_far(ci: CanvasItem, far: TankFarPanel, lk: Dictionary) -> void:
 		_beacon_body(
 			ci, Vector2(gx + side * (GATE_W * 0.5 - 12.0), GATE_Y0 + 20.0), float(lk["beacon"])
 		)
+
+
+## Panel x of the far facade's three bars: one over the gate, one either side.
+static func far_bar_xs(gx: float) -> Array[float]:
+	var mid := gx - BAR_W * 0.5
+	return [mid - BAR_W - 30.0, mid, mid + BAR_W + 30.0]
 
 
 static func _shutter(ci: CanvasItem, x: float, open: float) -> void:
@@ -508,14 +561,9 @@ static func draw_far_light(ci: CanvasItem, far: TankFarPanel, lk: Dictionary) ->
 	if not bool(lk.get("far_on", false)):
 		return
 	var gx: float = lk["far_x"]
-	var fl := roundf(gx - FACADE_HALF)
-	var fr := roundf(gx + FACADE_HALF)
 	var lit := 1.0 - float(lk["dark"])
 	if lit > 0.0:
-		for n in 3:
-			var bx := fl + 40.0 + float(n) * BAR_PITCH + 10.0
-			if bx + BAR_W > fr - 20.0:
-				continue
+		for bx in far_bar_xs(gx):
 			_cone(ci, roundf(bx), lit)
 	var k: float = lk["beacon"]
 	if k > 0.0:

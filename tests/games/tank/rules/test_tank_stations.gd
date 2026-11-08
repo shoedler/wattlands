@@ -189,6 +189,7 @@ func test_below_the_window_the_loader_trickles_at_a_fifth_of_p_eff() -> void:
 	assert_false(st.in_band, "under 90% FTP: still out of band, so no score, no glow")
 	assert_gt(st.p_eff_w, 0.0)
 	var want := 0.2 * st.p_eff_w * 5.0 / full_j * 100.0
+	assert_lt(want, rig.content.num("tanks", "steam.below_band_cap_pct"), "short of the cap")
 	assert_gt(st.pressure_pct, 0.0, "the shell creeps on")
 	assert_almost_eq(st.pressure_pct, want, want * 0.1, "20% of p_eff x 5 s")
 
@@ -216,12 +217,52 @@ func test_a_gain_of_zero_is_the_old_rule_and_a_coasting_loader_gains_nothing() -
 	assert_eq(rig.steam().pressure_pct, 0.0, "no power, no trickle")
 
 
-func test_the_trickle_never_lets_the_rack_overfill_or_the_shell_pass_100() -> void:
+func test_the_trickle_stops_at_the_cap_and_never_stows_opens_a_window_or_fills_the_rack() -> void:
 	var rig := _loader()
+	var st := rig.steam()
+	var cap := rig.content.num("tanks", "steam.below_band_cap_pct")
+	assert_between(cap, 80.0, 90.0, "about 85-90% of a shell")
 	rig.power_w[3] = 0.8 * 240.0
 	rig.run(300.0)
-	assert_lte(rig.steam().rack, TankConst.RACK_MAX)
-	assert_lt(rig.steam().pressure_pct, 100.0)
+	assert_almost_eq(st.pressure_pct, cap, 0.01, "it climbs to the cap and holds there")
+	assert_eq(st.rack, 0, "no shell is stowed out of band")
+	assert_eq(st.window_s, 0.0, "no surge window opens")
+	assert_eq(rig.of_type("latch").size(), 0)
+	assert_false(st.in_band)
+	# In band it finishes the shell from there, with in-band joules only.
+	rig.power_w[3] = 240.0
+	rig.run(3.0)
+	assert_eq(rig.of_type("latch").size(), 1, "the shell stows in band")
+
+
+## A rider held under the band must never be loaded harder for the trickle's progress: the boiler's grade follows
+## only the pressure earned in band, so it never rises, in the warm-up and after.
+func test_a_rider_below_the_band_gets_a_boiler_grade_that_never_rises() -> void:
+	for index: int in [HANGAR, ADVANCE]:
+		var rig := _loader(0, index, 5.0)
+		var st := rig.steam()
+		st.pressure_pct = 30.0
+		rig.power_w[3] = 0.8 * 240.0
+		rig.cadence[3] = 40.0
+		var warm := index == HANGAR
+		var last := TankDirector.boiler_grade_pct(rig.content, st.grade_pressure_pct(), warm, false)
+		var peak_pressure := st.pressure_pct
+		for _i in roundi(120.0 / Wl.SIM_DT):
+			rig.step()
+			var g := TankDirector.boiler_grade_pct(
+				rig.content, st.grade_pressure_pct(), warm, false
+			)
+			assert_lte(g, last + 1e-9, "the grade never rises under the band (index %d)" % index)
+			last = g
+			peak_pressure = maxf(peak_pressure, st.pressure_pct)
+		assert_false(st.in_band, "held below the band (index %d)" % index)
+		assert_gt(peak_pressure, 31.0, "the trickle did add progress (index %d)" % index)
+		assert_almost_eq(
+			TankDirector.boiler_grade_pct(rig.content, st.grade_pressure_pct(), warm, false),
+			TankDirector.boiler_grade_pct(rig.content, 30.0, warm, false),
+			1e-6,
+			"the grade is the one of the 30% it started with"
+		)
 
 
 func test_only_p_eff_in_band_loads_in_full_and_the_reserve_loads_at_60_w() -> void:

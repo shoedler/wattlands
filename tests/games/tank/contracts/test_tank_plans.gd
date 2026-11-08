@@ -319,6 +319,7 @@ func test_the_validators_hold_the_safety_envelope() -> void:
 		["stations", "plans.checkpoint.target_pct", 55, "plans.checkpoint: must be exactly ERG 50"],
 		["stations", "drill_plans.checkpoint.mode", "SIM", "drill_plans.checkpoint: must be"],
 		["stations", "drill_plans.dynamo.skirmish.range_pct", [55, 70], "skirmish: warm-up ERG"],
+		["tanks", "steam.below_band_cap_pct", 95, "steam.below_band_cap_pct: at most 90"],
 		["stations", "plans.dynamo.hangar.ramp_to_pct", 70, "plans.dynamo.hangar: warm-up ERG"],
 		["stations", "plans.dynamo.rollout.ramp_to_pct", 70, "plans.dynamo.rollout: warm-up ERG"],
 		["stations", "plans.arc.rollout.target_pct", 66, "plans.arc.rollout: warm-up ERG"],

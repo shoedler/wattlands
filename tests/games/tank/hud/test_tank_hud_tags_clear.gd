@@ -106,6 +106,25 @@ func test_no_world_tag_lies_on_the_tank_for_any_crew_or_direction() -> void:
 		assert_gte(_check(tags, body, str(c["what"])), 3, "%s: the crowd's tags" % c["what"])
 
 
+## On the stand the tracks turn and nothing goes by: the tag says "tracks 31", on the road "31 km/h".
+func test_the_speed_tag_reads_tracks_on_the_stand_and_km_h_on_the_road() -> void:
+	var hangar := TankFixtures._base(TankFixtures.content(), 2, 0, 60.0)
+	hangar.hull.speed_mps = 8.6
+	var g: TankGame = autofree(U.make_game(hangar))
+	U.make_view(self, g)
+	var tags := _tags(g)
+	tags.refresh()
+	assert_eq(tags.speed_text(tags.m), "tracks 31")
+	assert_ne(tags.m["layout"]["speed"], Rect2(), "the plate is there")
+	var road := TankFixtures.state(2)
+	road.hull.speed_mps = 8.6
+	var g2: TankGame = autofree(U.make_game(road))
+	U.make_view(self, g2)
+	var tags2 := _tags(g2)
+	tags2.refresh()
+	assert_eq(tags2.speed_text(tags2.m), "31 km/h")
+
+
 func test_a_far_shooters_tag_stands_in_the_far_panel_clear_of_the_pip() -> void:
 	for dir in [TankIds.DIR_RIGHT, TankIds.DIR_LEFT]:
 		var s := U.roam_state(3, dir)

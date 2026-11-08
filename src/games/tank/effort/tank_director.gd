@@ -394,7 +394,7 @@ func _boiler_step(state: TankState, ri: TankRiderInput, tick: int) -> void:
 	if tick - int(_boiler_tick.get(ri.peer, NEVER)) < interval:
 		return
 	var want := boiler_grade_pct(
-		content, steam.pressure_pct, ri.in_warmup(), steam.loaded or steam.cycling
+		content, steam.grade_pressure_pct(), ri.in_warmup(), steam.loaded or steam.cycling
 	)
 	if _waits_for_seat(state, ri):
 		want = 0.0  # the rider left the Loader; its trainer switches soon: no boiler grade

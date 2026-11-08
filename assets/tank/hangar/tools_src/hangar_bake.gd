@@ -67,13 +67,38 @@ const LAMP_AMB := Color("#e0a64a")
 func _initialize() -> void:
 	var dir := ProjectSettings.globalize_path(OUT)
 	DirAccess.make_dir_recursive_absolute(dir)
-	_room().save_png(dir + "room.png")
-	_end().save_png(dir + "end.png")
-	_door().save_png(dir + "door.png")
-	_gate().save_png(dir + "gate.png")
-	_shutter().save_png(dir + "shutter.png")
+	for pair: Array in [
+		["room.png", _room()],
+		["end.png", _end()],
+		["door.png", _door()],
+		["gate.png", _gate()],
+		["shutter.png", _shutter()]
+	]:
+		var img: Image = pair[1]
+		_lift(img)
+		img.save_png(dir + str(pair[0]))
 	print("hangar_bake: room, end, door, gate, shutter -> ", OUT)
 	quit(0)
+
+
+## The whole picture lifted LIFT in value and warmed toward a neutral steel: a lit hangar reads brighter and less cold
+## than the night forest, and the warm hull stays the strongest contrast. Keeps the alpha, and never touches a pixel
+## that is clear.
+const LIFT := 1.24
+const NEUTRAL := 0.22
+
+
+static func _lift(img: Image) -> void:
+	for y in img.get_height():
+		for x in img.get_width():
+			var c := img.get_pixel(x, y)
+			if c.a <= 0.0:
+				continue
+			var l := (c.r + c.g + c.b) / 3.0
+			var r := lerpf(c.r, l * 1.04, NEUTRAL) * LIFT
+			var g := lerpf(c.g, l * 1.0, NEUTRAL) * LIFT
+			var b := lerpf(c.b, l * 0.94, NEUTRAL) * LIFT
+			img.set_pixel(x, y, Color(minf(r, 1.0), minf(g, 1.0), minf(b, 1.0), c.a))
 
 
 # --- Shared pieces ---------------------------------------------------------------------------------------
@@ -228,7 +253,7 @@ func _room_pilasters(img: Image) -> void:
 			_rivet(img, px0 + 4, ry, PIL_HI)
 			_rivet(img, px0 + 15, ry, PIL_HI)
 		# the base is painted with hazard stripes up to a tank's wheel height
-		_hazard(img, Rect2i(px0, FLOOR_Y - 22, 22, 22), 5)
+		_hazard(img, Rect2i(px0, FLOOR_Y - 12, 22, 12), 4)
 
 
 func _room_windows(img: Image) -> void:
@@ -376,7 +401,7 @@ func _end() -> Image:
 	Px.rect(img, Rect2i(7, 0, 1, ROOM_H), PIL_LO)
 	for ry in range(4, 372, 16):
 		_rivet(img, 3, ry, PIL_HI)
-	_hazard(img, Rect2i(0, FLOOR_Y - 22, 8, 22), 5)
+	_hazard(img, Rect2i(0, FLOOR_Y - 12, 8, 12), 4)
 	# the floor slab through the doorway and the wall's lit top edge
 	Px.rect(img, Rect2i(0, VOID_BOT, END_W, 3), FLOOR_HI)
 	Px.rect(img, Rect2i(VOID_X0, VOID_BOT + 3, VOID_X1 - VOID_X0, 1), FLOOR_HI.darkened(0.3))

@@ -260,9 +260,24 @@ static func crew_counts(state: TankState, entries: Array) -> Array[int]:
 	return out
 
 
+## Takes the hangar's drill wrecks off the field.
+static func clear_drill_wrecks(state: TankState) -> void:
+	var code := TankIds.obstacle_code(TankIds.OBST_DRILL_WRECK)
+	for i in range(state.obstacles.size() - 1, -1, -1):
+		if state.obstacles[i].code == code:
+			state.obstacles.remove_at(i)
+
+
 ## The hangar's aim drill: its wrecks stand ahead of the tank on its stand once the drill starts.
 static func hangar_wrecks(state: TankState, aux: TankAux) -> void:
-	if state.seg.seg != TankIds.SEG_HANGAR or aux.drill_wrecks:
+	if state.seg.seg != TankIds.SEG_HANGAR:
+		return
+	if TankSegments.hangar_countdown_s(state) >= 0.0:
+		# The countdown clears the range: nothing stands in the door's way (the drills end before it).
+		clear_drill_wrecks(state)
+		aux.drill_wrecks = true
+		return
+	if aux.drill_wrecks:
 		return
 	for d: Variant in aux.drills:
 		if str(d.get("drill", "")) != "aim" or state.seg.elapsed_s < float(d.get("from_s", 0.0)):

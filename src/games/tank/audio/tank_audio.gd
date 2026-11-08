@@ -26,6 +26,12 @@ const KLAXON_DB := -13.0
 const KLAXON_PITCH := 1.5
 const KLAXON_AT_S: Array[float] = [10.0, 6.6, 3.3]
 const KLAXON_LATE_S := 0.75
+## The hull comes off the stand: a low thunk when it lands (the lever's clunk, pitched down: no new file), at the
+## seconds left that TankHangar.LOWER_S ends at.
+const LANDING_SOUND := "lever_clunk"
+const LANDING_DB := -5.0
+const LANDING_PITCH := 0.7
+const LANDING_AT_S := 5.0
 ## The track machine's "revolution": 2.4 m of travel holds three links and one squeak.
 const TRACK_M_PER_REV := 2.4
 ## Sound runs at twice real speed here: the real 2.4-7 s would feel detached from the flash.
@@ -123,6 +129,7 @@ var _lift := LiftOffDetector.new()
 var _lift_was: float = 0.0
 var _patches_seen: int = -1
 var _klaxon_n: int = 0
+var _landed: bool = false
 var _last_far_m: float = FALLBACK_RANGE_M
 var _far_kills: int = 0
 var _barrage_kills: int = 0
@@ -535,7 +542,12 @@ func _hangar_klaxon(state: TankState) -> void:
 	if left < 0.0:
 		if state.seg.seg != TankIds.SEG_HANGAR:
 			_klaxon_n = 0
+			_landed = false
 		return
+	if not _landed and left <= LANDING_AT_S:
+		_landed = true
+		if left > LANDING_AT_S - KLAXON_LATE_S:
+			kit.sound(LANDING_SOUND, LANDING_DB, LANDING_PITCH)
 	while _klaxon_n < KLAXON_AT_S.size() and left <= KLAXON_AT_S[_klaxon_n]:
 		if left > KLAXON_AT_S[_klaxon_n] - KLAXON_LATE_S:
 			kit.sound(KLAXON_SOUND, KLAXON_DB, KLAXON_PITCH)

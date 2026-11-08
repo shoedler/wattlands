@@ -358,6 +358,26 @@ func test_the_fire_drill_shoots_the_drill_wrecks_with_no_damage_and_no_score() -
 	assert_eq(rig.hull().hp, rig.hull().hp_max)
 
 
+func test_the_countdown_clears_the_drill_wrecks_and_the_rollout_has_none() -> void:
+	var rig := TankRulesRig.new(2)
+	rig.enter(HANGAR, 65.0)
+	rig.run(1.0)
+	var is_wreck := func(o: TankObstacleState) -> bool:
+		return o.code == TankIds.obstacle_code(TankIds.OBST_DRILL_WRECK)
+	assert_eq(rig.state.obstacles.filter(is_wreck).size(), 2, "standing in the aim drill")
+	rig.enter(HANGAR, 168.0)
+	assert_eq(rig.state.obstacles.filter(is_wreck).size(), 2, "still there before the countdown")
+	rig.enter(HANGAR, 171.0)
+	rig.run(0.2)
+	assert_eq(rig.state.obstacles.filter(is_wreck).size(), 0, "gone when the countdown starts")
+	rig.run(5.0)
+	assert_eq(rig.state.obstacles.filter(is_wreck).size(), 0, "and they do not come back")
+	rig.enter(ROLLOUT, 0.0)
+	rig.run(30.0)
+	assert_eq(rig.state.obstacles.size(), 0, "nothing to drive through on the roll-out")
+	assert_gt(rig.hull().distance_m, 50.0, "and the tank rolls")
+
+
 func test_the_aim_drill_does_not_fire_a_loaded_shell_before_the_fire_drill() -> void:
 	var rig := TankRulesRig.new(2)
 	rig.enter(HANGAR, 65.0)

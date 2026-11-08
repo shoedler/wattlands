@@ -1050,6 +1050,37 @@ func test_the_hangar_klaxon_sounds_three_times_in_the_countdown() -> void:
 	assert_eq(a.played.count(TankAudio.KLAXON_SOUND), 3, "none in the roll-out")
 
 
+## The hull landing off its stand sounds once, at 5 s left, from a file the bank already has.
+func test_the_hull_lands_with_a_thunk_once_at_five_seconds_left() -> void:
+	var s := TankFixtures._base(TankFixtures.content(), 2, 0, 100.0)
+	var a := _make(s)
+	var at := 100.0
+	var when: Array[float] = []
+	while at < 180.0:
+		at += 0.1
+		s.seg.elapsed_s = at
+		var before := a.played.count(TankAudio.LANDING_SOUND)
+		a.update(s, DT, 1, {}, 0.0)
+		if a.played.count(TankAudio.LANDING_SOUND) > before:
+			when.append(180.0 - at)
+	assert_eq(when.size(), 1, "once")
+	assert_almost_eq(when[0], TankAudio.LANDING_AT_S, 0.15)
+	assert_almost_eq(
+		TankAudio.LANDING_AT_S,
+		TankConst.HANGAR_COUNTDOWN_S - TankHangar.LOWER_S.y,
+		1e-6,
+		"as the lowering ends"
+	)
+	var bank: Dictionary = JSON.parse_string(
+		FileAccess.get_file_as_string("res://assets/tank/audio/audio.json")
+	)
+	assert_true((bank["sounds"] as Dictionary).has(TankAudio.LANDING_SOUND), "an existing sample")
+	var late_state := TankFixtures._base(TankFixtures.content(), 2, 0, 176.0)
+	var b := _make(late_state)
+	b.update(late_state, DT, 1, {}, 0.0)
+	assert_eq(b.played.count(TankAudio.LANDING_SOUND), 0, "a late joiner does not hear it")
+
+
 func test_a_rider_joining_late_in_the_countdown_misses_the_beats_gone_by() -> void:
 	var s := TankFixtures._base(TankFixtures.content(), 2, 0, 175.0)
 	var a := _make(s)

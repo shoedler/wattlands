@@ -345,6 +345,25 @@ func test_boiler_restarts_from_zero_after_a_reserve() -> void:
 		prev = g
 
 
+## The trickle's share of the pressure never loads the rider: the director's boiler grade follows only what was earned
+## in band (TankSteamState.grade_pressure_pct).
+func test_the_boiler_grade_ignores_the_below_band_trickle() -> void:
+	var h := _h()
+	_steam(h).pressure_pct = 80.0
+	_steam(h).trickle_pct = 80.0
+	h.run_s(ADV1, 10.0)
+	assert_eq(h.sent(3, "boiler"), [], "pressure that is all trickle asks for no grade")
+	_steam(h).pressure_pct = 80.0
+	_steam(h).trickle_pct = 60.0
+	h.run_s(ADV1, 20.0)
+	var rows := h.sent(3, "boiler")
+	assert_gt(rows.size(), 0)
+	var top := 0.0
+	for r: Array in rows:
+		top = maxf(top, float(r[1]["mode_grade"]))
+	assert_almost_eq(top, 8.0 * 0.2, 1e-6, "20% earned in band: 1.6%")
+
+
 ## Every boiler send is >= 1 s after the previous one and rises <= 0.5%, whatever the pressure.
 func test_boiler_spacing_and_rise_limit() -> void:
 	var h := _h()

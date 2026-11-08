@@ -83,6 +83,7 @@ const TANKS_SPEC := {
 	"steam.over_max_pct": "pos",
 	"steam.rack_start": "nonneg",
 	"steam.below_band_gain": "frac",
+	"steam.below_band_cap_pct": "pos",
 	"steam.chamber_s": "pos",
 	"steam.light_latch_pct": "pos",
 	"gun.load_elev_deg": "num",
@@ -351,6 +352,8 @@ const ERG_MIN_PCT := 50.0
 const ERG_MAX_PCT := 100.0
 ## 4.6.8: ERG in WARMUP-kind segments at most 65%; SIM grades 0..+3% before difficulty.
 const WARMUP_ERG_MAX_PCT := 65.0
+## The Loader's below-band trickle stops at most this far into a shell (steam.below_band_cap_pct).
+const STEAM_TRICKLE_CAP_MAX_PCT := 90.0
 const WARMUP_SIM_MAX_PCT := 3.0
 ## Checkpoints: ERG 50% for everyone.
 const CHECKPOINT_PCT := 50.0
@@ -412,6 +415,17 @@ static func validate_tanks(d: Variant) -> Array[String]:
 	if not (d is Dictionary):
 		return ["tanks.json: expected an object"]
 	check_spec(d, TANKS_SPEC, "tanks.json", errors)
+	var cap: Variant = dig(d, "steam.below_band_cap_pct")
+	if _num(cap) and (float(cap) > STEAM_TRICKLE_CAP_MAX_PCT or float(cap) < 0.0):
+		(
+			errors
+			. append(
+				(
+					"tanks.json steam.below_band_cap_pct: at most %d (a shell is always finished in band)"
+					% int(STEAM_TRICKLE_CAP_MAX_PCT)
+				)
+			)
+		)
 	var restock: Variant = dig(d, "steam.checkpoint_rack_by_crew")
 	if restock != null and not _crew_list(restock, 0.0, float(TankConst.RACK_MAX), true):
 		errors.append(
