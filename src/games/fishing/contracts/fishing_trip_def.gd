@@ -4,7 +4,8 @@ extends FishingRecord
 ##
 ## Free Roam (kind "roam"): {"id": "roam_30", "kind": "roam", "label": "FISHING_CONTENT_ROAM_30",
 ##   "minutes": 30}: play time in minutes from the start (the first 5 min are the drive-out
-##   warm-up); the fixed map is content/fishing/map.json.
+##   warm-up); the fixed map is content/fishing/map.json, or the file the optional "map" field
+##   names ("map": "map_big_game.json": a file name in content/fishing/, lower case, `.json`).
 ## Workouts, on the endless map:
 ##   Base (pre-rolled per rider):
 ##   {"id": "base_60", "kind": "base", "label": "FISHING_CONTENT_BASE_60", "total_min": 60,
@@ -21,11 +22,17 @@ extends FishingRecord
 ##   the species' offset; runs n draws its dur_s and peak like the species table.
 ##   reel_pct (optional) fixes the Reel target and ignores the rider's reel_pct option.
 
+## The map a roam trip without a "map" field plays on, and the content files a "map" may not name.
+const DEFAULT_MAP := "map.json"
+const RESERVED_FILES: Array[String] = ["species.json", "cosmetics.json"]
+
 var id: String = ""
 var kind: String = ""
 var label: String = ""
 ## Free Roam: play minutes.
 var minutes: float = 0.0
+## Free Roam: the map file in the content folder.
+var map: String = DEFAULT_MAP
 var total_min: float = 0.0
 var ride_out_s: float = 0.0
 var ride_out_pct: float = 0.0
@@ -49,6 +56,7 @@ static func from_dict(d: Dictionary) -> FishingTripDef:
 	t.kind = str(d.get("kind", ""))
 	t.label = str(d.get("label", "FISHING_CONTENT_%s" % t.id.to_upper()))
 	t.minutes = float(d.get("minutes", 0))
+	t.map = map_file_of(d)
 	t.total_min = float(d.get("total_min", 0))
 	var ro: Dictionary = d.get("ride_out", {})
 	t.ride_out_s = float(ro.get("duration_s", FishingConst.RIDE_OUT_S))
@@ -62,6 +70,23 @@ static func from_dict(d: Dictionary) -> FishingTripDef:
 	t.reel_pct = int(d.get("reel_pct", -1))
 	t.schedule = (d.get("schedule", {}) as Dictionary).duplicate(true)
 	return t
+
+
+## The map file a (parsed) roam trip names: its "map" field when that is a valid file name, else
+## DEFAULT_MAP.
+static func map_file_of(d: Variant) -> String:
+	if d is Dictionary and (d as Dictionary).has("map") and valid_map_file((d as Dictionary)["map"]):
+		return str((d as Dictionary)["map"])
+	return DEFAULT_MAP
+
+
+## True for a plain lower-case `name.json` that is not another content file.
+static func valid_map_file(v: Variant) -> bool:
+	if not v is String:
+		return false
+	var base: String = (v as String).trim_suffix(".json")
+	var plain: bool = base != v and base == base.to_lower() and base.is_valid_identifier()
+	return plain and not RESERVED_FILES.has(v)
 
 
 func is_roam() -> bool:
@@ -100,6 +125,8 @@ static func errors(d: Variant, species_ids: Array) -> Array[String]:
 		var m := float(e.get("minutes", 0))
 		if m < 10.0 or m > 120.0:
 			out.append("minutes must be 10..120")
+		if e.has("map") and not valid_map_file(e["map"]):
+			out.append("map must be a content file name like map_big_game.json")
 		return out
 	var ro: Variant = e.get("ride_out", {})
 	if not ro is Dictionary or float((ro as Dictionary).get("duration_s", 0)) <= 0.0:

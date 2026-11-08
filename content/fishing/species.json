@@ -217,7 +217,8 @@
 			"label": "FISHING_SPECIES_TUNA",
 			"sprite": "fish_tuna",
 			"zones": [
-				"shelf"
+				"shelf",
+				"bluewater"
 			],
 			"rarity": 55,
 			"depth_m": [
@@ -429,7 +430,8 @@
 			"label": "FISHING_SPECIES_GROUPER",
 			"sprite": "fish_grouper",
 			"zones": [
-				"deep"
+				"deep",
+				"bluewater"
 			],
 			"rarity": 35,
 			"depth_m": [

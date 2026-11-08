@@ -6,6 +6,7 @@ FISHING_CONTENT_ROAM_20,"Free Roam, 20 min"
 FISHING_CONTENT_ROAM_30,"Free Roam, 30 min"
 FISHING_CONTENT_ROAM_45,"Free Roam, 45 min"
 FISHING_CONTENT_ROAM_60,"Free Roam, 60 min"
+FISHING_CONTENT_BIG_GAME_30,"Big game trip, 30 min"
 FISHING_CONTENT_BASE_60,"Base miles, 60 min"
 FISHING_CONTENT_THRESHOLD,"Threshold tuna, 55 min"
 FISHING_CONTENT_E2E_2MIN,"Quick test, 2 min"
@@ -20,12 +21,14 @@ FISHING_SPECIES_MARLIN,Blue marlin
 FISHING_SPECIES_GROUPER,Giant grouper
 FISHING_SPECIES_OARFISH,Giant oarfish
 FISHING_MAP_ROAM,The open sea
+FISHING_MAP_BIG_GAME,The big game grounds
 FISHING_ZONE_DOCK,Harbour
 FISHING_ZONE_SHALLOWS,Shallows
 FISHING_ZONE_REEF,Reef
 FISHING_ZONE_SHELF,Shelf
 FISHING_ZONE_DEEP,Deep sea
 FISHING_ZONE_ABYSS,Abyss
+FISHING_ZONE_BLUEWATER,Bluewater
 FISHING_ZONE_EDGE,The edge of the world
 FISHING_PHASE_DRIVE_OUT,Drive out
 FISHING_PHASE_ROAM,Free roam
@@ -118,6 +121,7 @@ FISHING_HUD_WATTS,W
 FISHING_HUD_YOU,YOU
 FISHING_HUD_FISH_ON,Fish on!
 FISHING_CARD_ROAM,Race to the most points. Drive out for bigger fish.
+FISHING_CARD_BIG_GAME,"Race to the most points where only tuna and giant grouper bite. Bluewater from the harbour mouth."
 FISHING_CARD_WORKOUT,A structured workout: the plan brings the fish.
 FISHING_HELP_MINIMAP,Minimap: every boat between the dock and open sea
 FISHING_HELP_BOARD,Leaderboard: points and fish landed per rider

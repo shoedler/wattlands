@@ -20,11 +20,11 @@ const CELL_PX := 8
 const BLOCK_CELLS := 96
 ## Per zone (FishingWorld.ZONES): the most a terrace's rows may vary before it drops, at the
 ## block's own view depth, and the terrace lengths (cells) the seed picks from.
-const MERGE_ROWS: Array[float] = [999.0, 8.0, 10.0, 12.0, 18.0, 22.0]
+const MERGE_ROWS: Array[float] = [999.0, 8.0, 10.0, 12.0, 18.0, 22.0, 16.0]
 const TERRACE_CELLS: Array[int] = [7, 9, 11, 13, 15, 17, 21, 25]
 ## Per zone, how far (a share of its depth) each terrace is seeded up or down from the true
 ## floor, so the floor climbs and drops in terraces instead of following a gentle slope.
-const RELIEF: Array[float] = [0.0, 0.16, 0.32, 0.26, 0.2, 0.14]
+const RELIEF: Array[float] = [0.0, 0.16, 0.32, 0.26, 0.2, 0.14, 0.24]
 ## The harbour: a quay shelf this deep out to DOCK_DROP_M, then the dredged channel.
 const DOCK_SHELF_M := 2.6
 const DOCK_CHANNEL_M := 5.4

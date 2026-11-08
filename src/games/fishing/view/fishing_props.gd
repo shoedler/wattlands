@@ -15,6 +15,7 @@ const BIG: Array = [
 	["kelp", "ledge", "kelp"],
 	["skeleton", "boulder", "ledge"],
 	["basalt", "basalt", "boulder"],
+	["kelp", "ledge", "boulder", "skeleton", "kelp", "ledge"],
 ]
 const SMALL: Array = [
 	["chain", "crate", "crate"],
@@ -23,6 +24,7 @@ const SMALL: Array = [
 	["kelp_short", "rock"],
 	["rib", "rock"],
 	["rock", "column"],
+	["kelp_short", "rock", "rib", "kelp_short"],
 ]
 
 ## Every kind draw() knows.
