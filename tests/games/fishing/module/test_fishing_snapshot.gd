@@ -60,6 +60,7 @@ func _worst_case(g: FishingGame) -> void:
 		r.pub_lo = 105
 		r.pub_hi = 127
 		r.power_w = 1234.4
+		r.applied_target_w = 1234.4
 		r.cadence_ema = 118.6
 		r.rescue = r.slot == 0
 		r.afk = r.slot == 1
@@ -78,6 +79,7 @@ func test_the_worst_case_fits_2_kb_of_json() -> void:
 	_worst_case(g)
 	var snap := g.snapshot()
 	assert_eq(S.check(snap), "")
+	assert_eq(S.R_COLUMNS, 38, "the target watts column joined the 37")
 	var size := FishingSnapshot.byte_size(snap)
 	gut.p("fishing worst-case 4-rider snapshot: %d bytes" % size)
 	assert_gt(size, 600, "it carries everything")
@@ -115,6 +117,7 @@ func test_a_json_round_trip_restores_every_carried_field() -> void:
 	assert_eq(b.pub_lo, 105)
 	assert_eq(b.pub_hi, 127)
 	assert_eq(b.power_w, 1234.0)
+	assert_eq(b.applied_target_w, 1234.0, "the target watts other riders' strips show")
 	assert_eq(b.cadence_ema, 119.0)
 	assert_true(b.rescue)
 	assert_true(b.pedal_nav)
