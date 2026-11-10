@@ -8,7 +8,7 @@ extends RefCounted
 const CONTENT := "res://content/fishing"
 ## Workouts (pre-rolled plans); Free Roam plans grow at each bite (roam_failures).
 const TRIPS := ["base_60", "threshold", "e2e_2min"]
-const ROAM_TRIPS := ["roam_10", "roam_20", "roam_30", "roam_45", "roam_60"]
+const ROAM_TRIPS := ["roam_10", "roam_20", "roam_30", "roam_45", "roam_60", "big_game_30"]
 const REEL_PCTS := [50, 55, 60, 65, 70]
 const FTPS := [100.0, 200.0, 300.0, 400.0, 500.0]
 const DT := 0.05
@@ -50,10 +50,11 @@ class Gov:
 ## Content, parsed and validated like FishingContent.load_for (the trip and every species).
 static func content(trip_id: String) -> FishingContent:
 	var c := FishingContent.new()
+	var trip: Variant = _json("trips/%s.json" % trip_id)
 	c.parse(
 		_json("species.json"),
-		_json("trips/%s.json" % trip_id),
-		_json("map.json"),
+		trip,
+		_json(FishingTripDef.map_file_of(trip)),
 		_json("cosmetics.json")
 	)
 	return c

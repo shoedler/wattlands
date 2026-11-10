@@ -234,3 +234,39 @@ test('main prints one line per scenario and skips missing ones', () => {
   assert.match(text, /SKIP ALL/);
   assert.match(text, /SKIP W3/);
 });
+
+/** A passing big game report: four riders, only tuna and grouper, nothing in the drive-out. */
+function bigGameReport() {
+  const r = roamReport();
+  r.content_id = 'big_game_30';
+  r.slots = [0, 1, 2, 3].map((i) => ({ slot: i, peer: i < 2 ? i + 1 : -(i - 1), ftp: 200, is_bot: i >= 2 }));
+  r.events = [];
+  for (const [i, sp] of [SP.tuna, SP.grouper, SP.tuna, SP.grouper].entries()) {
+    const t = 320 + i * 10;
+    r.events.push(ev(t - 10, { type: 'cast', l: i, sp, dx: 20, z: 40 }), ev(t, { type: 'bite', l: i, sp }), ev(t + 1, { type: 'hookup', l: i, sp, n: 1, sch: 0 }));
+    r.events.push(ev(t + 100, { type: 'landed', l: i, sp, grade: 0, kg: 60, points: 130, hk: 10 }));
+  }
+  r.directives = [2, 3, 4, 5].map((id) => ({ id, peer: 1, t: 320, kind: 'replan', requested: { plan: {} }, accepted: true, applied: null }));
+  r.events.push(ev(1800, { type: 'time_up' }), ev(1800, { type: 'trip_over' }));
+  return r;
+}
+
+test('R7 passes a big game run of tuna and grouper only', () => {
+  const res = cs.checkR7({ r7_biggame: bigGameReport() });
+  assert.equal(res.ok, true, res.probs.join('\n'));
+  assert.match(res.info, /tuna \+ grouper/);
+  assert.equal(cs.checkR7({}).skip, true);
+});
+
+test('R7 fails a mahi in the bluewater, a rider who landed nothing and a bite in the drive-out', () => {
+  const r = bigGameReport();
+  r.events.push(ev(700, { type: 'cast', l: 0, sp: SP.mahi, dx: 20, z: 10 }));
+  r.events = r.events.filter((e) => !(e.event.type === 'landed' && e.event.l === 3));
+  r.events.unshift(ev(100, { type: 'bite', l: 1, sp: SP.tuna }));
+  const res = cs.checkR7({ r7_biggame: r });
+  assert.equal(res.ok, false);
+  const text = res.probs.join('\n');
+  assert.match(text, /a cast of mahi/);
+  assert.match(text, /rider 3 landed nothing/);
+  assert.match(text, /in the drive-out/);
+});

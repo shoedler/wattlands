@@ -844,3 +844,19 @@ func _loudest(a: FishingAudio, id: String) -> float:
 		if a.played[i] == id:
 			top = maxf(top, a.kit.played_db[i])
 	return top
+
+
+func test_a_recast_is_a_quieter_shorter_cast_without_the_clunk() -> void:
+	var a := _audio()
+	a.cue({"k": FishingCues.CUE_CAST, "l": 0}, true)
+	var cast_n := a.played.size()
+	var cast_db: Array = a.kit.played_db.duplicate()
+	a.cue({"k": FishingCues.CUE_RECAST, "l": 0}, true)
+	var recast: Array = a.played.slice(cast_n)
+	assert_has(recast, "cast_whip")
+	assert_false(recast.has("reel_clunk"), "no clunk: the lever does not flip")
+	assert_lt(recast.size(), cast_n, "fewer sounds")
+	var loudest_cast: float = cast_db.max()
+	var loudest_recast: float = (a.kit.played_db.slice(cast_n) as Array).max()
+	assert_lt(loudest_recast, loudest_cast - 8.0, "clearly lower gain")
+	assert_eq(FishingAudio.cue_name({"k": FishingCues.CUE_RECAST}), "recast")

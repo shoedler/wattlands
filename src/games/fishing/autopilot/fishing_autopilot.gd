@@ -25,7 +25,7 @@ const MIXED := 2
 const STRATEGY_TABLE := {
 	"vibe":
 	{
-		"zones": ["shallows"],
+		"zones": ["shallows", "bluewater"],
 		"span": [0.1, 0.9],
 		"effort": 0.55,
 		"pick": "any",
@@ -34,7 +34,7 @@ const STRATEGY_TABLE := {
 	},
 	"small":
 	{
-		"zones": ["shallows"],
+		"zones": ["shallows", "bluewater"],
 		"span": [0.0, 0.35],
 		"effort": 0.75,
 		"pick": "light",
@@ -43,7 +43,7 @@ const STRATEGY_TABLE := {
 	},
 	"mixed":
 	{
-		"zones": ["shallows", "reef"],
+		"zones": ["shallows", "reef", "bluewater"],
 		"span": [0.1, 0.9],
 		"effort": 0.85,
 		"pick": "heavy",
@@ -52,7 +52,7 @@ const STRATEGY_TABLE := {
 	},
 	"big":
 	{
-		"zones": ["shallows", "reef", "shelf", "deep", "abyss"],
+		"zones": ["shallows", "reef", "shelf", "deep", "abyss", "bluewater"],
 		"span": [0.2, 0.9],
 		"effort": 1.0,
 		"pick": "heavy",

@@ -69,11 +69,10 @@ static func json(path: String) -> Variant:
 
 
 static func load_content(content_id: String) -> FishingContent:
+	var trip: Variant = json("trips/%s.json" % content_id)
+	var map_file := FishingTripDef.map_file_of(trip)
 	return FishingContent.new().parse(
-		json("species.json"),
-		json("trips/%s.json" % content_id),
-		json("map.json"),
-		json("cosmetics.json")
+		json("species.json"), trip, json(map_file), json("cosmetics.json")
 	)
 
 

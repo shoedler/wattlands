@@ -88,6 +88,7 @@ static func _row(st: FishingState, r: FishingRiderState) -> Array:
 	row[S.R_TOW] = S.u8(r.tow_n / FishingConst.TOW_MAX_N)
 	row[S.R_PROP_CM] = roundi(r.prop_depth_m * 100.0)
 	row[S.R_REEL] = S.u8(r.reel) if fighting else 0
+	row[S.R_TARGET_W] = roundi(r.applied_target_w)
 	return row
 
 
@@ -221,6 +222,7 @@ static func _apply_row(r: FishingRiderState, row: Array) -> void:
 	r.tow_n = S.unit(row[S.R_TOW]) * FishingConst.TOW_MAX_N
 	r.prop_depth_m = int(row[S.R_PROP_CM]) / 100.0
 	r.reel = S.unit(row[S.R_REEL])
+	r.applied_target_w = float(clampi(int(row[S.R_TARGET_W]), 0, 9999))
 	r.surging = fl & S.F_SURGE != 0
 
 
