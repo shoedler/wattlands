@@ -144,7 +144,7 @@ static func boss(crew: int) -> TankState:
 	s.boss.phase = TankIds.BOSS_PHASE_1
 	s.boss.x_px = s.hull.x_px + s.hull.hull_w + 180.0
 	var def := c.boss_def()
-	var scale := c.enemy_scale(s.hull.tank)
+	var scale := c.enemy_scale(s.hull.tank) * c.boss_hp_mult()
 	var bogie_max := float(def["bogie_hp"]) * scale
 	s.boss.bogie_hp = [bogie_max, bogie_max * 0.4, 0.0]
 	s.boss.turret_hp = float(def["turret_hp"]) * scale

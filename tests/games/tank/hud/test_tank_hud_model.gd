@@ -74,7 +74,10 @@ func test_boss_bars_show_the_fractions_scaled_by_the_tank() -> void:
 	assert_true(b["telegraph"])
 	var small := TankFixtures.boss(1)
 	var def := TankFixtures.content().boss_def()
-	var scale := TankFixtures.content().enemy_scale(TankIds.TANK_LANDSHIP)
+	var scale := (
+		TankFixtures.content().enemy_scale(TankIds.TANK_LANDSHIP)
+		* TankFixtures.content().boss_hp_mult()
+	)
 	var bogie_max := float(def["bogie_hp"]) * scale
 	var turret_max := float(def["turret_hp"]) * scale
 	small.boss.bogie_hp = [bogie_max, bogie_max * 0.5, 0.0]

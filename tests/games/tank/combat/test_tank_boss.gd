@@ -17,13 +17,38 @@ func _driver(rig: TankRulesRig) -> int:
 	return rig.peer_of(TankIds.ENGINE_DIESEL)
 
 
+## A mission scales its own Behemoth (boss.hp_mult in the boss segment): ambush_15 and ashfall_road cut it by 10%
+## (the kill sat near max_s), the shared enemies.json is untouched, and a client derives the same maxima.
+func test_a_missions_boss_hp_mult_scales_the_behemoth_and_a_client_agrees() -> void:
+	for mission: String in ["ashfall_road", "ambush_15"]:
+		var rig := TankRulesRig.new(3, mission)
+		var def := rig.content.boss_def()
+		assert_almost_eq(rig.content.boss_hp_mult(), 0.9, 1e-9, mission)
+		rig.enter(rig.segs().size() - 1, 1.0)
+		assert_almost_eq(rig.state.boss.turret_max, float(def["turret_hp"]) * 0.9, 0.001, mission)
+		assert_almost_eq(rig.state.boss.bogie_max, float(def["bogie_hp"]) * 0.9, 0.001, mission)
+		var client := TankState.new()
+		client.content = rig.content
+		client.hull.tank = rig.state.hull.tank
+		TankSnapshot._derive_maxima(client, rig.content)
+		assert_almost_eq(client.boss.turret_max, rig.state.boss.turret_max, 0.001, "a client")
+	assert_eq(TankRulesRig.new(1, "drill").content.boss_hp_mult(), 1.0, "no boss: 1")
+	var files := TankContent.read_files("ambush_15")
+	files["mission"]["segments"][5]["boss"]["hp_mult"] = 0.4
+	assert_false(
+		TankContent.from_dicts(files, "ambush_15").ok(), "a cut of more than half is refused"
+	)
+
+
 func test_the_boss_starts_in_phase_1_at_full_health_scaled_by_the_tank() -> void:
 	for crew in [2, 3, 4]:
 		var rig := _rig(crew)
 		var b := rig.state.boss
 		assert_eq(b.phase, TankIds.BOSS_PHASE_1)
 		var def := rig.content.boss_def()
-		var scale := rig.content.enemy_scale(TankIds.tank_for_crew(crew))
+		var scale := (
+			rig.content.enemy_scale(TankIds.tank_for_crew(crew)) * rig.content.boss_hp_mult()
+		)
 		assert_almost_eq(b.bogie_max, float(def["bogie_hp"]) * scale, 0.001)
 		assert_almost_eq(b.turret_max, float(def["turret_hp"]) * scale, 0.001)
 		for hp in b.bogie_hp:
@@ -431,7 +456,9 @@ func test_a_solo_rider_meets_the_behemoth_with_its_bogies_wrecked() -> void:
 	assert_eq(b.bogies_left(), 0)
 	assert_eq(b.phase, TankIds.BOSS_PHASE_2)
 	assert_eq(rig.of_type("boss_phase").back()["p"], TankIds.BOSS_PHASE_2)
-	assert_eq(b.turret_hp, float(rig.content.boss_def()["turret_hp"]))
+	assert_almost_eq(
+		b.turret_hp, float(rig.content.boss_def()["turret_hp"]) * rig.content.boss_hp_mult(), 0.001
+	)
 	var stop := float(rig.content.boss_def()["far"]["stop_m"])
 	assert_eq(b.range_m, stop, "at its stop line")
 	rig.run(10.0)
@@ -451,8 +478,18 @@ func test_difficulty_reaches_the_behemoth() -> void:
 		var row: Dictionary = rig.content.value("enemies", "difficulty.%s" % level, {})
 		var def := rig.content.boss_def()
 		var b := rig.state.boss
-		assert_almost_eq(b.bogie_max, float(def["bogie_hp"]) * float(row["hp"]), 0.001, level)
-		assert_almost_eq(b.turret_max, float(def["turret_hp"]) * float(row["hp"]), 0.001, level)
+		assert_almost_eq(
+			b.bogie_max,
+			float(def["bogie_hp"]) * float(row["hp"]) * rig.content.boss_hp_mult(),
+			0.001,
+			level
+		)
+		assert_almost_eq(
+			b.turret_max,
+			float(def["turret_hp"]) * float(row["hp"]) * rig.content.boss_hp_mult(),
+			0.001,
+			level
+		)
 		b.main_s = 20.0
 		b.secondary_s = 1000.0
 		var longest := 0.0

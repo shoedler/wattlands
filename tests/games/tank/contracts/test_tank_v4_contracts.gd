@@ -529,8 +529,12 @@ func test_a_clients_maxima_follow_the_difficulty() -> void:
 	var hp := float(s.content.enemy_def(kind)["hp"])
 	assert_eq(c.enemies[0].hp_max, ceilf(hp * 1.25), "enemy HP x difficulty")
 	var def := s.content.boss_def()
-	assert_eq(c.boss.bogie_max, float(def["bogie_hp"]) * 1.25)
-	assert_eq(c.boss.turret_max, float(def["turret_hp"]) * 1.25)
+	assert_almost_eq(
+		c.boss.bogie_max, float(def["bogie_hp"]) * 1.25 * s.content.boss_hp_mult(), 0.001
+	)
+	assert_almost_eq(
+		c.boss.turret_max, float(def["turret_hp"]) * 1.25 * s.content.boss_hp_mult(), 0.001
+	)
 
 
 # --- Events -----------------------------------------------------------------------------------------

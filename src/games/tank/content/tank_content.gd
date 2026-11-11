@@ -199,6 +199,15 @@ func boss_def() -> Dictionary:
 	return data["enemies"].get("boss", {})
 
 
+## The mission's own scale of the Behemoth's HP (the boss segment's `boss.hp_mult`, 1.0 without one): a short mission
+## tunes its boss without touching the shared enemies.json.
+func boss_hp_mult() -> float:
+	for s: Variant in segments():
+		if str((s as Dictionary).get("type", "")) == TankIds.SEG_BOSS:
+			return float(((s as Dictionary).get("boss", {}) as Dictionary).get("hp_mult", 1.0))
+	return 1.0
+
+
 func enemy_scale(tank: String) -> float:
 	return float(tank_def(tank).get("enemy_scale", 1.0))
 

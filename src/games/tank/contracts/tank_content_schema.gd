@@ -1067,6 +1067,13 @@ static func _check_segment(s: Variant, where: String, errors: Array[String]) -> 
 				errors.append('%s encounters: "from" is gone: nothing comes from behind' % where)
 	if type == TankIds.SEG_HANGAR:
 		_check_hangar(s, where, errors)
+	var boss: Variant = s.get("boss")
+	if boss is Dictionary and (boss as Dictionary).has("hp_mult"):
+		var hm: Variant = (boss as Dictionary)["hp_mult"]
+		if type != TankIds.SEG_BOSS or not _num(hm) or float(hm) < 0.5 or float(hm) > 1.0:
+			errors.append(
+				"%s boss.hp_mult: a boss segment's 0.5..1.0 share of the Behemoth's HP" % where
+			)
 	_check_near(s.get("near", []), where, errors)
 	for key in ["encounters", "enemies", "obstacles", "near"]:
 		for e: Variant in s.get(key, []) if s.get(key, []) is Array else []:

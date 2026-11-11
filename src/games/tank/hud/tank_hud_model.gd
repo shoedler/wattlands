@@ -514,7 +514,11 @@ static func boss_bars(state: TankState) -> Dictionary:
 	var bogie_max := b.bogie_max
 	var turret_max := b.turret_max
 	if state.content != null:
-		scale_k = state.content.enemy_scale(state.hull.tank) * TankDifficulty.mult(state, "hp")
+		scale_k = (
+			state.content.enemy_scale(state.hull.tank)
+			* TankDifficulty.mult(state, "hp")
+			* state.content.boss_hp_mult()
+		)
 		bogie_max = float(state.content.boss_def().get("bogie_hp", 100)) * scale_k
 		turret_max = float(state.content.boss_def().get("turret_hp", 300)) * scale_k
 	var bogies: Array[float] = []

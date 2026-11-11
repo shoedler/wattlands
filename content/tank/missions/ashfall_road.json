@@ -227,7 +227,7 @@
 			"name": "TANK_PLACE_IRON_GATE",
 			"backdrop": "base",
 			"end_hold_s": 7.5,
-			"boss": {"start_left_px": 500},
+			"boss": {"start_left_px": 500, "hp_mult": 0.9},
 			"near": [
 				{"at_s": 30, "enemy": "tankette", "count": 1, "min_crew": 3},
 				{"at_s": 90, "enemy": "recon", "count": 1, "min_crew": 3},
