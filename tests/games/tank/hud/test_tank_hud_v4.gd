@@ -341,7 +341,9 @@ func test_the_boss_bars_read_the_difficultys_maxima() -> void:
 	var s := TankFixturesV4.make("boss_far", 3)
 	s.difficulty = TankIds.DIFF_HARD
 	var def := s.content.boss_def()
-	var k := s.content.enemy_scale(s.hull.tank) * TankDifficulty.mult(s, "hp")
+	var k := (
+		s.content.enemy_scale(s.hull.tank) * TankDifficulty.mult(s, "hp") * s.content.boss_hp_mult()
+	)
 	s.boss.bogie_hp = [float(def["bogie_hp"]) * k * 0.5, 0.0, 0.0]
 	var bars := TankHudModel.boss_bars(s)
 	assert_almost_eq(float((bars["bogies"] as Array)[0]), 0.5, 0.001, "half of Hard's maximum")

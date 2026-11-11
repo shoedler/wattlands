@@ -188,8 +188,9 @@ func test_apply_derives_what_the_snapshot_leaves_out() -> void:
 		var want := holder.peer if holder != null else 0
 		assert_eq(st.peer, want, "%s: who works the room (0: an empty seat)" % st.engine)
 	var boss_def := c.content.boss_def()
-	assert_eq(c.boss.bogie_max, float(boss_def["bogie_hp"]))
-	assert_eq(c.boss.turret_max, float(boss_def["turret_hp"]))
+	var boss_k := c.content.boss_hp_mult()
+	assert_almost_eq(c.boss.bogie_max, float(boss_def["bogie_hp"]) * boss_k, 0.001)
+	assert_almost_eq(c.boss.turret_max, float(boss_def["turret_hp"]) * boss_k, 0.001)
 	assert_eq(
 		c.enemy(11).hp_max,
 		float(c.content.enemy_def("medium")["hp"]),
@@ -203,9 +204,14 @@ func test_apply_derives_what_the_snapshot_leaves_out() -> void:
 	solo.apply_snapshot(_wire(solo_host))
 	var scale := c.content.enemy_scale(TankIds.TANK_LANDSHIP)
 	assert_almost_eq(
-		solo.state.boss.bogie_max, float(boss_def["bogie_hp"]) * scale, 0.001, "enemy scale"
+		solo.state.boss.bogie_max,
+		float(boss_def["bogie_hp"]) * scale * boss_k,
+		0.001,
+		"enemy scale"
 	)
-	assert_almost_eq(solo.state.boss.turret_max, float(boss_def["turret_hp"]) * scale, 0.001)
+	assert_almost_eq(
+		solo.state.boss.turret_max, float(boss_def["turret_hp"]) * scale * boss_k, 0.001
+	)
 	# A client derives an enemy's maximum from the content, rounded up like every HP it shows.
 	assert_almost_eq(
 		solo.state.enemy(11).hp_max,
