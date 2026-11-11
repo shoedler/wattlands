@@ -477,8 +477,13 @@ func test_ambush_15_defaults_to_hard_and_lists_its_enemies() -> void:
 	)
 	var hold := c.segment(3)
 	assert_eq(str(hold["enemies"][0]["enemy"]), "light", "what a solo rider's 3 shots can finish")
-	assert_eq(str(hold["enemies"][1]["enemy"]), "heavy")
-	assert_eq(hold["enemies"][1]["hold_m"], [1400.0])
+	assert_eq(
+		str(hold["enemies"][1]["enemy"]), "medium", "a crew of three meets light, medium, light"
+	)
+	assert_eq(hold["enemies"][1]["hold_m"], [1100.0])
+	assert_eq(str(hold["enemies"][3]["enemy"]), "heavy", "the far heavy is last, for four riders")
+	assert_eq(hold["enemies"][3]["hold_m"], [1400.0])
+	assert_eq(int(hold["enemies"][3]["min_crew"]), 4)
 	assert_eq((hold["near"] as Array).size(), 2)
 	assert_eq((c.segment(5)["near"] as Array).size(), 2)
 	assert_eq(float(c.segment(5)["end_hold_s"]), 7.5)
