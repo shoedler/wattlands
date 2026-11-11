@@ -151,3 +151,9 @@ Reason: a stricter gate; no threshold moved. The re-pin also took Tank v4's addi
 - Decision: before the repository went public, the owner had every commit and tag rewritten with `git filter-repo --mailmap`, so authors, committers and taggers carry the GitHub noreply address. Trees are unchanged (rc.4's tree hash is the same). Commit IDs quoted in the docs were mapped to the new ones, and `tools/gate pin-safety` re-pinned at the new history, since `safety_pins.json` names its pinning commit. The game briefs in `docs/games/` were brought up to the shipped games with the owner's leave.
 - Alternatives: keep the history (the addresses would be public for good); a fresh repository with one squashed commit (loses the history every ADR points into).
 - Reason: the owner's call. No file hash in the pins changed, so no BRIEF 4.6 or 7 path moved.
+
+## 2026-11-11: Tank's laps re-pinned for v1.1.0
+
+- Decision: `EXPECTED_LAPS` in `tests/games/tank/sim/check_sims.mjs` goes from ashfall_road 12 and ambush_15 6 to 13 and 7, and the lead re-pinned `safety_pins.json`. The re-pin also takes Fishing's new R7 row in its `CHECKS` table (additive).
+- Alternatives: keep one 300 s Depot lap (the owner asked for a Hangar and a Roll-out that riders see as separate laps).
+- Reason: the 300 s Depot warm-up became a 180 s Hangar plus a 120 s Roll-out, both WARMUP at 65% FTP or less, so each mission has one more lap. The safety-reviewer read the plan, the Loader trickle and its Overpressure carry, and the boss HP change: no path raises a rider's load, and no BRIEF 4.6 threshold or BRIEF 7 assertion moved. Drill stays at 4 laps, because its Hangar replaces its Depot.
