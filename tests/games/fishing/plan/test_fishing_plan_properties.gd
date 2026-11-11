@@ -265,3 +265,27 @@ func test_the_roam_plan_starts_with_a_fixed_drive_out_and_an_open_roam() -> void
 
 func _dicts(slots: Array[FishingPlanSlot]) -> Array:
 	return slots.map(func(s: FishingPlanSlot) -> Dictionary: return s.to_dict())
+
+
+func test_big_game_30() -> void:
+	var c := H.content("big_game_30")
+	assert_true(c.ok, "big_game_30 content valid: %s" % [c.errors])
+	assert_eq(c.trip.map, "map_big_game.json")
+	_check_roam("big_game_30", ["tuna", "grouper"])
+	var fails: Array[String] = []
+	for seed in range(1, 101):
+		fails.append_array(H.roam_failures(c, seed, ["grouper", "tuna"], 6))
+	assert_eq(fails.size(), 0, "back to back groupers and tuna: %s" % "\n".join(fails.slice(0, 6)))
+
+
+func test_the_big_game_biome_holds_only_tuna_and_grouper_inside_the_plan_rules() -> void:
+	var c := H.content("big_game_30")
+	var in_biome: Array[String] = []
+	for id: String in FishingConst.SPECIES:
+		var d: FishingSpeciesDef = c.species[id]
+		if d.zones.has("bluewater"):
+			in_biome.append(id)
+			if d.max_s > PlanValidator.LONG_PHASE_S:
+				assert_lte(d.pull_hi, 105.0, "%s: a long phase stays <= 105 %%" % id)
+	assert_eq(in_biome, ["tuna", "grouper"] as Array[String])
+	assert_true(c.species["grouper"].near_floor, "the grouper holds the floor of the biome")

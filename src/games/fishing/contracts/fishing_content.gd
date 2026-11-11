@@ -4,7 +4,8 @@ extends RefCounted
 ## ctx.load_content_json so run_game_sim --override reaches it:
 ##   species.json            FishingSpeciesDef entries (every FishingConst.SPECIES id once)
 ##   trips/<content id>.json FishingTripDef
-##   map.json                the Free Roam map (FishingWorld.from_map; roam contents only)
+##   map.json                the Free Roam map (FishingWorld.from_map; roam contents only), or the
+##                           file the trip's "map" field names (map_big_game.json)
 ##   cosmetics.json          {"unlock_every_xp": 500, "items": [{"id", "kind", "value", "label"}]}
 ##                           kind: line | canopy | trim | pennant, in unlock order; value: a
 ##                           "#rrggbb" palette colour or a pattern id the view draws in code
@@ -18,7 +19,7 @@ var errors: Array[String] = []
 ## species id -> FishingSpeciesDef
 var species: Dictionary = {}
 var trip: FishingTripDef = null
-## The parsed map.json (roam contents; {} for workouts).
+## The parsed map file (roam contents; {} for workouts).
 var map: Dictionary = {}
 var cosmetics: Dictionary = {}
 
@@ -29,7 +30,7 @@ static func load_for(ctx: GameContext, quiet: bool = false) -> FishingContent:
 	var tr: Variant = ctx.load_content_json("trips/%s.json" % ctx.content_id)
 	var mp: Variant = null
 	if tr is Dictionary and str(tr.get("kind", "")) == FishingConst.TRIP_ROAM:
-		mp = ctx.load_content_json("map.json")
+		mp = ctx.load_content_json(FishingTripDef.map_file_of(tr))
 	var co: Variant = ctx.load_content_json("cosmetics.json")
 	c.parse(sp, tr, mp, co)
 	if not c.ok and not quiet:
@@ -38,7 +39,7 @@ static func load_for(ctx: GameContext, quiet: bool = false) -> FishingContent:
 
 
 ## Validates and fills from parsed JSON values (null for a missing file; `mp` is only read for
-## a roam trip). Pure.
+## a roam trip: the file its "map" field names, map.json without one). Pure.
 func parse(sp: Variant, tr: Variant, mp: Variant, co: Variant) -> FishingContent:
 	errors = []
 	species = {}
@@ -66,7 +67,11 @@ func parse(sp: Variant, tr: Variant, mp: Variant, co: Variant) -> FishingContent
 			trip = FishingTripDef.from_dict(tr)
 	map = {}
 	if trip != null and trip.is_roam():
-		errors.append_array(FishingWorld.errors(mp))
+		if mp == null:
+			errors.append("trip: map file %s is missing" % trip.map)
+		else:
+			for e in FishingWorld.errors(mp):
+				errors.append(e.replace("map.json:", trip.map + ":"))
 		map = mp if mp is Dictionary else {}
 	errors.append_array(cosmetics_errors(co))
 	cosmetics = co if co is Dictionary else {}

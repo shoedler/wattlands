@@ -20,11 +20,11 @@ const CELL_PX := 8
 const BLOCK_CELLS := 96
 ## Per zone (FishingWorld.ZONES): the most a terrace's rows may vary before it drops, at the
 ## block's own view depth, and the terrace lengths (cells) the seed picks from.
-const MERGE_ROWS: Array[float] = [999.0, 8.0, 10.0, 12.0, 18.0, 22.0]
+const MERGE_ROWS: Array[float] = [999.0, 8.0, 10.0, 12.0, 18.0, 22.0, 16.0]
 const TERRACE_CELLS: Array[int] = [7, 9, 11, 13, 15, 17, 21, 25]
 ## Per zone, how far (a share of its depth) each terrace is seeded up or down from the true
 ## floor, so the floor climbs and drops in terraces instead of following a gentle slope.
-const RELIEF: Array[float] = [0.0, 0.16, 0.32, 0.26, 0.2, 0.14]
+const RELIEF: Array[float] = [0.0, 0.16, 0.32, 0.26, 0.2, 0.14, 0.24]
 ## The harbour: a quay shelf this deep out to DOCK_DROP_M, then the dredged channel.
 const DOCK_SHELF_M := 2.6
 const DOCK_CHANNEL_M := 5.4
@@ -134,6 +134,9 @@ const ABYSS_DROPS: Array[float] = [26.0, 40.0]
 const CAVE_DROP_PX := 18.0
 
 var world: FishingWorld = null
+## Screen x spans of the fish on a line this frame (FishingScenery.fish_x): plants stay out of them.
+var fish_x: Array[Vector2] = []
+
 ## block index -> terraces [{"c0", "c1" (cells, end exclusive), "d" (m, INF: none), "zone"}].
 var _blocks: Dictionary = {}
 
@@ -251,6 +254,7 @@ static func pieces(t: Dictionary) -> Array[Vector3]:
 
 ## Draws the floor for camera `cam_m` at time `t` (s); nothing at or past `edge_px` (screen).
 func paint(c: CanvasItem, sc: FishingScenery, cam_m: float, t: float, edge_px: float) -> void:
+	fish_x = sc.fish_x
 	if world == null:
 		return
 	var cam_px := roundf(cam_m * FishingScenery.PX_PER_M)
@@ -639,14 +643,28 @@ func _paint_props(
 		var big: String = bigs[(h >> 4) % bigs.size()]
 		if zone == 0 and FishingScenery.hash2(s, 7) % MOORING_ONE_IN == 0:
 			big = "mooring"
-		var w := FishingProps.draw(c, big, x, top, lg, h, t)
+		var w := 0.0
+		if not plant_under_fish(big, x):
+			w = FishingProps.draw(c, big, x, top, lg, h, t)
 		for k in 1 + (h >> 9) % 2:
 			var hs := FishingScenery.hash2(s * 3 + k, 59)
 			var small: String = smalls[hs % smalls.size()]
 			var sx := x + w + 2.0 + float(hs % 4) if k == 0 else x - 10.0 - float(hs % 4)
 			if sx < float(e["sx0"]) - 2.0 or sx + 4.0 > float(e["sx1"]):
 				continue
-			FishingProps.draw(c, small, sx, top, lg, hs, t)
+			if not plant_under_fish(small, sx):
+				FishingProps.draw(c, small, sx, top, lg, hs, t)
+
+
+## True when prop `kind` is a plant and a fish on a line stands over its x (a stalk would end under
+## the belly): about 40 px wide.
+func plant_under_fish(kind: String, x: float) -> bool:
+	if not FishingProps.PLANTS.has(kind):
+		return false
+	for span in fish_x:
+		if x < span.y + 4.0 and x + 40.0 > span.x:
+			return true
+	return false
 
 
 ## Where the floor drops away into the abyss: one tall cliff from the last piece, broken by two

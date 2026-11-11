@@ -59,18 +59,12 @@ const TOWN_X0 := -130.0
 ## The pier (world m, its left end) and the quay's top row above the surface.
 const PIER_X_M := 6.0
 const QUAY_TOP := 6
-## Past the edge: air (the sky, a haze mist band over the pool) down to the pool's surface, then
-## the pool's water one step darker than the sea's bands; both rows count up from the bottom
-## edge (mist_y(), pool_y()).
-const MIST_UP := 74
-const POOL_UP := 60
-## The waterfall: the column's width and its lit foam strip (px), the lip's two square steps
-## (width ahead of the edge per step, 2 rows each) and the foam slabs where it lands in the pool
-## (reach beyond the column, top first).
+## The edge: the column's width and its lit foam strip (px), and the lip's two square steps (width ahead
+## of the edge per step, 2 rows each). The ocean (the bands and the floor) runs on to the strip, the
+## wall; past it one flat sky field.
 const FALL_W := 10
 const FALL_EDGE_W := 3
 const FALL_LIP: Array[int] = [6, 2]
-const FALL_BANK: Array[int] = [6, 14, 24]
 
 ## The sea floor's terraces, ridge, props and landmarks.
 var floor_art: FishingFloor = FishingFloor.new()
@@ -86,6 +80,9 @@ var h: int = H
 ## Screen x spans (Vector2(left, right)) the islands keep clear of: the boats (the view sets
 ## it every frame), so no island stands behind a hull or a rider.
 var clear_x: Array[Vector2] = []
+## Screen x spans of the fish on a line (the view sets it every frame): no plant stands in one, so
+## no stalk ends under a big fish's belly.
+var fish_x: Array[Vector2] = []
 
 
 ## Sets the drawn size (art px); the height never drops under the sky plus some water.
@@ -101,15 +98,6 @@ func size() -> Vector2i:
 ## The rows the deepest floor in sight lies under the surface at this height.
 func floor_rows() -> float:
 	return float(h - SURF_Y - FLOOR_GAP)
-
-
-## The waterfall pool's surface row and the mist band's top, past the edge.
-func pool_y() -> int:
-	return h - POOL_UP
-
-
-func mist_y() -> int:
-	return h - MIST_UP
 
 
 ## Screen y of `depth_m` below the surface (INF stays INF).
@@ -194,7 +182,7 @@ func paint_back(c: CanvasItem, cam_m: float, t: float) -> void:
 	_paint_islands(c, cam_m)
 	_paint_town(c, cam_m, t)
 	_paint_water(c)
-	floor_art.paint(c, self, cam_m, t, screen_x(edge_m(), cam_m))
+	floor_art.paint(c, self, cam_m, t, screen_x(edge_m(), cam_m) + float(FALL_W - FALL_EDGE_W))
 	_paint_dock(c, cam_m)
 	_paint_edge(c, cam_m)
 
@@ -339,28 +327,22 @@ func _paint_dock(c: CanvasItem, cam_m: float) -> void:
 		c.draw_texture(pier, Vector2(px, SURF_Y - QUAY_TOP - deck))
 
 
-## Past the edge the ocean pours over a square two-step foam lip and drops through air (the sky
-## running on down, a haze mist band) in a straight two-plane column (a haze face, a foam lit
-## strip) into a pool, one step darker than the sea, with foam slabs where it lands.
+## Past the edge the ocean pours over a square two-step foam lip: the bands and the floor run on to
+## the wall, a lit foam strip standing the full height of the view (its face is the ocean itself),
+## and everything past it is one flat field of sky.
 func _paint_edge(c: CanvasItem, cam_m: float) -> void:
 	var ex := roundf(screen_x(edge_m(), cam_m))
 	if ex >= float(w):
 		return
-	var x0 := maxf(ex, 0.0)
-	var ww := float(w) - x0
-	var pool := float(pool_y())
-	var mist := float(mist_y())
-	c.draw_rect(Rect2(x0, HORIZON_Y, ww, mist - HORIZON_Y), FishingPalette.SKY)
-	c.draw_rect(Rect2(x0, mist, ww, pool - mist), FishingPalette.HAZE)
-	c.draw_rect(Rect2(x0, pool, ww, float(h) - pool), FishingPalette.SURFACE)
-	var top := float(HORIZON_Y + 2 * FALL_LIP.size())
 	var fw := float(FALL_W)
 	var lit := float(FALL_EDGE_W)
-	c.draw_rect(Rect2(ex, top, fw - lit, pool - top), FishingPalette.HAZE)
-	c.draw_rect(Rect2(ex + fw - lit, top, lit, pool - top), FishingPalette.FOAM)
+	var wall := ex + fw - lit
+	var beyond := maxf(wall + lit, 0.0)
+	c.draw_rect(
+		Rect2(beyond, HORIZON_Y, float(w) - beyond, float(h) - HORIZON_Y), FishingPalette.SKY
+	)
+	var top := float(HORIZON_Y + 2 * FALL_LIP.size())
+	c.draw_rect(Rect2(wall, top, lit, float(h) - top), FishingPalette.FOAM)
 	for k in FALL_LIP.size():
 		var lead := float(FALL_LIP[k])
 		c.draw_rect(Rect2(ex - lead, HORIZON_Y + 2 * k, lead + fw, 2), FishingPalette.FOAM)
-	for k in FALL_BANK.size():
-		var reach := float(FALL_BANK[k])
-		c.draw_rect(Rect2(ex, pool - 2.0 + 2.0 * k, fw + reach, 2), FishingPalette.FOAM)

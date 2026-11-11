@@ -2,14 +2,16 @@ class_name FishingWorld
 extends RefCounted
 ## The one ocean every boat shares (pure, deterministic, no rules state). Two kinds:
 ##
-## - Roam (Free Roam contents): the fixed map from content/fishing/map.json. x runs from the dock
+## - Roam (Free Roam contents): the fixed map from content/fishing/map.json (or the trip's own map
+##   file). x runs from the dock
 ##   (x 0) out to sea; the boats stop at edge_x_m(); past length_m() the ocean pours off the
 ##   flat-earth edge into the void. map.json:
 ##     {"id": "roam", "label": key, "length_m": 18000, "edge_x_m": 17900,
 ##      "zones": [{"id": "dock", "x_m": [0, 600], "colour": "#c9b48a", "label": key}, ...],
 ##      "floor_m": [[x_m, depth_m], ...],
 ##      "landmarks": [{"id": "harbour_light", "kind": "lighthouse", "x_m": 240}, ...]}
-##   zones tile [0, length_m] left to right without gaps, ids from ZONES. floor_m is a piecewise
+##   zones tile [0, length_m] left to right without gaps, ids from ZONES. Which map a Free Roam
+##   content plays on is its trip's "map" field (map.json without one). floor_m is a piecewise
 ##   linear sea-floor profile, x ascending from 0; a depth of -1 means "no floor" from that x on
 ##   (the abyss: floor_depth_m() returns INF there). landmarks (optional) are decorative set
 ##   pieces at fixed x in [0, length_m]: unique ids, kinds from LANDMARK_KINDS.
@@ -26,22 +28,27 @@ extends RefCounted
 ## minimap(n) are cheap batch samplers; zone colours are "#rrggbb" defaults the view may restyle;
 ## landmarks(x0, x1) lists the set pieces to draw (rules never read them).
 
-const ZONES: Array[String] = ["dock", "shallows", "reef", "shelf", "deep", "abyss"]
-## Zone base depth (m) for the endless map, by ZONES index (the abyss never occurs there).
-const ZONE_DEPTH_M: Array[float] = [4.0, 12.0, 30.0, 110.0, 420.0, 600.0]
+## "bluewater" is the big game trip's one biome (map_big_game.json): tuna and grouper, nothing else.
+## It is last, so no earlier index moved; every table below is by ZONES index.
+const ZONES: Array[String] = ["dock", "shallows", "reef", "shelf", "deep", "abyss", "bluewater"]
+## Zone base depth (m) for the endless map, by ZONES index (the abyss and the bluewater never
+## occur there).
+const ZONE_DEPTH_M: Array[float] = [4.0, 12.0, 30.0, 110.0, 420.0, 600.0, 220.0]
 const ZONE_COLOURS: Array[String] = [
-	"#c9b48a", "#7fc4b8", "#4f9c94", "#357a86", "#22546e", "#13304a"
+	"#c9b48a", "#7fc4b8", "#4f9c94", "#357a86", "#22546e", "#13304a", "#2b6f89"
 ]
 const ENDLESS_TOUR: Array[String] = ["shallows", "reef", "shelf", "deep", "shelf", "reef"]
 ## Decorative set pieces (view only): the harbour lighthouse and breakwater, a big rock arch on
 ## the reef, whale bones on the shelf edge, a sunken wreck in the deep.
 const LANDMARK_KINDS: Array[String] = ["lighthouse", "reef_arch", "whale_bones", "wreck"]
 ## Endless map: the landmark kind each zone's segments carry, by ZONES index ("" none).
-const LANDMARK_FOR_ZONE: Array[String] = ["", "", "reef_arch", "whale_bones", "wreck", ""]
+const LANDMARK_FOR_ZONE: Array[String] = ["", "", "reef_arch", "whale_bones", "wreck", "", ""]
 ## Endless map: the harbour light's x, and where in a segment its landmark sits (fraction).
 const ENDLESS_LIGHT_X_M := 240.0
 const LANDMARK_SEG_LO := 0.25
 const LANDMARK_SEG_HI := 0.75
+## The floor runs this far past length_m (the view draws the edge's wall a few pixels past it).
+const FLOOR_PAST_EDGE_M := 8.0
 const DOCK_M := 600.0
 const SEG_MIN_M := 2400.0
 const SEG_MAX_M := 4400.0
@@ -337,7 +344,7 @@ func _extend_to(x_m: float) -> void:
 func _base_depth(x_m: float) -> float:
 	if endless:
 		return _endless_depth(x_m)
-	if x_m >= _length_m:
+	if x_m >= _length_m + FLOOR_PAST_EDGE_M:
 		return INF
 	var n := _floor.size() / 2
 	if x_m <= _floor[0]:

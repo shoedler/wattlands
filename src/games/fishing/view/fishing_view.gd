@@ -720,6 +720,11 @@ func _paint_back(c: CanvasItem) -> void:
 			var z := b.pixel_of(Vector2i(FishingRig.HULL_SIZE.x, 0)).x
 			spans.append(Vector2(minf(a, z), maxf(a, z)))
 	scenery.clear_x = spans
+	var fish_spans: Array[Vector2] = []
+	for r: Variant in (model.get("fish", {}) as Dictionary).values():
+		if r is Rect2:
+			fish_spans.append(Vector2((r as Rect2).position.x, (r as Rect2).end.x))
+	scenery.fish_x = fish_spans
 	scenery.paint_back(c, cam_m, _t)
 
 

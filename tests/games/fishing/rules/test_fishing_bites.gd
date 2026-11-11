@@ -1,6 +1,7 @@
 extends GutTest
-## Bites: Free Roam's hazard at depth (1 / 25 s in band, a quarter outside, none in the first
-## 5 s, forced at 90 s, never while staggered or before the Roam phase's min_s); workouts' trolled
+## Bites: Free Roam's hazard at depth (1 / 25 s in band below the jig's power, a quarter outside,
+## none in the first 5 s, forced at 90 s, never while staggered or before the Roam phase's min_s;
+## the jig's own hazard is in test_fishing_jig.gd); workouts' trolled
 ## lure (R_min, the hazard, the forced bite, last call) and the scheduled bite 4 s before a fixed
 ## Troll ends.
 
@@ -112,7 +113,7 @@ func test_a_roam_bite_is_forced_at_90_s() -> void:
 	assert_lte(r.wait_t, FishingConst.ROAM_FORCED_BITE_S + 0.06)
 
 
-func test_the_mean_roam_wait_is_about_25_s_in_band() -> void:
+func test_the_mean_roam_wait_is_about_25_s_in_band_below_the_jigs_power() -> void:
 	var total := 0.0
 	var n := 12
 	for s in n:
