@@ -17,21 +17,34 @@ func _driver(rig: TankRulesRig) -> int:
 	return rig.peer_of(TankIds.ENGINE_DIESEL)
 
 
-## A mission scales its own Behemoth (boss.hp_mult in the boss segment): ambush_15 and ashfall_road cut it by 10%
-## (the kill sat near max_s), the shared enemies.json is untouched, and a client derives the same maxima.
+## A mission scales its own Behemoth (boss.hp_mult in the boss segment): ambush_15 cuts it to 70 / 175 HP,
+## exactly two and five 35-damage shells (a 10% cut leaves 72 / 180, still three and six); ashfall_road keeps
+## the shared 80 / 200; a client derives the same maxima.
 func test_a_missions_boss_hp_mult_scales_the_behemoth_and_a_client_agrees() -> void:
-	for mission: String in ["ashfall_road", "ambush_15"]:
+	for row: Array in [["ashfall_road", 1.0], ["ambush_15", 0.875]]:
+		var mission := str(row[0])
+		var k := float(row[1])
 		var rig := TankRulesRig.new(3, mission)
 		var def := rig.content.boss_def()
-		assert_almost_eq(rig.content.boss_hp_mult(), 0.9, 1e-9, mission)
+		assert_almost_eq(rig.content.boss_hp_mult(), k, 1e-9, mission)
 		rig.enter(rig.segs().size() - 1, 1.0)
-		assert_almost_eq(rig.state.boss.turret_max, float(def["turret_hp"]) * 0.9, 0.001, mission)
-		assert_almost_eq(rig.state.boss.bogie_max, float(def["bogie_hp"]) * 0.9, 0.001, mission)
+		assert_almost_eq(rig.state.boss.turret_max, float(def["turret_hp"]) * k, 0.001, mission)
+		assert_almost_eq(rig.state.boss.bogie_max, float(def["bogie_hp"]) * k, 0.001, mission)
 		var client := TankState.new()
 		client.content = rig.content
 		client.hull.tank = rig.state.hull.tank
 		TankSnapshot._derive_maxima(client, rig.content)
 		assert_almost_eq(client.boss.turret_max, rig.state.boss.turret_max, 0.001, "a client")
+	var ambush := TankRulesRig.new(3, "ambush_15")
+	var heavy := float(ambush.content.num("tanks", "damage.heavy"))
+	assert_eq(
+		ceili(ambush.content.boss_def()["bogie_hp"] * 0.875 / heavy),
+		2,
+		"two heavy shells per bogie"
+	)
+	assert_eq(
+		ceili(ambush.content.boss_def()["turret_hp"] * 0.875 / heavy), 5, "five for the turret"
+	)
 	assert_eq(TankRulesRig.new(1, "drill").content.boss_hp_mult(), 1.0, "no boss: 1")
 	var files := TankContent.read_files("ambush_15")
 	files["mission"]["segments"][5]["boss"]["hp_mult"] = 0.4
