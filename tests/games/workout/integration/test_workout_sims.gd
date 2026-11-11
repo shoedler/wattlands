@@ -3,12 +3,11 @@ extends GutTest
 ## needs sdk-runtime's runner, the governor and MockTrainer). Left out of game-workout's W1
 ## test command; the full suite runs it.
 ##
-## Assertions: a compliant, verified rider finishes every built-in session with time in
-## band >= 90% and grade A or better; e2e stays inside the warm-up limits in HOST play;
-## VO2 never latches the 105% duration limit; the sample .zwo plays; the same seed gives the
-## same report hash; a 0 W rider grades D.
-
-const BUILT_IN: Array[String] = ["easy_30", "sweet_spot", "threshold", "vo2", "rolling_road", "e2e"]
+## Assertions: e2e stays inside the warm-up limits in HOST play; a zwo path content id reaches
+## every client; the same seed gives the same report hash; a 0 W rider grades D; rescue on a
+## cadence collapse only at or above 60% FTP. A compliant rider finishing every built-in session
+## and the sample .zwo with an A or better, inside the warm-up limits and with no duration limit
+## latched, is tests/scenarios/workout (test_workout_sessions.gd, test_zwo_import.gd).
 
 var _tmp: String = ""
 ## Runners made by a test: cleanup() deletes each one's temp root (W3 QT-4).
@@ -71,37 +70,6 @@ func _run(content: String, extra: Array[String] = []) -> Dictionary:
 	return report
 
 
-func test_compliant_riders_grade_a_or_better_in_every_session() -> void:
-	for id in BUILT_IN:
-		var report := _run(id)
-		if report.is_empty():
-			continue
-		assert_eq(report["_end"], "complete", "%s ends after the cool-down" % id)
-		var res: GameResults = report["_results"]
-		assert_not_null(res, "%s results" % id)
-		if res == null:
-			continue
-		assert_true(["S", "A"].has(res.grade), "%s grade %s" % [id, res.grade])
-		for row in res.rows:
-			assert_true(
-				float(row["time_in_band_pct"]) >= 90.0,
-				"%s rider %s in band %s%%" % [id, row["peer_id"], row["time_in_band_pct"]]
-			)
-		# Warm-up limits hold (4.6.8): every applied ERG target in the first 300 s <= 65% FTP.
-		var points: Array[Dictionary] = []
-		_collect(report.get("traces", report.get("trace", [])), points)
-		assert_gt(points.size(), 0, "%s has 1 Hz traces" % id)
-		for pt in points:
-			if float(pt.get("t", INF)) >= 300.0:
-				continue
-			for key: String in ["applied_pct", "applied_ftp_pct"]:
-				if pt.has(key):
-					assert_true(
-						float(pt[key]) <= 65.0 + 0.001,
-						"%s: %s inside the warm-up cap: %s" % [id, key, pt]
-					)
-
-
 func test_e2e_host_play_stays_inside_the_warmup_limits() -> void:
 	var report := _run("e2e", ["--players=3", "--bots=0"])
 	if report.is_empty():
@@ -136,25 +104,6 @@ func _collect(v: Variant, out: Array[Dictionary]) -> void:
 	elif v is Array:
 		for e: Variant in v:
 			_collect(e, out)
-
-
-func test_vo2_never_latches_the_105_limit() -> void:
-	var report := _run("vo2")
-	if report.is_empty():
-		return
-	var text := JSON.stringify(report.get("traces", report.get("trace", [])))
-	assert_false(text.contains(Wl.CLAMP_LIMIT_105), "no limit_105 clamp in VO2")
-	assert_false(text.contains(Wl.CLAMP_LIMIT_120))
-
-
-func test_the_sample_zwo_plays() -> void:
-	var report := _run("zwo_sample")
-	if report.is_empty():
-		return
-	assert_eq(report["_end"], "complete")
-	var g := WorkoutGame.new()
-	autofree(g)
-	assert_gt((g.session_preview("zwo_sample")["lines"] as Array).size(), 0)
 
 
 ## game-workout W1: "zwo:<absolute path>" is not in game.json contents; Workout lists the zwo
