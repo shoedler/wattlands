@@ -84,6 +84,27 @@ func test_scan_hides_invalid_games_naming_the_field() -> void:
 	assert_push_warning("hiding")
 
 
+func test_scan_only_lists_just_the_named_games() -> void:
+	_reg.scan(FIXTURES.path_join("runtime"))
+	_reg.scan_only(["fx_solo"] as Array[String], FIXTURES.path_join("runtime"))
+	assert_eq(
+		_reg.ids(), ["fx_solo"] as Array[String], "the other game is neither scanned nor kept"
+	)
+	assert_eq(_reg.manifest("fx_solo")["first_run_priority"], 0, "validated like scan()")
+	assert_eq(_reg.game_dir("fx_solo"), FIXTURES.path_join("runtime/fx_solo"))
+	_reg.scan_only(["nope"] as Array[String], FIXTURES.path_join("runtime"))
+	assert_eq(_reg.ids(), [] as Array[String], "an unknown id lists nothing")
+	_reg.scan_only([] as Array[String], FIXTURES.path_join("runtime"))
+	assert_eq(_reg.ids(), [] as Array[String], "no ids, no games")
+
+
+func test_scan_only_still_hides_a_named_invalid_game() -> void:
+	_reg.scan_only(["fx_bad_entry", "fx_valid"] as Array[String], FIXTURES.path_join("scan"))
+	assert_eq(_reg.ids(), ["fx_valid"] as Array[String])
+	assert_eq(_reg.invalid_games().size(), 1, "only the named folders are validated")
+	assert_push_warning("hiding")
+
+
 func test_template_is_never_listed() -> void:
 	_reg.scan(FIXTURES.path_join("scan"))
 	assert_false(_reg.ids().has("_template"))

@@ -104,6 +104,19 @@ func clear() -> void:
 
 ## Scan `root` for */game.json (default GAMES_ROOT). Replaces the current list.
 func scan(root: String = GAMES_ROOT) -> void:
+	_scan_folders(root, [], false)
+
+
+## scan() limited to the game folders named in `ids`: the other games are neither validated
+## nor listed, so their scripts are never compiled. tools/run_game_sim rides one game and
+## scans only that one, since compiling every game's scripts is most of a run's start-up.
+## Replaces the current list.
+func scan_only(ids: Array[String], root: String = GAMES_ROOT) -> void:
+	_scan_folders(root, ids, true)
+
+
+## scan()'s walk over the folders of `root`: all of them, or with `filtered` only `only`.
+func _scan_folders(root: String, only: Array[String], filtered: bool) -> void:
 	_remove_all_translations()
 	_root = root.trim_suffix("/")
 	_games.clear()
@@ -117,7 +130,7 @@ func scan(root: String = GAMES_ROOT) -> void:
 	var subs := Array(dir.get_directories())
 	subs.sort()
 	for sub: String in subs:
-		if sub.begins_with(".") or sub == TEMPLATE_ID:
+		if sub.begins_with(".") or sub == TEMPLATE_ID or (filtered and not only.has(sub)):
 			continue
 		var folder := _root.path_join(sub)
 		var path := folder.path_join("game.json")

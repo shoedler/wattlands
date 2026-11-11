@@ -581,3 +581,32 @@ func test_the_main_script_is_a_scene_tree_entry() -> void:
 	assert_not_null(s)
 	assert_eq(s.get_instance_base_type(), &"SceneTree")
 	assert_string_contains(s.source_code, "GameSimCli.new().main(OS.get_cmdline_user_args(), root)")
+	# A run compiles only its own game (test_scan_registry_lists_only_the_game_of_the_run).
+	assert_string_contains(s.source_code, "reg.scan_on_ready = false")
+	assert_string_contains(
+		s.source_code, "GameSimCli.scan_registry(reg, OS.get_cmdline_user_args())"
+	)
+
+
+## A run scans only the game it rides: the entry script turns the GameRegistry autoload's start-up
+## scan off and GameSimCli.scan_registry() fills it with the --game alone, or with every game when
+## that one is unknown or invalid (setup then fails with the same list of registered games).
+func test_scan_registry_lists_only_the_game_of_the_run() -> void:
+	var fixtures := "res://tests/fixtures/games/runtime"
+	var reg := WlGameRegistry.new()
+	reg.scan_on_ready = false
+	reg.content_root = "res://tests/fixtures/games/_content"
+	GameSimCli.scan_registry(reg, ["--game=fx_solo", "--report=r.json"], fixtures)
+	assert_eq(reg.ids(), ["fx_solo"] as Array[String])
+	GameSimCli.scan_registry(reg, ["--game=nope"], fixtures)
+	assert_eq(reg.ids(), ["fx_crew", "fx_solo"] as Array[String], "unknown game: every game")
+	GameSimCli.scan_registry(reg, ["--game=_template"], fixtures)
+	assert_eq(reg.ids(), ["fx_crew", "fx_solo"] as Array[String], "the template: every game")
+	GameSimCli.scan_registry(reg, ["--report=r.json"], fixtures)
+	assert_eq(reg.ids(), ["fx_crew", "fx_solo"] as Array[String], "no --game: every game")
+	reg.clear()
+	reg.scan_on_ready = true
+	GameSimCli.scan_registry(reg, ["--game=fx_solo"], fixtures)
+	assert_eq(reg.ids(), [] as Array[String], "a registry that scans on ready is left alone")
+	GameSimCli.scan_registry(null, ["--game=fx_solo"], fixtures)
+	reg.free()
