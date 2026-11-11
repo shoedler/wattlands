@@ -204,13 +204,16 @@ Use two PCs (host and client) or one PC and a bot for steps 83 to 88, in any bre
 
 | # | Step | Expected | Result |
 | --- | --- | --- | --- |
-| 83 | In a break, pick an upgrade with the keys (or the surge), then check the trainer | The item appears on the receipt panel above the shop with your name, its cost, YES n and the total; "N ON RECEIPT" shows under your gold and your free gold drops by the cost; the shop row says ADDED. **No gold is spent yet and the trainer's load does not change** | |
+| 83 | In a break, pick an upgrade with the keys (or the surge), then check the trainer | The item appears on the receipt panel above the shop with your name, its cost, YES n and the total; "N YOURS HELD" shows under your gold and your free gold drops by the cost; the shop row says ADDED. **No gold is spent yet and the trainer's load does not change** | |
 | 84 | With pedal navigation on, pedal in ERG for more than two scan cycles without picking anything | The lit row moves along the list, but nothing is picked: the receipt stays as it was, and the hint says pedalling alone adds nothing. Surging picks the lit row | |
 | 85 | Pick your own item again | It leaves the receipt and your held gold comes back at once | |
 | 86 | Two riders: the second picks the first's item (it shows the picker's name in the shop) | The receipt shows NO 1 and, on the voter's screen, YOUR NO. With two riders the tie takes the item off at once, the picker sees "Voted off" and their gold is back. Pick it again as the picker and then vote yes: it stays | |
 | 87 | Three or four riders: one no, then a second | One no leaves the item on (YES 2 NO 1 with three riders); the second no takes it off | |
 | 88 | Let the break end with two or three items on the receipt | Each is bought in the order it was added, once, with a "Bought" toast to its picker, the receipt empties and your gold drops by what was held. The wave starts at its ERG target as usual | |
-| 89 | A rider drops out mid-break (close their game) | Their items leave the receipt and their votes drop; the others' items stay and are bought at the end | |
+| 89 | A rider drops out mid-break (close their game) | Nothing on the receipt changes: their items and their votes stay, nobody's vote is re-counted, and at the break's end their items are bought with their held gold as usual | |
+| 90 | Pick an upgrade, then (as another rider or bot) look at the shop | A separate row for the next level of the same station shows, priced for that level. Pick it: it is its own receipt line with its own YES/NO. Take level 1 back: level 2 goes with it and its gold returns | |
+| 91 | Light a row you added, a row someone else added, and one you voted no on | The tag turns into TAKE BACK, VOTE NO and UNDO NO. The other rows keep ADDED or the picker's name | |
+| 92 | Vote an item off (or have it voted off) | Everyone gets a "Voted off" toast; its picker and everyone who voted no hear a short refusal sound; your own no or yes clicks a lever. The break's end shows "Receipt bought" with the total | |
 
 ## Log template
 
