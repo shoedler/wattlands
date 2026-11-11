@@ -1,7 +1,7 @@
 {
- "reason": "re-pin after the history rewrite that removed personal emails: same files, the pinning commit got a new ID",
- "pinned_at": "103c35f189dae6ef591aefa178cca6bb4dfd682e",
- "date": "2026-11-03",
+ "reason": "Tank 0.7.0: the Depot splits into Hangar and Roll-out, one more lap in EXPECTED_LAPS",
+ "pinned_at": "657d9038c55f273cdab2200f609387f8ced7d9ca",
+ "date": "2026-11-11",
  "globs": [
   "addons/wattlands/trainer/**",
   "addons/wattlands/core/locks.gd",
@@ -1866,7 +1866,7 @@
   {
    "file": "tests/games/tank/sim/check_sims.mjs",
    "name": "EXPECTED_LAPS",
-   "statement": "export const EXPECTED_LAPS = { ashfall_road: 12, ambush_15: 6, drill: 4 };"
+   "statement": "export const EXPECTED_LAPS = { ashfall_road: 13, ambush_15: 7, drill: 4 };"
   },
   {
    "file": "tests/games/tank/sim/check_sims.mjs",
@@ -2102,7 +2102,7 @@
   {
    "file": "tests/games/fishing/sim/check_sims.mjs",
    "name": "CHECKS",
-   "statement": "export const CHECKS = { ALL: checkAll, R1: checkR1, R2: checkR2, R3: checkR3, R4: checkR4, R5: checkR5, R6: checkR6, W1: checkW1, W2: checkW2, W3: checkW3, D: checkD };"
+   "statement": "export const CHECKS = { ALL: checkAll, R1: checkR1, R2: checkR2, R3: checkR3, R4: checkR4, R5: checkR5, R6: checkR6, R7: checkR7, W1: checkW1, W2: checkW2, W3: checkW3, D: checkD };"
   },
   {
    "file": "tools/lib/run_tests.mjs",
