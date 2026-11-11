@@ -369,6 +369,47 @@ func test_overpressure_takes_the_stowed_shell_back_and_builds_it_to_150() -> voi
 	assert_gte(st.pressure_pct, carry, "the next shell's progress came back and builds on")
 
 
+## The trickle share of the next shell is carried through an Overpressure as trickle: when the rider dropped below the
+## band after the stow and then surged, the boiler's grade after the Overpressure is the one of the in-band share only.
+func test_the_trickle_share_survives_an_overpressure_and_never_becomes_graded_pressure() -> void:
+	var rig := _over_rig()
+	var st := rig.steam()
+	var aux := TankAux.of(rig.state)
+	rig.power_w[3] = 0.8 * 240.0
+	rig.run(2.0)
+	assert_gt(st.window_s, 0.0, "the window is still open")
+	assert_false(st.in_band)
+	assert_gt(st.trickle_pct, 1.0, "the trickle accrued below the band, inside the window")
+	var trickle := st.trickle_pct
+	var graded := st.grade_pressure_pct()
+	rig.send(3, {"k": "over", "via": "surge"})
+	rig.run(0.05)
+	assert_true(st.over)
+	assert_eq(st.trickle_pct, 0.0, "nothing below the band counts while the shell is overpressured")
+	assert_almost_eq(
+		aux.carry_trickle_pct, trickle, 0.5, "the trickle share is set aside with the shell"
+	)
+	rig.power_w[3] = 360.0
+	for _i in roundi(60.0 / Wl.SIM_DT):
+		rig.step()
+		if not st.over:
+			break
+	assert_false(st.over, "the Overpressure ended")
+	assert_almost_eq(st.trickle_pct, trickle, 0.5, "the trickle share came back as trickle")
+	assert_lte(
+		st.grade_pressure_pct(),
+		graded + 1.2,
+		"at most one tick of in-band load on top of the graded share"
+	)
+	assert_lte(
+		TankDirector.boiler_grade_pct(rig.content, st.grade_pressure_pct(), false, false),
+		TankDirector.boiler_grade_pct(rig.content, graded + 1.2, false, false) + 1e-9,
+		"the boiler grade is the in-band share's, never above it"
+	)
+	assert_eq(aux.carry_trickle_pct, 0.0)
+	assert_eq(aux.carry_pct, 0.0)
+
+
 func test_overpressure_bleeds_without_the_sprint_and_ends_heavy_after_30_s() -> void:
 	var rig := _over_rig()
 	var st := rig.steam()

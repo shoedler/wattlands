@@ -85,6 +85,8 @@ var off_drive_seg: Dictionary = {}
 var rack_types: Array[int] = []
 ## The Loader's progress on the next shell (pressure %) set aside while an Overpressure builds.
 var carry_pct: float = 0.0
+## The below-band share of carry_pct (the trickle): it comes back as trickle, never as graded pressure.
+var carry_trickle_pct: float = 0.0
 ## The bow guns' elevation now (degrees, up positive; TankBow slews it to the target).
 var bow_deg: float = 0.0
 ## v4: peer -> {"seat": engine}: the human a bot covers while on reserve (TankBots.cover), and the

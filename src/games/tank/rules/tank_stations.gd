@@ -312,6 +312,7 @@ static func _start_over(state: TankState, aux: TankAux, st: TankSteamState) -> v
 	aux.rack_types.pop_back()
 	st.rack = aux.rack_types.size()
 	aux.carry_pct = st.pressure_pct
+	aux.carry_trickle_pct = minf(st.trickle_pct, st.pressure_pct)
 	st.pressure_pct = 100.0
 	st.trickle_pct = 0.0
 	st.over = true
@@ -356,8 +357,9 @@ static func _overpressure(
 	st.over_s = 0.0
 	aux.over_j = 0.0
 	st.pressure_pct = aux.carry_pct
-	st.trickle_pct = 0.0
+	st.trickle_pct = minf(aux.carry_trickle_pct, aux.carry_pct)
 	aux.carry_pct = 0.0
+	aux.carry_trickle_pct = 0.0
 	_stow(aux, st, ri.slot, shell, events)
 
 
