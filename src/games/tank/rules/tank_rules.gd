@@ -50,7 +50,7 @@ static func step(state: TankState, inputs: TankInputs, dt: float) -> Array[Dicti
 	TankRoam.pre(state, inputs, aux, dt, events)
 	TankEncounters.advance(state, aux, events)
 	TankEncounters.near_step(state, aux, events)
-	TankEncounters.depot_wrecks(state, aux)
+	TankEncounters.hangar_wrecks(state, aux)
 	TankDrive.step(state, inputs, dt)
 	TankEnemies.move(state, aux, dt, events)
 	TankBoss.step(state, aux, dt, events)

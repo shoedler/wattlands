@@ -2,8 +2,9 @@ class_name TankSegments
 extends RefCounted
 ## The crew's place in the mission (brief 2.3 segment table, 2.4 objectives; owner: rules): follows
 ## the group's phase, sets each segment up (TankEncounters), tracks the objectives and the hold
-## before min_s ("Regroup"), and answers the depot drill questions. The director ends the phase
-## (ADR "Who calls end_phase"); the platform cuts it at max_s, which plays as an overrun here.
+## before min_s ("Regroup"), and answers the hangar drill questions and the hangar's countdown. The
+## director ends the phase (ADR "Who calls end_phase"); the platform cuts it at max_s, which plays as
+## an overrun here.
 
 
 ## Follows the group's phase: on a new segment records the previous one's HP, counts an overrun,
@@ -56,9 +57,12 @@ static func track(
 			state.hull.hp_max += bonus
 			state.hull.hp = minf(state.hull.hp + bonus, state.hull.hp_max)
 		state.gun_line.active = sg.seg == TankIds.SEG_GUN_LINE
-		if prev_seg == TankIds.SEG_DEPOT and state.content != null:
-			# The depot drill's rounds were practice: the rack leaves the depot as full as it
-			# started (steam.rack_start), the work of the depot crew.
+		if (
+			(prev_seg == TankIds.SEG_HANGAR or prev_seg == TankIds.SEG_DEPOT)
+			and state.content != null
+		):
+			# The hangar drill's rounds were practice: the rack leaves the hangar as full as it
+			# started (steam.rack_start), the work of the ground crew.
 			TankStations.top_up_rack(
 				state, int(state.content.num("tanks", "steam.rack_start", 0.0))
 			)
@@ -151,12 +155,12 @@ static func riders_may_end(state: TankState, inputs: TankInputs) -> bool:
 	return true
 
 
-# --- Depot drills -------------------------------------------------------------------------------
+# --- Hangar drills and the stand ------------------------------------------------------------------
 
 
-## The depot drill running now ("drive", "aim", "fire"), or "" outside the depot's drill windows.
+## The hangar drill running now ("drive", "aim", "fire"), or "" outside the hangar's drill windows.
 static func drill_at(state: TankState) -> String:
-	if state.seg.seg != TankIds.SEG_DEPOT:
+	if state.seg.seg != TankIds.SEG_HANGAR:
 		return ""
 	var aux := TankAux.of(state)
 	for d: Variant in aux.drills:
@@ -168,20 +172,42 @@ static func drill_at(state: TankState) -> String:
 	return ""
 
 
-## The depot's fire drill: each loaded shell fires at a drill wreck.
+## The hangar's fire drill: each loaded shell fires at a drill wreck.
 static func fire_drill(state: TankState) -> bool:
 	return drill_at(state) == "fire"
 
 
-## The depot's drill wrecks are targets (aim and fire drills).
+## The hangar's drill wrecks are targets (aim and fire drills).
 static func drill_targets(state: TankState) -> bool:
 	var d := drill_at(state)
 	return d == "aim" or d == "fire"
 
 
-## The tank may drive in the depot: during a "drive" drill, or always when the depot has none.
-static func depot_driving(state: TankState) -> bool:
-	var aux := TankAux.of(state)
-	if aux.drills.is_empty():
-		return true
-	return drill_at(state) == "drive"
+## The hull sits on the mechanic's stand: the Hangar. The tracks spin in the air (the Drive seat's
+## speed still turns them) and the tank goes nowhere.
+static func on_stand(state: TankState) -> bool:
+	return state.seg.seg == TankIds.SEG_HANGAR
+
+
+## The warm-up segments that may roll the tank over the ground: never the Hangar (the stand). The
+## Roll-out never halts, and the depot of free roam's drive-out always rolls (it has no drills).
+static func warmup_rolls(state: TankState) -> bool:
+	if state.seg.seg == TankIds.SEG_HANGAR:
+		return false
+	return state.seg.seg == TankIds.SEG_ROLLOUT or TankAux.of(state).drills.is_empty()
+
+
+## The hull's speed over the ground (m/s): `hull.speed_mps`, which is the tracks' speed, except on
+## the stand, where nothing goes anywhere. Ballistics, wrecks and dust read this one.
+static func ground_mps(state: TankState) -> float:
+	return 0.0 if on_stand(state) else state.hull.speed_mps
+
+
+## Seconds left in the Hangar when they are within the countdown (TankConst.HANGAR_COUNTDOWN_S),
+## else -1: the ceiling bars dark, the beacons, the hull lowered, the door opening.
+static func hangar_countdown_s(state: TankState) -> float:
+	if state.seg.seg != TankIds.SEG_HANGAR or state.content == null:
+		return -1.0
+	var dur := float(state.content.segment(state.seg.segment_index).get("duration_s", 0.0))
+	var left := dur - state.seg.elapsed_s
+	return maxf(left, 0.0) if left <= TankConst.HANGAR_COUNTDOWN_S and dur > 0.0 else -1.0

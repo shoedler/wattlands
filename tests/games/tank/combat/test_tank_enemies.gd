@@ -3,8 +3,8 @@ extends GutTest
 ## the session RNG, launch_far (flight_s and rng_m on every far shot), the near launch and where its
 ## shell lands, the caps. Far motion: test_tank_far.gd; near motion: test_tank_near.gd.
 
-const ADVANCE := 1
-const GUN_LINE := 2
+const ADVANCE := 2
+const GUN_LINE := 3
 
 
 ## A quiet Advance: no encounters, no obstacles, the gun out of the picture.

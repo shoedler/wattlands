@@ -7,7 +7,7 @@ extends GutTest
 ## seat, a breakdown, a rescue or a rider on reserve silences them. And the main gun's dispersion
 ## by the Lights seat (dark: x2).
 
-const CHECKPOINT := 3
+const CHECKPOINT := 4
 
 
 static func _quiet(index: int) -> Callable:
@@ -91,7 +91,7 @@ func test_power_in_band_sets_the_slew_speed() -> void:
 		rig.no_fire = true
 		rig.seat(2, TankIds.ENGINE_FEED)
 		rig.p_eff[1] = 0.0
-		rig.enter(1, 1.0)
+		rig.enter(2, 1.0)
 		TankAux.of(rig.state).bow_deg = -30.0
 		_target(rig, TankIds.ENEMY_RECON, 130.0)
 		rigs.append(rig)
@@ -135,7 +135,7 @@ func test_far_enemies_and_the_behemoth_are_not_bow_targets() -> void:
 	var boss := TankRulesRig.new(2)
 	boss.no_fire = true
 	boss.seat(2, TankIds.ENGINE_FEED)
-	boss.enter(10, 1.0)
+	boss.enter(11, 1.0)
 	var aux := TankAux.of(boss.state)
 	TankTargets.build(boss.state, aux)
 	assert_null(TankBow.target(boss.state, aux), "the Behemoth is far")

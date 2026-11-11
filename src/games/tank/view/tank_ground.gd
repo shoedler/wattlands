@@ -17,11 +17,15 @@ const TERRAIN_K := 0.6
 const TERRAIN_MAX := 10.0
 ## [wavelength art px, amplitude art px].
 const BUMPS: Array[Vector2] = [Vector2(700, 2.4), Vector2(150, 1.6), Vector2(64, 0.8)]
+## The width of the join between the hangar's flat floor and the road outside it (art px).
+const FLAT_BLEND := 24.0
 ## Height samples per metre of the integrated profile.
 const STEP_M := 1.0
 
 ## The road line on the stage at the flat (the v3 layout: 385).
 var base_y: float = 385.0
+## Canvas x left of which the floor is flat (the hangar's: -INF outside it), joined to the road over FLAT_BLEND px.
+var flat_until: float = -INF
 ## Seeded phases of the bumps.
 var phases: Array[float] = []
 ## This frame: the Back layer's world art x at canvas 0, the hull's canvas x and its metre, and the
@@ -108,7 +112,10 @@ func terrain(canvas_x: float) -> float:
 
 ## How high the road stands at canvas x (art px above the flat road line).
 func lift(canvas_x: float) -> float:
-	return bumps(world0 + canvas_x) + terrain(canvas_x)
+	var h := bumps(world0 + canvas_x) + terrain(canvas_x)
+	if canvas_x < flat_until + FLAT_BLEND:
+		return h * smoothstep(flat_until, flat_until + FLAT_BLEND, canvas_x)
+	return h
 
 
 ## The road surface's stage y at canvas x.

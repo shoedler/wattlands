@@ -102,25 +102,31 @@ The content cards use in-engine renders under `assets/tank/cards/` and `TANK_CAR
 
 | Segment | Kind | Length |
 | --- | --- | --- |
-| Depot | WARMUP | 300 s |
+| Hangar | WARMUP | 180 s |
+| Roll-out | WARMUP | 120 s |
 | Advance | WORK | open-ended, 180 s nominal (90–300 s) |
 | Holding action | WORK | open-ended, 120 s nominal (60–180 s) |
 | Checkpoint | RECOVERY | 60 s, ERG 50% for everyone |
 | Boss | WORK | open-ended, 240 s nominal (120–360 s) |
 | Cool-down | appended by the validator | |
 
-Ashfall Road runs the depot, three stages of Advance, holding action and checkpoint, then the boss. The nominal mission is 30 min and at most 41 min. Ambush (2.9) is shorter. The rules read segments from `frame.phase` and call `end_phase` for every rider in one step once an objective is done and `min_s` has passed ("Regroup" until then). The platform cuts a phase at `max_s`; that is an overrun and costs score (an Advance tows the tank to the halt line, a holding force is barraged, the Behemoth withdraws). The ride itself never fails. Free roam has its own plan (2.10). The internal ids `gun_line`, `SEG_GUN_LINE` and `TankGunLineState` stay for the wire, the plans and the FIT; the UI says "Holding action".
+Ashfall Road runs the hangar and the roll-out (the first 300 s), three stages of Advance, holding action and checkpoint, then the boss. The nominal mission is 30 min and at most 41 min. Ambush (2.9) is shorter. The rules read segments from `frame.phase` and call `end_phase` for every rider in one step once an objective is done and `min_s` has passed ("Regroup" until then). The platform cuts a phase at `max_s`; that is an overrun and costs score (an Advance tows the tank to the halt line, a holding force is barraged, the Behemoth withdraws). The ride itself never fails. Free roam has its own plan (2.10). The internal ids `gun_line`, `SEG_GUN_LINE` and `TankGunLineState` stay for the wire, the plans and the FIT; the UI says "Holding action".
 
-| Seat | Depot (WARMUP) | Advance | Holding action | Boss | Checkpoint | Roam |
+| Seat | Hangar and Roll-out (WARMUP) | Advance | Holding action | Boss | Checkpoint | Roam |
 | --- | --- | --- | --- | --- | --- | --- |
-| Drive | SIM `game`, terrain 0 … +2 % | SIM `game`, terrain −3 … +6 %; evade sprints | SIM flat (dig) | SIM flat; evade sprints | ERG 50 % | SIM `game`, valley grade −3 … +5 % |
-| Gun | ERG 50 % → 65 % | ERG 55 %, `range_pct` [55, 100] (bank) | same | same | ERG 50 % | bank [55, 85] |
+| Drive | SIM flat in the hangar (the hull is on its stand), SIM `game` with terrain 0 … +2 % on the roll-out | SIM `game`, terrain −3 … +6 %; evade sprints | SIM flat (dig) | SIM flat; evade sprints | ERG 50 % | SIM `game`, valley grade −3 … +5 % |
+| Gun | ERG 50 % → 59 % in the hangar, 59 % → 65 % on the roll-out | ERG 55 %, `range_pct` [55, 100] (bank) | same | same | ERG 50 % | bank [55, 85] |
 | Loader | SIM flat, boiler 3 % × pressure | SIM flat, boiler 8 % × min(pressure, 1); Overpressure and evade sprints | same | same | ERG 50 % | same |
-| Lights | ERG 50 % → 65 % | ERG 65 %, `range_pct` [65, 80] (searchlight load) | same | same | ERG 50 % | same |
+| Lights | ERG 50 % → 59 % → 65 % | ERG 65 %, `range_pct` [65, 80] (searchlight load) | same | same | ERG 50 % | same |
 | Secondaries | SIM flat | SIM flat | SIM flat | SIM flat | ERG 50 % | SIM flat |
-| Repairs | ERG 50 % → 65 % | ERG 55 %, `range_pct` [55, 70] (repair load) | same | same | ERG 50 % | same |
+| Repairs | ERG 50 % → 59 % → 65 % | ERG 55 %, `range_pct` [55, 70] (repair load) | same | same | ERG 50 % | same |
 
 A seat move replans the rest of the rider's plan from these same tables. Difficulty never touches an effort number (2.4).
+
+**Hangar and Roll-out (v1.1.0).** The first 300 s are two WARMUP segments in place of the old 300 s depot, so BRIEF 4.6.8, `TankConst.FIRST_S` and the mission's totals do not move; both stay at ERG 65% or less, and the ERG seats ride the depot's one ramp (50% → 59% → 65%, 0.05 points a second) cut at 180 s.
+- **Hangar, 180 s.** The hull sits on a mechanic's stand with its tracks spinning in the air: the Drive seat's speed turns them, the distance never moves (`TankSegments.on_stand`, `ground_mps` is 0). Every station works. The drills run here: drive 0–60 s, aim 60–120 s with two wreck targets, fire 120–170 s. The last 10 s are a countdown: the ceiling bars go dark, two red beacons turn, the hull is lowered, the door opens, and a soft klaxon sounds at 10, 6.6 and 3.3 s.
+- **Roll-out, 120 s.** Out of the door, on the depot's old terrain (0 … +2%). It never halts: there is no drill and no halt line, so it rolls for the whole 120 s. The Loader's rack is topped up as the hull leaves the hangar.
+- Free roam keeps its 300 s drive-out as it was (the segment type `depot`), and the 30 s `drill` mission opens with a 30 s hangar.
 
 **The fight shapes the workout:**
 - light tanks bring a telegraphed flank shot and short sprint prompts;
@@ -138,7 +144,7 @@ The encounter list is fixed in the mission file, so the PlanValidator checks the
 | Gun, Lights, Repairs (ERG) | power ≥ 95% of the applied target and cadence ≥ 60 |
 | Loader, building | ≥ 90% FTP |
 | Loader, idle (rack full) | cadence ≥ 50 |
-| Depot and checkpoints | cadence ≥ 60 |
+| Hangar, roll-out and checkpoints | cadence ≥ 60 |
 
 While the trainer waits for a seat move, an ERG seat on a SIM trainer is in band at ≥ 95% of the seat's planned target (× 0.85 while FTP is unverified) and cadence ≥ 60; a SIM seat on an ERG trainer uses the SIM band.
 
@@ -151,11 +157,11 @@ While the trainer waits for a seat move, an ERG seat on a SIM trainer is in band
 - **4.6.2:** a bank, arc or repair update moves ≤ 10 points, sent as three sub-steps 1 s apart (≤ 3.3% FTP/s).
 - **4.6.3:** rescue arms in every ERG phase while the applied target is ≥ 60%.
 - **4.6.6:** boiler 8% × the rider's difficulty setting ≤ +8%; terrain (−3 … +6%) × the same. The largest haptic is +3%.
-- **4.6.8:** the depot stays at ERG 50–65% and SIM 0 … +3% before difficulty, with no haptics.
+- **4.6.8:** the hangar and the roll-out (together the first 300 s, the depot's one ramp of 0.05 points a second cut in two) stay at ERG 50–65% and SIM 0 … +3% before difficulty, with no haptics.
 - **BRIEF 4.5:** per-rider ERG ↔ SIM switches are ≥ 30 s apart.
 
 **Directive patterns** (`ctx.directives`, `source: "tank"`, sent only by `TankDirector`):
-1. **Bank (Gun):** `{mode: ERG, target_pct: 55 + 45 × (1 − bank/100), reason: "bank"}` every 5 s in sub-steps, clamped to `range_pct` (roam: [55, 85]). None in the depot or checkpoints.
+1. **Bank (Gun):** `{mode: ERG, target_pct: 55 + 45 × (1 − bank/100), reason: "bank"}` every 5 s in sub-steps, clamped to `range_pct` (roam: [55, 85]). None in the hangar, the roll-out or checkpoints.
 2. **Arc (Lights):** `{mode: ERG, target_pct: 65 + 15 × duty, reason: "arc"}` on the same schedule. `duty` is the share of the last 10 s in which an enemy stood in the main gun's range (0–1).
 3. **Boiler (Loader):** `{mode: SIM, mode_grade: 8% × min(pressure, 1), reason: "boiler"}`, at most once a second, rising at most 0.5% a step; 0 at a stow and while the rack is full; 3% in WARMUP.
 4. Retired (it belonged to a v1 tank's gearbox).
@@ -208,7 +214,7 @@ Far enemies enter in 10 s from just past their hold, fading out of the haze. A h
 
 **The shell's path.** Ours leaves the near panel as a tracer, flies on the shell screen and drops into the far panel. Theirs leaves the far panel, flies on the shell screen and comes in on the near panel: that is the telegraph to read.
 
-**Loader.** The Loader in band builds one shell per 1750 J of P_eff into a ready rack of 3 (full at the start, and again when the crew leaves the depot). At 100% pressure the shell is stowed: a heavy shell, or a light one if latched from 40%. Inside the 5 s window after a stow the rider may surge (`over`) to take the shell back to the boiler and overpressure it (100 → 150% on 1300 J while the sprint rule holds, a double-damage shell). The Gun chambers the oldest shell in 1 s, then auto-aim lays again. A solo rider's rack is restocked to 3 at each checkpoint.
+**Loader.** The Loader in band builds one shell per 1750 J of P_eff into a ready rack of 3 (full at the start, and again when the crew leaves the hangar). At 100% pressure the shell is stowed: a heavy shell, or a light one if latched from 40%. Inside the 5 s window after a stow the rider may surge (`over`) to take the shell back to the boiler and overpressure it (100 → 150% on 1300 J while the sprint rule holds, a double-damage shell). The Gun chambers the oldest shell in 1 s, then auto-aim lays again. A solo rider's rack is restocked to 3 at each checkpoint. Below the band the boiler still gains 20% of the rider's P_eff (`steam.below_band_gain`) up to 88% of a shell (`below_band_cap_pct`), so a rider a little under 90% FTP is not stuck at nothing; in band stays false there, so the score and the glow do not change, a shell is always finished in band, and the boiler grade follows only the pressure earned in band.
 
 **Gun bank (Gun).** The bank fills in band (+1 per 180 J of P_eff) and drains for stabilizing (2.25 a second while a fight is on), elevation (0.5 per degree) and traverse (15 each). A low bank widens dispersion. The ERG target climbs as it drains (pattern 1). A rescue freezes the bank and the turret.
 
@@ -343,8 +349,8 @@ Never in WARMUP, the first 300 s or the cool-down, never to an ERG rider, never 
 
 - **Missions:**
   - `ashfall_road` (default, zero-input): 30 min nominal, 41 at most. Normal by default.
-  - `ambush_15` (featured): depot 300 s, one Advance (80–160 s), one holding action (60–120 s), a checkpoint, the Behemoth (100–190 s), cool-down 180 s. 15 min nominal. Hard by default. It starts short of plates (hull 90, 20 per checkpoint).
-  - `drill` (e2e): 130 s inside the warm-up limits (depot 30 s, skirmish 70 s, checkpoint 30 s); every seat rides ERG 50 → 55% with `range_pct` [55, 65] or SIM; at most one mode switch per rider; no haptics.
+  - `ambush_15` (featured): hangar 180 s, roll-out 120 s, one Advance (80–160 s), one holding action (60–120 s), a checkpoint, the Behemoth (100–190 s), cool-down 180 s. 15 min nominal. Hard by default. It starts short of plates (hull 90, 20 per checkpoint).
+  - `drill` (e2e): 130 s inside the warm-up limits (hangar 30 s, skirmish 70 s, checkpoint 30 s); every seat rides ERG 50 → 55% with `range_pct` [55, 65] or SIM; at most one mode switch per rider; no haptics.
 - **Free roam:** `roam_10`, `roam_20`, `roam_30` (featured), `roam_45`, `roam_60` (2.10).
 - **Files:** `tanks.json` (the one tank), `stations.json`, `enemies.json`, `missions/*.json` (`kind` "mission" or "roam"), `roam/valley.json` (the map), `scoring.json`, `cosmetics.json` and `strings.csv` (`TANK_*`), all validated at load by `TankContentSchema`, which also holds every effort number to BRIEF 4.6 (a bad value is a load error).
 
@@ -402,6 +408,8 @@ Each seat's roam row is in 2.3. The roam phase is over 300 s, so the 105% cap ap
 ### 3.1 Look and resolution
 
 The reference, at 960 × 540 art px (2× at 1080p, 4× at 4K, nearest filtering). Through `pixel_flex` (min 852 × 480), wider or narrower windows show more world. Rules px × 1.5 = art px. Nothing important sits only at the far edges, and the HUD rects use the SDK's anchoring.
+
+**Hangar:** a steel hangar in the forest's own colours, baked in code by `assets/tank/hangar/tools_src/hangar_bake.gd` (a corrugated wall with pilasters, girders, pipes, a crane hook, two high windows, a concrete floor with a safety line, the end wall with its doorway and a ribbed door). `TankHangar` draws it behind the tank, the bars, beacons and stand in code. The near panel shows the hangar side on, the far panel the gate wall face on with its rolling shutter; on the roll-out both slide away at their own parallax. A far wreck stands where it fell and the hull's travel closes its range; one that comes inside 700 m drops out of the panel.
 
 **World:** the road runs through a pine forest at night, bluer and greener than the reference, with moderate tilt-shift. The road and tank sit low (ground line 385 art px), with a soft verge between the road and the foreground blur. Little bases (a fenced clearing with a bunker, lamp, crates and a barrier) stand at the depot and at free-roam strongpoints; a holding force's base stands in the far panel. Backdrops: `forest`, `forest_firs`, `forest_birches` and `base`. No people outside the tank.
 
@@ -463,7 +471,7 @@ One machine per seat: `view/tank_mech.gd` (`TankMech`) over one class per machin
 - **The Foundry Pact.** The enemy is one faction in our tank's hand on the opposite side: the same 1 px outline, plate-edge rule and rivet pixel, but ours is patched and open and theirs is sealed factory slab. Field grey with bands of dark yellow, grime, a mud line, welded seams, flat decks, long guns, stowage, no windows. Hatches are shut: warmth lives only in vents, the exhaust and the Behemoth's furnace, so nothing mimics our lit rooms. Slits are the cold foe signal. They are drawn by `assets/tank/v4/tools_src/` and baked into one atlas (`assets/tank/v4/enemies.json`).
 - **Marks:** the Pact's mark is an invented hollow diamond. Numbers use only 0, 1 and 8, drawn to read the same mirrored (a turret's traverse and a flip mirror them), and a test refuses any that could read as a known number code or a real unit's number in either direction (`tests/games/tank/art/test_tank_v4_pact.gd`).
 - **Silhouettes:** low wedge lights, tall slab mediums, long heavies, turretless destroyers, the multi-bogie Behemoth, and the small recon car and tankette.
-- **Wrecks and props:** far wrecks dim and burn. Near wrecks age on sim time. The halt line is concrete teeth with a post and a hooded amber lamp.
+- **Wrecks and props:** far wrecks dim and burn, and close in as the hull drives (they drop out of the panel inside the far panel's near edge, 700 m). Near wrecks age on sim time. The halt line is concrete teeth with a post and a hooded amber lamp.
 - **Particles:**
   - muzzle flashes, smoke rings, casings, tracers and impacts;
   - the diesel exhaust by watts;
@@ -510,7 +518,7 @@ Every sound is rendered from the recipes in the repository (`assets/tank/audio/a
 - **The gun and the far fight:** the main gun, shells in flight, casings, landings and kills heard after the flash at twice real sound speed.
 - **Near threats** are heard before they are seen: a burst from the bushes, a small high engine, a sharp crack.
 - **The track,** locked to the distance drawn.
-- **The night:** wind in the pines and crickets, frogs, an owl, a far battle that stays out of the depot and the cool-down.
+- **The night:** wind in the pines and crickets, frogs, an owl, a far battle that stays out of the hangar, the roll-out and the cool-down; a soft klaxon (the segment horn, pitched up) three times in the hangar's countdown.
 
 ## 4. Testing and gates
 

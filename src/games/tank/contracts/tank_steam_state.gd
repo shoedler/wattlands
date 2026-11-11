@@ -8,6 +8,10 @@ extends TankStationState
 
 ## [snap] Pressure in % (0..150; 100% = 6 kJ of P_eff).
 var pressure_pct: float = 0.0
+## The part of `pressure_pct` the below-band trickle added (steam.below_band_gain; 0 in band). The boiler's grade
+## follows only the pressure earned in band, `grade_pressure_pct()`, so a rider under the window is never loaded
+## more because the trickle gave them progress. Host only; not on the wire.
+var trickle_pct: float = 0.0
 ## [snap] Seconds left of the 5 s "Surge to overpressure" window at 100%; 0 when none.
 var window_s: float = 0.0
 ## [snap] Overpressure is building (100 -> 150% on 3 kJ while the sprint rule holds).
@@ -39,3 +43,8 @@ var chamber_s: float = 0.0
 ## [snap] The loader's cycle phase for the shell it is working on, 0..1 (0 idle or just begun, 1
 ## stowed in the rack); the view maps it onto the r6 loader's steps (hoist, stow, ...).
 var load_t: float = 0.0
+
+
+## The pressure the boiler's grade follows: what was earned in band, never the trickle's share.
+func grade_pressure_pct() -> float:
+	return maxf(pressure_pct - trickle_pct, 0.0)

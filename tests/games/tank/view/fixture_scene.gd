@@ -24,6 +24,10 @@ extends Control
 ##   sec                the Lights rider moves to the Secondaries seat
 ##   empty=<engine>     that station's seat empty (slot -1), e.g. empty=arc
 ##   still              the hull holds still
+##   wreck=<m>          a far wreck at that range (m) from frame 3, for a look at it closing in as the hull
+##                      drives and dropping out of the far panel at its near edge (TankFarMap.RANGE_NEAR_M)
+##   speed=<m/s>        the hull's speed, held (the fixtures' own is 7.4)
+##   noenemy            no enemy and no shell on the field (the wreck's frames)
 ##   stats              print frame times after 300 frames (or seconds=<n> of wall time), then quit
 ##   seconds=<n>        with stats: measure for n seconds of wall time instead of 300 frames
 ##   novsync            vsync off, so stats read the real frame time and not the display's 16.7 ms
@@ -105,6 +109,9 @@ func _ready() -> void:
 		if st != null:
 			st.slot = -1
 			st.peer = 0
+	if _opts.has("noenemy"):
+		state.enemies.clear()
+		state.shells.clear()
 	var peer := int(_opts.get("peer", 1))
 	var ctx := F.make_ctx(crew, bots, content, Wl.SOLO, peer)
 	game = F.make_game(ctx)
@@ -128,6 +135,24 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_frames += 1
+	if _opts.has("wreck") and _frames == 3:
+		(
+			view
+			. far
+			. wrecks
+			. append(
+				{
+					"range": float(_opts["wreck"]),
+					"r0": float(_opts["wreck"]),
+					"x0": 220.0,
+					"lane": 0,
+					"kind": TankIds.ENEMY_MEDIUM,
+					"t": state.t,
+				}
+			)
+		)
+	if _opts.has("speed"):
+		state.hull.speed_mps = float(_opts["speed"])
 	if _v4_cues_due and _frames >= 2:
 		_v4_cues_due = false
 		for e: Dictionary in TankFixturesV4.cues(_v4):

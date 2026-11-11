@@ -142,15 +142,39 @@ func test_apply_rebuilds_the_replicated_state() -> void:
 	assert_gt(c.enemy(13).telegraph_s, 2.0)
 
 
+## v1.1.0: the hangar and the roll-out go over the wire by their codes, and a client derives the same segment from
+## its own content: the hangar's countdown and the stand read the same on both.
+func test_a_client_reads_the_hangar_and_the_rollout_from_the_wire() -> void:
+	for index: int in [0, 1]:
+		var host := _host(2, func(crew: int) -> TankState: return _hangar_state(crew, index))
+		var wire := _wire(host)
+		assert_eq(TankSnapshotSchema.check(host.snapshot()), "", "segment %d" % index)
+		var client := _client(2)
+		client.apply_snapshot(wire)
+		var want := TankIds.SEG_HANGAR if index == 0 else TankIds.SEG_ROLLOUT
+		assert_eq(client.state.seg.seg, want)
+		assert_eq(client.state.seg.kind, Wl.WARMUP)
+		assert_eq(client.state.seg.segment_index, index)
+		assert_false(client.state.seg.open_ended)
+	var late := _host(2, func(crew: int) -> TankState: return _hangar_state(crew, 0, 174.0))
+	var c2 := _client(2)
+	c2.apply_snapshot(_wire(late))
+	assert_almost_eq(TankSegments.hangar_countdown_s(c2.state), 6.0, 0.01, "the same countdown")
+
+
+func _hangar_state(crew: int, index: int, elapsed: float = 60.0) -> TankState:
+	return TankFixtures._base(TankFixtures.content(), crew, index, elapsed)
+
+
 func test_apply_derives_what_the_snapshot_leaves_out() -> void:
 	var host := _host(3)
 	var client := _client(3)
 	client.apply_snapshot(_wire(host))
 	var c := client.state
 	assert_eq(c.seg.kind, Wl.WORK)
-	assert_eq(c.seg.segment_index, 4)
+	assert_eq(c.seg.segment_index, 5)
 	assert_true(c.seg.open_ended)
-	var seg_def := c.content.segment(4)
+	var seg_def := c.content.segment(5)
 	assert_eq(
 		[c.seg.min_s, c.seg.max_s, c.seg.length_m],
 		[90.0, 300.0, float(seg_def["length_m"])],
@@ -164,8 +188,9 @@ func test_apply_derives_what_the_snapshot_leaves_out() -> void:
 		var want := holder.peer if holder != null else 0
 		assert_eq(st.peer, want, "%s: who works the room (0: an empty seat)" % st.engine)
 	var boss_def := c.content.boss_def()
-	assert_eq(c.boss.bogie_max, float(boss_def["bogie_hp"]))
-	assert_eq(c.boss.turret_max, float(boss_def["turret_hp"]))
+	var boss_k := c.content.boss_hp_mult()
+	assert_almost_eq(c.boss.bogie_max, float(boss_def["bogie_hp"]) * boss_k, 0.001)
+	assert_almost_eq(c.boss.turret_max, float(boss_def["turret_hp"]) * boss_k, 0.001)
 	assert_eq(
 		c.enemy(11).hp_max,
 		float(c.content.enemy_def("medium")["hp"]),
@@ -179,9 +204,14 @@ func test_apply_derives_what_the_snapshot_leaves_out() -> void:
 	solo.apply_snapshot(_wire(solo_host))
 	var scale := c.content.enemy_scale(TankIds.TANK_LANDSHIP)
 	assert_almost_eq(
-		solo.state.boss.bogie_max, float(boss_def["bogie_hp"]) * scale, 0.001, "enemy scale"
+		solo.state.boss.bogie_max,
+		float(boss_def["bogie_hp"]) * scale * boss_k,
+		0.001,
+		"enemy scale"
 	)
-	assert_almost_eq(solo.state.boss.turret_max, float(boss_def["turret_hp"]) * scale, 0.001)
+	assert_almost_eq(
+		solo.state.boss.turret_max, float(boss_def["turret_hp"]) * scale * boss_k, 0.001
+	)
 	# A client derives an enemy's maximum from the content, rounded up like every HP it shows.
 	assert_almost_eq(
 		solo.state.enemy(11).hp_max,
@@ -224,7 +254,7 @@ func test_all_afk_and_the_outcome_are_derived() -> void:
 	client.apply_snapshot(_wire(host))
 	assert_false(client.state.all_afk)
 	host.state.seg.seg = TankIds.SEG_COOLDOWN
-	host.state.seg.phase_index = 11
+	host.state.seg.phase_index = 12
 	client.apply_snapshot(_wire(host))
 	assert_eq(client.state.seg.kind, Wl.COOLDOWN)
 	assert_eq(client.state.seg.segment_index, -1)

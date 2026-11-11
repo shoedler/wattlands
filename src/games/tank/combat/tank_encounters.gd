@@ -3,7 +3,7 @@ extends RefCounted
 ## What stands in each segment (brief 2.4 mission P0, 2.9; v4): the Advance's obstacles and its fixed
 ## encounter list keyed by metres driven (far kinds through TankFar, near kinds through TankNear), a
 ## holding action's force (the UI's name for a gun line) and its props, near threats by seconds into a
-## holding action or the boss fight, the Behemoth, the depot's drill wrecks. Counts scale with the crew
+## holding action or the boss fight, the Behemoth, the hangar's drill wrecks. Counts scale with the crew
 ## and difficulty.count (TankContent.crew_count). No random spawns: the mission file lists everything,
 ## so the plan builder knows every segment before the ride starts. Owner: rules (combat).
 ##
@@ -260,9 +260,24 @@ static func crew_counts(state: TankState, entries: Array) -> Array[int]:
 	return out
 
 
-## The depot's aim drill: its wrecks stand ahead of the halted tank once the drill starts.
-static func depot_wrecks(state: TankState, aux: TankAux) -> void:
-	if state.seg.seg != TankIds.SEG_DEPOT or aux.drill_wrecks:
+## Takes the hangar's drill wrecks off the field.
+static func clear_drill_wrecks(state: TankState) -> void:
+	var code := TankIds.obstacle_code(TankIds.OBST_DRILL_WRECK)
+	for i in range(state.obstacles.size() - 1, -1, -1):
+		if state.obstacles[i].code == code:
+			state.obstacles.remove_at(i)
+
+
+## The hangar's aim drill: its wrecks stand ahead of the tank on its stand once the drill starts.
+static func hangar_wrecks(state: TankState, aux: TankAux) -> void:
+	if state.seg.seg != TankIds.SEG_HANGAR:
+		return
+	if TankSegments.hangar_countdown_s(state) >= 0.0:
+		# The countdown clears the range: nothing stands in the door's way (the drills end before it).
+		clear_drill_wrecks(state)
+		aux.drill_wrecks = true
+		return
+	if aux.drill_wrecks:
 		return
 	for d: Variant in aux.drills:
 		if str(d.get("drill", "")) != "aim" or state.seg.elapsed_s < float(d.get("from_s", 0.0)):

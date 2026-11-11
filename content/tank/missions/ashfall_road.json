@@ -1,25 +1,35 @@
 {
-	"_doc": "Ashfall Road (brief 2.4; v4: docs/decisions/tank.md). Owner: rules. Schema: TankContentSchema.validate_mission. Segments in plan order; every one is a lap-true plan phase (TankPlanBuilder). terrain: [distance_m, grade_pct] points, the course_profile format, interpolated linearly by the tank's distance into the segment and held past the last point; grades are before difficulty. encounters trigger when the tank has driven at_m metres into the Advance (far kinds in the far panel, near kinds from the bushes); obstacles stand at at_m in world space. A gun_line segment is a holding action in the UI: enemies {enemy, count, hold_m: [..]} on the move at long range, near {at_s, enemy, count} near threats by seconds into it; the boss segment has a near list too. Counts scale with the crew and difficulty (TankEncounters.crew_counts: the segment's total, taken from the lists in order, so each list puts first what the smallest crews must meet; min_crew: the entry is there only for crews of that size and up). end_hold_s: seconds the director waits after the objective is done before end_phase (the Autopilot's seating moves riders for the next segment; the Behemoth's death beat).",
+	"_doc": "Ashfall Road (brief 2.4; v4: docs/decisions/tank.md). Owner: rules. Schema: TankContentSchema.validate_mission. The first 300 s are the 180 s hangar (the hull on its stand; the drills; the door opens in the last 10 s) and the 120 s roll-out (out of the door; it never halts), both WARMUP (BRIEF 4.6.8). Segments in plan order; every one is a lap-true plan phase (TankPlanBuilder). terrain: [distance_m, grade_pct] points, the course_profile format, interpolated linearly by the tank's distance into the segment and held past the last point; grades are before difficulty. encounters trigger when the tank has driven at_m metres into the Advance (far kinds in the far panel, near kinds from the bushes); obstacles stand at at_m in world space. A gun_line segment is a holding action in the UI: enemies {enemy, count, hold_m: [..]} on the move at long range, near {at_s, enemy, count} near threats by seconds into it; the boss segment has a near list too. Counts scale with the crew and difficulty (TankEncounters.crew_counts: the segment's total, taken from the lists in order, so each list puts first what the smallest crews must meet; min_crew: the entry is there only for crews of that size and up). end_hold_s: seconds the director waits after the objective is done before end_phase (the Autopilot's seating moves riders for the next segment; the Behemoth's death beat).",
 	"id": "ashfall_road",
 	"difficulty_default": "normal",
 	"label": "TANK_CONTENT_ASHFALL_ROAD",
 	"plan_table": "plans",
 	"segments": [
 		{
-			"id": "depot",
-			"type": "depot",
+			"id": "hangar",
+			"type": "hangar",
 			"stage": 0,
 			"kind": "WARMUP",
-			"duration_s": 300,
-			"label": "TANK_PHASE_DEPOT",
-			"name": "TANK_PLACE_DEPOT",
-			"backdrop": "base",
-			"terrain": [[0, 0], [200, 1], [400, 2], [600, 1], [800, 0], [1000, 1.5], [1200, 0.5], [1500, 0]],
+			"duration_s": 180,
+			"label": "TANK_PHASE_HANGAR",
+			"name": "TANK_PLACE_HANGAR",
+			"backdrop": "hangar",
 			"drills": [
-				{"from_s": 0, "to_s": 120, "drill": "drive"},
-				{"from_s": 120, "to_s": 240, "drill": "aim", "targets": 2},
-				{"from_s": 240, "to_s": 300, "drill": "fire"}
+				{"from_s": 0, "to_s": 60, "drill": "drive"},
+				{"from_s": 60, "to_s": 120, "drill": "aim", "targets": 2},
+				{"from_s": 120, "to_s": 170, "drill": "fire"}
 			]
+		},
+		{
+			"id": "rollout",
+			"type": "rollout",
+			"stage": 0,
+			"kind": "WARMUP",
+			"duration_s": 120,
+			"label": "TANK_PHASE_ROLLOUT",
+			"name": "TANK_PLACE_ROLLOUT",
+			"backdrop": "forest",
+			"terrain": [[0, 0], [150, 1], [300, 2], [500, 1], [700, 0], [900, 1.5], [1100, 0.5], [1500, 0]]
 		},
 		{
 			"id": "stage1_advance",
@@ -217,7 +227,7 @@
 			"name": "TANK_PLACE_IRON_GATE",
 			"backdrop": "base",
 			"end_hold_s": 7.5,
-			"boss": {"start_left_px": 500},
+			"boss": {"start_left_px": 500, "hp_mult": 0.7},
 			"near": [
 				{"at_s": 30, "enemy": "tankette", "count": 1, "min_crew": 3},
 				{"at_s": 90, "enemy": "recon", "count": 1, "min_crew": 3},

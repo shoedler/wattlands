@@ -6,10 +6,11 @@ extends GutTest
 
 const H := preload("res://tests/games/tank/effort/tank_effort_harness.gd")
 
-const DEPOT := 0
-const ADV1 := 1
-const GUN1 := 2
-const CP1 := 3
+const HANGAR := 0
+const ROLLOUT := 1
+const ADV1 := 2
+const GUN1 := 3
+const CP1 := 4
 const RATE := 10.0 / 3.0
 
 
@@ -39,7 +40,7 @@ func test_the_directives_are_the_same_at_every_difficulty() -> void:
 		var h := _h()
 		h.state.difficulty = level
 		_bay(h).duty = 0.5
-		h.run_s(DEPOT, 20.0)
+		h.run_s(HANGAR, 20.0)
 		h.run_s(ADV1, 30.0)
 		h.run_s(GUN1, 30.0)
 		h.run_s(CP1, 20.0)
@@ -123,7 +124,7 @@ func test_the_slew_and_the_range() -> void:
 func test_it_only_runs_in_repair_phases_with_a_range() -> void:
 	var h := _h()
 	_bay(h).duty = 1.0
-	h.run_s(DEPOT, 12.0)
+	h.run_s(HANGAR, 12.0)
 	h.run_s(CP1, 12.0)
 	assert_eq(h.sent(4, "repair"), [], "no repair load in the depot or a checkpoint")
 	h.clear()

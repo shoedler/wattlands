@@ -233,7 +233,7 @@ func _full_hull_crews() -> Array[int]:
 
 func test_the_rules_gun_lines_are_drawn_on_the_panel_their_frame_says() -> void:
 	for crew in _full_hull_crews():
-		for index: int in [2, 5, 8]:
+		for index: int in [3, 6, 9]:
 			var rig := TankRulesRig.new(crew)
 			rig.enter(index, 0.5)
 			var v := U.view_of(self, rig.state)

@@ -4,8 +4,8 @@ extends GutTest
 ## chambering from the rack, the dark gun's reach, the shell cap (the bow guns: test_tank_bow.gd;
 ## chambering in detail: test_tank_stations.gd).
 
-const ADVANCE := 1
-const CHECKPOINT := 3
+const ADVANCE := 2
+const CHECKPOINT := 4
 const V0 := 360.0
 
 
@@ -119,7 +119,7 @@ func test_the_lay_leads_a_moving_target() -> void:
 func test_every_holding_force_is_reachable_from_every_crew() -> void:
 	for crew in [1, 2, 3, 4]:
 		var rig := TankRulesRig.new(crew)
-		for index in [2, 5, 8]:
+		for index in [3, 6, 9]:
 			rig.enter(index, 1.0)
 			rig.hull().speed_mps = 0.0
 			var aux := TankAux.of(rig.state)

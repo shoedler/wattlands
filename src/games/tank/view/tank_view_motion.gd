@@ -76,6 +76,8 @@ func _relief(state: TankState) -> void:
 		hm = hull_x / TankConst.PX_PER_M
 	if mirrored:
 		hull_cx = canvas.x - hull_cx
+	# The hangar's floor is flat: no relief inside it, a soft join at its end wall.
+	ground.flat_until = TankHangar.clip_x(hangar_look)
 	ground.frame(plane_x * S, hull_cx, hm, key, points)
 
 
@@ -123,6 +125,8 @@ func _pose(step_dt: float) -> void:
 			screen_s = -1.0
 	off -= Vector2(firing.jolt(), 0).rotated(rot)
 	off.x -= tow_px
+	# On the mechanic's stand the hull rides high (TankHangar), lowered in the countdown.
+	off.y -= float(hangar_look.get("lift", 0.0))
 	xf = TankSuspension.xform(rig.size, rig.ground, at + off, rot, hull_lift)
 	wheel_centres = TankSuspension.wheel_centres(rig.wheels, xf, gfn, t_track, up, droop)
 

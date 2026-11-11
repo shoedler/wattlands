@@ -82,6 +82,8 @@ const TANKS_SPEC := {
 	"steam.over_j": "pos",
 	"steam.over_max_pct": "pos",
 	"steam.rack_start": "nonneg",
+	"steam.below_band_gain": "frac",
+	"steam.below_band_cap_pct": "pos",
 	"steam.chamber_s": "pos",
 	"steam.light_latch_pct": "pos",
 	"gun.load_elev_deg": "num",
@@ -264,6 +266,8 @@ const SCORING_SPEC := {
 }
 const SEGMENT_KINDS := {
 	TankIds.SEG_DEPOT: Wl.WARMUP,
+	TankIds.SEG_HANGAR: Wl.WARMUP,
+	TankIds.SEG_ROLLOUT: Wl.WARMUP,
 	TankIds.SEG_SKIRMISH: Wl.WARMUP,
 	TankIds.SEG_ADVANCE: Wl.WORK,
 	TankIds.SEG_GUN_LINE: Wl.WORK,
@@ -278,8 +282,15 @@ const UNLOCK_RULES: Array[String] = ["finish", "grade", "behemoth_no_breakdown"]
 const GRADES: Array[String] = ["S", "A", "B", "C", "D"]
 ## The segment types every engine needs an entry for, per plan table.
 const TABLE_SEGMENTS := {
-	"plans": [TankIds.SEG_DEPOT, TankIds.SEG_ADVANCE, TankIds.SEG_GUN_LINE, TankIds.SEG_BOSS],
-	"drill_plans": [TankIds.SEG_DEPOT, TankIds.SEG_SKIRMISH],
+	"plans":
+	[
+		TankIds.SEG_HANGAR,
+		TankIds.SEG_ROLLOUT,
+		TankIds.SEG_ADVANCE,
+		TankIds.SEG_GUN_LINE,
+		TankIds.SEG_BOSS
+	],
+	"drill_plans": [TankIds.SEG_HANGAR, TankIds.SEG_SKIRMISH],
 	"roam_plans": [TankIds.SEG_DEPOT, TankIds.SEG_ROAM],
 }
 ## valley.json (free roam, brief 2.10).
@@ -341,6 +352,8 @@ const ERG_MIN_PCT := 50.0
 const ERG_MAX_PCT := 100.0
 ## 4.6.8: ERG in WARMUP-kind segments at most 65%; SIM grades 0..+3% before difficulty.
 const WARMUP_ERG_MAX_PCT := 65.0
+## The Loader's below-band trickle stops at most this far into a shell (steam.below_band_cap_pct).
+const STEAM_TRICKLE_CAP_MAX_PCT := 90.0
 const WARMUP_SIM_MAX_PCT := 3.0
 ## Checkpoints: ERG 50% for everyone.
 const CHECKPOINT_PCT := 50.0
@@ -402,6 +415,17 @@ static func validate_tanks(d: Variant) -> Array[String]:
 	if not (d is Dictionary):
 		return ["tanks.json: expected an object"]
 	check_spec(d, TANKS_SPEC, "tanks.json", errors)
+	var cap: Variant = dig(d, "steam.below_band_cap_pct")
+	if _num(cap) and (float(cap) > STEAM_TRICKLE_CAP_MAX_PCT or float(cap) < 0.0):
+		(
+			errors
+			. append(
+				(
+					"tanks.json steam.below_band_cap_pct: at most %d (a shell is always finished in band)"
+					% int(STEAM_TRICKLE_CAP_MAX_PCT)
+				)
+			)
+		)
 	var restock: Variant = dig(d, "steam.checkpoint_rack_by_crew")
 	if restock != null and not _crew_list(restock, 0.0, float(TankConst.RACK_MAX), true):
 		errors.append(
@@ -558,7 +582,7 @@ static func _check_table(tbl: Dictionary, table: String, errors: Array[String]) 
 		errors.append("stations.json %s.checkpoint: must be exactly ERG 50%% (brief 2.3)" % table)
 
 
-## A WARMUP-kind entry (the depot, the drill's skirmish): ERG at most 65% (BRIEF 4.6.8).
+## A WARMUP-kind entry (the hangar, the roll-out, the depot, the drill's skirmish): ERG at most 65% (BRIEF 4.6.8).
 static func _check_warmup_entry(e: Variant, where: String, errors: Array[String]) -> void:
 	if not (e is Dictionary) or str(e.get("mode", "")) != Wl.ERG:
 		return
@@ -1041,6 +1065,15 @@ static func _check_segment(s: Variant, where: String, errors: Array[String]) -> 
 				errors.append("%s encounters: each needs a known enemy" % where)
 			elif (e as Dictionary).has("from"):
 				errors.append('%s encounters: "from" is gone: nothing comes from behind' % where)
+	if type == TankIds.SEG_HANGAR:
+		_check_hangar(s, where, errors)
+	var boss: Variant = s.get("boss")
+	if boss is Dictionary and (boss as Dictionary).has("hp_mult"):
+		var hm: Variant = (boss as Dictionary)["hp_mult"]
+		if type != TankIds.SEG_BOSS or not _num(hm) or float(hm) < 0.5 or float(hm) > 1.0:
+			errors.append(
+				"%s boss.hp_mult: a boss segment's 0.5..1.0 share of the Behemoth's HP" % where
+			)
 	_check_near(s.get("near", []), where, errors)
 	for key in ["encounters", "enemies", "obstacles", "near"]:
 		for e: Variant in s.get(key, []) if s.get(key, []) is Array else []:
@@ -1052,6 +1085,37 @@ static func _check_segment(s: Variant, where: String, errors: Array[String]) -> 
 			errors.append("%s max_s: a 90%% gun line lasts at most 180 s (4.6.1)" % where)
 	if s.has("terrain"):
 		_check_terrain(s["terrain"], str(SEGMENT_KINDS[type]) == Wl.WARMUP, where, errors)
+
+
+## v1.1.0: the Hangar's last HANGAR_COUNTDOWN_S are the countdown, so it is longer than twice that and
+## each drill window ends before it.
+static func _check_hangar(s: Dictionary, where: String, errors: Array[String]) -> void:
+	var dur := float(s.get("duration_s", 0.0)) if _num(s.get("duration_s")) else 0.0
+	var free := dur - TankConst.HANGAR_COUNTDOWN_S
+	if dur < 2.0 * TankConst.HANGAR_COUNTDOWN_S:
+		errors.append(
+			"%s: a hangar lasts at least %d s" % [where, int(2.0 * TankConst.HANGAR_COUNTDOWN_S)]
+		)
+	var drills: Variant = s.get("drills", [])
+	if not (drills is Array):
+		errors.append("%s drills: expected a list" % where)
+		return
+	for d: Variant in drills:
+		var ok: bool = (
+			d is Dictionary
+			and _num(d.get("from_s"))
+			and _num(d.get("to_s"))
+			and ["drive", "aim", "fire"].has(str(d.get("drill", "")))
+			and float(d["from_s"]) >= 0.0
+			and float(d["from_s"]) < float(d["to_s"])
+		)
+		if not ok:
+			errors.append("%s drills: [{from_s, to_s, drill: drive|aim|fire}, ...]" % where)
+			return
+		if float(d["to_s"]) > free + 1e-6:
+			errors.append(
+				"%s drills: a drill ends before the countdown (%d s in)" % [where, int(free)]
+			)
 
 
 ## v4: a segment's near list: [{at_s, enemy (a near kind), count?, min_crew?}], at_s ascending.

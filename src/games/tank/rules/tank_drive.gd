@@ -41,8 +41,8 @@ static func _may_move(state: TankState) -> bool:
 	if state.roam.active and TankRoam.halted(state):
 		return false
 	match sg.seg:
-		TankIds.SEG_DEPOT:
-			return TankSegments.depot_driving(state)
+		TankIds.SEG_DEPOT, TankIds.SEG_HANGAR, TankIds.SEG_ROLLOUT:
+			return TankSegments.warmup_rolls(state)
 		TankIds.SEG_ADVANCE, TankIds.SEG_SKIRMISH:
 			return not sg.objective_done and state.hull.distance_m < sg.length_m
 		TankIds.SEG_COOLDOWN, TankIds.SEG_ROAM:
@@ -73,12 +73,20 @@ static func _move(state: TankState, d: TankDieselState, ri: TankRiderInput, dt: 
 	# v3: an empty Drive seat stops the tank.
 	var manned := d != null and not d.is_empty()
 	var rolls := manned and _may_move(state) and not hull.out_of_action() and not state.all_afk
+	# On the stand (the Hangar) the driver's legs turn the tracks in the air: the speed model runs and
+	# the speed is the tracks', the distance never moves.
+	var spins := (
+		manned and TankSegments.on_stand(state) and not hull.out_of_action() and not state.all_afk
+	)
 	hull.holding = (
 		not rolls and not hull.out_of_action() and state.seg.seg != TankIds.SEG_CHECKPOINT
 	)
 	if state.seg.seg == TankIds.SEG_CHECKPOINT or state.seg.seg == TankIds.SEG_BOSS:
 		hull.holding = true
 	hull.blocked_by = 0
+	if spins:
+		hull.speed_mps = sm.step(dt, power, 0.0)
+		return
 	if not rolls:
 		sm.v_mps = 0.0
 		hull.speed_mps = 0.0

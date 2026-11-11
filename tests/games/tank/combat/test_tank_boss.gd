@@ -2,7 +2,7 @@ extends GutTest
 ## The Behemoth (brief 2.4 Enemies and Foundry Gate): creep, push-back, the two phases, the main
 ## gun with its telegraph and "Surge to evade", the secondary, death and withdrawal.
 
-const BOSS := 10
+const BOSS := 11
 
 
 ## A rig in the boss segment; `quiet`: the crew's gun stays out of it (nothing loads or fires).
@@ -17,13 +17,51 @@ func _driver(rig: TankRulesRig) -> int:
 	return rig.peer_of(TankIds.ENGINE_DIESEL)
 
 
+## A mission scales its own Behemoth (boss.hp_mult in the boss segment) and a client derives the same maxima.
+## The shells are 35 damage, so what counts is the shells a part takes: ambush_15 (0.875) 70 / 175 HP is two per
+## bogie and five for the turret, ashfall_road (0.7) 56 / 140 HP is two and four; a 10% cut (72 / 180) would
+## still be three and six, the unscaled 80 / 200 too.
+func test_a_missions_boss_hp_mult_scales_the_behemoth_and_a_client_agrees() -> void:
+	for row: Array in [["ashfall_road", 0.7, 2, 4], ["ambush_15", 0.875, 2, 5]]:
+		var mission := str(row[0])
+		var k := float(row[1])
+		var rig := TankRulesRig.new(3, mission)
+		var def := rig.content.boss_def()
+		var heavy := float(rig.content.num("tanks", "damage.heavy"))
+		assert_almost_eq(rig.content.boss_hp_mult(), k, 1e-9, mission)
+		rig.enter(rig.segs().size() - 1, 1.0)
+		assert_almost_eq(rig.state.boss.turret_max, float(def["turret_hp"]) * k, 0.001, mission)
+		assert_almost_eq(rig.state.boss.bogie_max, float(def["bogie_hp"]) * k, 0.001, mission)
+		assert_eq(
+			ceili(rig.state.boss.bogie_max / heavy), int(row[2]), "%s: shells per bogie" % mission
+		)
+		assert_eq(
+			ceili(rig.state.boss.turret_max / heavy),
+			int(row[3]),
+			"%s: shells for the turret" % mission
+		)
+		var client := TankState.new()
+		client.content = rig.content
+		client.hull.tank = rig.state.hull.tank
+		TankSnapshot._derive_maxima(client, rig.content)
+		assert_almost_eq(client.boss.turret_max, rig.state.boss.turret_max, 0.001, "a client")
+	assert_eq(TankRulesRig.new(1, "drill").content.boss_hp_mult(), 1.0, "no boss: 1")
+	var files := TankContent.read_files("ambush_15")
+	files["mission"]["segments"][5]["boss"]["hp_mult"] = 0.4
+	assert_false(
+		TankContent.from_dicts(files, "ambush_15").ok(), "a cut of more than half is refused"
+	)
+
+
 func test_the_boss_starts_in_phase_1_at_full_health_scaled_by_the_tank() -> void:
 	for crew in [2, 3, 4]:
 		var rig := _rig(crew)
 		var b := rig.state.boss
 		assert_eq(b.phase, TankIds.BOSS_PHASE_1)
 		var def := rig.content.boss_def()
-		var scale := rig.content.enemy_scale(TankIds.tank_for_crew(crew))
+		var scale := (
+			rig.content.enemy_scale(TankIds.tank_for_crew(crew)) * rig.content.boss_hp_mult()
+		)
 		assert_almost_eq(b.bogie_max, float(def["bogie_hp"]) * scale, 0.001)
 		assert_almost_eq(b.turret_max, float(def["turret_hp"]) * scale, 0.001)
 		for hp in b.bogie_hp:
@@ -399,7 +437,7 @@ func test_the_secondary_fires_3_damage_every_5_seconds() -> void:
 
 func test_a_boss_alive_when_the_segment_ends_withdraws() -> void:
 	var rig := _rig(2)
-	rig.enter(11, 0.0, Wl.ENDED_MAX_S)
+	rig.enter(12, 0.0, Wl.ENDED_MAX_S)
 	assert_eq(rig.state.boss.phase, TankIds.BOSS_WITHDRAWN)
 	assert_eq(rig.of_type("boss_phase").back()["p"], TankIds.BOSS_WITHDRAWN)
 	assert_eq(rig.state.outcome, TankIds.OUTCOME_WITHDRAWN)
@@ -414,7 +452,7 @@ func test_a_dead_boss_stays_dead_through_the_cooldown_and_the_outcome_is_victory
 	for i in 3:
 		TankShells.damage_boss(rig.state, aux, i, 1000.0, 0, rig.events)
 	TankShells.damage_boss(rig.state, aux, TankBossState.TURRET_PART, 10000.0, 0, rig.events)
-	rig.enter(11, 0.0, Wl.ENDED_END_PHASE)
+	rig.enter(12, 0.0, Wl.ENDED_END_PHASE)
 	assert_eq(rig.state.boss.phase, TankIds.BOSS_DEAD)
 	assert_eq(rig.state.outcome, TankIds.OUTCOME_VICTORY)
 	assert_eq(rig.of_type("overrun").size(), 0)
@@ -431,7 +469,9 @@ func test_a_solo_rider_meets_the_behemoth_with_its_bogies_wrecked() -> void:
 	assert_eq(b.bogies_left(), 0)
 	assert_eq(b.phase, TankIds.BOSS_PHASE_2)
 	assert_eq(rig.of_type("boss_phase").back()["p"], TankIds.BOSS_PHASE_2)
-	assert_eq(b.turret_hp, float(rig.content.boss_def()["turret_hp"]))
+	assert_almost_eq(
+		b.turret_hp, float(rig.content.boss_def()["turret_hp"]) * rig.content.boss_hp_mult(), 0.001
+	)
 	var stop := float(rig.content.boss_def()["far"]["stop_m"])
 	assert_eq(b.range_m, stop, "at its stop line")
 	rig.run(10.0)
@@ -451,8 +491,18 @@ func test_difficulty_reaches_the_behemoth() -> void:
 		var row: Dictionary = rig.content.value("enemies", "difficulty.%s" % level, {})
 		var def := rig.content.boss_def()
 		var b := rig.state.boss
-		assert_almost_eq(b.bogie_max, float(def["bogie_hp"]) * float(row["hp"]), 0.001, level)
-		assert_almost_eq(b.turret_max, float(def["turret_hp"]) * float(row["hp"]), 0.001, level)
+		assert_almost_eq(
+			b.bogie_max,
+			float(def["bogie_hp"]) * float(row["hp"]) * rig.content.boss_hp_mult(),
+			0.001,
+			level
+		)
+		assert_almost_eq(
+			b.turret_max,
+			float(def["turret_hp"]) * float(row["hp"]) * rig.content.boss_hp_mult(),
+			0.001,
+			level
+		)
 		b.main_s = 20.0
 		b.secondary_s = 1000.0
 		var longest := 0.0

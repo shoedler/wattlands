@@ -2,8 +2,8 @@ extends GutTest
 ## The one terrain sampler: the grade the rules roll the hull on (TankHullState.grade_pct) and the
 ## grade the director pushes with course_grade come from the same function (TankTerrain).
 
-const DEPOT := 0
-const ADVANCE := 1
+const ROLLOUT := 1
+const ADVANCE := 2
 
 
 func test_grade_at_interpolates_holds_and_handles_empty_profiles() -> void:
@@ -29,10 +29,10 @@ func test_for_segment_clamps_to_the_envelope_and_the_warm_up_range() -> void:
 				assert_eq(g, TankDirector.terrain_grade_pct(c, seg, float(m), warm))
 
 
-## Every tick of a driven Advance and of the depot, the hull's grade is the director's grade at the
+## Every tick of a driven Advance and of the roll-out, the hull's grade is the director's grade at the
 ## distance the tick started from.
 func test_the_hull_rolls_on_the_grade_the_director_pushes() -> void:
-	for seg in [ADVANCE, DEPOT]:
+	for seg in [ADVANCE, ROLLOUT]:
 		var rig := TankRulesRig.new(1)
 		rig.enter(seg, 5.0)
 		var warm: bool = rig.state.seg.kind == Wl.WARMUP

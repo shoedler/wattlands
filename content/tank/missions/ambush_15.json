@@ -1,5 +1,5 @@
 {
-	"_doc": "Ambush (SPEC_TANK 3.8): the short, hard mission. 15 minutes: the 5 minute warm-up depot (BRIEF 4.6.8), about 7 minutes of fights, a 3 minute cool-down. Nominal 300 + 120 + 90 + 60 + 150 + 180 = 900 s; at the phases' min_s 780 s, at their max_s 1010 s. Defaults to Hard (difficulty_default; the host's option overrides it). One stage for the score (score_stages). Owner: rules. Schema: TankContentSchema.validate_mission; format as ashfall_road.json.",
+	"_doc": "Ambush (SPEC_TANK 3.8): the short, hard mission. 15 minutes: the 5 minute warm-up, a 180 s hangar and a 120 s roll-out (BRIEF 4.6.8), about 7 minutes of fights, a 3 minute cool-down. Nominal 300 + 120 + 90 + 60 + 150 + 180 = 900 s; at the phases' min_s 780 s, at their max_s 1010 s. Defaults to Hard (difficulty_default; the host's option overrides it). One stage for the score (score_stages). Owner: rules. Schema: TankContentSchema.validate_mission; format as ashfall_road.json.",
 	"id": "ambush_15",
 	"difficulty_default": "hard",
 	"hull_hp": 90,
@@ -9,20 +9,30 @@
 	"plan_table": "plans",
 	"segments": [
 		{
-			"id": "depot",
-			"type": "depot",
+			"id": "hangar",
+			"type": "hangar",
 			"stage": 0,
 			"kind": "WARMUP",
-			"duration_s": 300,
-			"label": "TANK_PHASE_DEPOT",
-			"name": "TANK_PLACE_DEPOT",
-			"backdrop": "base",
-			"terrain": [[0, 0], [200, 1], [400, 2], [600, 1], [800, 0], [1000, 1.5], [1200, 0.5], [1500, 0]],
+			"duration_s": 180,
+			"label": "TANK_PHASE_HANGAR",
+			"name": "TANK_PLACE_HANGAR",
+			"backdrop": "hangar",
 			"drills": [
-				{"from_s": 0, "to_s": 120, "drill": "drive"},
-				{"from_s": 120, "to_s": 240, "drill": "aim", "targets": 2},
-				{"from_s": 240, "to_s": 300, "drill": "fire"}
+				{"from_s": 0, "to_s": 60, "drill": "drive"},
+				{"from_s": 60, "to_s": 120, "drill": "aim", "targets": 2},
+				{"from_s": 120, "to_s": 170, "drill": "fire"}
 			]
+		},
+		{
+			"id": "rollout",
+			"type": "rollout",
+			"stage": 0,
+			"kind": "WARMUP",
+			"duration_s": 120,
+			"label": "TANK_PHASE_ROLLOUT",
+			"name": "TANK_PLACE_ROLLOUT",
+			"backdrop": "forest",
+			"terrain": [[0, 0], [150, 1], [300, 2], [500, 1], [700, 0], [900, 1.5], [1100, 0.5], [1500, 0]]
 		},
 		{
 			"id": "ambush_advance",
@@ -63,9 +73,9 @@
 			"backdrop": "base",
 			"enemies": [
 				{"enemy": "light", "count": 1, "hold_m": [950]},
-				{"enemy": "heavy", "count": 1, "hold_m": [1400], "min_crew": 2},
 				{"enemy": "medium", "count": 1, "hold_m": [1100], "min_crew": 2},
-				{"enemy": "light", "count": 1, "hold_m": [1050], "min_crew": 2}
+				{"enemy": "light", "count": 1, "hold_m": [1050], "min_crew": 2},
+				{"enemy": "heavy", "count": 1, "hold_m": [1400], "min_crew": 4}
 			],
 			"near": [
 				{"at_s": 20, "enemy": "recon", "count": 1, "min_crew": 3},
@@ -97,7 +107,7 @@
 			"name": "TANK_PLACE_IRON_GATE",
 			"backdrop": "base",
 			"end_hold_s": 7.5,
-			"boss": {"start_left_px": 500},
+			"boss": {"start_left_px": 500, "hp_mult": 0.875},
 			"near": [
 				{"at_s": 30, "enemy": "tankette", "count": 1, "min_crew": 3},
 				{"at_s": 90, "enemy": "recon", "count": 1, "min_crew": 3}

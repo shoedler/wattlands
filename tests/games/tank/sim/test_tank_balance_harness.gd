@@ -23,7 +23,8 @@ func _good(
 		"breakdowns": 0,
 		"segments":
 		[
-			_seg(TankIds.SEG_DEPOT, 0, 300.0),
+			_seg(TankIds.SEG_HANGAR, 0, 180.0),
+			_seg(TankIds.SEG_ROLLOUT, 0, 120.0),
 			_seg(TankIds.SEG_ADVANCE, 1, 200.0),
 			_seg(TankIds.SEG_GUN_LINE, 1, 100.0),
 			_seg(TankIds.SEG_BOSS, 4, 250.0),
@@ -63,7 +64,7 @@ func _good(
 			},
 			{
 				"t": 530.0,
-				"seg": TankIds.SEG_DEPOT,
+				"seg": TankIds.SEG_HANGAR,
 				"shell": TankIds.SHELL_HEAVY,
 				"build_s": 5.0,
 				"grade0_s": 1.0
@@ -83,7 +84,7 @@ func test_the_harness_runs_the_drill_for_every_crew_and_is_deterministic() -> vo
 		)
 		assert_eq(
 			[segs[0]["seg"], segs[1]["seg"], segs[2]["seg"]],
-			[TankIds.SEG_DEPOT, TankIds.SEG_SKIRMISH, TankIds.SEG_CHECKPOINT]
+			[TankIds.SEG_HANGAR, TankIds.SEG_SKIRMISH, TankIds.SEG_CHECKPOINT]
 		)
 		assert_almost_eq(float(segs[0]["dur_s"]), 30.0, 0.1)
 		assert_almost_eq(float(segs[2]["dur_s"]), 30.0, 0.1)
@@ -101,14 +102,16 @@ func test_the_harness_reports_every_ashfall_road_segment_for_crew_3() -> void:
 	var r := TankBalanceHarness.run({"crew": 3, "seed": 1, "compliance": 1.0, "snapshots": false})
 	assert_false(r.has("error"), str(r.get("error", "")))
 	var segs: Array = r["segments"]
-	assert_eq(segs.size(), 11, "11 mission segments")
+	assert_eq(segs.size(), 12, "12 mission segments")
 	var total := 0.0
 	for i in segs.size():
 		var s: Dictionary = segs[i]
 		assert_gt(float(s["dur_s"]), 0.0, "segment %d has a length" % i)
 		total += float(s["dur_s"])
-		if str(s["seg"]) == TankIds.SEG_DEPOT:
-			assert_almost_eq(float(s["dur_s"]), 300.0, 0.1)
+		if str(s["seg"]) == TankIds.SEG_HANGAR:
+			assert_almost_eq(float(s["dur_s"]), 180.0, 0.1)
+		if str(s["seg"]) == TankIds.SEG_ROLLOUT:
+			assert_almost_eq(float(s["dur_s"]), 120.0, 0.1)
 		if str(s["seg"]) == TankIds.SEG_CHECKPOINT:
 			assert_almost_eq(float(s["dur_s"]), 60.0, 0.1)
 	assert_almost_eq(float(r["end_t"]) - total, 1.0, 1.0, "the run stops 1 s into the cool-down")
@@ -135,7 +138,7 @@ func test_the_synthetic_rider_follows_the_band_and_the_target() -> void:
 		clock.advance(tick * Wl.SIM_DT)
 		last = riders.frame(tick)
 	var tm := last.telemetry(1)
-	# The drill's depot is a SIM warm-up: 0.85 x the band centre, 1 s lag settled after 20 s.
+	# The drill's hangar is a SIM warm-up: 0.85 x the band centre, 1 s lag settled after 20 s.
 	assert_eq(tm.mode, Wl.SIM)
 	assert_almost_eq(tm.power_w, 0.85 * 0.5 * (0.76 + 1.05) * ftp, 2.0)
 	assert_almost_eq(tm.ftp_pct, 76.9, 1.0)
@@ -220,7 +223,7 @@ func test_the_report_names_the_difficulty_losses_and_near_threats() -> void:
 			assert_eq(
 				(r["hp_at"] as Array).map(func(h: Dictionary) -> String: return h["seg"]),
 				[
-					TankIds.SEG_DEPOT,
+					TankIds.SEG_HANGAR,
 					TankIds.SEG_SKIRMISH,
 					TankIds.SEG_CHECKPOINT,
 					TankIds.SEG_COOLDOWN
@@ -229,7 +232,7 @@ func test_the_report_names_the_difficulty_losses_and_near_threats() -> void:
 			var one := TankBalanceHarness.line(r)
 			assert_string_contains(one, "crew 2 seed 2 %s" % level)
 			assert_string_contains(one, "losses 0 breakdowns")
-			assert_string_contains(one, "times dep0:30")
+			assert_string_contains(one, "times han0:30")
 
 
 func test_the_kills_near_killed_counts_the_two_near_codes() -> void:
@@ -253,13 +256,13 @@ func test_t1_to_t5_pass_on_a_run_that_meets_them() -> void:
 
 func test_t1_misses_on_a_slow_advance_an_overrun_a_breakdown_or_a_low_grade() -> void:
 	var slow := _good()
-	slow["segments"][1]["dur_s"] = 300.0
+	slow["segments"][2]["dur_s"] = 300.0
 	assert_false(bool(TankBalanceTargets.t1([slow])["ok"]), "an Advance over 280 s")
 	var short := _good()
-	short["segments"][2]["dur_s"] = 50.0
+	short["segments"][3]["dur_s"] = 50.0
 	assert_false(bool(TankBalanceTargets.t1([short])["ok"]), "a gun line under 60 s")
 	var overran := _good()
-	overran["segments"][3]["overran"] = true
+	overran["segments"][4]["overran"] = true
 	assert_false(bool(TankBalanceTargets.t1([overran])["ok"]))
 	var broke := _good()
 	broke["breakdowns"] = 2
@@ -288,7 +291,7 @@ func test_t2_needs_time_above_80_per_stage_and_a_fast_return() -> void:
 	assert_string_contains(str(TankBalanceTargets.t2([_good(1)])["text"]), "skipped")
 
 
-func test_t3_judges_only_heavy_shells_outside_the_depot() -> void:
+func test_t3_judges_only_heavy_shells_outside_the_hangar() -> void:
 	assert_true(bool(TankBalanceTargets.t3([_good()])["ok"]))
 	var fast := _good()
 	fast["shells"][0]["build_s"] = 12.0
@@ -306,7 +309,7 @@ func test_t3_judges_only_heavy_shells_outside_the_depot() -> void:
 
 func test_t1_to_t5_are_normals_targets() -> void:
 	var slow := _good()
-	slow["segments"][1]["dur_s"] = 300.0
+	slow["segments"][2]["dur_s"] = 300.0
 	slow["difficulty"] = TankIds.DIFF_HARD
 	assert_string_contains(str(TankBalanceTargets.t1([slow])["text"]), "skipped")
 	slow["difficulty"] = TankIds.DIFF_NORMAL

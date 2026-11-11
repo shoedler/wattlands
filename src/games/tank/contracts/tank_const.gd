@@ -27,6 +27,10 @@ const HUD_BOTTOM_Y := 300
 ## (PhaseState.plan_elapsed_s < FIRST_S), brief 2.3, 2.7.
 const FIRST_S := 300.0
 
+## The Hangar's last seconds are the countdown: the ceiling bars go dark, the red beacons turn, the
+## hull is lowered off its stand and the hangar door opens (TankSegments.hangar_countdown_s).
+const HANGAR_COUNTDOWN_S := 10.0
+
 ## Steam "building" is >= 90% FTP (brief 2.3). The SIM mock rider rides exactly 90% FTP with no
 ## published band (GAME_SDK 20), and power arrives in whole watts, so the comparison keeps a small
 ## tolerance (ADR "Steam 90% float tolerance"): building when

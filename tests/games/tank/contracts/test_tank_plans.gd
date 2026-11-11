@@ -8,7 +8,8 @@ const F := preload("res://tests/games/tank/tank_fakes.gd")
 
 ## Brief 2.3 segment table (and 2.9 for the drill): [type, kind, duration_s, min_s, max_s].
 const ASHFALL := [
-	["depot", "WARMUP", 300.0, 0.0, 0.0],
+	["hangar", "WARMUP", 180.0, 0.0, 0.0],
+	["rollout", "WARMUP", 120.0, 0.0, 0.0],
 	["advance", "WORK", 180.0, 90.0, 300.0],
 	["gun_line", "WORK", 120.0, 60.0, 180.0],
 	["checkpoint", "RECOVERY", 60.0, 0.0, 0.0],
@@ -21,13 +22,14 @@ const ASHFALL := [
 	["boss", "WORK", 240.0, 120.0, 360.0],
 ]
 const DRILL := [
-	["depot", "WARMUP", 30.0, 0.0, 0.0],
+	["hangar", "WARMUP", 30.0, 0.0, 0.0],
 	["skirmish", "WARMUP", 70.0, 0.0, 0.0],
 	["checkpoint", "RECOVERY", 30.0, 0.0, 0.0],
 ]
 ## v4: SPEC_TANK 3.8.
 const AMBUSH := [
-	["depot", "WARMUP", 300.0, 0.0, 0.0],
+	["hangar", "WARMUP", 180.0, 0.0, 0.0],
+	["rollout", "WARMUP", 120.0, 0.0, 0.0],
 	["advance", "WORK", 120.0, 80.0, 160.0],
 	["gun_line", "WORK", 90.0, 60.0, 120.0],
 	["checkpoint", "RECOVERY", 60.0, 0.0, 0.0],
@@ -188,7 +190,7 @@ func test_ambush_15_is_fifteen_minutes_and_six_laps() -> void:
 				if plan.phase(i).lap:
 					laps += 1
 			assert_eq(
-				laps, 5, "crew %d: five segments; the platform's cool-down is the sixth" % crew
+				laps, 6, "crew %d: six segments; the platform's cool-down is the seventh" % crew
 			)
 			assert_eq(plan.nominal_length_s(), 720.0, "crew %d: 900 s with the cool-down" % crew)
 
@@ -243,7 +245,7 @@ func test_bank_targets_stay_inside_the_phase_range() -> void:
 	var drill := _content("drill")
 	var skirmish := TankPlanBuilder.phase_for(drill, drill.segment(1), TankIds.ENGINE_DYNAMO, 1)
 	var ashfall := _content()
-	var advance := TankPlanBuilder.phase_for(ashfall, ashfall.segment(1), TankIds.ENGINE_DYNAMO, 1)
+	var advance := TankPlanBuilder.phase_for(ashfall, ashfall.segment(2), TankIds.ENGINE_DYNAMO, 2)
 	for bank in range(-10, 111, 5):
 		var b := float(bank)
 		var s := TankDirector.bank_target_pct(drill, b, skirmish)
@@ -317,16 +319,26 @@ func test_the_validators_hold_the_safety_envelope() -> void:
 		["stations", "plans.checkpoint.target_pct", 55, "plans.checkpoint: must be exactly ERG 50"],
 		["stations", "drill_plans.checkpoint.mode", "SIM", "drill_plans.checkpoint: must be"],
 		["stations", "drill_plans.dynamo.skirmish.range_pct", [55, 70], "skirmish: warm-up ERG"],
-		["stations", "plans.dynamo.depot.ramp_to_pct", 70, "plans.dynamo.depot: warm-up ERG"],
+		["tanks", "steam.below_band_cap_pct", 95, "steam.below_band_cap_pct: at most 90"],
+		["stations", "plans.dynamo.hangar.ramp_to_pct", 70, "plans.dynamo.hangar: warm-up ERG"],
+		["stations", "plans.dynamo.rollout.ramp_to_pct", 70, "plans.dynamo.rollout: warm-up ERG"],
+		["stations", "plans.arc.rollout.target_pct", 66, "plans.arc.rollout: warm-up ERG"],
 		["stations", "plans.dynamo.boss.range_pct", [55, 105], "plans.dynamo.boss: every ERG"],
 		["stations", "plans.steam.gun_line", null, "plans.steam.gun_line: missing"],
 		["stations", "drill_plans.diesel.skirmish", null, "drill_plans.diesel.skirmish: missing"],
 		["stations", "rotation", {}, "stations.json rotation: retired in v3"],
 		["stations", "start_engines.landship", ["diesel", "dynamo", "dynamo", "arc"], "distinct"],
 		["tanks", "in_band.sim_ftp_pct", [76, 110], "in_band.sim_ftp_pct: must lie in 50..105"],
-		["mission", "segments.2.max_s", 200, "segments[2] max_s: a 90% gun line"],
-		["mission", "segments.1.terrain.2", [300, 7], "segments[1] terrain: grade"],
-		["mission", "segments.0.terrain.2", [400, 2.5], "segments[0] terrain: grade"],
+		["mission", "segments.3.max_s", 200, "segments[3] max_s: a 90% gun line"],
+		["mission", "segments.2.terrain.2", [300, 7], "segments[2] terrain: grade"],
+		["mission", "segments.1.terrain.2", [300, 2.5], "segments[1] terrain: grade"],
+		[
+			"mission",
+			"segments.0.drills.2.to_s",
+			175,
+			"segments[0] drills: a drill ends before the countdown"
+		],
+		["mission", "segments.0.duration_s", 15, "segments[0]: a hangar lasts at least 20 s"],
 	]
 	for case: Array in cases:
 		var f := TankContent.read_files("ashfall_road")

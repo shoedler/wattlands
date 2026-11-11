@@ -3,11 +3,12 @@ extends GutTest
 ## rack (a shell per steam.full_j of P_eff in band, the rack of 3, Overpressure, the light latch)
 ## and the Gun chambering from the rack. (v3 retired the gearbox and the gunner's hoist.)
 
-const DEPOT := 0
-const ADVANCE := 1
-const GUN_LINE := 2
-const CHECKPOINT := 3
-const STAGE2_ADVANCE := 4
+const HANGAR := 0
+const ROLLOUT := 1
+const ADVANCE := 2
+const GUN_LINE := 3
+const CHECKPOINT := 4
+const STAGE2_ADVANCE := 5
 
 
 ## A mission patch: segment `index` gets `props` merged in.
@@ -106,7 +107,7 @@ func test_elevation_slows_linearly_to_2_degrees_a_second_at_an_empty_bank() -> v
 
 func test_the_depot_fills_the_bank_on_a_script() -> void:
 	var rig := TankRulesRig.new(2)
-	rig.enter(DEPOT, 5.0)
+	rig.enter(HANGAR, 5.0)
 	rig.dynamo().bank = 10.0
 	rig.run(0.2)
 	assert_eq(rig.dynamo().bank, 100.0)
@@ -178,14 +179,100 @@ func test_the_rack_fills_to_three_and_then_the_loader_idles() -> void:
 	assert_gt(st.pressure_pct, 0.0)
 
 
-func test_only_p_eff_in_band_loads_and_the_reserve_loads_at_60_w() -> void:
+func test_below_the_window_the_loader_trickles_at_a_fifth_of_p_eff() -> void:
+	var rig := _loader()
+	var st := rig.steam()
+	var full_j := rig.content.num("tanks", "steam.full_j")
+	assert_eq(rig.content.num("tanks", "steam.below_band_gain"), 0.2, "a fifth of p_eff")
+	rig.power_w[3] = 0.8 * 240.0
+	rig.run(5.0)
+	assert_false(st.in_band, "under 90% FTP: still out of band, so no score, no glow")
+	assert_gt(st.p_eff_w, 0.0)
+	var want := 0.2 * st.p_eff_w * 5.0 / full_j * 100.0
+	assert_lt(want, rig.content.num("tanks", "steam.below_band_cap_pct"), "short of the cap")
+	assert_gt(st.pressure_pct, 0.0, "the shell creeps on")
+	assert_almost_eq(st.pressure_pct, want, want * 0.1, "20% of p_eff x 5 s")
+
+
+func test_a_gain_of_zero_is_the_old_rule_and_a_coasting_loader_gains_nothing() -> void:
+	var off := TankRulesRig.new(
+		3,
+		"ashfall_road",
+		7,
+		func(files: Dictionary) -> void:
+			(files["tanks"]["steam"] as Dictionary)["below_band_gain"] = 0.0
+			(files["mission"]["segments"][1] as Dictionary).merge(
+				{"encounters": [], "obstacles": []}, true
+			)
+	)
+	off.enter(ADVANCE, 5.0)
+	off.set_rack(0)
+	off.steam().pressure_pct = 0.0
+	off.power_w[3] = 0.8 * 240.0
+	off.run(10.0)
+	assert_eq(off.steam().pressure_pct, 0.0, "nothing loads under band")
+	var rig := _loader()
+	rig.power_w[3] = 0.0
+	rig.run(10.0)
+	assert_eq(rig.steam().pressure_pct, 0.0, "no power, no trickle")
+
+
+func test_the_trickle_stops_at_the_cap_and_never_stows_opens_a_window_or_fills_the_rack() -> void:
+	var rig := _loader()
+	var st := rig.steam()
+	var cap := rig.content.num("tanks", "steam.below_band_cap_pct")
+	assert_between(cap, 80.0, 90.0, "about 85-90% of a shell")
+	rig.power_w[3] = 0.8 * 240.0
+	rig.run(300.0)
+	assert_almost_eq(st.pressure_pct, cap, 0.01, "it climbs to the cap and holds there")
+	assert_eq(st.rack, 0, "no shell is stowed out of band")
+	assert_eq(st.window_s, 0.0, "no surge window opens")
+	assert_eq(rig.of_type("latch").size(), 0)
+	assert_false(st.in_band)
+	# In band it finishes the shell from there, with in-band joules only.
+	rig.power_w[3] = 240.0
+	rig.run(3.0)
+	assert_eq(rig.of_type("latch").size(), 1, "the shell stows in band")
+
+
+## A rider held under the band must never be loaded harder for the trickle's progress: the boiler's grade follows
+## only the pressure earned in band, so it never rises, in the warm-up and after.
+func test_a_rider_below_the_band_gets_a_boiler_grade_that_never_rises() -> void:
+	for index: int in [HANGAR, ADVANCE]:
+		var rig := _loader(0, index, 5.0)
+		var st := rig.steam()
+		st.pressure_pct = 30.0
+		rig.power_w[3] = 0.8 * 240.0
+		rig.cadence[3] = 40.0
+		var warm := index == HANGAR
+		var last := TankDirector.boiler_grade_pct(rig.content, st.grade_pressure_pct(), warm, false)
+		var peak_pressure := st.pressure_pct
+		for _i in roundi(120.0 / Wl.SIM_DT):
+			rig.step()
+			var g := TankDirector.boiler_grade_pct(
+				rig.content, st.grade_pressure_pct(), warm, false
+			)
+			assert_lte(g, last + 1e-9, "the grade never rises under the band (index %d)" % index)
+			last = g
+			peak_pressure = maxf(peak_pressure, st.pressure_pct)
+		assert_false(st.in_band, "held below the band (index %d)" % index)
+		assert_gt(peak_pressure, 31.0, "the trickle did add progress (index %d)" % index)
+		assert_almost_eq(
+			TankDirector.boiler_grade_pct(rig.content, st.grade_pressure_pct(), warm, false),
+			TankDirector.boiler_grade_pct(rig.content, 30.0, warm, false),
+			1e-6,
+			"the grade is the one of the 30% it started with"
+		)
+
+
+func test_only_p_eff_in_band_loads_in_full_and_the_reserve_loads_at_60_w() -> void:
 	var rig := _loader()
 	var st := rig.steam()
 	rig.power_w[3] = 0.8 * 240.0
 	rig.run(5.0)
 	assert_false(st.in_band, "under 90% FTP")
-	assert_eq(st.pressure_pct, 0.0, "nothing loads under band")
 	rig.power_w.erase(3)
+	st.pressure_pct = 0.0
 	rig.afk[3] = true
 	rig.run(10.0)
 	var want := 600.0 / rig.content.num("tanks", "steam.full_j") * 100.0
@@ -239,7 +326,7 @@ func test_the_window_opens_on_a_stowed_shell_past_300_s_only() -> void:
 	early.steam().pressure_pct = 99.9
 	early.run(0.3)
 	assert_eq(early.steam().window_s, 0.0, "plan_elapsed_s < 300")
-	var depot := _loader(1, DEPOT, 100.0)
+	var depot := _loader(1, HANGAR, 100.0)
 	depot.steam().pressure_pct = 99.9
 	depot.run(0.3)
 	assert_eq(depot.steam().rack, 2)
@@ -280,6 +367,47 @@ func test_overpressure_takes_the_stowed_shell_back_and_builds_it_to_150() -> voi
 	assert_eq(TankAux.of(rig.state).rack_types.back(), TankIds.SHELL_OVER)
 	assert_eq(rig.of_type("latch").back()["sh"], TankIds.SHELL_OVER)
 	assert_gte(st.pressure_pct, carry, "the next shell's progress came back and builds on")
+
+
+## The trickle share of the next shell is carried through an Overpressure as trickle: when the rider dropped below the
+## band after the stow and then surged, the boiler's grade after the Overpressure is the one of the in-band share only.
+func test_the_trickle_share_survives_an_overpressure_and_never_becomes_graded_pressure() -> void:
+	var rig := _over_rig()
+	var st := rig.steam()
+	var aux := TankAux.of(rig.state)
+	rig.power_w[3] = 0.8 * 240.0
+	rig.run(2.0)
+	assert_gt(st.window_s, 0.0, "the window is still open")
+	assert_false(st.in_band)
+	assert_gt(st.trickle_pct, 1.0, "the trickle accrued below the band, inside the window")
+	var trickle := st.trickle_pct
+	var graded := st.grade_pressure_pct()
+	rig.send(3, {"k": "over", "via": "surge"})
+	rig.run(0.05)
+	assert_true(st.over)
+	assert_eq(st.trickle_pct, 0.0, "nothing below the band counts while the shell is overpressured")
+	assert_almost_eq(
+		aux.carry_trickle_pct, trickle, 0.5, "the trickle share is set aside with the shell"
+	)
+	rig.power_w[3] = 360.0
+	for _i in roundi(60.0 / Wl.SIM_DT):
+		rig.step()
+		if not st.over:
+			break
+	assert_false(st.over, "the Overpressure ended")
+	assert_almost_eq(st.trickle_pct, trickle, 0.5, "the trickle share came back as trickle")
+	assert_lte(
+		st.grade_pressure_pct(),
+		graded + 1.2,
+		"at most one tick of in-band load on top of the graded share"
+	)
+	assert_lte(
+		TankDirector.boiler_grade_pct(rig.content, st.grade_pressure_pct(), false, false),
+		TankDirector.boiler_grade_pct(rig.content, graded + 1.2, false, false) + 1e-9,
+		"the boiler grade is the in-band share's, never above it"
+	)
+	assert_eq(aux.carry_trickle_pct, 0.0)
+	assert_eq(aux.carry_pct, 0.0)
 
 
 func test_overpressure_bleeds_without_the_sprint_and_ends_heavy_after_30_s() -> void:
@@ -393,13 +521,13 @@ func test_a_shot_starts_the_next_chambering_and_an_empty_rack_chambers_nothing()
 ## v3 solo balance (tanks.json steam.checkpoint_rack_by_crew [3, 0, 0, 0]): a solo rider's rack is
 ## restocked to 3 at each checkpoint; a crew loads its own.
 func test_a_solo_riders_rack_is_restocked_at_each_checkpoint() -> void:
-	var solo := _quiet(1, 2, 5.0)
+	var solo := _quiet(1, GUN_LINE, 5.0)
 	solo.set_rack(0)
-	solo.enter(3, 0.0)
+	solo.enter(CHECKPOINT, 0.0)
 	solo.run(0.1)
 	assert_eq(solo.steam().rack, TankConst.RACK_MAX)
-	var crew := _quiet(2, 2, 5.0)
+	var crew := _quiet(2, GUN_LINE, 5.0)
 	crew.set_rack(1)
-	crew.enter(3, 0.0)
+	crew.enter(CHECKPOINT, 0.0)
 	crew.run(0.1)
 	assert_eq(crew.steam().rack, 1, "crews 2-4 load their own")

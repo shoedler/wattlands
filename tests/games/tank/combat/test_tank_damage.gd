@@ -2,7 +2,7 @@ extends GutTest
 ## The damage table (brief 2.4 Gun): shell damage, armour classes, splash, and HP and counts scaled
 ## by the tank.
 
-const ADVANCE := 1
+const ADVANCE := 2
 
 
 func _rig(crew: int = 3) -> TankRulesRig:

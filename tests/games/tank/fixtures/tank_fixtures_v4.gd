@@ -23,9 +23,9 @@ const NAMES: Array[String] = [
 	"cap_v4",
 ]
 ## Mission segment indexes in ashfall_road (TankFixtures' numbers).
-const SEG_ADVANCE_2 := 4
-const SEG_HOLD_2 := 5
-const SEG_BOSS := 10
+const SEG_ADVANCE_2 := 5
+const SEG_HOLD_2 := 6
+const SEG_BOSS := 11
 ## The far frame's numbers (tanks.json gun.far) when a state has no content.
 const V0 := 560.0
 const G := 70.0
@@ -228,7 +228,7 @@ static func _boss_far(crew: int) -> TankState:
 	s.hull.elev_deg = 7.0
 	var c := s.content
 	var def := c.boss_def()
-	var scale := c.enemy_scale(s.hull.tank)
+	var scale := c.enemy_scale(s.hull.tank) * c.boss_hp_mult()
 	var bogie_max := float(def["bogie_hp"]) * scale
 	s.boss.phase = TankIds.BOSS_PHASE_1
 	s.boss.range_m = 1100.0

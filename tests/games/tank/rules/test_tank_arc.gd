@@ -5,7 +5,7 @@ extends GutTest
 ## lights dim), the searchlight load (duty: an enemy in range) written each tick, and its plans
 ## (brief 2.3 table and BRIEF 4.6).
 
-const ADVANCE := 1
+const ADVANCE := 2
 
 
 func _rig() -> TankRulesRig:
@@ -99,8 +99,10 @@ func test_the_arc_plans_match_the_brief() -> void:
 		assert_eq(ph.mode, Wl.ERG, "the arc rider always rides ERG (phase %d)" % i)
 		var seg := str(ph.meta["seg"])
 		match seg:
-			TankIds.SEG_DEPOT:
-				assert_eq([ph.target_pct, ph.ramp_to_pct], [50.0, 65.0])
+			TankIds.SEG_HANGAR:
+				assert_eq([ph.target_pct, ph.ramp_to_pct], [50.0, 59.0])
+			TankIds.SEG_ROLLOUT:
+				assert_eq([ph.target_pct, ph.ramp_to_pct], [59.0, 65.0])
 			TankIds.SEG_CHECKPOINT:
 				assert_eq(ph.target_pct, 50.0)
 			_:

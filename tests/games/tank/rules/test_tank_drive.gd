@@ -2,8 +2,8 @@ extends GutTest
 ## The tracks (brief 2.4 Drive): the speed model on the driver's P_eff, the world scroll, obstacles,
 ## the sprint rule, evasive, the berm, breakdown and repair (v2: no Ram, brief 2.4).
 
-const ADVANCE := 1
-const GUN_LINE := 2
+const ADVANCE := 2
+const GUN_LINE := 3
 
 
 ## A mission patch: segment `index` gets `props` merged in (for example an empty encounter list).
@@ -66,7 +66,7 @@ func test_the_drive_uses_the_mass_of_the_rider_on_the_diesel() -> void:
 
 func test_the_tank_holds_in_gun_lines_checkpoints_and_the_boss_and_in_a_breakdown() -> void:
 	var rig := TankRulesRig.new(1)
-	for index in [2, 3, 10]:
+	for index in [3, 4, 11]:
 		rig.enter(index, 3.0)
 		rig.run(5.0)
 		assert_eq(rig.hull().speed_mps, 0.0, "segment %d" % index)
@@ -286,7 +286,7 @@ func test_the_berm_clears_when_the_segment_ends() -> void:
 	var rig := _gun_line_rig(2)
 	rig.run(10.0)
 	assert_gt(rig.hull().berm_hp, 0.0)
-	rig.enter(3, 0.0)
+	rig.enter(4, 0.0)
 	assert_eq(rig.hull().berm_hp, 0.0)
 
 

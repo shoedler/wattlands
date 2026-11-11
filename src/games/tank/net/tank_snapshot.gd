@@ -368,7 +368,7 @@ static func _outcome(state: TankState, c: TankContent) -> String:
 static func _derive_maxima(state: TankState, c: TankContent) -> void:
 	var scale := c.enemy_scale(state.hull.tank)
 	var boss := c.boss_def()
-	var hp_mult := TankDifficulty.mult(state, "hp")
+	var hp_mult := TankDifficulty.mult(state, "hp") * c.boss_hp_mult()
 	state.boss.bogie_max = float(boss.get("bogie_hp", state.boss.bogie_max)) * scale * hp_mult
 	state.boss.turret_max = float(boss.get("turret_hp", state.boss.turret_max)) * scale * hp_mult
 	for en in state.enemies:

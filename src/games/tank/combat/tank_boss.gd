@@ -16,7 +16,9 @@ static func start(state: TankState, aux: TankAux, events: Array[Dictionary]) -> 
 	var c := state.content
 	var def := c.boss_def()
 	var b := state.boss
-	var scale := c.enemy_scale(state.hull.tank) * TankDifficulty.mult(state, "hp")
+	var scale := (
+		c.enemy_scale(state.hull.tank) * TankDifficulty.mult(state, "hp") * c.boss_hp_mult()
+	)
 	var far: Dictionary = def.get("far", {})
 	b.bogie_max = float(def.get("bogie_hp", 100.0)) * scale
 	b.turret_max = float(def.get("turret_hp", 300.0)) * scale

@@ -2,7 +2,7 @@ extends GutTest
 ## The Repairs seat (SPEC_TANK 3.6): rebuilds the hull per kJ of P_eff in band, only below the hull's
 ## maximum, at a difficulty-dependent rate; a rescue, an empty seat and a tow stop it.
 
-const ADVANCE := 1
+const ADVANCE := 2
 
 
 ## Rider 1 on Repairs, 130 W P_eff, the plan's ERG in band, no enemies, the Drive seat empty.

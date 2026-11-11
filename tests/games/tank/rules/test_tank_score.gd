@@ -162,8 +162,11 @@ func test_work_time_and_band_time_count_only_in_work_phases() -> void:
 	var rig := TankRulesRig.new(1)
 	rig.enter(0, 10.0)
 	rig.run(20.0)
-	assert_eq(rig.rider().work_s, 0.0, "the depot is a warm-up")
-	rig.enter(1, 5.0)
+	assert_eq(rig.rider().work_s, 0.0, "the hangar is a warm-up")
+	rig.enter(1, 10.0)
+	rig.run(20.0)
+	assert_eq(rig.rider().work_s, 0.0, "so is the roll-out")
+	rig.enter(2, 5.0)
 	rig.no_fire = true
 	rig.run(40.0)
 	assert_almost_eq(rig.rider().work_s, 40.05, 0.1)
@@ -172,7 +175,7 @@ func test_work_time_and_band_time_count_only_in_work_phases() -> void:
 	rig.run(10.0)
 	assert_almost_eq(rig.rider().work_s, 50.05, 0.1)
 	assert_almost_eq(rig.rider().band_s, 40.05, 0.15, "50% FTP is out of band")
-	rig.enter(3, 0.0)
+	rig.enter(4, 0.0)
 	var w := rig.rider().work_s
 	rig.run(10.0)
 	assert_eq(rig.rider().work_s, w, "checkpoints are recovery")
@@ -182,9 +185,9 @@ func test_work_time_and_band_time_count_only_in_work_phases() -> void:
 func test_time_per_engine_follows_the_seat() -> void:
 	var rig := TankRulesRig.new(2)
 	rig.no_fire = true
-	rig.enter(1, 0.0)
+	rig.enter(2, 0.0)
 	rig.run(10.0)
-	rig.enter(4, 0.0)
+	rig.enter(5, 0.0)
 	rig.run(10.0)
 	var r0 := rig.rider(1)
 	assert_almost_eq(r0.engine_s[0], 20.1, 0.2, "diesel in stages 1 and 2")
@@ -199,7 +202,7 @@ func test_time_per_engine_follows_the_seat() -> void:
 
 func test_the_per_rider_shell_counters_by_type() -> void:
 	var rig := TankRulesRig.new(2)
-	rig.enter(3, 5.0)
+	rig.enter(4, 5.0)
 	var g := rig.peer_of(TankIds.ENGINE_DYNAMO)
 	rig.hull().aim_pause_s = 99.0
 	for t in [TankIds.SHELL_LIGHT, TankIds.SHELL_HEAVY, TankIds.SHELL_HEAVY, TankIds.SHELL_OVER]:

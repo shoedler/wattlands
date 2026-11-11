@@ -56,7 +56,7 @@ func test_plans_share_every_boundary_and_keep_the_start_seats() -> void:
 		var plans := g.build_effort_plans()
 		assert_eq(plans.size(), crew)
 		var first: EffortPlan = plans[1]
-		assert_eq(first.size(), 11, "depot, 3 x (advance, gun line, checkpoint), boss")
+		assert_eq(first.size(), 12, "hangar, roll-out, 3 x (advance, gun line, checkpoint), boss")
 		for peer: int in plans:
 			var plan: EffortPlan = plans[peer]
 			for i in plan.size():
@@ -84,23 +84,28 @@ func test_plans_share_every_boundary_and_keep_the_start_seats() -> void:
 		for peer: int in rows:
 			var plan: EffortPlan = built[peer]
 			assert_eq(
-				plan.phase(0).meta["engine"], rows[peer][0], "crew %d peer %d depot" % [crew, peer]
+				plan.phase(0).meta["engine"], rows[peer][0], "crew %d peer %d hangar" % [crew, peer]
+			)
+			assert_eq(
+				plan.phase(1).meta["engine"],
+				rows[peer][0],
+				"crew %d peer %d roll-out" % [crew, peer]
 			)
 			for stage in 3:
 				for k in 2:
 					assert_eq(
-						plan.phase(1 + 3 * stage + k).meta["engine"],
+						plan.phase(2 + 3 * stage + k).meta["engine"],
 						rows[peer][stage],
 						"crew %d peer %d stage %d" % [crew, peer, stage + 1]
 					)
-			for cp in [3, 6, 9]:
+			for cp in [4, 7, 10]:
 				assert_eq(
 					plan.phase(cp).meta["engine"],
 					plan.phase(cp + 1).meta["engine"],
 					"a checkpoint carries the next segment's engine"
 				)
 			assert_eq(
-				plan.phase(10).meta["engine"], rows[peer][3], "crew %d peer %d boss" % [crew, peer]
+				plan.phase(11).meta["engine"], rows[peer][3], "crew %d peer %d boss" % [crew, peer]
 			)
 
 
@@ -139,7 +144,7 @@ func test_a_full_session_ends_open_phases_together_and_finishes_once() -> void:
 		if str(c["ended_by"]) == Wl.ENDED_END_PHASE or str(c["ended_by"]) == Wl.ENDED_MAX_S:
 			var ph := (clock.plans[c["peer"]] as EffortPlan).phase(int(c["index"]) - 1)
 			assert_true(ph.open_ended, "only open-ended phases end early or at max_s")
-	assert_signal_emit_count(g, "phase_changed", 12, "every segment and the cool-down")
+	assert_signal_emit_count(g, "phase_changed", 13, "every segment and the cool-down")
 	assert_signal_emit_count(g, "finished", 1)
 	var reason: Variant = get_signal_parameters(g, "finished")[0]
 	assert_has([TankIds.OUTCOME_VICTORY, TankIds.OUTCOME_WITHDRAWN], reason)

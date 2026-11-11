@@ -314,7 +314,7 @@ func test_the_strava_tag_and_lines() -> void:
 	var drill: TankGame = autofree(F.make_game(F.make_ctx(1, 0, "drill")))
 	drill.state.seg.seg = TankIds.SEG_COOLDOWN
 	drill.state.outcome = TankIds.OUTCOME_COMPLETE
-	assert_eq(drill.results().ride_tag, "Depot drill - complete")
+	assert_eq(drill.results().ride_tag, "Hangar drill - complete")
 
 
 ## v4: the level and the tanks lost reach the results screen and Strava; the repair stats reach the rows.

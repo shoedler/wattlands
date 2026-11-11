@@ -81,6 +81,10 @@ const TELEGRAPH_PULSE := 30.0
 ## first number, TankEnemyDraw's veil made it a pale ghost for the whole telegraph). The muzzle's glow warns.
 const TELEGRAPH_FLASH := 0.03
 const MAX_WRECKS := 8
+## A far wreck fades over its last WRECK_FADE_S before it leaves the panel, and a sim-time step longer than
+## WRECK_MAX_STEP_S (a jump, not a hitch) is not travel.
+const WRECK_FADE_S := 1.0
+const WRECK_MAX_STEP_S := 10.0
 const WRECK_DIM := 0.25
 const COLD := Color(0.66, 0.82, 1.0)
 const FIRE := Color(1.0, 0.42, 0.12)
@@ -141,6 +145,8 @@ var _base: Node2D = null
 var _base_light: Node2D = null
 var _scrub_layer: Node2D = null
 var _world: Node2D = null
+## The wrecks in their last second, on a layer of their own whose alpha is the lowest fade among them.
+var _wreck_fade: Node2D = null
 var _light: Node2D = null
 var _veil: Node2D = null
 var _mirrored: bool = false
@@ -149,6 +155,9 @@ var _y_off: float = 0.0
 var _seen: Dictionary = {}
 var _boss: Dictionary = {}
 var _smoke_acc: float = 0.0
+## The sim time the wrecks last closed in at (a wreck stands in the world, so the hull's travel brings it
+## nearer, close_wrecks).
+var _close_t: float = -1.0
 
 
 func _init(view: TankView, sd: int) -> void:
@@ -169,6 +178,7 @@ func _init(view: TankView, sd: int) -> void:
 	_base_light = _layer("BaseLight")
 	_scrub_layer = _layer("Scrub")
 	_world = _layer("World")
+	_wreck_fade = _layer("WreckFade")
 	_light = _layer("Light")
 	var add := CanvasItemMaterial.new()
 	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -181,6 +191,7 @@ func _init(view: TankView, sd: int) -> void:
 	_base_light.draw.connect(_draw_base_light)
 	_scrub_layer.draw.connect(_draw_scrub)
 	_world.draw.connect(_draw_world)
+	_wreck_fade.draw.connect(_draw_wreck_fade)
 	_light.draw.connect(_draw_light)
 	_veil.draw.connect(_draw_veil)
 
@@ -204,7 +215,7 @@ func layout(canvas: Vector2, mirrored: bool, y_off: float) -> void:
 	var want := Vector2i(int(far_w), int(canvas.y))
 	if size != want:
 		size = want
-	for l: Node2D in [_base, _base_light, _scrub_layer, _world, _light]:
+	for l: Node2D in [_base, _base_light, _scrub_layer, _world, _wreck_fade, _light]:
 		l.scale = Vector2(-1, 1) if mirrored else Vector2.ONE
 		l.position = Vector2(far_w, 0) if mirrored else Vector2.ZERO
 
@@ -258,6 +269,7 @@ func frame(state: TankState, dt: float) -> void:
 	_track(state, dt)
 	_track_boss(state, dt)
 	_emit(state, dt)
+	close_wrecks(state)
 	fx.step(dt, 0.0)
 	shake = maxf(shake - dt * SHAKE_DECAY, 0.0)
 	var off := Vector2.ZERO
@@ -269,7 +281,11 @@ func frame(state: TankState, dt: float) -> void:
 	veil = move_toward(
 		veil, 1.0 if towed else 0.0, dt / (VEIL_IN_S if towed else TankView.RESTART_FADE_S)
 	)
-	for l: Node2D in [_back, _base, _base_light, _scrub_layer, _world, _light, _veil]:
+	var fading := 1.0
+	for w in wrecks:
+		fading = minf(fading, float(w.get("fade", 1.0)))
+	_wreck_fade.modulate.a = fading
+	for l: Node2D in [_back, _base, _base_light, _scrub_layer, _world, _wreck_fade, _light, _veil]:
 		l.queue_redraw()
 
 
@@ -510,6 +526,8 @@ func on_kill(state: TankState, id: int) -> bool:
 		. append(
 			{
 				"range": float(rec["range"]),
+				"r0": float(rec["range"]),
+				"x0": (rec["foot"] as Vector2).x if rec.has("foot") else NAN,
 				"lane": int(rec["lane"]),
 				"kind": str(rec["kind"]),
 				"t": state.t,
@@ -598,15 +616,49 @@ func wreck_fire(w: Dictionary, t: float) -> float:
 	return clampf(1.0 - (t - float(w["t"])) / TankView.WRECK_BURN_S, 0.0, 1.0)
 
 
+## A wreck's foot: where its enemy stood, then sliding along the panel with the range the hull closes (px_per_m), off
+## the near edge if need be, so it never parks at the panel's edge. One that was never placed (a test's) stands where
+## the map says.
 func _wreck_foot(w: Dictionary) -> Vector2:
 	var half := float(kit.kind(str(w["kind"]))["size"].x) * 0.5
 	var rng := float(w["range"])
-	return Vector2(foot_x(rng, half, far_w), TankFarMap.foot_y(rng, int(w["lane"])))
+	var x := foot_x(rng, half, far_w)
+	var x0 := float(w.get("x0", NAN))
+	if not is_nan(x0):
+		x = roundf(x0 + (rng - float(w["r0"])) * px_per_m())
+	return Vector2(x, TankFarMap.foot_y(rng, int(w["lane"])))
+
+
+## Panel px per metre of range.
+func px_per_m() -> float:
+	return (far_w - 2.0 * TankFarMap.EDGE_PAD) / (TankFarMap.RANGE_FAR_M - TankFarMap.RANGE_NEAR_M)
 
 
 func _wreck_hatch(w: Dictionary) -> Vector2:
 	var r := _rect_of(str(w["kind"]), _wreck_foot(w))
 	return r.position + r.size * Vector2(0.45, 0.25)
+
+
+## A far wreck stands where it fell: the hull's travel since the last call (its ground speed over the sim time
+## that passed) brings it nearer, and one that has come inside RANGE_NEAR_M is behind the panel's near
+## edge, so it goes. Sim time, so a pause or a client's snapshot step moves it exactly as far as the hull went.
+func close_wrecks(state: TankState) -> void:
+	var step_s := state.t - _close_t if _close_t >= 0.0 else 0.0
+	_close_t = state.t
+	if step_s <= 0.0 or step_s > WRECK_MAX_STEP_S or wrecks.is_empty():
+		return
+	var speed := TankSegments.ground_mps(state)
+	var travelled := speed * step_s
+	var keep: Array[Dictionary] = []
+	for w in wrecks:
+		w["range"] = float(w["range"]) - travelled
+		var left := float(w["range"]) - TankFarMap.RANGE_NEAR_M
+		if left < 0.0:
+			continue
+		# It fades into the haze over its last WRECK_FADE_S at the hull's speed, then it is gone: no pop.
+		w["fade"] = clampf(left / (maxf(speed, 0.1) * WRECK_FADE_S), 0.0, 1.0)
+		keep.append(w)
+	wrecks = keep
 
 
 ## Drops wrecks older than TankView.WRECK_GONE_S.
@@ -850,6 +902,7 @@ func _draw_world() -> void:
 		return
 	var state := v.game.state
 	var ci := _world
+	TankHangar.draw_far(ci, self, v.hangar_look)
 	if boss_box.size != Vector2.ZERO:
 		TankEnemyDraw.draw(ci, kit, TankIds.BOSS_ID, boss_foot, boss_pose(state))
 	for row: Dictionary in _depth_order(state):
@@ -865,7 +918,8 @@ func _draw_world() -> void:
 func _depth_order(state: TankState) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for w in wrecks:
-		out.append({"y": _wreck_foot(w).y, "wreck": w})
+		if float(w.get("fade", 1.0)) >= 1.0:
+			out.append({"y": _wreck_foot(w).y, "wreck": w})
 	for e in state.enemies:
 		if feet.has(e.id):
 			out.append({"y": (feet[e.id] as Vector2).y, "enemy": e})
@@ -907,11 +961,21 @@ func _wreck_pose(w: Dictionary, dim: float) -> Dictionary:
 	}
 
 
+## The wrecks inside their last second (close_wrecks), drawn whole on a layer whose alpha fades them out.
+func _draw_wreck_fade() -> void:
+	if v == null or not _ready_to_draw():
+		return
+	for w in wrecks:
+		if float(w.get("fade", 1.0)) < 1.0:
+			_wreck(_wreck_fade, w)
+
+
 func _draw_light() -> void:
 	if v == null or not _ready_to_draw():
 		return
 	var state := v.game.state
 	var ci := _light
+	TankHangar.draw_far_light(ci, self, v.hangar_look)
 	_search_pool(ci, state)
 	var burning := burning_shots(state)
 	for e in state.enemies:
@@ -1032,10 +1096,13 @@ func _boss_light(ci: CanvasItem, state: TankState) -> void:
 func _wreck_fire(ci: CanvasItem, w: Dictionary, t: float) -> void:
 	var k := wreck_fire(w, t)
 	var c := _wreck_hatch(w)
+	var fade := float(w.get("fade", 1.0))
 	if k <= 0.0:
 		if t - float(w["t"]) < TankView.WRECK_BURN_S * 2.0:
-			TankDraw.glow_at(ci, c, 3.0, Color(1.0, 0.35, 0.1, 0.35))
+			TankDraw.glow_at(ci, c, 3.0, Color(1.0, 0.35, 0.1, 0.35 * fade))
 		return
+	if fade < 1.0:
+		k *= fade
 	TankEnemyDraw.draw_light(ci, kit, str(w["kind"]), _wreck_foot(w), _wreck_pose(w, 1.0 - k))
 
 

@@ -25,7 +25,7 @@ function sink() {
 /** The drill's Tank events as the host sends them. */
 function drillEvents() {
   return [
-    { type: 'segment', i: 0, sg: 1, st: 0 },
+    { type: 'segment', i: 0, sg: 9, st: 0 },
     { type: 'segment', i: 1, sg: 6, st: 1 },
     { type: 'shot', s: -1, sh: 5, id: 31, src: 20, e: 1, rng_m: 0 },
     { type: 'shot', s: 0, sh: 1, id: 32, src: 0, e: 0, rng_m: 1400, flight_s: 2.53 },
@@ -152,7 +152,7 @@ test('ranges: a kill of the wrong enemy code, a hit on nothing, a reserved lever
   assert.deepEqual(ec.eventErrors({ type: 'seat', s: 0, from: 1, to: 7 }), [], 'Repairs is seat code 7');
   assert.deepEqual(ec.eventErrors({ type: 'seat', s: 3, from: 5, to: 6 }), []);
   assert.match(ec.eventErrors({ type: 'ram', s: 0, ok: 2, id: 1 }).join(), /ok 2 outside 0\.\.1/);
-  assert.match(ec.eventErrors({ type: 'segment', i: 1, sg: 0, st: 1 }).join(), /sg 0 outside 1\.\.7/);
+  assert.match(ec.eventErrors({ type: 'segment', i: 1, sg: 0, st: 1 }).join(), /sg 0 outside 1\.\.10/);
   assert.deepEqual(ec.eventErrors({ type: 'breakdown' }), []);
   assert.deepEqual(ec.eventErrors({ type: 'rotation', r: [[0, 2], [1, 3], [2, 1]] }), []);
 });
@@ -208,7 +208,7 @@ test('the drill: nothing a WARMUP session forbids', () => {
   assert.equal(ec.checkReport(report({ directives: other })).ok, true, 'a boiler grade is fine');
 });
 
-test('the drill: kills, repairs and the depot', () => {
+test('the drill: kills, repairs and the hangar', () => {
   const four = [...drillEvents(), { type: 'kill', id: 23, e: 1, by: 0, s: 0 }];
   assert.match(errs(report({ host: four, client1: four })), /4 kills, the skirmish has 3 tanks/);
   const twice = drillEvents();
@@ -218,10 +218,10 @@ test('the drill: kills, repairs and the depot', () => {
   assert.match(errs(report({ host: orphan, client1: orphan })), /repaired without a breakdown/);
   const paired = [...drillEvents().slice(0, 6), { type: 'breakdown' }, { type: 'repaired', hp: 40 }, ...drillEvents().slice(6)];
   assert.equal(ec.checkReport(report({ host: paired, client1: paired, client2: paired.slice(5) })).ok, true);
-  const depot = [drillEvents()[0], { type: 'hit', on: 0, id: 0, dmg: 4, sh: 5, b: 0, x: 1 }, ...drillEvents().slice(1)];
-  assert.match(errs(report({ host: depot, client1: depot })), /hit in the depot/);
+  const hangar = [drillEvents()[0], { type: 'hit', on: 0, id: 0, dmg: 4, sh: 5, b: 0, x: 1 }, ...drillEvents().slice(1)];
+  assert.match(errs(report({ host: hangar, client1: hangar })), /hit in the hangar/);
   const latch = [drillEvents()[0], { type: 'latch', s: 2, sh: 1 }, ...drillEvents().slice(1)];
-  assert.equal(ec.checkReport(report({ host: latch, client1: latch, client2: latch.slice(5) })).ok, true, 'a latch in the depot is fine');
+  assert.equal(ec.checkReport(report({ host: latch, client1: latch, client2: latch.slice(5) })).ok, true, 'a latch in the hangar is fine');
 });
 
 test('other content is not held to the drill story', () => {

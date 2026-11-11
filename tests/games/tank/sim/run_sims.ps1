@@ -20,11 +20,11 @@ $timeout = if ($env:TANK_GODOT_TIMEOUT) { $env:TANK_GODOT_TIMEOUT } else { '1800
 New-Item -ItemType Directory -Force $out | Out-Null
 
 $Erg = 'erg:compliance=1.0'
-$DynamoDrop = 'erg+cadence_drop:rpm=30,at_phase=1,after_s=20,at_target_pct=60,for_s=30'
+$DynamoDrop = 'erg+cadence_drop:rpm=30,at_phase=2,after_s=20,at_target_pct=60,for_s=30'
 $Sprinter = 'intervals:on_w=300,off_w=150,on_s=12,off_s=28,rpm=100'
 $S9Sprinter = 'intervals:on_w=300,off_w=150,on_s=20,off_s=17,rpm=100'
-$Stop = 'erg+cadence_drop:rpm=0,at_phase=1,after_s=20,at_target_pct=60,for_s=60'
-$ArcDrop = 'erg+cadence_drop:rpm=30,at_phase=1,at_target_pct=60,for_s=30'
+$Stop = 'erg+cadence_drop:rpm=0,at_phase=2,after_s=20,at_target_pct=60,for_s=60'
+$ArcDrop = 'erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=30'
 $Idle = 'const:w=10,rpm=25'
 # The lobby's difficulty option (v4). Windows PowerShell 5.1 strips bare double quotes from a native argument, so they
 # are written escaped here; the escapes are what reach the child's command line.

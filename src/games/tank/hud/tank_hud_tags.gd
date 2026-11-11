@@ -138,6 +138,7 @@ func refresh() -> void:
 	var g := geom()
 	var h := s.hull
 	m = {"speed": h.speed_mps * 3.6, "rear": g.tank_point("rear"), "ground": g.ground_y()}
+	m["stand"] = TankSegments.on_stand(s)
 	m["body"] = g.tank_rects()
 	m["panels"] = g.panels()
 	m["mirrored"] = g.mirrored()
@@ -222,7 +223,7 @@ func layout() -> Dictionary:
 	var out := {"speed": Rect2(), "posts": [], "warn": [], "shell": Rect2()}
 	var speed := Rect2()
 	if float(m["speed"]) > 0.5:
-		var txt := tx("TANK_HUD_SPEED", [roundi(float(m["speed"]))])
+		var txt := speed_text(m)
 		var under := float(TankHud.anchored(TankHud.LAYOUT["mine"], canvas()).position.y)
 		speed = speed_rect(m["rear"], D.tall_w(txt) + 16.0, bool(m["mirrored"]), body, near, under)
 		out["speed"] = speed
@@ -477,11 +478,18 @@ func paint() -> void:
 	_alpha = 1.0
 
 
+## The speed tag's text: km/h on the road, "tracks 31" while the hull sits on its stand (the tracks turn in the air,
+## nothing goes by).
+func speed_text(model: Dictionary) -> String:
+	var key := "TANK_HUD_SPEED_STAND" if bool(model.get("stand", false)) else "TANK_HUD_SPEED"
+	return tx(key, [roundi(float(model["speed"]))])
+
+
 ## A small riveted plate standing on the road behind the rear track, the HUD's plate style with room
 ## round the text: the speed in the tall face, a drop shadow on the gravel and two iron legs; below
 ## the tracks, clear of the tank (speed_rect).
 func _speed_tag(r: Rect2) -> void:
-	var txt := tx("TANK_HUD_SPEED", [roundi(float(m["speed"]))])
+	var txt := speed_text(m)
 	D.rect(self, Rect2(r.position + Vector2(2, r.size.y), Vector2(r.size.x - 2, 1)), D.SHADOW)
 	# on the road it stands on its legs; over the deck (a short canvas) it has none
 	if r.position.y >= float(m["ground"]) - SPEED_H:

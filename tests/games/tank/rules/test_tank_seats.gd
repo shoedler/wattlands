@@ -4,11 +4,12 @@ extends GutTest
 ## seat event), with no seat lock at a stage change or anywhere else; refusals (a manned seat,
 ## reserve, the cool-down); back and forth; the trainer's switches tracked for TankSeatPlan.follow.
 
-const DEPOT := 0
-const ADVANCE := 1
-const GUN_LINE := 2
-const CHECKPOINT := 3
-const BOSS := 10
+const HANGAR := 0
+const ROLLOUT := 1
+const ADVANCE := 2
+const GUN_LINE := 3
+const CHECKPOINT := 4
+const BOSS := 11
 
 
 static func _quiet(index: int) -> Callable:

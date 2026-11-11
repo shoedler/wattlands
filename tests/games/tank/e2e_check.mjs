@@ -3,7 +3,7 @@
 //
 //   node tests/games/tank/e2e_check.mjs build/e2e/tank/report.json
 //
-// tools/e2e/run.mjs runs it after playing Tank's e2e content, the drill (a 30 s depot, a 70 s
+// tools/e2e/run.mjs runs it after playing Tank's e2e content, the drill (a 30 s hangar, a 70 s
 // skirmish against two light tanks and a medium, a 30 s checkpoint, then the cool-down) with a
 // host and two clients (a crew of 3 on the v3 landship), Autopilot and mock trainers; client2 is killed at about 25 s
 // and rejoins. The harness checks the generic things (same shared events on every peer, final
@@ -13,11 +13,11 @@
 //      client applied an event it does not know and no int travelled as a float or a string;
 //   2. the host and the client that stayed hold the same Tank events in the same order, and the
 //      rejoined client's events are a tail of that sequence;
-//   3. the drill's story: the group's segments come once each, in order (depot, skirmish,
+//   3. the drill's story: the group's segments come once each, in order (hangar, skirmish,
 //      checkpoint, then the cool-down's own event if the rules send one); nothing a WARMUP phase forbids happens (no Ram, dodge
 //      (v2 never emits them), no successful evade (nobody can evade in WARMUP), boss event
 //      or overrun, no haptic directive); no more kills than the skirmish has tanks, none twice;
-//      every repair follows a breakdown; no hit or kill in the depot; no rotation event (v3
+//      every repair follows a breakdown; no hit or kill in the hangar; no rotation event (v3
 //      retired rotation; the name stays reserved); seat moves (v3) carry known seats; no tank loss, restart or
 //      near threat (v4: the drill is a warm-up, so its hull cannot be lost, and it has no recon car or tankette);
 //   4. every peer's final snapshot is a well-formed Tank snapshot (the schema of
@@ -69,10 +69,10 @@ export const INT_FIELDS = {
   splash: ['r', 'sh', 'f'],
 };
 /** Segment codes (TankIds.SEG_CODES). */
-export const SEG = { none: 0, depot: 1, advance: 2, gun_line: 3, checkpoint: 4, boss: 5, skirmish: 6, cooldown: 7 };
+export const SEG = { none: 0, depot: 1, advance: 2, gun_line: 3, checkpoint: 4, boss: 5, skirmish: 6, cooldown: 7, roam: 8, hangar: 9, rollout: 10 };
 /** The drill's group segments in order: index, code, stage (the cool-down's event is optional). */
 export const DRILL_SEGMENTS = [
-  { i: 0, sg: SEG.depot, st: 0 },
+  { i: 0, sg: SEG.hangar, st: 0 },
   { i: 1, sg: SEG.skirmish, st: 1 },
   { i: 2, sg: SEG.checkpoint, st: 1 },
   { i: 3, sg: SEG.cooldown, st: 0 },
@@ -132,7 +132,7 @@ export function eventErrors(e) {
   switch (type) {
     case 'segment':
       inRange('i', e.i, 0, 99);
-      inRange('sg', e.sg, 1, 7);
+      inRange('sg', e.sg, 1, 10);
       inRange('st', e.st, 0, 4);
       break;
     case 'rotation':
@@ -176,7 +176,7 @@ export function eventErrors(e) {
       inRange('hp', e.hp, 1, 1000);
       break;
     case 'overrun':
-      inRange('sg', e.sg, 1, 7);
+      inRange('sg', e.sg, 1, 10);
       inRange('st', e.st, 0, 4);
       break;
     case 'boss_phase':
@@ -197,11 +197,11 @@ export function eventErrors(e) {
       break;
     case 'tank_lost':
       inRange('n', e.n, 1, 99);
-      inRange('sg', e.sg, 1, 8);
+      inRange('sg', e.sg, 1, 10);
       inRange('st', e.st, 0, 4);
       break;
     case 'stage_restart':
-      inRange('sg', e.sg, 1, 8);
+      inRange('sg', e.sg, 1, 10);
       inRange('st', e.st, 0, 4);
       inRange('hp', e.hp, 1, 1000);
       break;
@@ -293,12 +293,12 @@ export function drillErrors(events, { tail = false } = {}) {
       if (fixed > broken && !tail) errs.push('repaired without a breakdown before it');
     }
   }
-  // Nothing is hit or killed in the depot: the drill puts no enemy there. (A shell may latch there:
+  // Nothing is hit or killed in the hangar: the drill puts no enemy there. (A shell may latch there:
   // v3, the Loader stows shells into the ready rack.)
   let seg = tail ? -1 : null;
   for (const e of events) {
     if (e.type === 'segment') seg = e.i;
-    else if (COMBAT.has(e.type) && seg === 0) errs.push(`${e.type} in the depot (no enemies there)`);
+    else if (COMBAT.has(e.type) && seg === 0) errs.push(`${e.type} in the hangar (no enemies there)`);
   }
   return errs;
 }

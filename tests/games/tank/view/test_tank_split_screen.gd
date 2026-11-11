@@ -321,6 +321,79 @@ func test_a_killed_far_enemy_leaves_a_wreck_at_its_range() -> void:
 	assert_false(stray, "never stood here")
 
 
+func test_a_far_wreck_closes_in_with_the_hull_and_drops_out_at_the_near_edge() -> void:
+	var v := _view("far_duel")
+	var s := v.game.state
+	s.hull.speed_mps = 20.0
+	v.far.wrecks.append({"range": 1000.0, "lane": 0, "kind": "medium", "t": s.t})
+	var foot0 := v.far._wreck_foot(v.far.wrecks[0])
+	U.run(v, 60)
+	assert_almost_eq(float(v.far.wrecks[0]["range"]), 980.0, 0.5, "the hull drove 20 m")
+	var foot1 := v.far._wreck_foot(v.far.wrecks[0])
+	assert_lt(foot1.x, foot0.x, "it slides toward the near edge")
+	assert_gt(foot1.y, foot0.y, "and its foot comes down")
+	s.hull.speed_mps = 0.0
+	U.run(v, 60)
+	assert_almost_eq(float(v.far.wrecks[0]["range"]), 980.0, 0.5, "a halted hull leaves it be")
+	s.hull.speed_mps = 100.0
+	U.run(v, 120)
+	assert_almost_eq(float(v.far.wrecks[0]["range"]), 780.0, 1.0, "200 m on, still in view")
+	U.run(v, 60)
+	assert_eq(v.far.wrecks.size(), 0, "past RANGE_NEAR_M it is gone")
+
+
+func test_a_far_wreck_keeps_closing_through_a_long_step_slides_off_and_fades_out() -> void:
+	var v := _view("far_duel")
+	var s := v.game.state
+	s.hull.speed_mps = 10.0
+	v.far.wrecks.append(
+		{"range": 900.0, "lane": 0, "kind": "medium", "t": s.t, "r0": 900.0, "x0": 180.0}
+	)
+	U.run(v, 2)
+	var x0: float = v.far._wreck_foot(v.far.wrecks[0]).x
+	# A hitch or a snapshot gap: 5 s of sim time in one frame still moves it 50 m.
+	s.t += 5.0
+	v.advance(1.0 / 60.0)
+	assert_almost_eq(float(v.far.wrecks[0]["range"]), 850.0, 1.0, "the long step counts")
+	assert_lt(
+		v.far._wreck_foot(v.far.wrecks[0]).x,
+		x0,
+		"it slides toward the near edge, no clamp parks it"
+	)
+	assert_almost_eq(
+		float(v.far.wrecks[0].get("fade", 1.0)), 1.0, 0.001, "far from the edge: whole"
+	)
+	s.t += 9.0
+	v.advance(1.0 / 60.0)
+	s.t += 5.0
+	v.advance(1.0 / 60.0)
+	assert_eq(v.far.wrecks.size(), 1, "10 m outside the near edge is still there")
+	var last_fade := 1.0
+	var gone := false
+	for _i in 120:
+		s.t += 0.05
+		v.advance(1.0 / 60.0)
+		if v.far.wrecks.is_empty():
+			gone = true
+			break
+		var f := float(v.far.wrecks[0].get("fade", 1.0))
+		assert_lte(f, last_fade + 1e-6, "the fade only goes down")
+		assert_almost_eq(v.far._wreck_fade.modulate.a, f, 0.001, "the fade layer carries it")
+		last_fade = f
+	assert_true(gone, "then it is gone")
+	assert_lt(last_fade, 0.5, "faded before it went: no pop")
+
+
+func test_a_far_wreck_does_not_close_in_while_the_hull_sits_on_the_stand() -> void:
+	var v := _view("far_duel")
+	var s := v.game.state
+	s.seg.seg = TankIds.SEG_HANGAR
+	s.hull.speed_mps = 20.0
+	v.far.wrecks.append({"range": 1000.0, "lane": 0, "kind": "medium", "t": s.t})
+	U.run(v, 60)
+	assert_eq(float(v.far.wrecks[0]["range"]), 1000.0, "tracks spinning in the air go nowhere")
+
+
 func test_a_boss_kill_and_hits_stay_in_the_far_panel() -> void:
 	var v := _view("boss_far")
 	var s := v.game.state

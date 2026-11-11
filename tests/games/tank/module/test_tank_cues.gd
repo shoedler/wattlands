@@ -308,11 +308,25 @@ func test_overrun_and_boss_events() -> void:
 	assert_eq(_banners(ctx).size(), 4)
 
 
+func test_the_hangar_and_the_rollout_banner_by_their_own_names() -> void:
+	var s := TankFixtures.state(1)
+	var ctx := _ctx(1, 1, Wl.SOLO)
+	var cues := TankCues.new(ctx)
+	cues.on_event(s, TankEvents.segment(0, TankIds.SEG_HANGAR, 0))
+	cues.on_event(s, TankEvents.segment(1, TankIds.SEG_ROLLOUT, 0))
+	var banners := _banners(ctx)
+	assert_eq(banners.size(), 2)
+	assert_eq(banners[0][2], [ctx.strings.t("TANK_PHASE_HANGAR")])
+	assert_eq(banners[1][2], [ctx.strings.t("TANK_PHASE_ROLLOUT")])
+	assert_eq(ctx.strings.t("TANK_PHASE_HANGAR"), "Hangar")
+	assert_eq(ctx.strings.t("TANK_PHASE_ROLLOUT"), "Roll-out")
+
+
 func test_a_segment_event_banners_the_segments_label() -> void:
 	var s := TankFixtures.state(1)
 	var ctx := _ctx(1, 1, Wl.SOLO)
 	var cues := TankCues.new(ctx)
-	cues.on_event(s, TankEvents.segment(4, TankIds.SEG_ADVANCE, 2))
+	cues.on_event(s, TankEvents.segment(5, TankIds.SEG_ADVANCE, 2))
 	var b: Array = _banners(ctx)[0]
 	assert_eq([b[1], b[4]], ["TANK_BANNER_SEGMENT", 1])
 	assert_eq(b[2], [ctx.strings.t("TANK_PHASE_ADVANCE_2")])
@@ -375,7 +389,7 @@ func test_a_full_session_never_broadcasts_a_toast_or_banner() -> void:
 		assert_eq(c[c.size() - 1], 1, "%s is for the host's own rider (peer 1)" % c[1])
 	var banner_keys := _keys(_banners(ctx))
 	assert_eq(
-		banner_keys.filter(func(k: String) -> bool: return k == "TANK_BANNER_SEGMENT").size(), 11
+		banner_keys.filter(func(k: String) -> bool: return k == "TANK_BANNER_SEGMENT").size(), 12
 	)
 
 

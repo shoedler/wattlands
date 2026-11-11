@@ -432,7 +432,14 @@ static func seat_needs(state: TankState, sit: Dictionary = {}, seg: String = "")
 	if seg == "":
 		seg = state.seg.seg
 	var fight := bool(sit["targets"])
-	var road := [TankIds.SEG_ADVANCE, TankIds.SEG_SKIRMISH, TankIds.SEG_ROAM, TankIds.SEG_DEPOT]
+	var road := [
+		TankIds.SEG_ADVANCE,
+		TankIds.SEG_SKIRMISH,
+		TankIds.SEG_ROAM,
+		TankIds.SEG_DEPOT,
+		TankIds.SEG_HANGAR,
+		TankIds.SEG_ROLLOUT
+	]
 	var drive := 0.5
 	if seg == TankIds.SEG_GUN_LINE:
 		drive = 3.2

@@ -47,7 +47,7 @@ var aim_valid: bool = false
 var aim_target: TankTarget = null
 var aim_elev: float = 0.0
 var aim_facing: int = TankIds.FACE_RIGHT
-## The depot's drills of the current segment ([{from_s, to_s, drill, targets?}]).
+## The hangar's drills of the current segment ([{from_s, to_s, drill, targets?}]).
 var drills: Array = []
 ## The target the rider cycled to by hand stays the auto-aim's target until it falls.
 var manual_target: bool = false
@@ -61,7 +61,7 @@ var over_j: float = 0.0
 ## Seconds an `over` asked for before the shell in progress was stowed still counts: that shell
 ## goes straight back to the boiler when it is stowed (a surge just before the window).
 var over_arm_s: float = 0.0
-## Depot drills already started (the aim drill's wrecks stand).
+## Hangar drills already started (the aim drill's wrecks stand).
 var drill_wrecks: bool = false
 ## The Behemoth's telegraph length at its start (the HUD's countdown pips read telegraph_s).
 var boss_tele_total: float = 0.0
@@ -85,6 +85,8 @@ var off_drive_seg: Dictionary = {}
 var rack_types: Array[int] = []
 ## The Loader's progress on the next shell (pressure %) set aside while an Overpressure builds.
 var carry_pct: float = 0.0
+## The below-band share of carry_pct (the trickle): it comes back as trickle, never as graded pressure.
+var carry_trickle_pct: float = 0.0
 ## The bow guns' elevation now (degrees, up positive; TankBow slews it to the target).
 var bow_deg: float = 0.0
 ## v4: peer -> {"seat": engine}: the human a bot covers while on reserve (TankBots.cover), and the

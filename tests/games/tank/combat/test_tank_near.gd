@@ -2,7 +2,7 @@ extends GutTest
 ## v4: the near threats (TankNear; SPEC_TANK 3.1): the burst from the bushes, pause, dash, the shots,
 ## the flight at flee_px and at flee_after_s, `escaped`, no reward and no penalty.
 
-const CHECKPOINT := 3
+const CHECKPOINT := 4
 
 
 static func _quiet(index: int) -> Callable:
@@ -218,7 +218,7 @@ func test_a_bow_kill_is_scored_at_the_near_kinds_index() -> void:
 func test_near_threats_clear_at_a_segment_change() -> void:
 	var rig := _rig()
 	rig.near(TankIds.ENEMY_RECON, 40.0)
-	rig.enter(4, 1.0)
+	rig.enter(5, 1.0)
 	assert_eq(
 		rig.state.enemies.filter(func(e: TankEnemyState) -> bool: return e.is_near()).size(), 0
 	)

@@ -6,7 +6,7 @@ extends GutTest
 const F := preload("res://tests/games/tank/tank_fakes.gd")
 const U := preload("res://tests/games/tank/view/tank_view_util.gd")
 const FRAME_S := 1.0 / 20.0
-const CHECKPOINT := 3
+const CHECKPOINT := 4
 
 var _kinds: Dictionary = {}
 var _silent_heard: Array[String] = []

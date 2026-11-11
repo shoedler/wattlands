@@ -3,7 +3,7 @@ extends GutTest
 ## shifts and their bounds, the light's retirement, the heavy's back-off, lanes, difficulty, and that
 ## nothing ever stands behind the hull or holds a stationary gun.
 
-const CHECKPOINT := 3
+const CHECKPOINT := 4
 
 
 static func _quiet(index: int) -> Callable:
@@ -279,7 +279,7 @@ func test_accuracy_is_scaled_and_capped_at_095() -> void:
 func test_no_enemy_stands_behind_and_no_gun_is_stationary_in_play() -> void:
 	var rig := TankRulesRig.new(4)
 	rig.no_fire = true
-	rig.enter(1, 1.0)
+	rig.enter(2, 1.0)
 	rig.hull().hp = 1.0e9
 	rig.hull().hp_max = 1.0e9
 	for i in 3000:
@@ -293,7 +293,7 @@ func test_no_enemy_stands_behind_and_no_gun_is_stationary_in_play() -> void:
 				assert_gt(e.x_px, rig.hull().x_px + rig.hull().hull_w, "near: ahead of the front")
 			else:
 				assert_gt(e.range_m, 0.0, "far: a real range")
-	for index in [2, 5, 8]:
+	for index in [3, 6, 9]:
 		rig.enter(index, 1.0)
 		assert_gt(rig.state.enemies.size(), 0)
 		for e in rig.state.enemies:

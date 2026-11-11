@@ -116,7 +116,7 @@ static func rider_rule(state: TankState, ri: TankRiderInput) -> SprintRule:
 
 
 ## The Gun's capacitor bank: charges on its rider's P_eff in band, the stabilizer drains it while an
-## enemy is in range; full in the depot. An empty Gun seat leaves it as it is.
+## enemy is in range; full in the hangar, the roll-out and the depot. An empty Gun seat leaves it as it is.
 static func _dynamo(
 	state: TankState, aux: TankAux, st: TankDynamoState, ri: TankRiderInput, dt: float
 ) -> void:
@@ -126,7 +126,11 @@ static func _dynamo(
 	st.stalled = in_rescue(ri) and not state.all_afk
 	if not manned or state.all_afk or st.stalled:
 		return
-	if state.seg.seg == TankIds.SEG_DEPOT:
+	if (
+		state.seg.seg == TankIds.SEG_DEPOT
+		or state.seg.seg == TankIds.SEG_HANGAR
+		or state.seg.seg == TankIds.SEG_ROLLOUT
+	):
 		st.bank = c.num("tanks", "dynamo.bank_max", 100.0)
 		return
 	var bank := st.bank
@@ -209,7 +213,8 @@ static func _repair(state: TankState, st: TankRepairState, ri: TankRiderInput, d
 ## "Surge to overpressure" window opens for window_s: an `over` intent in it takes that shell back
 ## to the boiler and overpressures it (_overpressure); an `over` up to window_s before the stow
 ## (the surge came first) does the same at the stow. The `latch` intent stows a light shell from
-## light_latch_pct. With the rack full the loader idles (`loaded`: no boiler grade, cadence band
+## light_latch_pct. Below the window the boiler trickles on a share (steam.below_band_gain, 0.2) of
+## P_eff, and in_band stays false. With the rack full the loader idles (`loaded`: no boiler grade, cadence band
 ## 50). Pressure holds in checkpoints and the cool-down. An empty Loader seat loads nothing.
 static func _steam(
 	state: TankState,
@@ -260,8 +265,12 @@ static func _steam(
 		return
 	if st.in_band or st.reserve:
 		st.pressure_pct += st.p_eff_w * dt / c.num("tanks", "steam.full_j", 1750.0) * 100.0
+	elif st.slot >= 0:
+		_trickle(c, st, dt)
+	st.trickle_pct = minf(st.trickle_pct, st.pressure_pct)
 	if st.pressure_pct >= 100.0:
 		st.pressure_pct = 0.0
+		st.trickle_pct = 0.0
 		_stow(aux, st, ri.slot, TankIds.SHELL_HEAVY, events)
 		var window := c.num("tanks", "steam.window_s", 5.0)
 		if able and aux.over_arm_s > 0.0 and not ri.in_warmup():
@@ -270,6 +279,21 @@ static func _steam(
 		elif able and window > 0.0 and not ri.in_warmup():
 			st.window_s = window
 	st.load_t = clampf(st.pressure_pct / 100.0, 0.0, 1.0)
+
+
+## Below the window the boiler still creeps on: steam.below_band_gain of P_eff, and never past
+## steam.below_band_cap_pct, so a shell is always finished with in-band joules: the trickle never stows, never
+## fills the rack ahead of an in-band Overpressure and never opens a surge window. in_band stays false (the score
+## and the glow do not change), and the boiler's grade ignores what the trickle added (TankSteamState).
+static func _trickle(c: TankContent, st: TankSteamState, dt: float) -> void:
+	var cap := c.num("tanks", "steam.below_band_cap_pct", 0.0)
+	if st.pressure_pct >= cap:
+		return
+	var gain := c.num("tanks", "steam.below_band_gain", 0.0)
+	var add := gain * st.p_eff_w * dt / c.num("tanks", "steam.full_j", 1750.0) * 100.0
+	add = minf(add, cap - st.pressure_pct)
+	st.pressure_pct += add
+	st.trickle_pct += add
 
 
 ## A shell of `shell` goes into the ready rack (the latch event: the view's loader stows it).
@@ -288,7 +312,9 @@ static func _start_over(state: TankState, aux: TankAux, st: TankSteamState) -> v
 	aux.rack_types.pop_back()
 	st.rack = aux.rack_types.size()
 	aux.carry_pct = st.pressure_pct
+	aux.carry_trickle_pct = minf(st.trickle_pct, st.pressure_pct)
 	st.pressure_pct = 100.0
+	st.trickle_pct = 0.0
 	st.over = true
 	st.over_s = 0.0
 	st.window_s = 0.0
@@ -331,7 +357,9 @@ static func _overpressure(
 	st.over_s = 0.0
 	aux.over_j = 0.0
 	st.pressure_pct = aux.carry_pct
+	st.trickle_pct = minf(aux.carry_trickle_pct, aux.carry_pct)
 	aux.carry_pct = 0.0
+	aux.carry_trickle_pct = 0.0
 	_stow(aux, st, ri.slot, shell, events)
 
 
@@ -347,4 +375,5 @@ static func _latch(
 		return
 	if st.pressure_pct >= state.content.num("tanks", "steam.light_latch_pct", 40.0):
 		st.pressure_pct = 0.0
+		st.trickle_pct = 0.0
 		_stow(aux, st, ri.slot, TankIds.SHELL_LIGHT, events)

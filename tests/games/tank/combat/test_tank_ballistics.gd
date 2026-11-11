@@ -22,7 +22,7 @@ func test_a_shell_flies_the_analytic_arc() -> void:
 
 func test_the_per_tick_stepping_reproduces_the_analytic_arc() -> void:
 	var rig := TankRulesRig.new(1)
-	rig.enter(4)
+	rig.enter(5)
 	rig.state.enemies.clear()
 	var vel := TankBallistics.velocity(V0, 12.0, TankIds.FACE_RIGHT)
 	var s := TankShellState.new()
@@ -86,7 +86,7 @@ func test_lead_differs_from_the_unled_solution_for_a_moving_target() -> void:
 func test_the_aim_aux_solution_puts_a_real_shell_in_the_box() -> void:
 	for crew in [1, 2, 3]:
 		var rig := TankRulesRig.new(crew)
-		rig.enter(4)
+		rig.enter(5)
 		var aux := TankAux.of(rig.state)
 		var e := TankEncounters.add_obstacle(
 			rig.state, TankIds.OBST_WIRE, rig.hull().x_px + rig.hull().hull_w + 130.0
@@ -172,7 +172,7 @@ func test_far_lead_lands_on_a_moving_target() -> void:
 
 func test_the_per_tick_far_flight_lands_where_the_arc_says() -> void:
 	var rig := TankRulesRig.new(1)
-	rig.enter(3)
+	rig.enter(4)
 	var aux := TankAux.of(rig.state)
 	var e := TankBallistics.far_elevation(1500.0, FAR_V0, FAR_G)
 	var s := TankShellState.new()

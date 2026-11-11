@@ -178,7 +178,7 @@ func test_the_input_digest_carries_the_planned_target() -> void:
 
 func test_the_rules_fill_target_pct_every_tick() -> void:
 	var rig := TankRulesRig.new(4)
-	rig.enter(1, 30.0)
+	rig.enter(2, 30.0)
 	# v3: the Loader loads (90% FTP to build) while its rack has room; a full rack idles it.
 	rig.set_rack(0)
 	rig.load_shell()
@@ -195,8 +195,8 @@ func test_the_rules_fill_target_pct_every_tick() -> void:
 	rig.enter(0, 30.0)
 	rig.step()
 	for r in rig.state.riders:
-		var depot := 60.0 if r.engine in ["diesel", "steam"] else 51.5
-		assert_almost_eq(r.target_pct, depot, 0.5, "%s in the depot" % r.engine)
+		var hangar := 60.0 if r.engine in ["diesel", "steam"] else 51.5
+		assert_almost_eq(r.target_pct, hangar, 0.5, "%s in the hangar" % r.engine)
 
 
 func test_the_hull_travels_right_by_default() -> void:
@@ -286,7 +286,10 @@ func test_the_crew_4_fixture_snapshot_matches_the_encoder() -> void:
 func test_the_arc_plans_follow_the_brief() -> void:
 	var c := TankFixtures.content()
 	assert_eq(
-		c.plan_entry("arc", "depot"), {"mode": "ERG", "target_pct": 50.0, "ramp_to_pct": 65.0}
+		c.plan_entry("arc", "hangar"), {"mode": "ERG", "target_pct": 50.0, "ramp_to_pct": 59.0}
+	)
+	assert_eq(
+		c.plan_entry("arc", "rollout"), {"mode": "ERG", "target_pct": 59.0, "ramp_to_pct": 65.0}
 	)
 	for seg: String in ["advance", "gun_line", "boss"]:
 		var e := c.plan_entry("arc", seg)
@@ -294,7 +297,7 @@ func test_the_arc_plans_follow_the_brief() -> void:
 		assert_eq(float(e["target_pct"]), 65.0, seg)
 		assert_eq(e["range_pct"], [65.0, 80.0], seg)
 	var drill := TankContent.from_dicts(_files("drill"), "drill")
-	assert_eq(float(drill.plan_entry("arc", "depot")["target_pct"]), 50.0)
+	assert_eq(float(drill.plan_entry("arc", "hangar")["target_pct"]), 50.0)
 	assert_eq(drill.plan_entry("arc", "skirmish")["range_pct"], [55.0, 65.0])
 	var plans := TankPlanBuilder.build_all(c, TankFixtures.slots(4))
 	assert_eq(plans.size(), 4, "a plan per rider of a crew of 4")

@@ -217,6 +217,7 @@ func advance(delta: float) -> void:
 	_cam_primed = true
 	travel += state.hull.speed_mps * TankConst.PX_PER_M * S * render_dt
 	_tow_frame(state, dt)
+	hangar_look = TankHangar.look(self, state)
 	_relief(state)
 	var feed := rider_feed(state, rt)
 	# render_t stalls at the newest snapshot then catches up (SnapRenderClock): on a client that

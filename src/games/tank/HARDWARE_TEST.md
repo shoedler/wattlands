@@ -6,14 +6,14 @@ Sections 1 to 14 check what the simulations already assert (`tests/games/tank/si
 
 Tank reaches the trainer only through `ctx.directives`, so everything below is the governor acting on Tank's plans and directives. What Tank asks for, by seat (% FTP; grades before your difficulty setting):
 
-| Seat | Depot (warm-up) | Advance | Holding action | Boss | Roam |
+| Seat | Hangar and roll-out (warm-up) | Advance | Holding action | Boss | Roam |
 | --- | --- | --- | --- | --- | --- |
-| Drive | SIM terrain 0 to +2% | SIM terrain -3 to +6% (2 Hz) | SIM flat (dig) | SIM flat | SIM valley grade -3 to +5% |
-| Gun | ERG 50 ramping to 65 | ERG 55 to 100 (the bank) | same | same | ERG 55 to 85 |
+| Drive | SIM flat in the hangar, SIM terrain 0 to +2% on the roll-out | SIM terrain -3 to +6% (2 Hz) | SIM flat (dig) | SIM flat | SIM valley grade -3 to +5% |
+| Gun | ERG 50 ramping to 59 (hangar), 59 to 65 (roll-out) | ERG 55 to 100 (the bank) | same | same | ERG 55 to 85 |
 | Loader | SIM flat, boiler 3% x pressure | SIM flat, boiler up to 8% x pressure | same | same | same |
-| Lights | ERG 50 ramping to 65 | ERG 65 to 80 (the searchlight load) | same | same | same |
+| Lights | ERG 50 ramping to 59, then 59 to 65 | ERG 65 to 80 (the searchlight load) | same | same | same |
 | Secondaries | SIM flat | SIM flat | SIM flat | SIM flat | SIM flat |
-| Repairs | ERG 50 ramping to 65 | ERG 55 to 70 (the repair load) | same | same | same |
+| Repairs | ERG 50 ramping to 59, then 59 to 65 | ERG 55 to 70 (the repair load) | same | same | same |
 
 Checkpoints are ERG 50% for everybody; the platform appends a 180 s cool-down at 50% (Tank sends nothing in it). Haptics (hit +2.0% for 1.5 s, boss hit +3.0% for 2 s) go only to riders in a SIM phase, never in the first 300 s, a warm-up or the cool-down. Sprints ("Surge to evade", "Surge to overpressure") send nothing: they are your own effort in the phase's SIM. **The difficulty option changes none of this** (section 10).
 
@@ -28,7 +28,7 @@ Checkpoints are ERG 50% for everybody; the platform appends a 180 s cool-down at
 | What | % FTP | Watts at 250 | Unverified watts |
 | --- | --- | --- | --- |
 | Checkpoint ERG | 50 | 125 | 106 |
-| Gun, Lights, Repairs depot ramp | 50 to 65 | 125 to 162 | 106 to 138 |
+| Gun, Lights, Repairs warm-up ramp (hangar, then roll-out) | 50 to 65 | 125 to 162 | 106 to 138 |
 | Gun fight, bank full | 55 | 138 | 117 |
 | Gun fight, bank empty | 100 | 250 | 212 |
 | Gun roam, bank empty (the roam's cap) | 85 | 212 | 181 |
@@ -46,16 +46,20 @@ Checkpoints are ERG 50% for everybody; the platform appends a 180 s cool-down at
 t (mm:ss) | segment | seat | trainer mode | target W or grade % | power W | cadence | note
 ```
 
-## 1. Depot: the first 300 s (BRIEF 4.6.8)
+## 1. Hangar and roll-out: the first 300 s (BRIEF 4.6.8)
+
+The hangar is 180 s, the roll-out the 120 s after it. The ramp is one: 50% at the start, 59% at the end of the hangar, 65% at the end of the roll-out.
 
 | # | Step | Expected | Result |
 | --- | --- | --- | --- |
-| 1 | Start Ashfall Road on Drive and pedal from 0:00 | SIM from the first second. Grade follows the depot's terrain 0 to +2% (before your setting), never above +3% total in the first 300 s, never below -2%. No haptic | |
-| 2 | Sprint at 130% FTP in the depot | Nothing happens on the trainer, no "Surge to evade" prompt: evade and Overpressure are off in WARMUP phases and the first 300 s | |
-| 3 | Repeat on the Gun, the Lights and Repairs | ERG 50% rising smoothly to 65% over 300 s (125 to 162 W at FTP 250), slewed, never above 65%. No pattern, no haptic | |
-| 4 | Repeat on the Loader | SIM flat. The boiler grade rises with pressure to +3% (before your setting) and never above it, even if you sprint; it drops to 0 at once at a stow and stays 0 with the rack full | |
+| 1 | Start Ashfall Road on Drive and pedal from 0:00 | SIM flat from the first second (the hull is on its stand): no road grade, the trainer feels like the flat. Never above +3% total in the first 300 s, never below -2%. No haptic. The tracks turn on screen and the tank does not move | |
+| 2 | Sprint at 130% FTP in the hangar | Nothing happens on the trainer, no "Surge to evade" prompt: evade and Overpressure are off in WARMUP phases and the first 300 s | |
+| 3 | Repeat on the Gun, the Lights and Repairs | ERG 50% rising smoothly (125 to 148 W at FTP 250 by 3:00 and on to 162 W at 5:00), slewed, never above 65%. No pattern, no haptic. No step, no dip at the hangar's end | |
+| 4 | Repeat on the Loader | SIM flat. The boiler grade rises with pressure to +3% (before your setting) and never above it, even if you sprint; it drops to 0 at once at a stow and stays 0 with the rack full. Pedal a little under 90% FTP: the shell still creeps on, slowly | |
 | 5 | Repeat on the Secondaries | SIM flat, no pattern | |
-| 6 | Move seat in the depot, ERG to SIM and back, 30 s or more apart | Ramped switches, each within the warm-up's limits: grade never above +3%, ERG never above 65% | |
+| 6 | Move seat in the hangar, ERG to SIM and back, 30 s or more apart | Ramped switches, each within the warm-up's limits: grade never above +3%, ERG never above 65% | |
+| 6a | The last 10 s of the hangar on Drive | The ceiling bars go dark, red beacons turn, a soft klaxon sounds three times, the hull comes down and the door opens. The trainer does nothing different: still SIM flat, no jolt when the hull lands | |
+| 6b | The roll-out on Drive (2:00) | SIM, the terrain's 0 to +2% (before your setting), smooth from the hangar's flat, the tank rolls out the whole time and never halts | |
 
 ## 2. Drive and the terrain
 
@@ -83,6 +87,7 @@ t (mm:ss) | segment | seat | trainer mode | target W or grade % | power W | cade
 | # | Step | Expected | Result |
 | --- | --- | --- | --- |
 | 18 | Advance on the Loader, ride 90% FTP with the rack not full | SIM flat, mode grade 8% x min(pressure, 1) before your setting. It rises at most 0.5% a step, at most once a second. One shell about every 7 s at 250 W | |
+| 18a | Advance on the Loader, ride 70% FTP (under the band) with the rack not full | The shell still builds, about five times slower than in band (a fifth of your power); the room lamp stays off and the glow, score and band read out of band. The boiler grade follows the pressure as before | |
 | 19 | A shell stows | The grade resets at the stow; with the rack full the grade is 0 and the cadence band 50-120 | |
 | 20 | Surge in the 5 s "Surge to overpressure" window after a stow (past 5:00, SIM WORK) | Sprinting builds the shell 100 to 150%; the grade holds; a double-damage shell stows at 150% | |
 | 21 | Checkpoints | The trainer is in ERG 50% with no boiler grade | |
@@ -132,7 +137,7 @@ t (mm:ss) | segment | seat | trainer mode | target W or grade % | power W | cade
 | 40 | A Behemoth main-gun hit | +3.0% x intensity for 2 s to every rider in SIM | |
 | 41 | An evaded shot | Nothing is felt: the shot missed | |
 | 42 | Two hits within 15 s | Only the first is felt | |
-| 43 | Hits while in ERG, in the depot, in the first 300 s, in the cool-down, or under a tow | Nothing is felt, ever | |
+| 43 | Hits while in ERG, in the hangar or the roll-out, in the first 300 s, in the cool-down, or under a tow | Nothing is felt, ever | |
 | 44 | Turn haptics off in the lobby and take hits | Nothing is felt | |
 | 45 | The worst stack: Drive on +6% terrain, then a hit | The total never exceeds +16% and your range clamp holds before the haptic | |
 
@@ -187,7 +192,7 @@ Ride alone with three bots.
 | 64 | Gun phase, applied target at 60% FTP or more: cadence below 45 rpm for 3 s | Rescue: target 50% FTP, "Dynamo stalled", the gun freezes and the bank stops charging; the plan continues. Cadence 70 rpm or more for 3 s ramps back over 10 s | |
 | 65 | The same on the Lights | "Arc generator stalled", the searchlights go dark | |
 | 66 | Stop pedaling in a crew game | The floor after 3 s; at 10 s the pause symbol (your ride timer stops, the game runs on), AFK, and the seat runs on reserve (as if 60 W, never in band). All riders stopped: the host pauses for everyone, and it resumes when one rider pedals 1 s at 30 rpm or more | |
-| 67 | Stop pedaling solo in the depot | The floor after 3 s, the session pauses at 10 s; 1 s at 30 rpm or more resumes it | |
+| 67 | Stop pedaling solo in the hangar | The floor after 3 s, the session pauses at 10 s; 1 s at 30 rpm or more resumes it | |
 | 68 | A Gun rider AFK in a fight for 60 s, then back | Log the target when you start again and every 2 s for 20 s: no step faster than 30 W/s, the rescue clears after 70 rpm for 3 s, the seat leaves reserve at once, no mode switch | |
 | 69 | **A client's network drops mid-fight for 30 s and rejoins, trainer still connected, on the Gun** | AFK at once, seat on reserve, plan continues; on reconnect the client resumes from the latest snapshot. Log the target before the drop, after the reconnect and every second for 10 s. It can have moved 20 to 40 points; expect a smooth climb at no more than 30 W/s. A jolt, a mode switch or a target above 100% is a failed safety check | |
 | 70 | Panic (Backspace 1 s) in an ERG fight and a SIM Advance | ERG off or grade 0 and wind 0 at once; the trainer stays safe until you resume | |
@@ -224,7 +229,7 @@ Each item is something a MockTrainer run cannot show. Do them after the rest and
 | 94 | The Gun at 98 to 100% FTP for several minutes in a long boss on Hard | Do riders finish it? How rescue or the stagger behaves at the end. Note heart-rate or RPE drift | |
 | 95 | The Gun's phase-boundary drop from about 95% to 55% ERG, then the climb | The decrease is immediate and clean; the climb smooth | |
 | 96 | Repairs as a calmer seat: ERG 55 to 70% for a whole fight | Does it feel like a recovery of sorts inside a fight, and is the hull's return worth the seat? | |
-| 97 | The unguided SIM warm-up in the depot: Drive, Loader and Secondaries ride 5 minutes of SIM with no power band | What riders actually ride; whether it is a sensible warm-up | |
+| 97 | The unguided SIM warm-up in the hangar and the roll-out: Drive, Loader and Secondaries ride 5 minutes of SIM with no power band | What riders actually ride; whether it is a sensible warm-up | |
 | 98 | A tank loss on a real ride | Does the loss feel fair, with the effort unchanged? Is KEEP RIDING clear? Is the stage's restart motivating or deflating? | |
 
 Log: date, trainer firmware, FTP, verified or not, your settings, crew size, the content, the difficulty, and each step's result with the running log of a full ride attached. Anything that spikes, jolts, exceeds a stated bound or feels wrong is a failed safety check: stop, note the segment and time, and report it.
@@ -248,7 +253,7 @@ Nobody has heard this audio: every number behind it was measured offline. A mach
 | 106 | An incoming shell, then Surge | The shot is a low thump after its range. The shell in the air is faint and comes close only in its last second, ending at the impact; say whether it reads as far until then, and whether its end still cuts through the machines. The Surge prompt, not this, is the time to start a sprint | |
 | 107 | A near threat | Before you look: a burst from the bushes, a small high engine over your machine that revs as it dashes and idles down to fire, a sharp small gun whose rounds ring on the plate; no whistle. It fades over about 3 s as it flees, and stops dead if you kill it. Say whether a recon and a tankette sound different, and whether they get tiring in a long fight | |
 | 108 | The track at speed | Links and a squeak that follow the tread on screen and stop with the hull. On a client, say whether they lurch when the network does (they follow the drawn tread, ADR 2026-10-31) | |
-| 109 | The depot, a fight, the cool-down | Wind, crickets and now and then a frog, an owl or a branch; a far battle on the road, gone once an enemy stands in the far panel. Crickets stay crickets for 30 minutes, not a pattern | |
+| 109 | The hangar, the roll-out, a fight, the cool-down | The klaxon in the hangar's last 10 s is soft and short through headphones, three times, not harsh. Wind, crickets and now and then a frog, an owl or a branch; a far battle on the road, gone once an enemy stands in the far panel. Crickets stay crickets for 30 minutes, not a pattern | |
 | 110 | Lose the tank on Hard, then the restart. Also a segment and a boss banner: a horn and a groan of iron, never the safety warning | A heavy hit, the klaxon, everything else ducked, the chain of the tow and the tread's links as it runs backwards, the engine catching at the restart | |
 | 111 | Pause and resume, with the crank still turning | Machines close, the night drops, a pending boom waits; nothing bursts on resume | |
 | 112 | A crew of 4 with bots at 90 rpm, as the driver | Your diesel in front; the others a texture behind it, no machine-gun | |

@@ -36,7 +36,7 @@ func test_the_schemas_name_what_is_wrong() -> void:
 	f["tanks"]["tanks"].erase("landship")
 	f["stations"]["plans"]["dynamo"]["advance"]["range_pct"] = [55, 110]
 	f["enemies"]["types"]["light"]["gun"]["hit"] = 1.5
-	f["mission"]["segments"][1].erase("max_s")
+	f["mission"]["segments"][2].erase("max_s")
 	f["cosmetics"]["unlocks"][0]["rule"] = "never"
 	var c := TankContent.from_dicts(f, "ashfall_road")
 	var all := "\n".join(c.errors)
@@ -44,7 +44,7 @@ func test_the_schemas_name_what_is_wrong() -> void:
 		"tanks: missing landship",
 		"plans.dynamo.advance: every ERG value",
 		"types.light gun.hit",
-		"segments[1]: open-ended",
+		"segments[2]: open-ended",
 		"soot.rule"
 	]:
 		assert_string_contains(all, needle)
@@ -56,7 +56,8 @@ func test_ashfall_road_follows_the_segment_table() -> void:
 	assert_eq(
 		types,
 		[
-			"depot",
+			"hangar",
+			"rollout",
 			"advance",
 			"gun_line",
 			"checkpoint",
@@ -225,7 +226,7 @@ func test_steam_building_keeps_a_small_tolerance_at_90_percent() -> void:
 	assert_true(TankConst.steam_building(179.0, 200.0), "one whole watt under (rounding)")
 	assert_false(TankConst.steam_building(178.0, 200.0))
 	assert_true(TankConst.steam_building(358.0, 400.0), "0.5% of FTP at 400 W")
-	assert_false(TankConst.steam_building(0.85 * 180.0, 200.0), "compliance 0.85 never builds")
+	assert_false(TankConst.steam_building(0.85 * 180.0, 200.0), "compliance 0.85 is out of band")
 
 
 func test_the_input_digest_reads_the_group_phase_and_each_engine() -> void:
@@ -237,7 +238,7 @@ func test_the_input_digest_reads_the_group_phase_and_each_engine() -> void:
 	var inp := TankInputs.from_frame(
 		f, players, plans, {2: TankIntents.filter_owned([{"k": "fire"}], "steam")}, {3: true}, {}
 	)
-	assert_eq(inp.phase.index, 4)
+	assert_eq(inp.phase.index, 5)
 	assert_eq(inp.phase.seg, TankIds.SEG_ADVANCE)
 	assert_eq(inp.phase.stage, 2)
 	var engines: Array = inp.riders.map(func(r: TankRiderInput) -> String: return r.engine)
@@ -245,7 +246,7 @@ func test_the_input_digest_reads_the_group_phase_and_each_engine() -> void:
 	assert_true(inp.rider(3).rescue)
 	assert_eq(inp.rider(2).intents.size(), 0, "already ownership-filtered")
 	for ri in inp.riders:
-		var ph := (plans[ri.peer] as EffortPlan).phase(4)
+		var ph := (plans[ri.peer] as EffortPlan).phase(5)
 		assert_eq(ri.phase_kind, Wl.WORK, "each rider's own phase kind")
 		assert_eq(ri.phase_mode, ph.mode)
 		assert_eq(ri.grade_source, ph.grade_source if ph.mode == Wl.SIM else "")

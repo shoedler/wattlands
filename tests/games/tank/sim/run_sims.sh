@@ -9,12 +9,12 @@
 # Scenarios (default: all). One report per run in build/tank/sims/ (TANK_SIMS_OUT):
 #   s1  ashfall_road, compliant `erg` riders, crews 1-4 (crews 2-4 run as HOST) x seeds 1-3
 #       (these runs also serve T1-T4, T6, T7 (crew 4) and, as the 100% leg, S3's T5, S4 and S7's first run)
-#   s2  zero riders: crew 3 (HOST: the shared pause holds the depot) and crew 1 (SOLO: it pauses),
+#   s2  zero riders: crew 3 (HOST: the shared pause holds the hangar) and crew 1 (SOLO: it pauses),
 #       and crew 3 spinning at 10 W and 25 rpm (no pause, no AFK: every stage overruns)
 #   s3  crew 3 at compliance 0.85 and 0.70 x seeds 1-3 (100% comes from s1)
 #   s4  drill, compliant, crews 1-4 as the S4 rule checks' other content (s1 is the other)
 #   s5  cadence_drop to 30 rpm at at_phase + at_target_pct=60: crew 3 in a Gun phase (slot 1, plan
-#       phase 1, ERG 55-100% with the bank), crew 4 in a Lights phase (slot 3, plan phase 1, ERG 65-80%)
+#       phase 2, ERG 55-100% with the bank), crew 4 in a Lights phase (slot 3, plan phase 2, ERG 65-80%)
 #       (v3: Drive digs in SIM, so no 90% gun line arms rescue any more)
 #   s6  crew 3, haptics off for slot 0
 #   s7  the s1 crew 3 seed 1 run again (same arguments, another report name)
@@ -26,7 +26,7 @@
 #       engine surges in its window: its `over` reaches the host as Telemetry.intents, owned by the
 #       steam engine; a client's `aim` needs a key, which headless sims cannot press: GUT-tested in
 #       tests/games/tank/integration), and slot 1 stopping dead for 60 s on the Gun in stage 1's Advance
-#       (rescue, AFK, a station on reserve, back; at_phase=1, after the warm-up's carried target, ERG target >= 60%)
+#       (rescue, AFK, a station on reserve, back; at_phase=2, after the warm-up's carried target, ERG target >= 60%)
 #   s11 free roam, compliant `erg` riders: roam_10 for crews 1 (SOLO) and 4 (HOST), roam_30 for crew 3 (HOST):
 #       time up, the overtime bound, no patrol after time up, the FIT laps (drive-out, roam, cool-down), the grade
 #   s12 free roam roam_10, crew 3 at 0 W (HOST): like s2's zero crew the host's shared pause holds the drive-out, so
@@ -35,9 +35,9 @@
 #       Autopilot through replans, the two clients included): the lock, the replans, the switches, the laps
 #   s14 ashfall_road on Easy, compliant, crews 1-4 x seeds: victory, no tank loss, T1
 #   s15 ashfall_road on Hard, compliant, crews 1-4 x seeds: 1-2 losses on most seeds, phases, 12 laps and S4 hold
-#   s16 ambush_15 on Normal and on Hard, compliant, crews 1, 3, 4 x seeds: 780-1010 game seconds, 6 laps, S4
+#   s16 ambush_15 on Normal and on Hard, compliant, crews 1, 3, 4 x seeds: 780-1010 game seconds, 7 laps, S4
 #   s17 crew 3 on Hard: compliance 0.85 x seeds (more losses than s15's crew 3: nobody rescues, ERG is out of band and
-#       the Loader never builds) and compliance 0.70 seed 1 (under rescue's 75 %: rescue shields the crew, BRIEF 4.6.3)
+#       the Loader gains only its 20% trickle) and compliance 0.70 seed 1 (under rescue's 75 %: rescue shields the crew, BRIEF 4.6.3)
 #   s18 ambush_15 on Hard with bots: 1 human + 3 bots, 2 + 2 (complete, nothing refused, bots act only through their seats)
 #
 # A scenario that needs another's report (s3, s4, s7 need s1 crew 3, s17 needs s15 crew 3; the checks of s1 reuse
@@ -66,9 +66,9 @@ SPRINTER='intervals:on_w=300,off_w=150,on_s=12,off_s=28,rpm=100'
 # S9's sprinter rides 20 s on, 17 s off, so its sprints cover an Advance's end (the first ends at
 # about 490 s with the v2 content and this rider): a gun line entered while still sprinting.
 S9_SPRINTER='intervals:on_w=300,off_w=150,on_s=20,off_s=17,rpm=100'
-STOP='erg+cadence_drop:rpm=0,at_phase=1,after_s=20,at_target_pct=60,for_s=60'
-DYNAMO_DROP='erg+cadence_drop:rpm=30,at_phase=1,after_s=20,at_target_pct=60,for_s=30'
-ARC_DROP='erg+cadence_drop:rpm=30,at_phase=1,at_target_pct=60,for_s=30'
+STOP='erg+cadence_drop:rpm=0,at_phase=2,after_s=20,at_target_pct=60,for_s=60'
+DYNAMO_DROP='erg+cadence_drop:rpm=30,at_phase=2,after_s=20,at_target_pct=60,for_s=30'
+ARC_DROP='erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=30'
 # Pedaling for the not_pedaling detector (cadence >= 20 rpm) with no effort to speak of.
 IDLE='const:w=10,rpm=25'
 # The lobby's difficulty option, as --options takes it (v4; the mission's own default without one).
@@ -106,7 +106,7 @@ scenario_s1() {
 }
 
 scenario_s2() {
-  # All three stop: the host's shared pause (BRIEF 3.5) holds the depot, so the run ends at
+  # All three stop: the host's shared pause (BRIEF 3.5) holds the hangar, so the run ends at
   # --max-sim-seconds still paused. The spinning crew pedals for every detector but gives nothing.
   run s2_c3_zero --content=ashfall_road --players=3 --bots=0 --rider=zero --seed=1 --max-sim-seconds=300
   run s2_c3_idle --content=ashfall_road --players=3 --bots=0 "--rider=$IDLE" --seed=1
