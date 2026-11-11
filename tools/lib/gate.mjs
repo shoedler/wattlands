@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { acquire, killTree, LEASE_TOKEN_ENV, LOCK_TIMEOUT_MESSAGE, machineCap, pidAlive } from './godot_lock.mjs';
+import { acquire, killTree, LEASE_TOKEN_ENV, LOCK_TIMEOUT_MESSAGE, machineCap, pidAlive, WHOLE_MACHINE_LEASE } from './godot_lock.mjs';
 import { evaluateGut, junitCounts, readGreenCount, readPendingAllowlist } from './gut_gate.mjs';
 import { ensureBuildDir, ensureNpm, GDTOOLKIT_VERSION, greenFloor, GREEN_FLOOR_FILE, NODE_SUITES, registeredGames, run, TEST_FILE_RE, wrapperCommand } from './run_tests.mjs';
 import {
@@ -890,7 +890,7 @@ async function quietLane(g, files, pendingAllowlist) {
   g.tails = g.tails.filter((t) => t.name !== 'gut:quiet');
   let lease;
   try {
-    lease = await acquire({ lease: machineCap(), label: 'tools/gate quiet rerun' });
+    lease = await acquire({ lease: WHOLE_MACHINE_LEASE, label: 'tools/gate quiet rerun' });
   } catch (err) {
     if (err.code !== 'ELOCKTIMEOUT') throw err;
     g.lockTimeout = true;

@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { acquire, capFile, machineCap, setCapFile, readTickets, pidAlive, LOCK_TIMEOUT_MESSAGE } from '../lib/godot_lock.mjs';
+import { acquire, capFile, CAP_FLOOR, defaultCap, machineCap, setCapFile, readTickets, pidAlive, LOCK_TIMEOUT_MESSAGE, WHOLE_MACHINE_LEASE } from '../lib/godot_lock.mjs';
 import { TOOLS, IS_WIN, sleep, runProc, rmQuiet } from './helpers.mjs';
 
 const LOCK_JS = path.join(TOOLS, 'lib', 'godot_lock.mjs');
@@ -186,13 +186,44 @@ describe('godot lock: grants', () => {
       process.env.WATTLANDS_GODOT_LOCK_CAP = 'lots';
       assert.throws(() => machineCap(), /positive integer/);
       delete process.env.WATTLANDS_GODOT_LOCK_CAP;
-      const expected = os.cpus().length >= 8 && os.freemem() >= 16 * 1024 ** 3 ? 4 : 2;
-      assert.ok([2, 4].includes(machineCap()));
-      assert.equal(machineCap(), expected);
+      const cap = machineCap();
+      assert.ok(Number.isInteger(cap) && cap >= CAP_FLOOR, `cap ${cap}`);
+      assert.ok(cap <= Math.max(CAP_FLOOR, Math.floor(os.cpus().length * 0.75)), `cap ${cap} on ${os.cpus().length} CPUs`);
+      assert.ok(machineCap(undefined, { heldSlots: 6 }) >= cap, 'held slots never lower the cap');
     } finally {
       restoreEnv('WATTLANDS_GODOT_LOCK_CAP', saved);
       restoreEnv('WATTLANDS_GODOT_LOCK_DIR', savedDir);
     }
+  });
+
+  test('the default cap: 3/4 of the CPUs, bounded by free RAM, never below 2', () => {
+    const GiB = 1024 ** 3;
+    assert.equal(defaultCap({ cpus: 20, freeBytes: 34 * GiB }), 15, 'this machine: the CPUs bound it');
+    assert.equal(defaultCap({ cpus: 20, freeBytes: 18 * GiB }), 10, 'RAM bounds it: 1 GiB a slot above an 8 GiB reserve');
+    assert.equal(defaultCap({ cpus: 8, freeBytes: 16 * GiB }), 6);
+    assert.equal(defaultCap({ cpus: 4, freeBytes: 64 * GiB }), 3);
+    assert.equal(defaultCap({ cpus: 2, freeBytes: 64 * GiB }), CAP_FLOOR, 'the floor');
+    assert.equal(defaultCap({ cpus: 64, freeBytes: 4 * GiB }), CAP_FLOOR, 'the floor, below the reserve');
+    // The held slots' processes already ate into free RAM: their budget comes back, so a full cap holds.
+    assert.equal(defaultCap({ cpus: 20, freeBytes: 15 * GiB, heldSlots: 12 }), 15);
+    assert.equal(defaultCap({ cpus: 20, freeBytes: 15 * GiB }), 7);
+    assert.equal(defaultCap({ cpus: 20, freeBytes: 15 * GiB, heldSlots: WHOLE_MACHINE_LEASE }), 7, 'a whole-machine lease adds no budget');
+  });
+
+  test('a whole-machine lease waits for every held slot, and holds back later grants', async () => {
+    const dir = tmpLockDir();
+    const one = await acquire({ dir, cap: 16, lease: 1, lockTimeoutS: 2 });
+    const whole = await enqueue(dir, { cap: 16, lease: WHOLE_MACHINE_LEASE });
+    await sleep(400);
+    assert.equal(whole.at, null, 'not granted while one slot is held');
+    one.release();
+    await whole.promise;
+    const later = await enqueue(dir, { cap: 16, lease: 1 });
+    await sleep(400);
+    assert.equal(later.at, null, 'nothing else runs beside it');
+    whole.handle.release();
+    await later.promise;
+    later.handle.release();
   });
 });
 
@@ -339,7 +370,7 @@ describe('godot lock: cap file', () => {
     assert.equal(del.code, 0, del.stderr);
     assert.match(del.stdout, /deleted/);
     assert.equal(fs.existsSync(capFile(dir)), false);
-    await withoutEnvCap(() => assert.ok([2, 4].includes(machineCap(dir)), 'back to the computed default'));
+    await withoutEnvCap(() => assert.equal(machineCap(dir), defaultCap(), 'back to the computed default'));
     const again = await runProc(process.execPath, [LOCK_JS, 'set-cap', '0'], { env });
     assert.equal(again.code, 0, again.stderr);
   });
