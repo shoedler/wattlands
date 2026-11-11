@@ -9,6 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { evaluateGut } from '../lib/gut_gate.mjs';
 import {
   aggregateGut,
+  allowGap,
   checkNodeTestCounts,
   checkPinContent,
   countNodeTests,
@@ -36,6 +37,7 @@ import {
   fastNarrowing,
   globToRegExp,
   groupKey,
+  gutSelection,
   inferWs,
   isBudgetTest,
   isGutFile,
@@ -53,7 +55,10 @@ import {
   planShards,
   quietRetryPlan,
   readWeights,
+  selectGutFiles,
+  selectionGap,
   sha256Lf,
+  splittableGroup,
   touchedGames,
   weightsByGroup,
   wsPaths,
@@ -146,7 +151,38 @@ describe('planShards', () => {
     assert.ok(p.shards.length <= 3);
   });
 
-  test('a group never splits', () => {
+  test('a heavy game group splits into its files by their own weights; platform, light and pinned groups never split', () => {
+    const heavy = [
+      'tests/games/tank/rules/test_1.gd',
+      'tests/games/tank/rules/test_2.gd',
+      'tests/games/tank/rules/test_3.gd',
+      'tests/games/tank/hud/test_4.gd',
+      'tests/games/tank/hud/test_5.gd',
+      'tests/scenarios/test_6.gd',
+      'tests/scenarios/test_7.gd',
+      'tests/net/test_8.gd',
+    ];
+    const w = {
+      'tests/games/tank/rules': 120,
+      'tests/games/tank/rules/test_1.gd': 100,
+      'tests/games/tank/rules/test_2.gd': 15,
+      'tests/games/tank/hud': 4,
+      'tests/scenarios': 90,
+      'tests/net': 10,
+    };
+    const p = planShards(heavy, w, { shards: 4 });
+    const shardOf = (f) => p.shards.findIndex((s) => s.includes(f));
+    assert.deepEqual([...p.shards.flat()].sort(), [...heavy].sort());
+    assert.notEqual(shardOf('tests/games/tank/rules/test_1.gd'), shardOf('tests/games/tank/rules/test_2.gd'), 'the long file runs apart');
+    assert.equal(shardOf('tests/scenarios/test_6.gd'), shardOf('tests/scenarios/test_7.gd'), 'a platform group stays whole');
+    assert.equal(shardOf('tests/games/tank/hud/test_4.gd'), shardOf('tests/games/tank/hud/test_5.gd'), 'a light game group stays whole');
+    assert.deepEqual(p.shards[shardOf('tests/games/tank/rules/test_1.gd')], ['tests/games/tank/rules/test_1.gd'], 'the 100 s file opens a shard alone');
+    const pinned = planShards(heavy, w, { shards: 4, pins: [['tests/games/tank/rules', 'tests/net']] });
+    const s = pinned.shards.find((x) => x.includes('tests/games/tank/rules/test_1.gd'));
+    for (const f of ['tests/games/tank/rules/test_2.gd', 'tests/games/tank/rules/test_3.gd', 'tests/net/test_8.gd']) assert.ok(s.includes(f), `a pinned group stays whole: ${f}`);
+  });
+
+  test('a platform group never splits', () => {
     const p = planShards(files, {}, { shards: 8 });
     const shardOf = new Map();
     p.shards.forEach((s, i) => s.forEach((f) => {
@@ -212,6 +248,19 @@ describe('planShards', () => {
     assert.ok(p.quiet.length >= 5, 'the wall-clock budget tests are quiet');
     for (const g of Object.keys(weightsFile)) assert.ok(Number.isFinite(weightsFile[g]), g);
     assert.equal(new Set(p.shards.flat().map(groupKey).filter((g) => g === 'tests/rides')).size, 1);
+    for (const g of ['tests/rides', 'tests/scenarios', 'tests/core']) {
+      assert.equal(p.shards.filter((s) => s.some((f) => groupKey(f) === g)).length, 1, `${g} writes one res://build dir: one shard`);
+    }
+    // At the cap of a 20-CPU machine, no shard holds much more than the longest single file or group.
+    const at15 = planShards(real, weightsFile, { shards: 15, quiet: manifest.quiet_tests, pins: manifest.shard_pins });
+    const weightOf = (f) => weightsFile[f] ?? 0;
+    const loads = at15.shards.map((s) => {
+      const groups = new Set(s.map(groupKey).filter((g) => !splittableGroup(g)));
+      return [...groups].reduce((sum, g) => sum + (weightsFile[g] ?? 0), 0) + s.filter((f) => splittableGroup(groupKey(f))).reduce((sum, f) => sum + weightOf(f), 0);
+    });
+    const total = Object.entries(weightsFile).filter(([k]) => !k.endsWith('.gd')).reduce((sum, [, v]) => sum + v, 0);
+    const pole = Math.max(...Object.entries(weightsFile).filter(([k]) => k.endsWith('.gd') || !splittableGroup(k)).map(([, v]) => v));
+    assert.ok(Math.max(...loads) <= Math.max(pole, total / 15) * 1.25, `heaviest shard ${Math.max(...loads).toFixed(0)} s, pole ${pole} s, mean ${(total / 15).toFixed(0)} s`);
   });
 });
 
@@ -224,6 +273,83 @@ describe('weights', () => {
     assert.deepEqual(weightsByGroup(w), { 'tests/a': 2, 'tests/b': 1.8 });
     assert.deepEqual(Object.keys(weightsByGroup(w)), ['tests/a', 'tests/b']);
     assert.equal(readWeights('').size, 0);
+  });
+
+  test("weightsByGroup also keeps the files of a game's groups, which may split; inner classes count for their file", () => {
+    const xml = '<testsuites><testsuite name="tests/games/tank/rules/test_x.gd" time="3"></testsuite>'
+      + '<testsuite name="tests/games/tank/rules/test_x.gd.TestInner" time="1"></testsuite><testsuite name="tests/games/tank/rules/test_y.gd" time="2"></testsuite>'
+      + '<testsuite name="tests/rides/test_z.gd" time="5"></testsuite></testsuites>';
+    assert.deepEqual(weightsByGroup(readWeights(xml)), {
+      'tests/games/tank/rules': 6,
+      'tests/games/tank/rules/test_x.gd': 4,
+      'tests/games/tank/rules/test_y.gd': 2,
+      'tests/rides': 5,
+    });
+  });
+});
+
+describe('the GUT selection of fast', () => {
+  const ids = ['fishing', 'siege', 'tank', 'workout'];
+
+  test("a game's own paths select that game; its docs fragments, brief and workflow too", () => {
+    const own = ['src/games/tank/a.gd', 'tests/games/tank/x/test_a.gd', 'assets/tank/x.png', 'content/tank/y.json', 'src/games/tank/README.md',
+      'docs/decisions/tank.md', 'docs/changelog.d/tank.md', 'docs/credits.d/tank.md', 'docs/games/tank.md', '.github/workflows/game-tank.yml'];
+    assert.deepEqual(gutSelection(own, ids), { all: false, games: ['tank'], reason: 'the change touches only the own paths of tank' });
+    assert.deepEqual(gutSelection(['src/games/tank/a.gd', 'content/siege/b.json'], ids).games, ['siege', 'tank']);
+  });
+
+  test('anything else runs everything: platform, _template, an unknown game, a platform doc, no change at all', () => {
+    for (const p of ['addons/wattlands/core/x.gd', 'tests/games/_template/test_a.gd', 'src/games/_template/a.gd', 'src/games/newgame/a.gd',
+      'docs/GAME_SDK.md', 'README.md', 'docs/decisions/gate.md', 'docs/decisions/audio-tank.md', 'content/strings/app.csv', 'tests/lib/game_suite.gd',
+      '.github/workflows/lead.yml', 'tools/lib/run_tests.mjs']) {
+      const sel = gutSelection(['src/games/tank/a.gd', p], ids);
+      assert.equal(sel.all, true, p);
+      assert.deepEqual(sel.games, ids, p);
+      assert.match(sel.reason, /outside the games' own paths/, p);
+    }
+    assert.equal(gutSelection([], ids).all, true);
+    assert.equal(gutSelection(['src/games/tank/a', 'src/games/siege/a', 'src/games/fishing/a', 'src/games/workout/a'], ids).all, true, 'every game is everything');
+  });
+
+  test('selectGutFiles leaves out only the other registered games, and says which', () => {
+    const files = ['tests/app/test_a.gd', 'tests/games/_template/test_t.gd', 'tests/games/tank/test_k.gd', 'tests/games/siege/x/test_s.gd',
+      'tests/games/fishing/test_f.gd', 'tests/games/oldgame/test_o.gd', 'tests/lib/test_l.gd'];
+    const r = selectGutFiles(files, { all: false, games: ['tank'] }, ids);
+    assert.deepEqual(r.skipped, ['tests/games/siege/x/test_s.gd', 'tests/games/fishing/test_f.gd']);
+    assert.deepEqual(r.skippedGames, ['fishing', 'siege']);
+    assert.deepEqual(r.run, ['tests/app/test_a.gd', 'tests/games/_template/test_t.gd', 'tests/games/tank/test_k.gd', 'tests/games/oldgame/test_o.gd', 'tests/lib/test_l.gd']);
+    assert.deepEqual(selectGutFiles(files, { all: true, games: ids }, ids), { run: files, skipped: [], skippedGames: [] });
+  });
+
+  test('selectionGap: a stamp covers a tree when it ran all, or every game the tree needs', () => {
+    const all = { all: true, games: ids, reason: 'x' };
+    const tank = { all: false, games: ['tank'], skipped_games: ['fishing', 'siege', 'workout'], reason: 'y' };
+    assert.equal(selectionGap({ all: true, games: ids }, all), null);
+    assert.equal(selectionGap({ all: true, games: ids }, { all: false, games: ['tank'] }), null);
+    assert.equal(selectionGap(tank, { all: false, games: ['tank'] }), null);
+    assert.match(selectionGap(tank, all), /left out the GUT files of fishing, siege, workout, and this tree needs every file/);
+    assert.match(selectionGap(tank, { all: false, games: ['siege', 'tank'] }), /left out siege/);
+    for (const bad of [undefined, null, {}, { all: 'yes', games: [] }, { all: false }]) assert.match(selectionGap(bad, all), /records no GUT selection/, JSON.stringify(bad));
+  });
+});
+
+describe('stamp-ok --allow', () => {
+  const ok = { partial: true, partial_reasons: ['--allow=docs/games/tank.md', '--allow-pin=tools/x.mjs:f'], allow: ['docs/games/tank.md', 'tools/x.mjs:f'], allow_globs: ['docs/games/tank.md'], allow_pins: ['tools/x.mjs:f'] };
+
+  test('the same exceptions, and nothing else narrowed: the stamp stands', () => {
+    assert.equal(allowGap(ok, ['docs/games/tank.md'], ['tools/x.mjs:f']), null);
+    const globOnly = { partial: true, partial_reasons: ['--allow=a,b'], allow: ['a', 'b'], allow_globs: ['a', 'b'], allow_pins: [] };
+    assert.equal(allowGap(globOnly, ['b', 'a'], []), null, 'order does not matter');
+  });
+
+  test('other exceptions, more narrowing, or missing lists: refused', () => {
+    assert.match(allowGap(ok, ['docs/games/tank.md'], []), /not the exceptions stamp-ok was given/);
+    assert.match(allowGap(ok, ['docs/games/**'], ['tools/x.mjs:f']), /not the exceptions/);
+    assert.match(allowGap({ ...ok, partial_reasons: [...ok.partial_reasons, '--lanes=gut'] }, ['docs/games/tank.md'], ['tools/x.mjs:f']), /more than its exceptions \(--lanes=gut\)/);
+    assert.match(allowGap({ ...ok, partial_reasons: [] }, ['docs/games/tank.md'], ['tools/x.mjs:f']), /more than its exceptions/);
+    assert.match(allowGap({ ...ok, partial: false }, ['docs/games/tank.md'], ['tools/x.mjs:f']), /more than its exceptions/);
+    assert.match(allowGap({ ...ok, allow: ['docs/games/tank.md'] }, ['docs/games/tank.md'], ['tools/x.mjs:f']), /does not match/);
+    assert.match(allowGap({ ...ok, allow_globs: undefined }, ['docs/games/tank.md'], ['tools/x.mjs:f']), /records no --allow/);
   });
 });
 
