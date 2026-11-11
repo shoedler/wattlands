@@ -56,6 +56,38 @@ func test_the_same_seed_replays_identically_and_the_plan_runs_to_the_cooldown() 
 	assert_true(SiegeSnapshotSchema.check(SiegeSnapshot.encode(a.state)) == "")
 
 
+func test_a_whole_shift_buys_only_when_a_break_ends_and_gold_never_goes_negative() -> void:
+	var trim := {"warmup_s": 40, "build_s": 40, "break_s": 40, "wave_s": 90, "max_waves": 2}
+	var sim := _sim("short", SiegeHeadlessSim.team(4), trim, {}, 3)
+	var lowest := 1.0e9
+	var on_receipt := 0
+	while not sim.finished():
+		sim.step()
+		for r in sim.state.riders:
+			lowest = minf(lowest, sim.state.spendable(r))
+			assert_lte(
+				float(sim.state.held_by(r.slot)), r.gold + 1e-6, "held gold is the rider's own"
+			)
+		if sim.state.shop_open():
+			on_receipt = maxi(on_receipt, sim.state.receipt.size())
+		else:
+			assert_eq(sim.state.receipt.size(), 0, "nothing is left on the receipt outside a break")
+	assert_gte(lowest, 0.0)
+	assert_gt(on_receipt, 0, "Autopilot put something on the receipt")
+	var ends: Array[float] = []
+	for i in sim.phases_of(SiegeIds.ROLE_WAVE):
+		ends.append(sim.phase_start(i))
+	var buys := sim.events_of(SiegeIds.EV_BUY)
+	assert_gt(buys.size(), 0)
+	for lg in buys:
+		var at_a_wave_start := false
+		for t in ends:
+			at_a_wave_start = at_a_wave_start or absf(lg.t - t) < 0.06
+		assert_true(at_a_wave_start, "a purchase at %.2f s: only a break's end buys" % lg.t)
+	for r in sim.state.riders:
+		assert_gte(r.gold, 0.0)
+
+
 func test_trimmed_shifts_stay_valid_for_every_content() -> void:
 	for id: String in ["short", "vo2", "sweetspot", "endurance", "drill"]:
 		var sim := _sim(

@@ -6,15 +6,16 @@ extends RefCounted
 ## step() order (SiegeOverdrive and the module rely on 2 and 4):
 ##   1. tick, t; each rider's telemetry, rescue, afk and connected from inputs (slot order); a
 ##      rescue or AFK that starts ends a running Overdrive (SiegeOverdrive.cancel).
-##   2. A new phase index: close the old phase (wave_end for a wave; drop the queue; enemies
+##   2. A new phase index: close the old phase (the receipt of a break is bought, in the order
+##      the items were added; wave_end for a wave; drop the queue; enemies
 ##      retreat; projectiles in flight are dropped; SiegeOverdrive.cancel(END_PHASE) for running
 ##      Overdrives; Autopilot's per-break buys reset), open the new one (wave_start for a wave,
 ##      with its budget B and its siege engines; the stations' wave damage restarts); after the
 ##      shift's last wave, state.done = true (the module emits finished("complete")).
-##   3. Intents in slot order, each rider's in arrival order: route (SiegeRouting), buy
-##      (SiegeShop), overdrive (SiegeOverdrive.try_start).
-##   4. Autopilot for riders in a fallback: route once a second in slot order; shop picks in
-##      breaks (<= 2 per break).
+##   3. Intents in slot order, each rider's in arrival order: route (SiegeRouting), pick
+##      (SiegeShop, SiegeReceipt), overdrive (SiegeOverdrive.try_start).
+##   4. Autopilot for riders in a fallback: route once a second in slot order; shop picks on the
+##      receipt in breaks (<= 2 per break).
 ##   5. Mine pay, wave-time stats, then SiegeCombat.step (spawns, movement, the tar works,
 ##      station output m with SiegeOverdrive.multiplier, aim and fire, pads, projectiles, gate,
 ##      Breach).
@@ -134,6 +135,8 @@ static func _phase(state: SiegeState, inputs: SiegeInputs) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
 	var ph := inputs.phase
 	if ph.index != state.phase_index:
+		if state.shop_open():
+			SiegeReceipt.buy_all(state, events)
 		if state.in_wave():
 			if state.role == SiegeIds.ROLE_WAVE:
 				state.wave_gate_hp.append(ceili(state.gate_hp))
@@ -201,7 +204,7 @@ static func _intents(state: SiegeState, inputs: SiegeInputs, events: Array[Dicti
 			match str(it.get("k", "")):
 				SiegeIds.INTENT_ROUTE:
 					SiegeRouting.intent(state, r, it, events)
-				SiegeIds.INTENT_BUY:
+				SiegeIds.INTENT_PICK:
 					SiegeShop.intent(state, r, it, events)
 				SiegeIds.INTENT_OVERDRIVE:
 					SiegeOverdrive.try_start(state, r, inputs.phase, it)

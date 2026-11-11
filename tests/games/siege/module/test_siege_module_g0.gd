@@ -119,6 +119,7 @@ func test_the_view_and_hud_build_headless_from_the_fixture() -> void:
 			"SIEGE_HELP_GATE",
 			"SIEGE_HELP_ROUTE_CARD",
 			"SIEGE_HELP_SHOP",
+			"SIEGE_HELP_RECEIPT",
 		]
 	)
 	for c: Dictionary in spec.controls:

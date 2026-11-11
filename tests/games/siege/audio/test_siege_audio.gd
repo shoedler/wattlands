@@ -1041,3 +1041,42 @@ func test_a_client_view_hears_the_rider_the_snapshot_carries() -> void:
 			assert_gt(v.cranks[slot].revs, 0.0)
 			moving += 1
 	assert_gt(moving, 0)
+
+
+func test_the_receipt_sounds_come_from_the_bank_as_it_is() -> void:
+	var bank := AudioBank.load_bank(SiegeAudio.BANK_PATH)
+	for act in SiegeIds.RC_ACTS:
+		var name := SiegeAudio.cue_for(SiegeIds.EV_RECEIPT, {"act": act})
+		assert_true(name == "" or bank.cues.has(name), "act %d -> %s" % [act, name])
+	assert_eq(SiegeAudio.cue_for(SiegeIds.EV_RECEIPT, {"act": SiegeIds.RC_REJECT}), "overdrive_no")
+	assert_eq(SiegeAudio.cue_for(SiegeIds.EV_RECEIPT, {"act": SiegeIds.RC_NO}), "route")
+	assert_eq(SiegeAudio.cue_for(SiegeIds.EV_RECEIPT, {"act": SiegeIds.RC_YES}), "route")
+	for act in [SiegeIds.RC_ADD, SiegeIds.RC_TAKE, SiegeIds.RC_DROP, SiegeIds.RC_BOUGHT]:
+		assert_eq(SiegeAudio.cue_for(SiegeIds.EV_RECEIPT, {"act": act}), "", "act %d" % act)
+
+
+func test_a_voted_off_item_is_heard_by_its_picker_and_everyone_who_voted_no() -> void:
+	var picker_and_no := (1 << 0) | (1 << 2)
+	var v := _solo(0.0)
+	v.audio.kit.clear_played()
+	v.audio.on_cue(SiegeIds.EV_RECEIPT, {"slot": 1, "act": SiegeIds.RC_REJECT, "who": 1 << 1})
+	assert_eq(v.audio.played.size(), 0, "slot 0 neither picked it nor voted no")
+	v.audio.on_cue(
+		SiegeIds.EV_RECEIPT, {"slot": 2, "act": SiegeIds.RC_REJECT, "who": picker_and_no}
+	)
+	assert_true(v.audio.played.has("overdrive_no"), "slot 0 is in the mask")
+
+
+func test_your_own_no_and_yes_click_and_someone_elses_do_not() -> void:
+	var v := _solo(0.0)
+	v.audio.kit.clear_played()
+	v.audio.on_cue(SiegeIds.EV_RECEIPT, {"slot": 1, "act": SiegeIds.RC_NO, "yes": 3, "no": 1})
+	assert_eq(v.audio.played.size(), 0, "another rider's vote is silent")
+	v.audio.on_cue(SiegeIds.EV_RECEIPT, {"slot": 0, "act": SiegeIds.RC_NO, "yes": 3, "no": 1})
+	assert_true(v.audio.played.has("lever_route"))
+	v.audio.kit.clear_played()
+	v.audio.on_cue(SiegeIds.EV_RECEIPT, {"slot": 0, "act": SiegeIds.RC_YES, "yes": 4, "no": 0})
+	assert_true(v.audio.played.has("lever_route"))
+	v.audio.kit.clear_played()
+	v.audio.on_cue(SiegeIds.EV_RECEIPT, {"slot": 0, "act": SiegeIds.RC_NO, "yes": 1, "no": 1})
+	assert_eq(v.audio.played.size(), 0, "the no that tips the vote is left to the voted-off cue")
