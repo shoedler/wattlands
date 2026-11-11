@@ -475,6 +475,19 @@ export function checkerEvidence({ code, text, partial = false, required = [] }) 
 }
 
 /**
+ * The order a matrix pool takes its runs in: indices of `stems`, the runs with no time in `previousMs`
+ * ({stem: ms} from the last matrix) first, since any of them may be long, then the longest first. Ties keep
+ * the plan's order. Order changes only when a run starts, never what runs.
+ */
+export function longestFirst(stems, previousMs = {}) {
+  const ms = (i) => {
+    const v = previousMs?.[stems[i]];
+    return Number.isFinite(v) ? v : Infinity;
+  };
+  return stems.map((_, i) => i).sort((a, b) => ms(b) - ms(a) || a - b);
+}
+
+/**
  * What the manifest asks of a game's full matrix, or null when it asks nothing: `rows` its checker must
  * pass, `minRuns` the runs its plan must hold. Both are floors: a matrix may grow, and a game's script
  * can't narrow itself (a hard-coded --only, fewer seeds or crews), since nothing else compares it.

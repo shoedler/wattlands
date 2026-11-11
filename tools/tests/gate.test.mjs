@@ -1356,6 +1356,20 @@ describe('matrix', { skip: !BASH && 'bash not found' }, () => {
     assert.equal((await gate(dir, ['stamp-ok', dir, '--matrix=mygame'])).code, 0);
   });
 
+  test("the stamp keeps each run's time, and the next matrix starts the longest first; the default is a worker per slot", async () => {
+    const dir = matrixRepo(simsScript('run a --seed=1\nrun b --seed=2\nrun c --seed=3'));
+    const first = await matrix(dir);
+    assert.equal(first.code, 0, first.stdout + first.stderr);
+    const stamp = stampOf(dir);
+    assert.equal(stamp.jobs, 3, 'cap 4, 3 runs: one worker per run');
+    assert.deepEqual(Object.keys(stamp.run_ms).sort(), ['a', 'b', 'c']);
+    // Pretend c was the long one and b the short one last time.
+    write(dir, { 'build/gate/matrix_mygame.json': JSON.stringify({ ...stamp, run_ms: { a: 2000, b: 1000, c: 9000 } }), 'build/pool_runs.txt': null });
+    const second = await matrix(dir, '--jobs=1');
+    assert.equal(second.code, 0, second.stdout + second.stderr);
+    assert.deepEqual(poolRuns(dir).map((l) => path.basename(l.split(' ')[0], '.json')), ['c', 'a', 'b']);
+  });
+
   test('a run exiting 5 fails the verdict though the checker passes; the others still run', async () => {
     const dir = matrixRepo(simsScript('run a --exit=5\nrun b\nrun c'));
     const r = await matrix(dir, '--jobs=1');

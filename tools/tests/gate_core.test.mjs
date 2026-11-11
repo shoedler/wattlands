@@ -46,6 +46,7 @@ import {
   LANE_SKIP_STRINGS,
   laneVerdict,
   listGutFiles,
+  longestFirst,
   maskConsts,
   parseAddedLines,
   parsePlan,
@@ -350,6 +351,16 @@ describe('stamp-ok --allow', () => {
     assert.match(allowGap({ ...ok, partial: false }, ['docs/games/tank.md'], ['tools/x.mjs:f']), /more than its exceptions/);
     assert.match(allowGap({ ...ok, allow: ['docs/games/tank.md'] }, ['docs/games/tank.md'], ['tools/x.mjs:f']), /does not match/);
     assert.match(allowGap({ ...ok, allow_globs: undefined }, ['docs/games/tank.md'], ['tools/x.mjs:f']), /records no --allow/);
+  });
+});
+
+describe('longestFirst', () => {
+  test('runs with no time first, then the longest; ties in plan order; every run once', () => {
+    const stems = ['a', 'b', 'c', 'd', 'e'];
+    assert.deepEqual(longestFirst(stems, { a: 10, b: 50, c: 10, e: 70 }), [3, 4, 1, 0, 2]);
+    assert.deepEqual(longestFirst(stems, {}), [0, 1, 2, 3, 4]);
+    assert.deepEqual(longestFirst(stems, undefined), [0, 1, 2, 3, 4]);
+    assert.deepEqual(longestFirst([], { a: 1 }), []);
   });
 });
 

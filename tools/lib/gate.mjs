@@ -35,6 +35,7 @@ import {
   junitCountProblems,
   junitCoverage,
   laneVerdict,
+  longestFirst,
   listGutFiles,
   manifestPins,
   matrixRule,
@@ -1154,6 +1155,8 @@ async function cmdMatrix(o) {
   ensureBuildDir(o.project);
   const name = `matrix_${id}`;
   const start = stampBase(o, 'matrix');
+  // Read before Run deletes it: the last matrix's run times order this one's pool.
+  const previousMs = loadJson(path.join(o.project, 'build', 'gate', `${name}.json`))?.run_ms ?? {};
   const g = new Run(o, name);
   const bash = findBash();
   const upper = id.toUpperCase();
@@ -1195,13 +1198,17 @@ async function cmdMatrix(o) {
   let next = 0;
   const logDir = path.join(g.dir, 'runs');
   fs.mkdirSync(logDir, { recursive: true });
+  const runMs = {};
+  // Longest first, by the last matrix's times, so no long run starts last and sets the wall time alone.
+  const order = longestFirst(lines.map((args, i) => reportStem(args, i)), previousMs);
   const worker = async (k) => {
     const env = withBashPath(withoutGameVars(childEnv({ WATTLANDS_BASH: bash, WATTLANDS_USERDATA_DIR: path.join(g.dir, `w${k}`, 'userdata') }), upper), bash);
     while (next < lines.length) {
-      const i = next;
+      const i = order[next];
       next += 1;
       const args = lines[i];
       const stem = reportStem(args, i);
+      const t = Date.now();
       const report = args.find((a) => a.startsWith('--report='));
       if (report) fs.mkdirSync(path.dirname(path.resolve(o.project, report.slice('--report='.length))), { recursive: true });
       const r = await run(bash, [tool, ...args], {
@@ -1212,6 +1219,7 @@ async function cmdMatrix(o) {
         quiet: true,
         onSpawn: (child) => g.live.add(child),
       });
+      runMs[stem] = Date.now() - t;
       if (r.code !== 0) {
         failed.push(`${stem}: exit ${r.code}`);
         if (r.code === 75) g.lockTimeout = true;
@@ -1235,7 +1243,7 @@ async function cmdMatrix(o) {
   const evidence = checkerEvidence({ code: checked.code, text: checked.text, partial, required: rule?.rows ?? [] });
   g.row('check_sims', evidence.pass ? 'PASS' : 'FAIL', Date.now() - t2, `${g.dirRel}/check.log`, [...evidence.reasons, ...checked.text.split(/\r?\n/).slice(-40)].join('\n'));
 
-  const stamp = g.finish({ ...start, ...endState(o, start), game: id, partial, runs: lines.length, failed_runs: failed, checker_rows: evidence.rows, checker_passed: evidence.passed });
+  const stamp = g.finish({ ...start, ...endState(o, start), game: id, partial, runs: lines.length, failed_runs: failed, checker_rows: evidence.rows, checker_passed: evidence.passed, jobs, run_ms: runMs });
   writeStamp(o, name, stamp);
   return g.exitCode();
 }
@@ -1542,7 +1550,8 @@ async function cmdWait(o) {
     await sleep(1000);
   }
   show();
-  return printStamp(o, cur.stamp);
+  // A gate from before current.json named no stamp: the newest one is what it wrote.
+  return printStamp(o, cur.stamp ?? newestStamp(o.project));
 }
 
 // ---------------------------------------------------------------- pin-safety
