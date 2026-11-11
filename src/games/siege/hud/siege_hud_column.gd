@@ -103,14 +103,31 @@ func _fort() -> void:
 func _gold() -> void:
 	var big := bool(model["gold_big"])
 	var h := GOLD_H_BIG if big else GOLD_H
+	var held := int(model["held"])
 	D.plate(self, 0, GOLD_Y, W, h)
-	D.icon(self, "denarius", 8, GOLD_Y + floori((h - 10) / 2.0), D.GOLD)
 	var label := SiegeHudModel.strings_of(game).t("SIEGE_HUD_GOLD")
-	SiegeHudType.draw(self, label, 22, GOLD_Y + floori((h - 9) / 2.0), "LABEL", D.GOLD)
+	# with gold on the receipt the label rides high and the held sum sits under it
+	var top := GOLD_Y + 6 if held > 0 and big else GOLD_Y + floori((h - 9) / 2.0)
+	D.icon(self, "denarius", 8, top, D.GOLD)
+	SiegeHudType.draw(self, label, 22, top, "LABEL", D.GOLD)
+	if held > 0 and big:
+		var on := SiegeHudModel.strings_of(game).t("SIEGE_HUD_ON_RECEIPT", [held])
+		SiegeHudType.draw(self, on, 8, GOLD_Y + 21, "LABEL", D.DIM)
 	var face := "KEY" if big else "NUM"
 	var cap := 24 if big else 14
+	var num := str(int(model["gold"]))
+	if held > 0 and big:
+		# the held line runs under the label: a number too wide to clear it drops to the small face
+		var on_w := SiegeHudType.width(
+			SiegeHudModel.strings_of(game).t("SIEGE_HUD_ON_RECEIPT", [held]), "LABEL"
+		)
+		if 8 + on_w + 6 + SiegeHudType.width(num, face) > W - 7:
+			face = "NUM"
+			cap = 14
 	var at := GOLD_Y + floori((h - cap) / 2.0)
-	SiegeHudType.draw_r(self, str(int(model["gold"])), W - 7, at, face, D.GOLD)
+	if face == "NUM" and big:
+		at = GOLD_Y + 5
+	SiegeHudType.draw_r(self, num, W - 7, at, face, D.GOLD)
 
 
 func _stations(y: int) -> void:

@@ -135,3 +135,11 @@ Review fixes (2026-10-30):
 - `reach` {id, et}: a ram reached the gate (cued like every event).
 - Snapshot rider rows have 13 columns: `connected` (R_CONNECTED 11) and `shop_fallback` (R_SHOP_FALLBACK 12) follow `afk`; clients get `SiegeRiderState.connected` and `shop_fallback` from them. Optional `rn`: `state.wave.rush_next` on clients.
 - The mine's `m` and `arm` move in breaks too (all output goes to it then).
+
+## The shared receipt (v0.7.0)
+
+- `SiegeState.receipt`: `Array[SiegeReceiptLine]` in the order the items were added. A line is `item` (a `SiegeIds.ITEMS` id), `at` (the station for an upgrade, the pad for a Scorpion or a pad upgrade, else 0), `lvl` (the level an upgrade, mine level or pad upgrade line buys, else 0: level N+1 is its own line, only on the receipt while level N is), `cost` (fixed when it was added), `slot` (the picker) and `no` (the slots that voted no, in slot order). Helpers: `receipt_line(item, at)`, `held_by(slot)`, `receipt_total()`, `spendable(rider)` (gold less what the rider holds, never below 0), `voter_slots()` (every rider, bots included: a drop changes nothing), `level_of(item, at)` and `next_level(item, at)` and `vote_on(line)` (a `TeamVote` over them: the picker counts yes, a majority no or a tie rejects).
+- `SiegeRider.gold` is unchanged by a pick: the receipt only holds it. The HUD and Autopilot read `spendable`.
+- Snapshot: the optional key `rc`, a list of `[item_code, at, lvl, cost, slot, no_slot...]` rows (`SiegeIds.item_code`, 1..9), present only while the receipt is not empty. A client rebuilds `state.receipt` from it (rows with an unknown item, an unknown slot or a repeat are dropped, at most 32 rows are read).
+- Intent: `{"k": "pick", "item", "station"?, "pad"?, "lvl"?, "auto"?}` (`"buy"` is read as `"pick"`). The host adds, takes back or votes; `auto` is ignored; a pick while the shop is closed is ignored.
+- Event: `receipt` {`slot` (who acted), `item`, `station`, `pad`, `act` (`RC_ADD` 1, `RC_TAKE` 2, `RC_NO` 3, `RC_YES` 4, `RC_REJECT` 5, `RC_DROP` 6 (a level leaving with the one below it), `RC_BOUGHT` 7 (the break's end bought the receipt)), `picker`, `yes`, `no`, `lvl`, `who` (bit mask: the picker and everyone who voted no), `cost`}. `buy` events now come when the break ends (and for a pick the shop refuses): `buy` {slot, item, ...}.

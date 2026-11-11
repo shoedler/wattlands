@@ -141,6 +141,23 @@ const STRING_KEYS: Array[String] = [
 	"SIEGE_HELP_GATE",
 	"SIEGE_HELP_ROUTE_CARD",
 	"SIEGE_HELP_SHOP",
+	"SIEGE_HELP_RECEIPT",
+	"SIEGE_SHOP_ADDED",
+	"SIEGE_SHOP_ACT_TAKE_BACK",
+	"SIEGE_SHOP_ACT_VOTE_NO",
+	"SIEGE_SHOP_ACT_UNDO_NO",
+	"SIEGE_SHOP_HINT",
+	"SIEGE_RECEIPT_TITLE",
+	"SIEGE_RECEIPT_BOUGHT",
+	"SIEGE_RECEIPT_EMPTY",
+	"SIEGE_RECEIPT_MORE",
+	"SIEGE_RECEIPT_TOTAL",
+	"SIEGE_RECEIPT_YES",
+	"SIEGE_RECEIPT_NO",
+	"SIEGE_RECEIPT_YOUR_NO",
+	"SIEGE_RECEIPT_RULE_1",
+	"SIEGE_RECEIPT_RULE_2",
+	"SIEGE_HUD_ON_RECEIPT",
 ]
 
 
@@ -492,8 +509,10 @@ static func rider_band(game: SiegeGame, r: SiegeRiderState) -> Vector2:
 
 
 ## The right column's fort and gold: {"gate", "gate_max", "low", "gate_frac", "curtain",
-## "curtain_max", "curtain_frac", "litres", "gold", "gold_big"}. The gold's size follows the shop:
-## NUM in waves, where it can't be spent, KEY while it is the number that decides.
+## "curtain_max", "curtain_frac", "litres", "gold", "held", "gold_big"}. The gold's size follows the
+## shop: NUM in waves, where it can't be spent, KEY while it is the number that decides. "gold" is
+## what the rider has free; "held" is what their items on the shared receipt hold until the break
+## ends.
 static func fort_face(state: SiegeState, rider: SiegeRiderState) -> Dictionary:
 	var curtain_max := roundi(state.curtain_max())
 	var curtain := ceili(state.tar.curtain_hp)
@@ -506,7 +525,8 @@ static func fort_face(state: SiegeState, rider: SiegeRiderState) -> Dictionary:
 		"curtain_max": curtain_max,
 		"curtain_frac": float(curtain) / maxf(float(curtain_max), 1.0),
 		"litres": floori(state.tar.cauldron_l),
-		"gold": floori(rider.gold) if rider != null else 0,
+		"gold": floori(state.spendable(rider)) if rider != null else 0,
+		"held": state.held_by(rider.slot) if rider != null else 0,
 		"gold_big": state.shop_open(),
 	}
 

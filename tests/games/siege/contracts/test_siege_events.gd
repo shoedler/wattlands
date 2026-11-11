@@ -19,6 +19,7 @@ func _all() -> Array[Dictionary]:
 		SiegeEvents.breach(1),
 		SiegeEvents.gate_restored(30.0),
 		SiegeEvents.buy(0, SiegeIds.ITEM_UPGRADE, 2, 0, true, "", 1),
+		SiegeEvents.receipt(1, SiegeIds.ITEM_UPGRADE, 2, 0, SiegeIds.RC_NO, 0, 2, 1, 2, 5, 50),
 		SiegeEvents.route(1, 3),
 		SiegeEvents.overdrive(0, SiegeIds.OD_EV_START),
 	]

@@ -27,6 +27,8 @@ const GOLD := Color("#eabb52")
 const ALARM := Color("#c8321f")
 const OXBLOOD := Color("#5a140e")
 const TERRA := Color("#b9583a")
+## The vote line's NO: a lighter terracotta that reads on the wax.
+const NO_VOTE := Color("#e0775a")
 const VERD := Color("#5fa596")
 const HEART := Color("#c0877f")
 const PITCH := Color("#a0663a")

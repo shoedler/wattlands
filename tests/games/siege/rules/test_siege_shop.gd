@@ -1,7 +1,8 @@
 extends GutTest
 ## The shop (brief 2.4 "Shop", 2.5 "Zero input"; 4): every item, its price and limit, closed in
-## waves, refusals as buy events, personal gold, Autopilot's two picks per break, no double
-## purchase with auto-confirms.
+## waves, refusals as buy events, personal gold, Autopilot's two picks per break (they go on the
+## shared receipt and are bought when the break ends; test_siege_receipt.gd has the receipt itself),
+## auto-confirms that never count.
 
 var _s: SiegeState
 
@@ -11,7 +12,7 @@ func before_each() -> void:
 
 
 func _buy(item: String, at: int = 0, peer: int = 1) -> Dictionary:
-	var it := SiegeIntents.normalize(SiegeIntents.buy(item, at))
+	var it := SiegeIntents.normalize(SiegeIntents.pick(item, at))
 	return SiegeShop.buy(_s, _s.rider(peer), it)
 
 
@@ -209,45 +210,53 @@ func _break_rig(humans: int = 1, bots: int = 0) -> SiegeRig:
 func test_a_manual_buy_ends_the_shop_fallback() -> void:
 	var rig := _break_rig()
 	assert_true(rig.rider().shop_fallback)
-	rig.send(1, SiegeIntents.buy(SiegeIds.ITEM_MINE))
+	rig.send(1, SiegeIntents.pick(SiegeIds.ITEM_MINE))
 	rig.step()
 	assert_false(rig.rider().shop_fallback)
 	assert_true(rig.rider().route_fallback, "routing is separate")
 
 
-func test_auto_confirmed_buys_never_end_it_and_are_ignored_while_it_lasts() -> void:
+func test_auto_confirmed_picks_never_end_it_and_are_ignored_while_it_lasts() -> void:
 	var rig := _break_rig()
 	rig.rider().gold = 1000.0
-	rig.send(1, SiegeIntents.buy(SiegeIds.ITEM_MINE, 0, true))
+	rig.send(1, SiegeIntents.pick(SiegeIds.ITEM_MINE, 0, true))
 	var ev := rig.step()
 	assert_true(rig.rider().shop_fallback)
 	assert_eq(rig.of_type(SiegeIds.EV_BUY, ev), [], "no event, no purchase")
+	assert_eq(rig.state.receipt.size(), 0)
 	assert_eq(rig.state.mine_level, 0)
 
 
-func test_after_the_fallback_ends_auto_confirmed_buys_count() -> void:
+func test_after_the_fallback_ends_auto_confirmed_picks_still_do_not_count() -> void:
 	var rig := _break_rig()
 	rig.manual()
 	rig.rider().gold = 1000.0
-	rig.send(1, SiegeIntents.buy(SiegeIds.ITEM_MINE, 0, true))
+	rig.send(1, SiegeIntents.pick(SiegeIds.ITEM_MINE, 0, true))
 	rig.step()
-	assert_eq(rig.state.mine_level, 1)
+	assert_eq(rig.state.receipt.size(), 0)
+	rig.goto(rig.phase_start(2))
+	rig.step()
+	assert_eq(rig.state.mine_level, 0, "pedalling alone buys nothing, ever")
 
 
-func test_autopilot_buys_at_most_two_items_per_break_at_4_and_9_s() -> void:
+func test_autopilot_picks_at_most_two_items_per_break_at_4_and_9_s() -> void:
 	var rig := _break_rig(1, 1)
 	for r in rig.state.riders:
 		r.gold = 1000.0
 	var times := []
 	for _i in roundi(30.0 / Wl.SIM_DT):
 		for e in rig.step():
-			if e["type"] == SiegeIds.EV_BUY:
+			if e["type"] == SiegeIds.EV_RECEIPT and int(e["act"]) == SiegeIds.RC_ADD:
 				times.append([snappedf(rig.state.phase_elapsed_s, 0.05), int(e["slot"])])
 	assert_eq(times.size(), 4, "two per rider")
 	assert_almost_eq(float(times[0][0]), 4.0, 0.06)
 	assert_almost_eq(float(times[2][0]), 9.0, 0.06)
 	assert_eq(int(times[0][1]), 0, "slot order")
 	assert_eq(int(times[1][1]), 1)
+	assert_eq(rig.of_type(SiegeIds.EV_BUY), [], "nothing is bought until the break ends")
+	rig.goto(rig.phase_start(2))
+	rig.step()
+	assert_eq(rig.of_type(SiegeIds.EV_BUY).size(), 4)
 
 
 func test_autopilot_s_count_resets_every_break() -> void:
@@ -264,6 +273,7 @@ func test_autopilot_saves_when_nothing_is_affordable() -> void:
 	rig.rider().gold = 5.0
 	var ev := rig.run(20.0)
 	assert_eq(rig.of_type(SiegeIds.EV_BUY, ev), [])
+	assert_eq(rig.state.receipt.size(), 0)
 	assert_almost_eq(rig.rider().gold, 5.0 + rig.rider().mine_gold, 0.01)
 
 
@@ -271,9 +281,13 @@ func test_the_shop_hook_replaces_autopilot_s_picks() -> void:
 	var rig := _break_rig()
 	rig.rider().gold = 500.0
 	SiegeShop.shop_hook = func(_st: SiegeState, _r: SiegeRiderState, _n: int) -> Array:
-		return [SiegeIntents.normalize(SiegeIntents.buy(SiegeIds.ITEM_CAULDRON, 0, true))]
+		return [SiegeIntents.normalize(SiegeIntents.pick(SiegeIds.ITEM_CAULDRON, 0, true))]
 	rig.run(5.0)
 	SiegeShop.shop_hook = Callable()
+	assert_eq(rig.state.receipt.size(), 1, "on the receipt, not yet bought")
+	assert_eq(rig.state.receipt[0].item, SiegeIds.ITEM_CAULDRON)
+	rig.goto(rig.phase_start(2))
+	rig.step()
 	assert_true(rig.state.perks.has(SiegeIds.PERK_CAULDRON))
 
 
@@ -282,3 +296,4 @@ func test_no_autopilot_shopping_in_waves() -> void:
 	rig.rider().gold = 1000.0
 	var ev := rig.run(20.0)
 	assert_eq(rig.of_type(SiegeIds.EV_BUY, ev), [])
+	assert_eq(rig.state.receipt.size(), 0)

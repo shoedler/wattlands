@@ -123,26 +123,30 @@ static func hot_target(state: SiegeState, rider: SiegeRiderState) -> int:
 	return best if best != rider.target else -1
 
 
-## Autopilot's shop picks for `rider` in this break, best first, as normalized buy intents
+## Autopilot's shop picks for `rider` in this break, best first, as normalized pick intents
 ## (SiegeIntents.normalize form, "auto": true), at most `max_items`. Order (brief 2.5): repair
 ## below 50%; an upgrade for the station that did the most damage last wave; a Scorpion on the
 ## first empty pad; a mine level; Iron bands; perks (Reserve flywheel, Aqueduct drive, Spare
-## cauldron); save (an empty list). A pick must be affordable with what is left after the earlier
-## picks; an unaffordable or impossible step falls through to the next one.
+## cauldron); save (an empty list). A pick must be affordable with what the rider has free (their
+## gold less what they hold on the receipt) after the earlier picks. An upgrade or a mine level goes
+## on top of the levels already on the receipt (anyone's), a Scorpion, Iron bands, repair or perk
+## already on it is not picked again: an unaffordable, impossible or taken step falls through to
+## the next one. `blind` ignores the receipt (all the rider's gold, nothing taken): the shop's
+## list keeps its order while items come and go.
 static func shop_picks(
-	state: SiegeState, rider: SiegeRiderState, max_items: int = 2
+	state: SiegeState, rider: SiegeRiderState, max_items: int = 2, blind: bool = false
 ) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if state == null or rider == null or state.content == null or max_items <= 0:
 		return out
 	if not state.shop_open():
 		return out
-	var plan := ShopPlan.new(state, rider.gold)
+	var plan := ShopPlan.new(state, rider.gold if blind else state.spendable(rider), blind)
 	for _i in max_items:
 		var pick := plan.next_pick()
 		if pick.is_empty():
 			break
-		out.append(SiegeIntents.normalize(SiegeIntents.buy(pick["item"], int(pick["at"]), true)))
+		out.append(SiegeIntents.normalize(SiegeIntents.pick(pick["item"], int(pick["at"]), true)))
 	return out
 
 
@@ -168,8 +172,10 @@ class ShopPlan:
 	var perks: Array[int] = []
 	var levels: Array[int] = []
 	var pads: Array[int] = []
+	## The receipt's "<item>/<at>" keys: what is already picked this break.
+	var taken: Array[String] = []
 
-	func _init(p_state: SiegeState, p_funds: float) -> void:
+	func _init(p_state: SiegeState, p_funds: float, blind: bool = false) -> void:
 		state = p_state
 		funds = floorf(p_funds)
 		# The snapshot carries the gate HP rounded up, so a client decides on the same number.
@@ -182,12 +188,26 @@ class ShopPlan:
 			levels.append(st.level)
 		for pd in state.pads:
 			pads.append(pd.type)
+		if not blind:
+			# the levels on the receipt count as bought: the next pick goes on top of them
+			for line in state.receipt:
+				match line.item:
+					SiegeIds.ITEM_UPGRADE:
+						levels[line.at] += 1
+					SiegeIds.ITEM_MINE:
+						mine_level += 1
+					_:
+						taken.append(line.key())
+
+	func _free(item: String, at: int) -> bool:
+		return not taken.has(SiegeReceiptLine.key_of(item, at))
 
 	## The next pick as {"item", "at", "cost"} (applied to this copy), or {} to save.
 	func next_pick() -> Dictionary:
 		for step: Callable in [_repair, _upgrade, _scorpion, _mine, _iron_bands, _perk]:
 			var pick: Dictionary = step.call()
 			if not pick.is_empty():
+				taken.append(SiegeReceiptLine.key_of(str(pick["item"]), int(pick["at"])))
 				return pick
 		return {}
 
@@ -201,6 +221,8 @@ class ShopPlan:
 		var c := state.content
 		var below := c.num("autopilot.repair_below_frac", 0.5)
 		if gate_hp >= gate_max or gate_hp / maxf(gate_max, 1.0) >= below:
+			return {}
+		if not _free(SiegeIds.ITEM_REPAIR, 0):
 			return {}
 		var cost := c.num("shop.repair", 20.0)
 		if not _spend(cost):
@@ -220,6 +242,8 @@ class ShopPlan:
 
 	func _scorpion() -> Dictionary:
 		var free := pads.find(SiegeIds.PAD_NONE)
+		while free >= 0 and not _free(SiegeIds.ITEM_SCORPION, free + 1):
+			free = pads.find(SiegeIds.PAD_NONE, free + 1)
 		if free < 0:
 			return {}
 		var cost := float(state.content.pad_def(SiegeIds.PAD_SCORPION).get("cost", 40))
@@ -238,7 +262,12 @@ class ShopPlan:
 	func _iron_bands() -> Dictionary:
 		var c := state.content
 		var cost := c.num("shop.iron_bands", 45.0)
-		if bands >= int(c.num("gate.iron_bands_max", 2.0)) or not _spend(cost):
+		if (
+			bands >= int(c.num("gate.iron_bands_max", 2.0))
+			or not _free(SiegeIds.ITEM_IRON_BANDS, 0)
+		):
+			return {}
+		if not _spend(cost):
 			return {}
 		bands += 1
 		return {"item": SiegeIds.ITEM_IRON_BANDS, "at": 0, "cost": cost}
@@ -246,7 +275,7 @@ class ShopPlan:
 	func _perk() -> Dictionary:
 		for item: String in [SiegeIds.ITEM_RESERVE, SiegeIds.ITEM_AQUEDUCT, SiegeIds.ITEM_CAULDRON]:
 			var code := int(SiegeIds.PERK_ITEMS[item])
-			if perks.has(code):
+			if perks.has(code) or not _free(item, 0):
 				continue
 			var cost := state.content.num("shop." + item, 80.0)
 			if not _spend(cost):

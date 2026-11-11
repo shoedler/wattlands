@@ -95,10 +95,11 @@ func test_the_cooldown_spawns_nothing_retreats_enemies_and_closes_shop_and_overd
 	assert_eq(_rig.state.role, SiegeIds.ROLE_COOLDOWN)
 	assert_eq(e.st, SiegeIds.EN_RETREAT)
 	_rig.rider(1).gold = 500.0
-	_rig.send(1, SiegeIntents.buy(SiegeIds.ITEM_MINE))
+	_rig.send(1, SiegeIntents.pick(SiegeIds.ITEM_MINE))
 	_rig.send(1, SiegeIntents.overdrive(SiegeIds.VIA_ACTION))
 	_rig.step()
-	assert_eq(_rig.of_type(SiegeIds.EV_BUY)[0]["why"], SiegeIds.BUY_CLOSED)
+	assert_eq(_rig.of_type(SiegeIds.EV_BUY), [], "a pick while the shop is closed is ignored")
+	assert_eq(_rig.state.receipt.size(), 0)
 	assert_eq(_rig.state.mine_level, 0)
 	assert_eq(_rig.rider(1).od_state, SiegeIds.OD_READY)
 	assert_true(_rig.state.take_od_requests().is_empty())

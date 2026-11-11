@@ -5,6 +5,9 @@ extends RefCounted
 ## nested arrays included, so a JSON round trip without int_fields still works. Projectiles never
 ## travel here: clients replay them from `shot` events.
 
+## The most receipt rows a client reads (the shop sells fewer than this).
+const MAX_RECEIPT_ROWS := 32
+
 
 ## The snapshot of `state` (host, 10 Hz).
 static func encode(state: SiegeState) -> Dictionary:
@@ -112,7 +115,18 @@ static func encode(state: SiegeState) -> Dictionary:
 	var rack := state.station(SiegeIds.STATION_ARROWS).rack
 	if rack != 0:
 		snap["rk"] = rack
+	if not state.receipt.is_empty():
+		snap["rc"] = _receipt_rows(state)
 	return snap
+
+
+static func _receipt_rows(state: SiegeState) -> Array:
+	var rows: Array = []
+	for line in state.receipt:
+		var row: Array = [SiegeIds.item_code(line.item), line.at, line.lvl, line.cost, line.slot]
+		row.append_array(line.no)
+		rows.append(row)
+	return rows
 
 
 ## Overwrites the snapshot part of `state` from `snap` (clients). Riders are matched by slot,
@@ -143,6 +157,7 @@ static func apply(state: SiegeState, snap: Dictionary) -> void:
 	state.wave.gate_damage = WireRead.int_of(snap.get("gd", 0)) / 10.0
 	state.station(SiegeIds.STATION_ARROWS).rack = WireRead.int_of(snap.get("rk", 0))
 	state.wave.rush_next = WireRead.int_of(snap.get("rn", 0))
+	_receipt(state, snap.get("rc", []))
 	var ru: Variant = snap.get("ru")
 	if ru is Array and (ru as Array).size() > SiegeSnapshotSchema.RU_INDEX:
 		var left_ms := (
@@ -158,6 +173,32 @@ static func apply(state: SiegeState, snap: Dictionary) -> void:
 		state.wave.rush_next = WireRead.int_of(ru[SiegeSnapshotSchema.RU_INDEX]) + 1
 	else:
 		state.wave.rush_s = 0.0
+
+
+## The receipt from its rows; a row with an unknown item, a slot that is no rider's or fewer than
+## four columns is skipped, and so is a repeat of an item already read.
+static func _receipt(state: SiegeState, rows: Variant) -> void:
+	state.receipt.clear()
+	var list: Array = WireRead.array_of(rows).slice(0, MAX_RECEIPT_ROWS)
+	for row: Variant in list:
+		if not (row is Array) or (row as Array).size() < SiegeSnapshotSchema.RC_NO:
+			continue
+		var line := SiegeReceiptLine.new()
+		line.item = SiegeIds.item_of(WireRead.int_of(row[SiegeSnapshotSchema.RC_ITEM]))
+		line.at = WireRead.int_of(row[SiegeSnapshotSchema.RC_AT])
+		line.lvl = clampi(WireRead.int_of(row[SiegeSnapshotSchema.RC_LVL]), 0, SiegeIds.MAX_LEVEL)
+		line.cost = maxi(WireRead.int_of(row[SiegeSnapshotSchema.RC_COST]), 0)
+		line.slot = WireRead.int_of(row[SiegeSnapshotSchema.RC_SLOT])
+		if line.item == "" or state.rider_at(line.slot) == null:
+			continue
+		if state.receipt_line(line.item, line.at, line.lvl) != null:
+			continue
+		var last := mini((row as Array).size(), SiegeSnapshotSchema.RC_NO + state.riders.size())
+		for i in range(SiegeSnapshotSchema.RC_NO, last):
+			var no := WireRead.int_of(row[i])
+			if state.rider_at(no) != null and not line.no.has(no) and no != line.slot:
+				line.no.append(no)
+		state.receipt.append(line)
 
 
 static func _riders(state: SiegeState, rows: Variant) -> void:

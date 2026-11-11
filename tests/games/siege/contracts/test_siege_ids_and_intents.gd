@@ -83,6 +83,7 @@ func test_event_types_are_the_brief_s() -> void:
 			"breach",
 			"gate_restored",
 			"buy",
+			"receipt",
 			"route",
 			"overdrive"
 		]
@@ -125,24 +126,24 @@ func test_bad_routes_are_junk() -> void:
 
 
 func test_buy_a_station_upgrade_needs_a_station_1_to_4() -> void:
-	var it := SiegeIntents.normalize(SiegeIntents.buy(SiegeIds.ITEM_UPGRADE, 2))
+	var it := SiegeIntents.normalize(SiegeIntents.pick(SiegeIds.ITEM_UPGRADE, 2))
 	assert_eq(it["item"], "upgrade")
 	assert_eq(it["station"], 2)
 	assert_eq(it["pad"], 0)
 	assert_eq(
-		SiegeIntents.normalize(SiegeIntents.buy(SiegeIds.ITEM_UPGRADE, 0)), {}, "not the mine"
+		SiegeIntents.normalize(SiegeIntents.pick(SiegeIds.ITEM_UPGRADE, 0)), {}, "not the mine"
 	)
-	assert_eq(SiegeIntents.normalize(SiegeIntents.buy(SiegeIds.ITEM_UPGRADE, 5)), {})
+	assert_eq(SiegeIntents.normalize(SiegeIntents.pick(SiegeIds.ITEM_UPGRADE, 5)), {})
 	assert_eq(SiegeIntents.normalize({"k": "buy", "item": "upgrade"}), {})
 
 
 func test_buy_a_pad_item_needs_a_pad_1_to_4() -> void:
-	var it := SiegeIntents.normalize(SiegeIntents.buy(SiegeIds.ITEM_SCORPION, 3))
+	var it := SiegeIntents.normalize(SiegeIntents.pick(SiegeIds.ITEM_SCORPION, 3))
 	assert_eq(it["pad"], 3)
 	assert_eq(it["station"], 0)
-	assert_eq(SiegeIntents.normalize(SiegeIntents.buy(SiegeIds.ITEM_PAD_UPGRADE, 4))["pad"], 4)
-	assert_eq(SiegeIntents.normalize(SiegeIntents.buy(SiegeIds.ITEM_SCORPION, 5)), {})
-	assert_eq(SiegeIntents.normalize(SiegeIntents.buy(SiegeIds.ITEM_PAD_UPGRADE, 0)), {})
+	assert_eq(SiegeIntents.normalize(SiegeIntents.pick(SiegeIds.ITEM_PAD_UPGRADE, 4))["pad"], 4)
+	assert_eq(SiegeIntents.normalize(SiegeIntents.pick(SiegeIds.ITEM_SCORPION, 5)), {})
+	assert_eq(SiegeIntents.normalize(SiegeIntents.pick(SiegeIds.ITEM_PAD_UPGRADE, 0)), {})
 
 
 func test_plain_items_need_nothing_else() -> void:
@@ -154,7 +155,7 @@ func test_plain_items_need_nothing_else() -> void:
 		SiegeIds.ITEM_AQUEDUCT,
 		SiegeIds.ITEM_CAULDRON
 	]:
-		var it := SiegeIntents.normalize(SiegeIntents.buy(item))
+		var it := SiegeIntents.normalize(SiegeIntents.pick(item))
 		assert_eq(it["item"], item)
 		assert_eq(it["station"], 0)
 		assert_eq(it["pad"], 0)
@@ -165,8 +166,41 @@ func test_v01_items_and_save_are_junk() -> void:
 		assert_eq(SiegeIntents.normalize({"k": "buy", "item": item}), {}, item)
 
 
+func test_pick_is_the_shop_intent_and_buy_is_its_old_wire_word() -> void:
+	assert_eq(SiegeIds.INTENT_KINDS, ["route", "pick", "overdrive"])
+	var it := SiegeIntents.normalize(SiegeIntents.pick(SiegeIds.ITEM_UPGRADE, 3))
+	assert_eq(it["k"], "pick")
+	assert_eq(it["station"], 3)
+	var old := SiegeIntents.normalize({"k": "buy", "item": "mine"})
+	assert_eq(old["k"], "pick", "an old client's buy reads as a pick")
+	assert_eq(old["item"], "mine")
+	assert_eq(SiegeIntents.normalize({"k": "pick", "item": "save"}), {}, "Save gold is no intent")
+	assert_eq(SiegeIntents.normalize({"k": "pick"}), {})
+	assert_eq(SiegeIntents.normalize({"k": "pick", "item": 5}), {})
+	assert_eq(SiegeIntents.at_of(it), 3)
+	var pad := SiegeIntents.normalize(SiegeIntents.pick(SiegeIds.ITEM_SCORPION, 2))
+	assert_eq(SiegeIntents.at_of(pad), 2)
+	assert_eq(SiegeIntents.at_of(SiegeIntents.normalize(SiegeIntents.pick("mine"))), 0)
+
+
+func test_picks_share_the_five_a_second_limit() -> void:
+	var lim := SiegeIntentLimiter.new()
+	var raw: Array = []
+	for i in 8:
+		raw.append(SiegeIntents.pick(SiegeIds.ITEM_MINE))
+	assert_eq(lim.filter(1, 0, raw).size(), 5, "a flood of picks is cut like any intent")
+
+
+func test_item_codes_round_trip() -> void:
+	for item: String in SiegeIds.ITEMS:
+		assert_eq(SiegeIds.item_of(SiegeIds.item_code(item)), item)
+	assert_eq(SiegeIds.item_code("nope"), 0)
+	assert_eq(SiegeIds.item_of(0), "")
+	assert_eq(SiegeIds.item_of(99), "")
+
+
 func test_auto_tags() -> void:
-	var it := SiegeIntents.normalize(SiegeIntents.buy(SiegeIds.ITEM_MINE, 0, true))
+	var it := SiegeIntents.normalize(SiegeIntents.pick(SiegeIds.ITEM_MINE, 0, true))
 	assert_true(it["auto"])
 	assert_eq(it["via"], SiegeIds.VIA_AUTO)
 	assert_true(SiegeIntents.normalize({"k": "overdrive", "via": "auto"})["auto"])
