@@ -143,6 +143,8 @@ func _process(delta: float) -> void:
 			. append(
 				{
 					"range": float(_opts["wreck"]),
+					"r0": float(_opts["wreck"]),
+					"x0": 220.0,
 					"lane": 0,
 					"kind": TankIds.ENEMY_MEDIUM,
 					"t": state.t,

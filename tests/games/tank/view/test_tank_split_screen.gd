@@ -378,6 +378,7 @@ func test_a_far_wreck_keeps_closing_through_a_long_step_slides_off_and_fades_out
 			break
 		var f := float(v.far.wrecks[0].get("fade", 1.0))
 		assert_lte(f, last_fade + 1e-6, "the fade only goes down")
+		assert_almost_eq(v.far._wreck_fade.modulate.a, f, 0.001, "the fade layer carries it")
 		last_fade = f
 	assert_true(gone, "then it is gone")
 	assert_lt(last_fade, 0.5, "faded before it went: no pop")

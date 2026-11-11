@@ -145,6 +145,8 @@ var _base: Node2D = null
 var _base_light: Node2D = null
 var _scrub_layer: Node2D = null
 var _world: Node2D = null
+## The wrecks in their last second, on a layer of their own whose alpha is the lowest fade among them.
+var _wreck_fade: Node2D = null
 var _light: Node2D = null
 var _veil: Node2D = null
 var _mirrored: bool = false
@@ -176,6 +178,7 @@ func _init(view: TankView, sd: int) -> void:
 	_base_light = _layer("BaseLight")
 	_scrub_layer = _layer("Scrub")
 	_world = _layer("World")
+	_wreck_fade = _layer("WreckFade")
 	_light = _layer("Light")
 	var add := CanvasItemMaterial.new()
 	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -188,6 +191,7 @@ func _init(view: TankView, sd: int) -> void:
 	_base_light.draw.connect(_draw_base_light)
 	_scrub_layer.draw.connect(_draw_scrub)
 	_world.draw.connect(_draw_world)
+	_wreck_fade.draw.connect(_draw_wreck_fade)
 	_light.draw.connect(_draw_light)
 	_veil.draw.connect(_draw_veil)
 
@@ -211,7 +215,7 @@ func layout(canvas: Vector2, mirrored: bool, y_off: float) -> void:
 	var want := Vector2i(int(far_w), int(canvas.y))
 	if size != want:
 		size = want
-	for l: Node2D in [_base, _base_light, _scrub_layer, _world, _light]:
+	for l: Node2D in [_base, _base_light, _scrub_layer, _world, _wreck_fade, _light]:
 		l.scale = Vector2(-1, 1) if mirrored else Vector2.ONE
 		l.position = Vector2(far_w, 0) if mirrored else Vector2.ZERO
 
@@ -277,7 +281,11 @@ func frame(state: TankState, dt: float) -> void:
 	veil = move_toward(
 		veil, 1.0 if towed else 0.0, dt / (VEIL_IN_S if towed else TankView.RESTART_FADE_S)
 	)
-	for l: Node2D in [_back, _base, _base_light, _scrub_layer, _world, _light, _veil]:
+	var fading := 1.0
+	for w in wrecks:
+		fading = minf(fading, float(w.get("fade", 1.0)))
+	_wreck_fade.modulate.a = fading
+	for l: Node2D in [_back, _base, _base_light, _scrub_layer, _world, _wreck_fade, _light, _veil]:
 		l.queue_redraw()
 
 
@@ -910,7 +918,8 @@ func _draw_world() -> void:
 func _depth_order(state: TankState) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for w in wrecks:
-		out.append({"y": _wreck_foot(w).y, "wreck": w})
+		if float(w.get("fade", 1.0)) >= 1.0:
+			out.append({"y": _wreck_foot(w).y, "wreck": w})
 	for e in state.enemies:
 		if feet.has(e.id):
 			out.append({"y": (feet[e.id] as Vector2).y, "enemy": e})
@@ -936,15 +945,13 @@ func _wreck(ci: CanvasItem, w: Dictionary) -> void:
 
 
 func _wreck_pose(w: Dictionary, dim: float) -> Dictionary:
-	var fade := float(w.get("fade", 1.0))
 	return {
 		"travel": 0.0,
 		"turret_sx": 1.0,
 		"elev_deg": 0.0,
 		"recoil": 0.0,
-		"dim": dim + (1.0 - fade) * 0.5,
-		"haze":
-		lerpf(1.0, haze_at(float(w["range"])), fade) if fade < 1.0 else haze_at(float(w["range"])),
+		"dim": dim,
+		"haze": haze_at(float(w["range"])),
 		"flash": 0.0,
 		"ground": null,
 		"wrecked": true,
@@ -952,6 +959,15 @@ func _wreck_pose(w: Dictionary, dim: float) -> Dictionary:
 		"flip": false,
 		"time": v.time,
 	}
+
+
+## The wrecks inside their last second (close_wrecks), drawn whole on a layer whose alpha fades them out.
+func _draw_wreck_fade() -> void:
+	if v == null or not _ready_to_draw():
+		return
+	for w in wrecks:
+		if float(w.get("fade", 1.0)) < 1.0:
+			_wreck(_wreck_fade, w)
 
 
 func _draw_light() -> void:
