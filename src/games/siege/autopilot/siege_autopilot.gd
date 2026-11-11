@@ -128,9 +128,10 @@ static func hot_target(state: SiegeState, rider: SiegeRiderState) -> int:
 ## below 50%; an upgrade for the station that did the most damage last wave; a Scorpion on the
 ## first empty pad; a mine level; Iron bands; perks (Reserve flywheel, Aqueduct drive, Spare
 ## cauldron); save (an empty list). A pick must be affordable with what the rider has free (their
-## gold less what they hold on the receipt) after the earlier picks, and an item already on the
-## receipt (anyone's) is not picked again: an unaffordable, impossible or taken step falls through
-## to the next one. `blind` ignores the receipt (all the rider's gold, nothing taken): the shop's
+## gold less what they hold on the receipt) after the earlier picks. An upgrade or a mine level goes
+## on top of the levels already on the receipt (anyone's), a Scorpion, Iron bands, repair or perk
+## already on it is not picked again: an unaffordable, impossible or taken step falls through to
+## the next one. `blind` ignores the receipt (all the rider's gold, nothing taken): the shop's
 ## list keeps its order while items come and go.
 static func shop_picks(
 	state: SiegeState, rider: SiegeRiderState, max_items: int = 2, blind: bool = false
@@ -157,20 +158,6 @@ static func top_weapon(state: SiegeState) -> int:
 		if state.station(id).damage_wave > state.station(best).damage_wave + 1e-6:
 			best = id
 	return best
-
-
-## The weapon stations by the damage they did in the current or last wave, most first (ties to the
-## lower id; the first is top_weapon).
-static func weapons_by_damage(state: SiegeState) -> Array[int]:
-	var out: Array[int] = []
-	out.assign(SiegeIds.WEAPONS)
-	out.sort_custom(
-		func(a: int, b: int) -> bool:
-			var da := state.station(a).damage_wave
-			var db := state.station(b).damage_wave
-			return da > db + 1e-6 or (absf(da - db) <= 1e-6 and a < b)
-	)
-	return out
 
 
 ## A throwaway copy of what a rider could buy, so the second pick sees the first.
@@ -202,8 +189,15 @@ class ShopPlan:
 		for pd in state.pads:
 			pads.append(pd.type)
 		if not blind:
+			# the levels on the receipt count as bought: the next pick goes on top of them
 			for line in state.receipt:
-				taken.append(line.key())
+				match line.item:
+					SiegeIds.ITEM_UPGRADE:
+						levels[line.at] += 1
+					SiegeIds.ITEM_MINE:
+						mine_level += 1
+					_:
+						taken.append(line.key())
 
 	func _free(item: String, at: int) -> bool:
 		return not taken.has(SiegeReceiptLine.key_of(item, at))
@@ -236,21 +230,15 @@ class ShopPlan:
 		gate_hp = minf(gate_hp + c.num("gate.repair_hp", 20.0), gate_max)
 		return {"item": SiegeIds.ITEM_REPAIR, "at": 0, "cost": cost}
 
-	## The upgrade for the weapon that did the most damage; when its upgrade is already on the receipt
-	## (one line per item), for the next weapon by damage that has one free. A weapon at its top level
-	## ends the step as before.
 	func _upgrade() -> Dictionary:
-		for id in SiegeAutopilot.weapons_by_damage(state):
-			if levels[id] >= SiegeIds.MAX_LEVEL:
-				return {}
-			if not _free(SiegeIds.ITEM_UPGRADE, id):
-				continue
-			var cost := float(state.content.station_upgrade_cost(levels[id] + 1))
-			if not _spend(cost):
-				return {}
-			levels[id] += 1
-			return {"item": SiegeIds.ITEM_UPGRADE, "at": id, "cost": cost}
-		return {}
+		var id := SiegeAutopilot.top_weapon(state)
+		if levels[id] >= SiegeIds.MAX_LEVEL:
+			return {}
+		var cost := float(state.content.station_upgrade_cost(levels[id] + 1))
+		if not _spend(cost):
+			return {}
+		levels[id] += 1
+		return {"item": SiegeIds.ITEM_UPGRADE, "at": id, "cost": cost}
 
 	func _scorpion() -> Dictionary:
 		var free := pads.find(SiegeIds.PAD_NONE)
@@ -266,7 +254,7 @@ class ShopPlan:
 
 	func _mine() -> Dictionary:
 		var cost := float(state.content.mine_level_cost(mine_level + 1))
-		if mine_level >= SiegeIds.MAX_LEVEL or not _free(SiegeIds.ITEM_MINE, 0) or not _spend(cost):
+		if mine_level >= SiegeIds.MAX_LEVEL or not _spend(cost):
 			return {}
 		mine_level += 1
 		return {"item": SiegeIds.ITEM_MINE, "at": 0, "cost": cost}

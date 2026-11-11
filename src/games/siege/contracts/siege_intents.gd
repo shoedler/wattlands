@@ -9,7 +9,9 @@ extends RefCounted
 ##   {"k": "route", "to": "mine" | 0..4 | "next" | "prev" | "hot", "via"?: String}  ("gen" is
 ##    accepted as "mine")
 ##   {"k": "pick", "item": <SiegeIds.ITEMS>, "station": 1..4 (upgrade only), "pad": 1..4
-##    (scorpion and pad_upgrade only), "auto"?: 1, "via"?: String}  -- one pick: the host adds
+##    (scorpion and pad_upgrade only), "lvl"?: 1..3 (the level of an upgrade, mine level or pad
+##    upgrade the pick is about; absent: the lowest on the receipt, else the next), "auto"?: 1,
+##    "via"?: String}  -- one pick: the host adds
 ##    the item to the shared receipt, takes your own back, or votes on someone else's (the next
 ##    pick of it returns the vote). Nothing is spent until the break ends. "auto": 1 when the
 ##    PedalScanList auto-confirmed it (item_picked via "auto"): the rules ignore it. "buy" is
@@ -18,7 +20,7 @@ extends RefCounted
 ## Normalized form (what SiegeRiderInput.intents holds):
 ##   {"k": String, "to": int (route: a station 0..4, ROUTE_NEXT / PREV / HOT; else 0),
 ##    "item": String ("" unless pick), "station": int (0 unless a station item), "pad": int (0
-##    unless a pad item), "auto": bool, "via": String}
+##    unless a pad item), "lvl": int (0 unless pick), "auto": bool, "via": String}
 ## `auto` is true for "auto": 1 (any non-zero number or true) or "via": "auto". Auto intents
 ## never end a zero-input fallback, never start Overdrive and never touch the receipt.
 
@@ -44,7 +46,9 @@ static func normalize(raw: Variant) -> Dictionary:
 	var auto := via == SiegeIds.VIA_AUTO or IntentValue.truthy(d.get("auto", 0))
 	if auto:
 		via = SiegeIds.VIA_AUTO
-	var out := {"k": k, "to": 0, "item": "", "station": 0, "pad": 0, "auto": auto, "via": via}
+	var out := {
+		"k": k, "to": 0, "item": "", "station": 0, "pad": 0, "lvl": 0, "auto": auto, "via": via
+	}
 	match str(k):
 		SiegeIds.INTENT_ROUTE:
 			var to: Variant = d.get("to")
@@ -69,6 +73,10 @@ static func normalize(raw: Variant) -> Dictionary:
 				if not IntentValue.whole(pad) or not SiegeIds.is_pad(int(pad)):
 					return {}
 				out["pad"] = int(pad)
+			var lvl: Variant = d.get("lvl", 0)
+			if not IntentValue.whole(lvl) or int(lvl) < 0 or int(lvl) > SiegeIds.MAX_LEVEL:
+				return {}
+			out["lvl"] = int(lvl)
 		SiegeIds.INTENT_OVERDRIVE:
 			pass
 	return out
@@ -80,8 +88,10 @@ static func route(to: Variant, via: String = SiegeIds.VIA_ACTION) -> Dictionary:
 
 
 ## A pick intent; `at` is the station (upgrade) or the pad (scorpion, pad_upgrade), else unused.
-static func pick(item: String, at: int = 0, auto: bool = false) -> Dictionary:
+static func pick(item: String, at: int = 0, auto: bool = false, lvl: int = 0) -> Dictionary:
 	var d := {"k": SiegeIds.INTENT_PICK, "item": item}
+	if lvl > 0:
+		d["lvl"] = lvl
 	if SiegeIds.STATION_ITEMS.has(item):
 		d["station"] = at
 	if SiegeIds.PAD_ITEMS.has(item):

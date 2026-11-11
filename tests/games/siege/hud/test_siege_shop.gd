@@ -255,6 +255,7 @@ func test_an_added_item_shows_added_and_another_riders_shows_their_name() -> voi
 	var theirs := SiegeReceiptLine.new()
 	theirs.item = SiegeIds.ITEM_UPGRADE
 	theirs.at = SiegeIds.STATION_BALLISTA
+	theirs.lvl = st.station(SiegeIds.STATION_BALLISTA).level + 1
 	theirs.cost = 40
 	theirs.slot = 1
 	theirs.no = [0]
@@ -281,6 +282,7 @@ func test_a_receipt_item_stays_pickable_when_the_gold_is_held() -> void:
 	var st := g.state
 	var line := SiegeReceiptLine.new()
 	line.item = SiegeIds.ITEM_MINE
+	line.lvl = st.mine_level + 1
 	line.cost = 60
 	line.slot = 0
 	st.receipt.assign([line])
@@ -289,11 +291,95 @@ func test_a_receipt_item_stays_pickable_when_the_gold_is_held() -> void:
 		var id: Dictionary = e["id"]
 		if str(id["item"]) == SiegeIds.ITEM_SAVE:
 			continue
-		if str(id["item"]) == SiegeIds.ITEM_MINE:
+		if str(id["item"]) == SiegeIds.ITEM_MINE and int(id["lvl"]) == line.lvl:
 			assert_false(bool(e["disabled"]), "pick it again to take it back")
 			assert_true(bool(e["mine"]))
 		else:
 			assert_true(bool(e["disabled"]), "all 60 gold is held: %s" % str(id))
+
+
+func _rows_of(g: SiegeGame, item: String, at: int) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var st := g.state
+	for e: Dictionary in SiegeShopModel.entries(st, st.rider_at(0), GameStrings.new(), []):
+		var id: Dictionary = e["id"]
+		if str(id["item"]) == item and int(id["at"]) == at:
+			out.append(e)
+	return out
+
+
+func test_level_1_on_the_receipt_adds_a_row_for_level_2_priced_at_that_level() -> void:
+	var g := _break_game(500.0, 2.0)
+	var st := g.state
+	var at := SiegeIds.STATION_BALLISTA
+	st.station(at).level = 0
+	assert_eq(_rows_of(g, "upgrade", at).size(), 1, "level 1 only")
+	SiegeReceipt.add(st, st.rider_at(1), "upgrade", at, 0, [])
+	var rows := _rows_of(g, "upgrade", at)
+	assert_eq(rows.size(), 2, "level 1 (added) and a row for level 2")
+	assert_true(bool(rows[0]["added"]))
+	assert_eq(int(rows[0]["id"]["lvl"]), 1)
+	assert_false(bool(rows[1]["added"]))
+	assert_eq(int(rows[1]["id"]["lvl"]), 2)
+	assert_eq(int(rows[1]["cost"]), 50, "priced at level 2")
+	assert_ne(rows[0]["name"], rows[1]["name"], "each level has its own name")
+	SiegeReceipt.add(st, st.rider_at(0), "upgrade", at, 0, [])
+	assert_eq(_rows_of(g, "upgrade", at).size(), 3, "and level 3 after level 2")
+	SiegeReceipt.add(st, st.rider_at(0), "upgrade", at, 0, [])
+	assert_eq(_rows_of(g, "upgrade", at).size(), 3, "never past level 3")
+
+
+func test_a_level_2_pick_goes_out_with_its_level() -> void:
+	var g := _break_game(500.0, 2.0)
+	var st := g.state
+	var at := SiegeIds.STATION_BALLISTA
+	st.station(at).level = 0
+	SiegeReceipt.add(st, st.rider_at(1), "upgrade", at, 0, [])
+	var panel := _panel(g)
+	var rows := panel.entries.filter(
+		func(e: Dictionary) -> bool: return e["id"]["item"] == "upgrade" and e["id"]["at"] == at
+	)
+	assert_eq(rows.size(), 2)
+	panel.list.item_picked.emit(0, rows[1]["id"], "surge")
+	var sent: Array = (g.ctx.intents as F.Intents).sent
+	assert_eq(int(sent[0]["lvl"]), 2)
+	assert_eq(int(sent[0]["station"]), at)
+
+
+func test_the_lit_row_says_what_a_surge_does() -> void:
+	var g := _break_game(500.0, 2.0)
+	var st := g.state
+	var tx := SiegeHudModel.strings_of(g)
+	st.gate_hp = st.gate_max - 30.0
+	var mine := SiegeReceiptLine.new()
+	mine.item = SiegeIds.ITEM_REPAIR
+	mine.cost = 20
+	mine.slot = 0
+	var other := SiegeReceiptLine.new()
+	other.item = SiegeIds.ITEM_UPGRADE
+	other.at = SiegeIds.STATION_BALLISTA
+	other.lvl = st.station(SiegeIds.STATION_BALLISTA).level + 1
+	other.cost = 40
+	other.slot = 1
+	var undone := SiegeReceiptLine.new()
+	undone.item = SiegeIds.ITEM_UPGRADE
+	undone.at = SiegeIds.STATION_ONAGER
+	undone.lvl = st.station(SiegeIds.STATION_ONAGER).level + 1
+	undone.cost = 40
+	undone.slot = 1
+	undone.no.assign([0])
+	st.receipt.assign([mine, other, undone])
+	var panel := _panel(g)
+	var acts := {}
+	for p in panel.page_count:
+		panel._turn_to(p)
+		for row: Dictionary in panel.model["rows"]:
+			if str(row["act"]) != "":
+				acts[str(row["text"])] = str(row["act"]).to_upper()
+	assert_true(acts.values().has("TAKE BACK"))
+	assert_true(acts.values().has("VOTE NO"))
+	assert_true(acts.values().has("UNDO NO"))
+	assert_eq(tx.t("SIEGE_SHOP_ADDED").to_upper(), "ADDED", "the other rows keep their tags")
 
 
 func test_a_receipt_change_keeps_the_riders_cursor_on_its_row() -> void:

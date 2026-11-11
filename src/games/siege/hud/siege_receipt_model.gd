@@ -10,7 +10,7 @@ extends RefCounted
 ## counts them).
 
 ## Rows the plate has room for.
-const MAX_ROWS := 4
+const MAX_ROWS := 3
 
 
 static func face(game: SiegeGame) -> Dictionary:
@@ -25,7 +25,7 @@ static func face(game: SiegeGame) -> Dictionary:
 			rows
 			. append(
 				{
-					"name": SiegeShopModel.text_of(s, tx, line.item, line.at),
+					"name": SiegeShopModel.text_of(s, tx, line.item, line.at, line.lvl),
 					"cost": line.cost,
 					"by": SiegeHudModel.rider_name(game, picker) if picker != null else "",
 					"yes": tv.yes_count(),

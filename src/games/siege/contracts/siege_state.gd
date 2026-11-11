@@ -366,12 +366,37 @@ func rush_on() -> bool:
 # --- The receipt ---------------------------------------------------------------------------------------
 
 
-## The receipt's line for `item` at `at`, or null.
-func receipt_line(item: String, at: int) -> SiegeReceiptLine:
+## The receipt's line for `item` at `at` (and `lvl`; 0: the lowest level there), or null.
+func receipt_line(item: String, at: int, lvl: int = 0) -> SiegeReceiptLine:
 	for line in receipt:
-		if line.item == item and line.at == at:
+		if line.item == item and line.at == at and (lvl == 0 or line.lvl == lvl):
 			return line
 	return null
+
+
+## The level `item` at `at` stands at now (upgrade: the station's, mine: the mine's, pad upgrade:
+## the pad's); 0 for an item without levels.
+func level_of(item: String, at: int) -> int:
+	match item:
+		SiegeIds.ITEM_UPGRADE:
+			return station(at).level if SiegeIds.is_station(at) else 0
+		SiegeIds.ITEM_MINE:
+			return mine_level
+		SiegeIds.ITEM_PAD_UPGRADE:
+			return pad(at).level if SiegeIds.is_pad(at) else 0
+	return 0
+
+
+## The level the next line of `item` at `at` would buy: the level it stands at, less what the
+## receipt already holds above it, plus one (0 for an item without levels).
+func next_level(item: String, at: int) -> int:
+	if not SiegeIds.LEVELED_ITEMS.has(item):
+		return 0
+	var n := level_of(item, at) + 1
+	for line in receipt:
+		if line.item == item and line.at == at:
+			n += 1
+	return n
 
 
 ## Gold of the rider in `slot` held by their lines on the receipt.
@@ -396,16 +421,17 @@ func spendable(r: SiegeRiderState) -> float:
 	return maxf(r.gold - float(held_by(r.slot)), 0.0)
 
 
-## The slots that vote on the receipt: the riders who are connected (bots always), in slot order.
+## The slots that vote on the receipt: every rider of the session in slot order, bots included. A
+## rider who drops or goes AFK stays a voter at yes until they cast a no: nothing is re-counted
+## on a drop.
 func voter_slots() -> Array[int]:
 	var out: Array[int] = []
 	for r in riders:
-		if r.connected:
-			out.append(r.slot)
+		out.append(r.slot)
 	return out
 
 
-## The vote on `line` as it stands: the connected riders vote, the picker counts yes.
+## The vote on `line` as it stands: every rider votes, the picker counts yes.
 func vote_on(line: SiegeReceiptLine) -> TeamVote:
 	return TeamVote.from_wire(voter_slots(), line.no)
 

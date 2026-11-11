@@ -221,9 +221,15 @@ const RC_NO := 3
 const RC_YES := 4
 ## The vote rejected it: it left the receipt and its gold went back to the picker.
 const RC_REJECT := 5
-## Its picker left the session: it left the receipt.
+## It left with the level below it: an upgrade's level N+1 goes when level N is taken back or
+## voted off, and its gold is free again.
 const RC_DROP := 6
-const RC_ACTS: Array[int] = [RC_ADD, RC_TAKE, RC_NO, RC_YES, RC_REJECT, RC_DROP]
+## The break ended and the receipt was bought (one summary event; `cost` is the gold spent,
+## `yes` the items bought).
+const RC_BOUGHT := 7
+const RC_ACTS: Array[int] = [RC_ADD, RC_TAKE, RC_NO, RC_YES, RC_REJECT, RC_DROP, RC_BOUGHT]
+## Items that come in levels: the receipt holds one line per level, level N+1 only on top of N.
+const LEVELED_ITEMS: Array[String] = [ITEM_UPGRADE, ITEM_MINE, ITEM_PAD_UPGRADE]
 
 # --- Overdrive (SiegeRiderState.od_state; overdrive event "st") -------------------------------
 const OD_READY := 0

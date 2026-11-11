@@ -123,7 +123,7 @@ static func encode(state: SiegeState) -> Dictionary:
 static func _receipt_rows(state: SiegeState) -> Array:
 	var rows: Array = []
 	for line in state.receipt:
-		var row: Array = [SiegeIds.item_code(line.item), line.at, line.cost, line.slot]
+		var row: Array = [SiegeIds.item_code(line.item), line.at, line.lvl, line.cost, line.slot]
 		row.append_array(line.no)
 		rows.append(row)
 	return rows
@@ -186,11 +186,12 @@ static func _receipt(state: SiegeState, rows: Variant) -> void:
 		var line := SiegeReceiptLine.new()
 		line.item = SiegeIds.item_of(WireRead.int_of(row[SiegeSnapshotSchema.RC_ITEM]))
 		line.at = WireRead.int_of(row[SiegeSnapshotSchema.RC_AT])
+		line.lvl = clampi(WireRead.int_of(row[SiegeSnapshotSchema.RC_LVL]), 0, SiegeIds.MAX_LEVEL)
 		line.cost = maxi(WireRead.int_of(row[SiegeSnapshotSchema.RC_COST]), 0)
 		line.slot = WireRead.int_of(row[SiegeSnapshotSchema.RC_SLOT])
 		if line.item == "" or state.rider_at(line.slot) == null:
 			continue
-		if state.receipt_line(line.item, line.at) != null:
+		if state.receipt_line(line.item, line.at, line.lvl) != null:
 			continue
 		var last := mini((row as Array).size(), SiegeSnapshotSchema.RC_NO + state.riders.size())
 		for i in range(SiegeSnapshotSchema.RC_NO, last):

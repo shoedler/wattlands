@@ -56,13 +56,15 @@ export const INT_FIELDS = {
   breach: ['n'],
   gate_restored: ['hp'],
   buy: ['slot', 'station', 'pad', 'ok', 'lvl'],
-  receipt: ['slot', 'station', 'pad', 'act', 'picker', 'yes', 'no'],
+  receipt: ['slot', 'station', 'pad', 'act', 'picker', 'yes', 'no', 'lvl', 'who', 'cost'],
   route: ['slot', 'to'],
   overdrive: ['slot', 'st', 'scored'],
 };
 export const STRING_FIELDS = { wave_start: ['role'], buy: ['item', 'why'], receipt: ['item'], overdrive: ['why'] };
 /** receipt event acts (SiegeIds.RC_*). */
-export const RC = { ADD: 1, TAKE: 2, NO: 3, YES: 4, REJECT: 5, DROP: 6 };
+export const RC = { ADD: 1, TAKE: 2, NO: 3, YES: 4, REJECT: 5, DROP: 6, BOUGHT: 7 };
+/** Items that come in levels (SiegeIds.LEVELED_ITEMS): one receipt line per level. */
+export const LEVELED = ['upgrade', 'mine', 'pad_upgrade'];
 export const ITEMS = ['upgrade', 'mine', 'scorpion', 'pad_upgrade', 'iron_bands', 'repair', 'reserve_flywheel', 'aqueduct_drive', 'spare_cauldron'];
 export const BUY_REASONS = ['closed', 'funds', 'pad_taken', 'no_pad', 'no_station', 'max_level', 'limit', 'gate_full'];
 export const COMBAT_TYPES = new Set(['push', 'dock', 'reach', 'shot', 'kill', 'leak', 'breach', 'gate_restored', 'rush']);
@@ -158,10 +160,15 @@ export function eventErrors(e) {
     case 'receipt':
       inRange('slot', e.slot, 0, 7);
       inRange('picker', e.picker, 0, 7);
-      inRange('act', e.act, RC.ADD, RC.DROP);
-      inRange('yes', e.yes, 0, 8);
+      inRange('act', e.act, RC.ADD, RC.BOUGHT);
+      inRange('yes', e.yes, 0, 99);
       inRange('no', e.no, 0, 8);
+      inRange('lvl', e.lvl, 0, 3);
+      inRange('who', e.who, 0, 255);
+      inRange('cost', e.cost, 0, 100000);
+      if (e.act === RC.BOUGHT) break;
       if (!ITEMS.includes(e.item)) errs.push(`receipt: unknown item ${JSON.stringify(e.item)}`);
+      if (LEVELED.includes(e.item) !== (e.lvl > 0)) errs.push(`receipt: ${e.item} with level ${e.lvl}`);
       inRange('station', e.station, 0, 4);
       inRange('pad', e.pad, 0, 4);
       break;
@@ -208,7 +215,8 @@ export function overdrivePairing(events) {
 export function receiptErrors(events, { tail = false } = {}) {
   const errs = [];
   const on = new Map();
-  const keyOf = (e) => `${e.item}/${e.pad > 0 ? e.pad : e.station}`;
+  const keyOf = (e) => `${e.item}/${e.pad > 0 ? e.pad : e.station}${LEVELED.includes(e.item) && e.lvl > 0 ? `/${e.lvl}` : ''}`;
+  const below = (e) => `${e.item}/${e.pad > 0 ? e.pad : e.station}/${e.lvl - 1}`;
   const need = (e, what) => {
     if (on.has(keyOf(e))) return true;
     if (!tail) errs.push(`receipt: ${what} ${keyOf(e)} which is not on the receipt`);
@@ -220,6 +228,7 @@ export function receiptErrors(events, { tail = false } = {}) {
       switch (e.act) {
         case RC.ADD:
           if (on.has(k)) errs.push(`receipt: ${k} added twice`);
+          if (e.lvl > 1 && !on.has(below(e)) && !tail) errs.push(`receipt: ${k} added without the level below it`);
           if (e.slot !== e.picker) errs.push(`receipt: ${k} added by slot ${e.slot} but picked by ${e.picker}`);
           on.set(k, e.picker);
           break;
@@ -245,6 +254,11 @@ export function receiptErrors(events, { tail = false } = {}) {
       if (e.ok === 1) {
         if (need(e, 'bought') && on.get(k) !== e.slot) errs.push(`receipt: slot ${e.slot} bought ${k}, picked by ${on.get(k)}`);
         on.delete(k);
+      } else if (LEVELED.includes(e.item)) {
+        // a refused purchase carries no level: it was the lowest line of that item, by that slot
+        const prefix = `${e.item}/${e.pad > 0 ? e.pad : e.station}/`;
+        const lowest = [...on.keys()].filter((x) => x.startsWith(prefix) && on.get(x) === e.slot).sort()[0];
+        if (lowest) on.delete(lowest);
       } else if (on.get(k) === e.slot) {
         on.delete(k);
       }

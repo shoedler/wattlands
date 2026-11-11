@@ -15,7 +15,7 @@ extends RefCounted
 ##   3. Intents in slot order, each rider's in arrival order: route (SiegeRouting), pick
 ##      (SiegeShop, SiegeReceipt), overdrive (SiegeOverdrive.try_start).
 ##   4. Autopilot for riders in a fallback: route once a second in slot order; shop picks on the
-##      receipt in breaks (<= 2 per break); then the receipt's votes settle (a rider who left).
+##      receipt in breaks (<= 2 per break).
 ##   5. Mine pay, wave-time stats, then SiegeCombat.step (spawns, movement, the tar works,
 ##      station output m with SiegeOverdrive.multiplier, aim and fire, pads, projectiles, gate,
 ##      Breach).
@@ -47,8 +47,6 @@ static func step(state: SiegeState, inputs: SiegeInputs, dt: float) -> Array[Dic
 	_intents(state, inputs, events)
 	SiegeRouting.autopilot(state, inputs, events)
 	SiegeShop.autopilot(state, inputs, events)
-	if state.shop_open():
-		SiegeReceipt.settle(state, events)
 	_economy(state, inputs, dt)
 	events.append_array(SiegeCombat.step(state, inputs, dt))
 	_finish(state, inputs, dt, events)

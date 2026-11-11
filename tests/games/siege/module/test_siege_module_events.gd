@@ -53,17 +53,19 @@ func test_a_refused_purchase_toasts_only_the_buyers_peer() -> void:
 	_free(client)
 
 
-func test_a_vote_that_takes_an_item_off_toasts_only_its_picker() -> void:
-	var rejected := SiegeEvents.receipt(1, SiegeIds.ITEM_MINE, 0, 0, SiegeIds.RC_REJECT, 1, 1, 1)
+func test_a_vote_that_takes_an_item_off_toasts_everyone() -> void:
+	var rejected := SiegeEvents.receipt(
+		1, SiegeIds.ITEM_MINE, 0, 0, SiegeIds.RC_REJECT, 1, 1, 1, 1, 3, 60
+	)
 	var host := _host()
 	host._local_effects(rejected)
-	assert_eq(K.toasts(host), [], "slot 1 picked it, the host rides slot 0")
-	host._local_effects(SiegeEvents.receipt(0, "mine", 0, 0, SiegeIds.RC_REJECT, 0, 1, 1))
-	assert_eq(_keys(K.toasts(host)), ["SIEGE_TOAST_RECEIPT_REJECTED"])
-	assert_eq(K.toasts(host)[0][2], 1)
-	host._local_effects(SiegeEvents.receipt(0, "mine", 0, 0, SiegeIds.RC_NO, 1, 1, 1))
-	host._local_effects(SiegeEvents.receipt(0, "mine", 0, 0, SiegeIds.RC_DROP, 0, 1, 1))
-	assert_eq(K.toasts(host).size(), 1, "a vote or a rider leaving is no toast")
+	assert_eq(
+		_keys(K.toasts(host)), ["SIEGE_TOAST_RECEIPT_REJECTED"], "the host's rider sees it too"
+	)
+	assert_eq(K.toasts(host)[0][2], 1, "named for the host's own peer: nothing is broadcast")
+	host._local_effects(SiegeEvents.receipt(0, "mine", 0, 0, SiegeIds.RC_NO, 1, 1, 1, 1))
+	host._local_effects(SiegeEvents.receipt(0, "mine", 0, 0, SiegeIds.RC_DROP, 0, 1, 1, 2))
+	assert_eq(K.toasts(host).size(), 1, "a vote or a level leaving with the one below is no toast")
 	_free(host)
 	var client := _client(2)
 	client.apply_event(rejected)
@@ -71,6 +73,19 @@ func test_a_vote_that_takes_an_item_off_toasts_only_its_picker() -> void:
 	assert_eq(_keys(toasts), ["SIEGE_TOAST_RECEIPT_REJECTED"])
 	assert_eq(toasts[0][1], ["Mine level 1 (+20% gold)"])
 	assert_eq(toasts[0][2], Wl.ALL_PEERS)
+	_free(client)
+
+
+func test_the_break_end_toasts_the_receipt_total_to_everyone() -> void:
+	var done := SiegeEvents.receipt(0, "", 0, 0, SiegeIds.RC_BOUGHT, 0, 3, 0, 0, 0, 110)
+	var host := _host()
+	host._local_effects(done)
+	assert_eq(_keys(K.toasts(host)), ["SIEGE_TOAST_RECEIPT_BOUGHT"])
+	assert_eq(K.toasts(host)[0][1], [110])
+	_free(host)
+	var client := _client(2)
+	client.apply_event(done)
+	assert_eq(K.toasts(client)[0][1], [110])
 	_free(client)
 
 
@@ -321,7 +336,7 @@ func test_a_pick_reaches_the_client_in_the_snapshot_and_a_vote_takes_it_off() ->
 	link.step(tick, {1: [SiegeIntents.pick(SiegeIds.ITEM_MINE)]})
 	tick = link.run(tick + 1, (tick + 4) * Wl.SIM_DT)
 	assert_eq(client.state.receipt.size(), 1, "the client sees the same receipt")
-	assert_eq(client.state.receipt[0].key(), "mine/0")
+	assert_eq(client.state.receipt[0].key(), "mine/0/1")
 	assert_eq(client.state.held_by(0), 60)
 	var adds := link.sent.filter(func(e: Dictionary) -> bool: return e["type"] == "receipt")
 	assert_eq(adds.size(), 1)

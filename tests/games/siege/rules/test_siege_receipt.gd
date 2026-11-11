@@ -42,7 +42,7 @@ func _keys(rig: SiegeRig) -> Array[String]:
 func test_a_pick_goes_on_the_receipt_and_holds_the_pickers_gold() -> void:
 	var rig := _rig()
 	var ev := _pick(rig, 1, SiegeIds.ITEM_UPGRADE, BAND)
-	assert_eq(_keys(rig), ["upgrade/1"])
+	assert_eq(_keys(rig), ["upgrade/1/1"])
 	assert_eq(rig.state.receipt[0].cost, 40)
 	assert_eq(rig.state.receipt[0].slot, 0)
 	assert_eq(rig.rider(1).gold, 200.0, "nothing is spent yet")
@@ -74,13 +74,13 @@ func test_a_pick_never_takes_more_gold_than_the_picker_has_free() -> void:
 	_pick(rig, 1, SiegeIds.ITEM_MINE)
 	assert_eq(rig.state.spendable(rig.rider(1)), 40.0)
 	_pick(rig, 1, SiegeIds.ITEM_UPGRADE, BAND)
-	assert_eq(_keys(rig), ["mine/0", "upgrade/1"], "40 is exactly enough")
+	assert_eq(_keys(rig), ["mine/0/1", "upgrade/1/1"], "40 is exactly enough")
 	assert_eq(rig.state.spendable(rig.rider(1)), 0.0)
 	var ev := _pick(rig, 1, SiegeIds.ITEM_CAULDRON)
 	var refused := rig.of_type(SiegeIds.EV_BUY, ev)
 	assert_eq(refused.size(), 1)
 	assert_eq(refused[0]["why"], SiegeIds.BUY_FUNDS)
-	assert_eq(_keys(rig), ["mine/0", "upgrade/1"])
+	assert_eq(_keys(rig), ["mine/0/1", "upgrade/1/1"])
 	assert_gte(rig.state.spendable(rig.rider(1)), 0.0)
 
 
@@ -91,7 +91,7 @@ func test_held_gold_can_never_pass_the_riders_gold() -> void:
 	]:
 		_pick(rig, 1, item)
 		assert_lte(float(rig.state.held_by(0)), rig.rider(1).gold)
-	assert_eq(_keys(rig), ["mine/0", "spare_cauldron/0"], "60 + 60, the next 80 and 45 don't fit")
+	assert_eq(_keys(rig), ["mine/0/1", "spare_cauldron/0"], "60 + 60, the next 80 and 45 don't fit")
 
 
 func test_an_item_can_not_be_on_the_receipt_twice() -> void:
@@ -217,7 +217,7 @@ func test_a_solo_riders_own_pick_never_rejects() -> void:
 	var rig := _rig(1)
 	_pick(rig, 1, SiegeIds.ITEM_MINE)
 	rig.run(5.0)
-	assert_eq(_keys(rig), ["mine/0"])
+	assert_eq(_keys(rig), ["mine/0/1"])
 	var tv := rig.state.vote_on(rig.state.receipt[0])
 	assert_eq(tv.yes_count(), 1)
 	assert_eq(tv.no_count(), 0)
@@ -247,7 +247,7 @@ func test_a_rejected_item_leaves_no_trace_and_can_be_picked_again() -> void:
 	_pick(rig, 2, SiegeIds.ITEM_MINE)
 	assert_eq(rig.state.receipt.size(), 0)
 	_pick(rig, 1, SiegeIds.ITEM_MINE)
-	assert_eq(_keys(rig), ["mine/0"], "a fresh line, with no old votes")
+	assert_eq(_keys(rig), ["mine/0/1"], "a fresh line, with no old votes")
 	assert_eq(rig.state.receipt[0].no, [])
 
 
@@ -284,7 +284,7 @@ func test_two_picks_in_one_tick_are_bought_in_slot_order() -> void:
 	rig.send(1, SiegeIntents.pick(SiegeIds.ITEM_CAULDRON))
 	rig.step()
 	assert_eq(
-		_keys(rig), ["spare_cauldron/0", "mine/0"], "slot order inside a tick, not send order"
+		_keys(rig), ["spare_cauldron/0", "mine/0/1"], "slot order inside a tick, not send order"
 	)
 
 
@@ -342,49 +342,226 @@ func test_a_purchase_the_state_no_longer_allows_is_refused_and_costs_nothing() -
 	assert_eq(rig.rider(1).gold, 100.0)
 
 
-# --- a rider leaves ---------------------------------------------------------------------------------
+# --- a rider who drops or goes AFK -------------------------------------------------------------------
 
 
-func test_a_rider_who_leaves_takes_their_items_off_and_keeps_their_gold() -> void:
+func test_a_rider_who_drops_changes_nothing_on_the_receipt() -> void:
 	var rig := _rig(3)
 	_pick(rig, 1, SiegeIds.ITEM_MINE)
 	_pick(rig, 3, SiegeIds.ITEM_CAULDRON)
 	_pick(rig, 2, SiegeIds.ITEM_CAULDRON)
-	assert_eq(_keys(rig), ["mine/0", "spare_cauldron/0"], "one no of three on the cauldron")
+	assert_eq(_keys(rig), ["mine/0/1", "spare_cauldron/0"], "one no of three on the cauldron")
 	rig.connected[3] = false
-	var ev := rig.step()
-	assert_eq(_keys(rig), ["mine/0"], "slot 2's item left with them")
-	assert_eq(_acts(ev, SiegeIds.RC_DROP).size(), 1)
-	assert_eq(rig.rider(3).gold, 200.0, "their gold was never spent")
+	rig.afk[1] = true
+	var ev := rig.run(2.0)
+	assert_eq(_keys(rig), ["mine/0/1", "spare_cauldron/0"], "their items stay")
+	assert_eq(
+		ev.filter(func(e: Dictionary) -> bool: return e["type"] == SiegeIds.EV_RECEIPT).size(), 0
+	)
+	assert_eq(rig.state.receipt[1].no, [1], "and the votes already cast stay")
 
 
-func test_a_voter_who_leaves_changes_the_count() -> void:
+func test_a_drop_never_turns_a_vote_into_a_rejection() -> void:
 	var rig := _rig(3)
 	_pick(rig, 1, SiegeIds.ITEM_MINE)
 	_pick(rig, 2, SiegeIds.ITEM_MINE)
 	assert_eq(rig.state.receipt.size(), 1, "one no of three")
 	rig.connected[3] = false
+	rig.run(1.0)
+	assert_eq(rig.state.receipt.size(), 1, "the third rider dropping is no vote at all")
+	rig.connected[3] = true
+	rig.run(0.5)
+	assert_eq(rig.state.receipt.size(), 1)
+
+
+func test_a_dropped_riders_items_are_bought_with_their_held_gold() -> void:
+	var rig := _rig(2, 0, 200.0)
+	_pick(rig, 2, SiegeIds.ITEM_MINE)
+	rig.connected[2] = false
+	rig.run(2.0)
+	assert_eq(rig.state.receipt.size(), 1)
+	rig.goto(rig.phase_start(2))
 	var ev := rig.step()
-	assert_eq(rig.state.receipt.size(), 0, "two voters left: 1 yes, 1 no is a tie")
-	assert_eq(_acts(ev, SiegeIds.RC_REJECT).size(), 1)
+	assert_eq(rig.state.mine_level, 1, "the break's end bought it as usual")
+	assert_almost_eq(rig.rider(2).gold, 140.0, 0.5)
+	assert_eq(int(rig.of_type(SiegeIds.EV_BUY, ev)[0]["ok"]), 1)
 
 
-func test_a_leaving_voters_no_is_dropped() -> void:
-	var rig := _rig(3)
+func test_a_dropped_riders_vote_stays_until_the_break_ends() -> void:
+	var rig := _rig(4)
 	_pick(rig, 1, SiegeIds.ITEM_MINE)
 	_pick(rig, 2, SiegeIds.ITEM_MINE)
 	rig.connected[2] = false
-	rig.step()
-	assert_eq(rig.state.receipt.size(), 1)
-	assert_eq(rig.state.receipt[0].no, [], "their no left with them")
+	rig.run(1.0)
+	assert_eq(rig.state.receipt[0].no, [1], "their no is still counted")
+	_pick(rig, 3, SiegeIds.ITEM_MINE)
+	assert_eq(rig.state.receipt.size(), 0, "2 yes, 2 no: the vote cast by the third tips it")
 
 
-func test_a_disconnected_rider_cannot_pick() -> void:
+# --- levels -----------------------------------------------------------------------------------------
+
+
+func _pick_lvl(rig: SiegeRig, peer: int, item: String, at: int, lvl: int) -> Array[Dictionary]:
+	rig.send(peer, SiegeIntents.pick(item, at, false, lvl))
+	return rig.step()
+
+
+func test_level_2_of_an_upgrade_is_its_own_line_priced_at_that_level() -> void:
+	var rig := _rig(3)
+	_pick(rig, 1, SiegeIds.ITEM_UPGRADE, BAND)
+	assert_eq(rig.state.next_level("upgrade", BAND), 2)
+	_pick(rig, 2, SiegeIds.ITEM_UPGRADE, BAND)
+	assert_eq(_keys(rig), ["upgrade/1/1"], "a plain pick of a line that is there is a vote")
+	var ev := _pick_lvl(rig, 2, SiegeIds.ITEM_UPGRADE, BAND, 2)
+	assert_eq(_keys(rig), ["upgrade/1/1", "upgrade/1/2"])
+	assert_eq(rig.state.receipt[1].cost, 50, "level 2 costs 50")
+	assert_eq(rig.state.receipt[1].slot, 1)
+	var added := _acts(ev, SiegeIds.RC_ADD)
+	assert_eq(int(added[0]["lvl"]), 2)
+	assert_eq(int(added[0]["cost"]), 50)
+	assert_eq(rig.state.held_by(1), 50)
+
+
+func test_a_level_can_only_go_on_top_of_the_ones_below() -> void:
 	var rig := _rig(2)
-	rig.connected[2] = false
+	_pick_lvl(rig, 1, SiegeIds.ITEM_UPGRADE, BAND, 2)
+	assert_eq(_keys(rig), [], "level 2 with no level 1 on the receipt is ignored")
+	_pick(rig, 1, SiegeIds.ITEM_UPGRADE, BAND)
+	_pick_lvl(rig, 1, SiegeIds.ITEM_UPGRADE, BAND, 3)
+	assert_eq(_keys(rig), ["upgrade/1/1"], "level 3 skipping level 2 is ignored")
+	_pick_lvl(rig, 1, SiegeIds.ITEM_UPGRADE, BAND, 2)
+	_pick_lvl(rig, 1, SiegeIds.ITEM_UPGRADE, BAND, 3)
+	assert_eq(_keys(rig), ["upgrade/1/1", "upgrade/1/2", "upgrade/1/3"])
+	assert_eq(rig.state.next_level("upgrade", BAND), 4)
+	var ev := _pick(rig, 1, SiegeIds.ITEM_UPGRADE, BAND)
+	assert_eq(
+		_keys(rig), [], "with no level the pick toggles the lowest line: the ones above leave too"
+	)
+	assert_eq(_acts(ev, SiegeIds.RC_DROP).size(), 2)
+
+
+func test_taking_level_1_back_takes_the_levels_above_it_and_frees_their_gold() -> void:
+	var rig := _rig(3)
+	_pick(rig, 1, SiegeIds.ITEM_UPGRADE, BAND)
+	_pick_lvl(rig, 2, SiegeIds.ITEM_UPGRADE, BAND, 2)
+	assert_eq(rig.state.held_by(1), 50)
+	var ev := _pick(rig, 1, SiegeIds.ITEM_UPGRADE, BAND)
+	assert_eq(_keys(rig), [])
+	assert_eq(rig.state.held_by(0), 0)
+	assert_eq(rig.state.held_by(1), 0, "level 2's gold went back to its picker")
+	assert_eq(_acts(ev, SiegeIds.RC_TAKE).size(), 1)
+	assert_eq(_acts(ev, SiegeIds.RC_DROP).size(), 1)
+	assert_eq(int(_acts(ev, SiegeIds.RC_DROP)[0]["picker"]), 1)
+
+
+func test_level_1_voted_off_takes_level_2_with_it() -> void:
+	var rig := _rig(2)
+	_pick(rig, 1, SiegeIds.ITEM_MINE)
+	_pick_lvl(rig, 1, SiegeIds.ITEM_MINE, 0, 2)
+	assert_eq(_keys(rig), ["mine/0/1", "mine/0/2"])
+	var ev := _pick_lvl(rig, 2, SiegeIds.ITEM_MINE, 0, 1)
+	assert_eq(_keys(rig), [], "the tie on level 1 rejects it and level 2 goes with it")
+	assert_eq(_acts(ev, SiegeIds.RC_REJECT).size(), 1)
+	assert_eq(_acts(ev, SiegeIds.RC_DROP).size(), 1)
+	assert_eq(rig.state.held_by(0), 0)
+
+
+func test_level_2_has_its_own_vote() -> void:
+	var rig := _rig(2)
+	_pick(rig, 1, SiegeIds.ITEM_UPGRADE, BAND)
+	_pick_lvl(rig, 1, SiegeIds.ITEM_UPGRADE, BAND, 2)
+	var ev := _pick_lvl(rig, 2, SiegeIds.ITEM_UPGRADE, BAND, 2)
+	assert_eq(_keys(rig), ["upgrade/1/1"], "a no on level 2 alone takes level 2 off, not level 1")
+	assert_eq(_acts(ev, SiegeIds.RC_REJECT).size(), 1)
+	assert_eq(int(_acts(ev, SiegeIds.RC_REJECT)[0]["lvl"]), 2)
+
+
+func test_levels_are_bought_in_order_and_the_station_ends_at_the_top_one() -> void:
+	var rig := _rig(2)
+	_pick(rig, 1, SiegeIds.ITEM_UPGRADE, BAND)
+	_pick_lvl(rig, 2, SiegeIds.ITEM_UPGRADE, BAND, 2)
+	_pick_lvl(rig, 1, SiegeIds.ITEM_UPGRADE, BAND, 3)
+	rig.goto(rig.phase_start(2))
+	var ev := rig.step()
+	var buys := rig.of_type(SiegeIds.EV_BUY, ev)
+	assert_eq([int(buys[0]["lvl"]), int(buys[1]["lvl"]), int(buys[2]["lvl"])], [1, 2, 3])
+	assert_eq(rig.state.station(BAND).level, 3)
+	assert_almost_eq(rig.rider(1).gold, 200.0 - 40.0 - 70.0, 0.5)
+	assert_almost_eq(rig.rider(2).gold, 200.0 - 50.0, 0.5)
+
+
+func test_mine_levels_and_pad_upgrades_stack_too() -> void:
+	var rig := _rig(1, 0, 500.0)
+	_pick(rig, 1, SiegeIds.ITEM_MINE)
+	_pick_lvl(rig, 1, SiegeIds.ITEM_MINE, 0, 2)
+	_pick(rig, 1, SiegeIds.ITEM_PAD_UPGRADE, 1)
+	_pick_lvl(rig, 1, SiegeIds.ITEM_PAD_UPGRADE, 1, 2)
+	assert_eq(_keys(rig), ["mine/0/1", "mine/0/2", "pad_upgrade/1/1", "pad_upgrade/1/2"])
+	assert_eq(rig.state.receipt_total(), 60 + 90 + 40 + 50)
+	rig.goto(rig.phase_start(2))
 	rig.step()
+	assert_eq(rig.state.mine_level, 2)
+	assert_eq(rig.state.pad(1).level, 2)
+
+
+func test_no_level_goes_past_the_top_one() -> void:
+	var rig := _rig(1, 0, 500.0)
+	rig.state.station(BAND).level = 2
+	_pick(rig, 1, SiegeIds.ITEM_UPGRADE, BAND)
+	assert_eq(_keys(rig), ["upgrade/1/3"], "the next level is 3")
+	assert_eq(SiegeIntents.normalize({"k": "pick", "item": "upgrade", "station": 1, "lvl": 4}), {})
+	assert_eq(rig.state.next_level("upgrade", BAND), 4)
+	var events: Array[Dictionary] = []
+	assert_false(SiegeReceipt.add(rig.state, rig.rider(1), "upgrade", BAND, 0, events))
+	assert_eq(events[0]["why"], SiegeIds.BUY_MAX_LEVEL, "nothing above level 3")
+
+
+func test_a_vote_does_not_end_the_shop_fallback_but_a_pick_and_a_take_back_do() -> void:
+	var rig := _rig(2)
+	_pick(rig, 1, SiegeIds.ITEM_MINE)
+	rig.rider(2).shop_fallback = true
 	_pick(rig, 2, SiegeIds.ITEM_MINE)
-	assert_eq(rig.state.receipt.size(), 0)
+	assert_true(rig.rider(2).shop_fallback, "a vote leaves the Autopilot's shopping alone")
+	_pick(rig, 1, SiegeIds.ITEM_CAULDRON)
+	_pick(rig, 2, SiegeIds.ITEM_CAULDRON)
+	assert_true(rig.rider(2).shop_fallback, "so does a vote on another item")
+	rig.rider(2).shop_fallback = true
+	_pick(rig, 2, SiegeIds.ITEM_RESERVE)
+	assert_false(rig.rider(2).shop_fallback, "adding an item is a deliberate pick")
+	rig.rider(2).shop_fallback = true
+	_pick(rig, 2, SiegeIds.ITEM_RESERVE)
+	assert_false(rig.rider(2).shop_fallback, "so is taking it back")
+
+
+func test_the_break_end_sums_the_receipt_up_in_one_event() -> void:
+	var rig := _rig(2)
+	_pick(rig, 1, SiegeIds.ITEM_UPGRADE, BAND)
+	_pick(rig, 2, SiegeIds.ITEM_CAULDRON)
+	rig.goto(rig.phase_start(2))
+	var ev := rig.step()
+	var done := _acts(ev, SiegeIds.RC_BOUGHT)
+	assert_eq(done.size(), 1)
+	assert_eq(int(done[0]["cost"]), 100)
+	assert_eq(int(done[0]["yes"]), 2, "two items")
+	assert_eq(SiegeEvents.check(done[0]), "")
+
+
+func test_an_empty_break_end_says_nothing() -> void:
+	var rig := _rig(2)
+	rig.goto(rig.phase_start(2))
+	assert_eq(_acts(rig.step(), SiegeIds.RC_BOUGHT), [])
+
+
+func test_a_rejection_names_the_picker_and_every_no_in_who() -> void:
+	var rig := _rig(4)
+	_pick(rig, 1, SiegeIds.ITEM_MINE)
+	_pick(rig, 3, SiegeIds.ITEM_MINE)
+	var ev := _pick(rig, 4, SiegeIds.ITEM_MINE)
+	var rej := _acts(ev, SiegeIds.RC_REJECT)
+	assert_eq(rej.size(), 1)
+	assert_eq(
+		int(rej[0]["who"]), (1 << 0) | (1 << 2) | (1 << 3), "the picker and the two who voted no"
+	)
 
 
 # --- determinism ------------------------------------------------------------------------------------
@@ -436,19 +613,21 @@ func test_autopilot_adds_its_picks_to_the_receipt_and_buys_them_at_the_end() -> 
 	assert_eq(rig.state.receipt.size(), 0)
 
 
-func test_autopilot_does_not_pick_what_is_on_the_receipt() -> void:
+func test_autopilot_goes_on_top_of_what_is_on_the_receipt() -> void:
 	var rig := _rig(2)
 	var blind := SiegeAutopilot.shop_picks(rig.state, rig.rider(1), 1, true)
 	assert_eq(blind.size(), 1)
 	var first := blind[0]
 	_pick(rig, 2, str(first["item"]), SiegeIntents.at_of(first))
+	assert_eq(rig.state.receipt.size(), 1)
 	var then := SiegeAutopilot.shop_picks(rig.state, rig.rider(1), 1)
 	assert_eq(then.size(), 1)
-	assert_ne(
-		SiegeReceiptLine.key_of(str(then[0]["item"]), SiegeIntents.at_of(then[0])),
-		SiegeReceiptLine.key_of(str(first["item"]), SiegeIntents.at_of(first)),
-		"the next pick is a different item"
-	)
+	assert_eq(then[0]["item"], first["item"])
+	var events: Array[Dictionary] = []
+	var item := str(then[0]["item"])
+	var station := int(then[0].get("station", 0))
+	assert_true(SiegeReceipt.add(rig.state, rig.rider(1), item, station, 0, events))
+	assert_eq(rig.state.receipt[1].lvl, 2, "level 2 of the same station: the stack continues")
 
 
 func test_autopilot_picks_only_what_the_rider_has_free() -> void:
@@ -469,11 +648,11 @@ func test_the_receipt_survives_a_snapshot_round_trip_with_its_votes() -> void:
 	_pick(rig, 2, SiegeIds.ITEM_MINE)
 	_pick(rig, 3, SiegeIds.ITEM_SCORPION, 3)
 	var snap := SiegeSnapshot.encode(rig.state)
-	assert_eq(snap["rc"], [[2, 0, 60, 0, 1], [3, 3, 40, 2]])
+	assert_eq(snap["rc"], [[2, 0, 1, 60, 0, 1], [3, 3, 0, 40, 2]])
 	var fresh := SiegeKit.state("short", 3)
 	SiegeSnapshot.apply(fresh, JSON.parse_string(JSON.stringify(snap)))
 	assert_eq(fresh.receipt.size(), 2)
-	assert_eq(fresh.receipt[0].key(), "mine/0")
+	assert_eq(fresh.receipt[0].key(), "mine/0/1")
 	assert_eq(fresh.receipt[0].no, [1])
 	assert_eq(fresh.receipt[1].key(), "scorpion/3")
 	assert_eq(fresh.receipt[1].cost, 40)

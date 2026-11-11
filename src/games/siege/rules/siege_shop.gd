@@ -35,15 +35,16 @@ static func autopiloted(r: SiegeRiderState) -> bool:
 
 
 ## Applies one normalized pick intent from `r`. An auto-confirm never counts, and a pick while the
-## shop is closed is ignored.
+## shop is closed is ignored. Adding an item or taking one back is a deliberate pick and ends the
+## rider's shop fallback; casting a vote on someone else's item does not.
 static func intent(
 	state: SiegeState, r: SiegeRiderState, it: Dictionary, events: Array[Dictionary]
 ) -> void:
 	if bool(it.get("auto", false)) or not state.shop_open():
 		return
-	if not r.is_bot:
+	var act := SiegeReceipt.pick(state, r, it, events)
+	if not r.is_bot and act != SiegeIds.RC_NO and act != SiegeIds.RC_YES:
 		r.shop_fallback = false
-	SiegeReceipt.pick(state, r, it, events)
 
 
 ## Resolves one purchase (a normalized intent's item, station and pad) and returns its `buy`
@@ -57,22 +58,27 @@ static func buy(state: SiegeState, r: SiegeRiderState, it: Dictionary) -> Dictio
 	return SiegeEvents.buy(r.slot, item, station, pad, why == SiegeIds.BUY_OK, why, int(res["lvl"]))
 
 
-## The price of `item` now (-1 when it can't be bought at all: max level, limit reached).
-static func price(state: SiegeState, item: String, station: int = 0, pad: int = 0) -> int:
+## The price of `item` now (-1 when it can't be bought at all: max level, limit reached). `lvl` is
+## the level of an upgrade, mine level or pad upgrade to price (0: the next one after what stands).
+static func price(
+	state: SiegeState, item: String, station: int = 0, pad: int = 0, lvl: int = 0
+) -> int:
 	var c := state.content
+	if lvl > SiegeIds.MAX_LEVEL:
+		return -1
 	match item:
 		SiegeIds.ITEM_UPGRADE:
 			if not SiegeIds.UPGRADABLE.has(station):
 				return -1
-			return c.station_upgrade_cost(state.station(station).level + 1)
+			return c.station_upgrade_cost(lvl if lvl > 0 else state.station(station).level + 1)
 		SiegeIds.ITEM_MINE:
-			return c.mine_level_cost(state.mine_level + 1)
+			return c.mine_level_cost(lvl if lvl > 0 else state.mine_level + 1)
 		SiegeIds.ITEM_SCORPION:
 			return int(c.pad_def(SiegeIds.PAD_SCORPION).get("cost", 40))
 		SiegeIds.ITEM_PAD_UPGRADE:
 			if not SiegeIds.is_pad(pad) or not state.pad(pad).built():
 				return -1
-			return c.pad_upgrade_cost(state.pad(pad).level + 1)
+			return c.pad_upgrade_cost(lvl if lvl > 0 else state.pad(pad).level + 1)
 		SiegeIds.ITEM_IRON_BANDS:
 			if state.iron_bands >= int(c.num("gate.iron_bands_max", 2.0)):
 				return -1

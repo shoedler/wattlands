@@ -22,10 +22,11 @@ extends RefCounted
 ##  "ru": [1, i, left_ms]   a rush is on (index i, time left), absent otherwise
 ##  "rn": n   the index of the next rush (rushes_at_s), absent at 0
 ##  "rk": n   the arrow organ's next rack, absent at 0
-##  "rc": [[item, at, cost, slot, no_slot...], ...]   the shared receipt in the order the items were
-##        added, absent when empty: item is SiegeIds.item_code (1..9), at the station or pad (0
-##        otherwise), cost the gold held, slot the picker, then the slots that voted no in slot
-##        order (TeamVote.no_voters); a row is at least RC_NO columns wide and as wide as its votes
+##  "rc": [[item, at, lvl, cost, slot, no_slot...], ...]   the shared receipt in the order the items
+##        were added, absent when empty: item is SiegeIds.item_code (1..9), at the station or pad (0
+##        otherwise), lvl the level an upgrade, mine level or pad upgrade line buys (0 otherwise),
+##        cost the gold held, slot the picker, then the slots that voted no in slot order
+##        (TeamVote.no_voters); a row is at least RC_NO columns wide and as wide as its votes
 ## od_ms is the Overdrive time left (0 unless ACTIVE), od_cd_ms the cooldown left (0 unless
 ## COOLDOWN); a client derives od_state from them (od_ms > 0 ACTIVE, od_cd_ms > 0 COOLDOWN, else
 ## READY).
@@ -63,9 +64,10 @@ const RU_LEFT_MS := 2
 # rc row columns (the no votes follow the fourth)
 const RC_ITEM := 0
 const RC_AT := 1
-const RC_COST := 2
-const RC_SLOT := 3
-const RC_NO := 4
+const RC_LVL := 2
+const RC_COST := 3
+const RC_SLOT := 4
+const RC_NO := 5
 
 # r row columns
 const R_SLOT := 0

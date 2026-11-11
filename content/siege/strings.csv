@@ -222,6 +222,9 @@ SIEGE_SHOP_BEST,Best
 SIEGE_SHOP_SHORT,{0} more
 SIEGE_SHOP_MORE,More items: {0} of {1}
 SIEGE_SHOP_ADDED,Added
+SIEGE_SHOP_ACT_TAKE_BACK,Take back
+SIEGE_SHOP_ACT_VOTE_NO,Vote no
+SIEGE_SHOP_ACT_UNDO_NO,Undo no
 SIEGE_SHOP_HINT,Surge to pick the lit row. Pedalling alone adds nothing.
 SIEGE_RECEIPT_TITLE,Receipt  everyone sees this
 SIEGE_RECEIPT_BOUGHT,Bought when the break ends ({0})
@@ -233,5 +236,6 @@ SIEGE_RECEIPT_NO,No {0}
 SIEGE_RECEIPT_YOUR_NO,Your no
 SIEGE_RECEIPT_RULE_1,A majority no (or a tie) takes it off at once.
 SIEGE_RECEIPT_RULE_2,Pick yours again to take it back.
-SIEGE_HUD_ON_RECEIPT,{0} on receipt
-SIEGE_TOAST_RECEIPT_REJECTED,Voted off: {0}. Your gold is back.
+SIEGE_HUD_ON_RECEIPT,{0} yours on receipt
+SIEGE_TOAST_RECEIPT_REJECTED,Voted off: {0}
+SIEGE_TOAST_RECEIPT_BOUGHT,Receipt bought: {0} gold

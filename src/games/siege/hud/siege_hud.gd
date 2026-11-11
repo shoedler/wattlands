@@ -48,7 +48,8 @@ const PALETTE := {
 ## Where the help panels point at the HUD's own cards (art pixels).
 const ROUTE_CARD_AT := Vector2(804, 150)
 const SHOP_AT := Vector2(178, 458)
-const RECEIPT_AT := Vector2(190, 312)
+## Receipt rows the help arrow is aimed for: the plate's title sits where a three-item receipt's does.
+const HELP_RECEIPT_ROWS := 3
 ## Where the help panels sit (art pixels), clear of each other, the title and most plates.
 const HELP_AT := {
 	"SIEGE_HELP_WHEEL": Vector2(660, 112),
@@ -57,7 +58,7 @@ const HELP_AT := {
 	"SIEGE_HELP_ROAD": Vector2(160, 326),
 	"SIEGE_HELP_GATE": Vector2(470, 362),
 	"SIEGE_HELP_ROUTE_CARD": Vector2(651, 158),
-	"SIEGE_HELP_SHOP": Vector2(178, 368),
+	"SIEGE_HELP_SHOP": Vector2(300, 408),
 	"SIEGE_HELP_RECEIPT": Vector2(30, 120),
 }
 
@@ -128,8 +129,17 @@ static func help(game: SiegeGame) -> Array[Dictionary]:
 	out.append(entry("SIEGE_HELP_GATE", gate))
 	out.append(entry("SIEGE_HELP_ROUTE_CARD", ROUTE_CARD_AT))
 	out.append(entry("SIEGE_HELP_SHOP", SHOP_AT))
-	out.append(entry("SIEGE_HELP_RECEIPT", RECEIPT_AT))
+	out.append(entry("SIEGE_HELP_RECEIPT", receipt_title_at()))
 	return out
+
+
+## The receipt plate's title, where a plate of HELP_RECEIPT_ROWS items puts it (the plate grows up
+## from its rect's bottom edge).
+static func receipt_title_at() -> Vector2:
+	var face := {"rows": range(HELP_RECEIPT_ROWS), "empty": "", "hidden": 0}
+	var h := SiegeReceiptPanel.plate_height(face)
+	var r := SiegeReceiptPanel.RECT
+	return Vector2(r.position.x + 70, r.end.y - 2 - h + 14)
 
 
 static func entry(key: String, arrow_to: Vector2) -> Dictionary:

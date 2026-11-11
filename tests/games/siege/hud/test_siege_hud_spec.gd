@@ -201,7 +201,10 @@ func test_the_help_arrows_point_into_the_new_plates() -> void:
 	assert_true(Rect2(column).has_point(help[5]["arrow_to"]), "the stations card")
 	assert_true(Rect2(shop).has_point(help[6]["arrow_to"]), "the shop")
 	var receipt := _rect_of(spec, SiegeReceiptPanel)
-	assert_true(Rect2(receipt).has_point(help[7]["arrow_to"]), "the receipt")
+	var h := SiegeReceiptPanel.plate_height({"rows": range(3), "empty": "", "hidden": 0})
+	var plate := Rect2(receipt.position.x, receipt.end.y - 2 - h, receipt.size.x, h)
+	assert_true(plate.has_point(help[7]["arrow_to"]), "the receipt plate")
+	assert_lt(absf(help[7]["arrow_to"].y - plate.position.y), 20.0, "at its title, from its height")
 
 
 func test_the_help_panels_do_not_cover_each_other() -> void:

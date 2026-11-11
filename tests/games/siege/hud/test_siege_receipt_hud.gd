@@ -100,9 +100,9 @@ func test_more_rows_than_fit_fold_into_a_count_and_the_total_still_counts_them()
 		g.state.receipt[n].at = n + 1
 	var f := SiegeReceiptModel.face(g)
 	assert_eq((f["rows"] as Array).size(), SiegeReceiptModel.MAX_ROWS - 1)
-	assert_eq(f["hidden"], 3)
+	assert_eq(f["hidden"], 6 - (SiegeReceiptModel.MAX_ROWS - 1))
 	assert_eq(f["total"], 240)
-	assert_true(str(f["more"]).contains("3"))
+	assert_true(str(f["more"]).contains(str(f["hidden"])))
 
 
 func test_the_panel_shows_only_while_the_shop_is_open() -> void:
@@ -128,10 +128,10 @@ func test_the_plate_grows_with_its_rows_and_never_passes_its_largest_height() ->
 		_line(g, SiegeIds.ITEM_UPGRADE, 1, 40, 1)
 	p.refresh()
 	assert_lte(p.plate_h, SiegeReceiptPanel.MAX_H)
-	for rows in 5:
+	for rows in SiegeReceiptModel.MAX_ROWS + 1:
 		var face := {"rows": range(rows), "empty": "", "hidden": 0}
 		assert_lte(SiegeReceiptPanel.plate_height(face), SiegeReceiptPanel.MAX_H)
-	var folded := {"rows": [1, 2, 3], "empty": "", "hidden": 5}
+	var folded := {"rows": [1, 2], "empty": "", "hidden": 5}
 	assert_lte(SiegeReceiptPanel.plate_height(folded), SiegeReceiptPanel.MAX_H)
 
 
@@ -189,7 +189,8 @@ func test_the_gold_plate_shows_free_gold_and_the_held_sum() -> void:
 	await wait_physics_frames(2)
 	assert_gt(col.draws, 0)
 	assert_eq(
-		SiegeHudModel.strings_of(g).t("SIEGE_HUD_ON_RECEIPT", [40]).to_upper(), "40 ON RECEIPT"
+		SiegeHudModel.strings_of(g).t("SIEGE_HUD_ON_RECEIPT", [40]).to_upper(),
+		"40 YOURS ON RECEIPT"
 	)
 
 

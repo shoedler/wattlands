@@ -115,8 +115,17 @@ func _gold() -> void:
 		SiegeHudType.draw(self, on, 8, GOLD_Y + 21, "LABEL", D.DIM)
 	var face := "KEY" if big else "NUM"
 	var cap := 24 if big else 14
+	var num := str(int(model["gold"]))
+	if held > 0 and big:
+		# the held line runs under the label: a number too wide to clear it drops to the small face
+		var on_w := SiegeHudType.width(
+			SiegeHudModel.strings_of(game).t("SIEGE_HUD_ON_RECEIPT", [held]), "LABEL"
+		)
+		if 8 + on_w + 6 + SiegeHudType.width(num, face) > W - 7:
+			face = "NUM"
+			cap = 14
 	var at := GOLD_Y + floori((h - cap) / 2.0)
-	SiegeHudType.draw_r(self, str(int(model["gold"])), W - 7, at, face, D.GOLD)
+	SiegeHudType.draw_r(self, num, W - 7, at, face, D.GOLD)
 
 
 func _stations(y: int) -> void:

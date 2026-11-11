@@ -5,7 +5,8 @@ extends SiegeHudCtl
 ## Autopilot's pick for the rider, the second "Save gold", then what else they could buy
 ## (SiegeShopModel). A pick adds the item to the shared receipt (SiegeReceiptPanel above this
 ## plate), takes your own back, or votes on someone else's; a row marks your own items "ADDED" and
-## the others' with the picker's name.
+## the others' with the picker's name; the lit row of an added item says what a surge will do
+## (TAKE BACK, VOTE NO or UNDO NO) in place of the tag.
 ##
 ## The pick logic is the platform's PedalScanList (scanning, surge to pick, keys), with one
 ## difference: its ERG auto-confirm is off here (follow_local_mode false, erg_auto_confirm false;
@@ -98,9 +99,10 @@ func build() -> Dictionary:
 	}
 
 
-## The rows as drawn: [{"text", "cost" (-1: none), "ok", "note", "mark", "mark_no"}]. "note" is
-## what the row lacks or recommends, "mark" what the receipt says of it: ADDED for the rider's own
-## item, the picker's name for another's (red when the rider voted no on it).
+## The rows as drawn: [{"text", "cost" (-1: none), "ok", "note", "mark", "mark_mine", "mark_no",
+## "act"}]. "note" is what the row lacks or recommends, "mark" what the receipt says of it: ADDED for
+## the rider's own item, the picker's name for another's (terracotta when the rider voted no on it),
+## and "act" what a pick of it does now (shown on the lit row only).
 func rows_face(tx: GameStrings, r: SiegeRiderState) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var free := floori(game.state.spendable(r))
@@ -113,8 +115,15 @@ func rows_face(tx: GameStrings, r: SiegeRiderState) -> Array[Dictionary]:
 		var added := not plain and bool(e.get("added", false))
 		var note := ""
 		var mark := ""
+		var act := ""
 		if added:
 			mark = tx.t("SIEGE_SHOP_ADDED") if bool(e["mine"]) else str(e["by"])
+			if bool(e["mine"]):
+				act = tx.t("SIEGE_SHOP_ACT_TAKE_BACK")
+			elif bool(e["my_no"]):
+				act = tx.t("SIEGE_SHOP_ACT_UNDO_NO")
+			else:
+				act = tx.t("SIEGE_SHOP_ACT_VOTE_NO")
 		elif not ok and not plain:
 			note = tx.t("SIEGE_SHOP_SHORT", [maxi(int(e["cost"]) - free, 0)])
 		elif not plain and bool(e.get("recommended", false)):
@@ -135,6 +144,7 @@ func rows_face(tx: GameStrings, r: SiegeRiderState) -> Array[Dictionary]:
 					"mark": mark,
 					"mark_mine": added and bool(e["mine"]),
 					"mark_no": added and bool(e["my_no"]),
+					"act": act,
 				}
 			)
 		)
@@ -176,13 +186,16 @@ func _row(ry: int, index: int, row: Dictionary) -> void:
 	var col := D.GOLD if ok else D.DIM
 	var note := str(row["note"])
 	var mark := str(row["mark"])
+	var act := str(row["act"])
 	if cost >= 0:
 		SiegeHudType.draw_r(self, str(cost), right, ry + 5, "BODY", col)
 		D.icon(self, "denarius", COIN_X, ry + 6, col)
 		right = COIN_X - 6
-	if mark != "":
+	if act != "" and index == int(model["highlight"]):
+		right = SiegeHudType.draw_r(self, act, right, ry + 7, "LABEL", D.GOLD) - 6
+	elif mark != "":
 		var mark_col := (
-			D.GOOD if bool(row["mark_mine"]) else (D.TERRA if bool(row["mark_no"]) else D.DIM)
+			D.GOOD if bool(row["mark_mine"]) else (D.NO_VOTE if bool(row["mark_no"]) else D.DIM)
 		)
 		right = SiegeHudType.draw_r(self, mark, right, ry + 7, "LABEL", mark_col) - 6
 	elif note != "":
@@ -280,6 +293,7 @@ func _on_item_picked(_index: int, id: Variant, via: String) -> void:
 		return
 	var item := str((id as Dictionary).get("item", ""))
 	var at := int((id as Dictionary).get("at", 0))
+	var lvl := int((id as Dictionary).get("lvl", 0))
 	if item == SiegeShopModel.ITEM_MORE or (via == "auto" and page != 0):
 		_turn_to(at if item == SiegeShopModel.ITEM_MORE and via != "auto" else 0)
 		return
@@ -287,4 +301,4 @@ func _on_item_picked(_index: int, id: Variant, via: String) -> void:
 	if via == "auto" or item == SiegeIds.ITEM_SAVE or item == "":
 		return
 	if game != null and game.ctx != null and game.ctx.intents != null:
-		game.ctx.intents.send(SiegeIntents.pick(item, at))
+		game.ctx.intents.send(SiegeIntents.pick(item, at, false, lvl))

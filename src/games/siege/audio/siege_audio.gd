@@ -26,8 +26,7 @@ const CUE_GOLD := "gold"
 const CUE_TAR_HISS := "tar_hiss"
 const CUE_KILL_ENGINE := "kill_engine"
 ## Events with no sound of their own. Every other event type maps to a cue (cue_for).
-## The receipt changes under the list's own click; a voted-off item speaks as a toast.
-const SILENT_EVENTS: Array[String] = [SiegeIds.EV_RECEIPT]
+const SILENT_EVENTS: Array[String] = []
 const HOOF_EVERY_S := 0.4
 ## Hooves only for a chariot this near the gate: all along the road they ran 75 % of a wave, at 2.5 Hz against the
 ## footfalls' 3 Hz.
@@ -172,10 +171,22 @@ static func cue_for(kind: String, data: Dictionary) -> String:
 		SiegeIds.EV_BUY:
 			return "buy" if int(data.get("ok", 0)) != 0 else ""
 		SiegeIds.EV_RECEIPT:
-			return ""
+			return _receipt_cue(int(data.get("act", SiegeIds.RC_NO)))
 		SiegeIds.EV_OVERDRIVE:
 			return _overdrive_cue(int(data.get("st", SiegeIds.OD_EV_END)))
 	return kind
+
+
+## The receipt's sounds, from the bank as it is: an item voted off is the refusal's cue ("overdrive_no"),
+## a rider's own no or yes is the lever's; adds, take-backs, levels leaving and the break's purchase
+## (the hammer of each buy says it) stay silent.
+static func _receipt_cue(act: int) -> String:
+	match act:
+		SiegeIds.RC_REJECT:
+			return "overdrive_no"
+		SiegeIds.RC_NO, SiegeIds.RC_YES:
+			return "route"
+	return ""
 
 
 static func _shot_cue(shot: int) -> String:
@@ -322,6 +333,20 @@ func on_cue(kind: String, data: Dictionary) -> void:
 			kit.cue(cue_name)
 		SiegeIds.EV_ROUTE, SiegeIds.EV_BUY, SiegeIds.EV_OVERDRIVE:
 			kit.cue(cue_name, {}, int(data.get("slot", -1)) == _local_slot)
+		SiegeIds.EV_RECEIPT:
+			# a voted-off item is heard by its picker and everyone who voted no, your own vote by you
+			var mine := (
+				(int(data.get("who", 0)) >> _local_slot) & 1 == 1
+				if int(data.get("act", 0)) == SiegeIds.RC_REJECT
+				else int(data.get("slot", -1)) == _local_slot
+			)
+			# the no that tips the vote is drowned by the voted-off cue that follows it
+			var tips := (
+				int(data.get("act", 0)) == SiegeIds.RC_NO
+				and int(data.get("no", 0)) >= int(data.get("yes", 0))
+			)
+			if mine and not tips:
+				kit.cue(cue_name, {}, true)
 		_:
 			kit.cue(cue_name)
 

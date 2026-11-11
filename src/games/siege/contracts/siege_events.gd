@@ -26,11 +26,14 @@ extends RefCounted
 ##                item), ok (1 / 0), why (String; "" when ok, else a SiegeIds.BUY_* reason), lvl
 ##                (the station's / pad's / mine's level or the iron bands after it, the gate HP
 ##                after a repair, 1 for a perk; 0 when refused)
-## receipt        slot (who did it), item (String), station (0 unless a station item), pad (0
-##                unless a pad item), act (SiegeIds.RC_*: 1 added, 2 taken back, 3 voted no, 4 took
-##                the no back, 5 voted off, 6 its picker left), picker (the slot that picked the
-##                item), yes, no (the vote after it). Only the host changes the receipt; the
-##                snapshot carries what is on it.
+## receipt        slot (who did it), item (String; "" for act 7), station (0 unless a station
+##                item), pad (0 unless a pad item), act (SiegeIds.RC_*: 1 added, 2 taken back, 3
+##                voted no, 4 took the no back, 5 voted off, 6 left with the level below it, 7 the
+##                break's end bought the receipt), picker (the slot that picked the item), yes, no
+##                (the vote after it; for act 7 yes is the items bought), lvl (the level an upgrade,
+##                mine level or pad upgrade line buys, else 0), who (a bit mask of the slots that
+##                care: the picker and everyone who voted no), cost (the line's gold; for act 7 the
+##                gold spent). Only the host changes the receipt; the snapshot carries what is on it.
 ## route          slot, to (a station 0..4)
 ## overdrive      slot, st (SiegeIds.OD_EV_START 1 / END 0 / REFUSED 2), scored (1: the sprint
 ##                rule held >= 10 s; END only), why (String; REFUSED: the refusal reason)
@@ -48,7 +51,8 @@ const INT_FIELDS := {
 	SiegeIds.EV_BREACH: ["n"],
 	SiegeIds.EV_GATE_RESTORED: ["hp"],
 	SiegeIds.EV_BUY: ["slot", "station", "pad", "ok", "lvl"],
-	SiegeIds.EV_RECEIPT: ["slot", "station", "pad", "act", "picker", "yes", "no"],
+	SiegeIds.EV_RECEIPT:
+	["slot", "station", "pad", "act", "picker", "yes", "no", "lvl", "who", "cost"],
 	SiegeIds.EV_ROUTE: ["slot", "to"],
 	SiegeIds.EV_OVERDRIVE: ["slot", "st", "scored"],
 }
@@ -190,7 +194,17 @@ static func buy(
 
 
 static func receipt(
-	slot: int, item: String, station: int, pad: int, act: int, picker: int, yes: int, no: int
+	slot: int,
+	item: String,
+	station: int,
+	pad: int,
+	act: int,
+	picker: int,
+	yes: int,
+	no: int,
+	lvl: int = 0,
+	who: int = 0,
+	cost: int = 0
 ) -> Dictionary:
 	return {
 		"type": SiegeIds.EV_RECEIPT,
@@ -202,6 +216,9 @@ static func receipt(
 		"picker": picker,
 		"yes": yes,
 		"no": no,
+		"lvl": lvl,
+		"who": who,
+		"cost": cost,
 	}
 
 

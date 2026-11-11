@@ -237,7 +237,7 @@ test('every kind of event passes its own schema', () => {
     { type: 'breach', n: 1 },
     { type: 'gate_restored', hp: 30 },
     { type: 'buy', slot: 1, item: 'scorpion', station: 0, pad: 3, ok: 1, why: '', lvl: 0 },
-    { type: 'receipt', slot: 1, item: 'upgrade', station: 2, pad: 0, act: 3, picker: 0, yes: 2, no: 1 },
+    { type: 'receipt', slot: 1, item: 'upgrade', station: 2, pad: 0, act: 3, picker: 0, yes: 2, no: 1, lvl: 1, who: 3, cost: 40 },
     { type: 'route', slot: 2, to: 4 },
     { type: 'shot', tk: 9, src: 13, kind: 3, o: [1, 2, 3], v: [4, 5, 6], n: 2, sd: 7 },
     { type: 'overdrive', slot: 3, st: 0, scored: 1, why: 'rescue' },
@@ -265,8 +265,9 @@ test('the CLI exits 0, 1 and 2', () => {
   assert.equal(run(file).status, 2);
 });
 
-const rc = (slot, act, item = 'mine', over = {}) => ({ type: 'receipt', slot, item, station: 0, pad: 0, act, picker: slot, yes: 2, no: 0, ...over });
-const bought = (slot, item = 'mine', ok = 1) => ({ type: 'buy', slot, item, station: 0, pad: 0, ok, why: ok ? '' : 'limit', lvl: ok ? 1 : 0 });
+const lvlOf = (item) => (ec.LEVELED.includes(item) ? 1 : 0);
+const rc = (slot, act, item = 'mine', over = {}) => ({ type: 'receipt', slot, item, station: 0, pad: 0, act, picker: slot, yes: 2, no: 0, lvl: lvlOf(item), who: 1, cost: 60, ...over });
+const bought = (slot, item = 'mine', ok = 1, lvl = 1) => ({ type: 'buy', slot, item, station: 0, pad: 0, ok, why: ok ? '' : 'limit', lvl: ok ? lvl : 0 });
 const WAVE = { type: 'wave_start', ph: 1, role: 'wave', n: 1, waves: 1, b: 12 };
 
 test('a receipt that is added, voted on and bought as the rules say passes', () => {
@@ -288,14 +289,14 @@ test('a receipt that is added, voted on and bought as the rules say passes', () 
 
 test('the receipt check catches a double add, a stranger taking back, a vote on nothing and an unbought leftover', () => {
   const twice = [rc(0, ec.RC.ADD), rc(0, ec.RC.ADD)];
-  assert.match(ec.receiptErrors(twice).join(), /mine\/0 added twice/);
+  assert.match(ec.receiptErrors(twice).join(), /mine\/0\/1 added twice/);
   const stranger = [rc(0, ec.RC.ADD), rc(1, ec.RC.TAKE, 'mine', { picker: 0 })];
-  assert.match(ec.receiptErrors(stranger).join(), /slot 1 took back mine\/0, picked by 0/);
+  assert.match(ec.receiptErrors(stranger).join(), /slot 1 took back mine\/0\/1, picked by 0/);
   assert.match(ec.receiptErrors([rc(1, ec.RC.NO, 'mine', { picker: 0 })]).join(), /not on the receipt/);
   assert.match(ec.receiptErrors([rc(0, ec.RC.ADD), rc(0, ec.RC.NO)]).join(), /voted on its own/);
   assert.match(ec.receiptErrors([rc(0, ec.RC.ADD), WAVE]).join(), /still on the receipt when the wave started/);
-  assert.match(ec.receiptErrors([bought(0)]).join(), /bought mine\/0 which is not on the receipt/);
-  assert.match(ec.receiptErrors([rc(0, ec.RC.ADD), bought(1)]).join(), /slot 1 bought mine\/0, picked by 0/);
+  assert.match(ec.receiptErrors([bought(0)]).join(), /bought mine\/0\/1 which is not on the receipt/);
+  assert.match(ec.receiptErrors([rc(0, ec.RC.ADD), bought(1)]).join(), /slot 1 bought mine\/0\/1, picked by 0/);
   assert.match(ec.receiptErrors([rc(0, ec.RC.ADD, 'mine', { picker: 1 })]).join(), /picked by 1/);
 });
 
@@ -306,6 +307,18 @@ test('a refused purchase of an item on the receipt takes it off, a refused pick 
 
 test('a restarted client that joined mid-break only holds a tail', () => {
   assert.deepEqual(ec.receiptErrors([rc(1, ec.RC.TAKE), bought(0), WAVE], { tail: true }), []);
+});
+
+test('levels: level 2 needs level 1, a level going with the one below is removed, levels are bought in order', () => {
+  const up = (slot, act, lvl, over = {}) => rc(slot, act, 'upgrade', { station: 2, lvl, ...over });
+  const buy = (slot, lvl) => ({ type: 'buy', slot, item: 'upgrade', station: 2, pad: 0, ok: 1, why: '', lvl });
+  const good = [up(0, ec.RC.ADD, 1), up(1, ec.RC.ADD, 2), up(1, ec.RC.ADD, 3), up(0, ec.RC.TAKE, 1), up(1, ec.RC.DROP, 2, { picker: 1 }), up(1, ec.RC.DROP, 3, { picker: 1 }), up(0, ec.RC.ADD, 1), up(1, ec.RC.ADD, 2), buy(0, 1), buy(1, 2), { type: 'receipt', slot: 0, item: '', station: 0, pad: 0, act: ec.RC.BOUGHT, picker: 0, yes: 2, no: 0, lvl: 0, who: 0, cost: 90 }, WAVE];
+  assert.deepEqual(ec.receiptErrors(good), []);
+  assert.match(ec.receiptErrors([up(1, ec.RC.ADD, 2)]).join(), /added without the level below it/);
+  assert.match(ec.receiptErrors([up(0, ec.RC.ADD, 1), buy(1, 1)]).join(), /slot 1 bought upgrade\/2\/1, picked by 0/);
+  assert.match(ec.eventErrors(rc(0, ec.RC.ADD, 'mine', { lvl: 0 })).join(), /mine with level 0/);
+  assert.match(ec.eventErrors(rc(0, ec.RC.ADD, 'repair', { lvl: 2 })).join(), /repair with level 2/);
+  assert.deepEqual(ec.eventErrors({ type: 'receipt', slot: 0, item: '', station: 0, pad: 0, act: ec.RC.BOUGHT, picker: 0, yes: 3, no: 0, lvl: 0, who: 0, cost: 110 }), []);
 });
 
 test('the report check runs the receipt check on the host and the client that stayed', () => {
