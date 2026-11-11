@@ -144,7 +144,7 @@ SIEGE_HELP_STATIONS,Five stations use your watts
 SIEGE_HELP_ROAD,The attackers march down this road
 SIEGE_HELP_GATE,Hold the gate; tar shields it
 SIEGE_HELP_ROUTE_CARD,"Left, right: station. Up: mine"
-SIEGE_HELP_SHOP,Breaks: pick to add to the receipt
+SIEGE_HELP_SHOP,Pick to add to the receipt
 SIEGE_HELP_RECEIPT,Everyone sees it. Gold is spent when the break ends
 SIEGE_RESULTS,Castellum Rotae stands
 SIEGE_RESULTS_FALLEN,"The gate fell, but the riders rode on"
@@ -236,6 +236,6 @@ SIEGE_RECEIPT_NO,No {0}
 SIEGE_RECEIPT_YOUR_NO,Your no
 SIEGE_RECEIPT_RULE_1,A majority no (or a tie) takes it off at once.
 SIEGE_RECEIPT_RULE_2,Pick yours again to take it back.
-SIEGE_HUD_ON_RECEIPT,{0} yours on receipt
+SIEGE_HUD_ON_RECEIPT,{0} yours held
 SIEGE_TOAST_RECEIPT_REJECTED,Voted off: {0}
 SIEGE_TOAST_RECEIPT_BOUGHT,Receipt bought: {0} gold

@@ -189,8 +189,7 @@ func test_the_gold_plate_shows_free_gold_and_the_held_sum() -> void:
 	await wait_physics_frames(2)
 	assert_gt(col.draws, 0)
 	assert_eq(
-		SiegeHudModel.strings_of(g).t("SIEGE_HUD_ON_RECEIPT", [40]).to_upper(),
-		"40 YOURS ON RECEIPT"
+		SiegeHudModel.strings_of(g).t("SIEGE_HUD_ON_RECEIPT", [40]).to_upper(), "40 YOURS HELD"
 	)
 
 

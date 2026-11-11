@@ -125,6 +125,8 @@ func _gold() -> void:
 			face = "NUM"
 			cap = 14
 	var at := GOLD_Y + floori((h - cap) / 2.0)
+	if face == "NUM" and big:
+		at = GOLD_Y + 5
 	SiegeHudType.draw_r(self, num, W - 7, at, face, D.GOLD)
 
 
