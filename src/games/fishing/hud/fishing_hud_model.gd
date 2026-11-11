@@ -29,6 +29,12 @@ const KEY_TARGET := "FISHING_HUD_TARGET"
 const KEY_NOW := "FISHING_HUD_NOW"
 const KEY_STRAIN := "FISHING_HUD_STRAIN"
 const KEY_SLACK := "FISHING_HUD_SLACK"
+const KEY_JIG := "FISHING_HUD_JIG"
+const KEY_JIG_HOLD := "FISHING_HUD_JIG_HOLD"
+const KEY_JIG_IN := "FISHING_HUD_JIG_IN"
+const KEY_JIG_RECAST := "FISHING_HUD_JIG_RECAST"
+## The most crew strips shown (one per other rider in a fight).
+const CREW_MAX := 3
 ## Knots per m/s.
 const KNOTS_PER_MPS := 1.943844
 ## FishingConst.ACTION_NAMES -> FISHING_ACTION_<NAME> (the leaderboard's action column).
@@ -56,6 +62,10 @@ const KEYS: Array[String] = [
 	KEY_NOW,
 	KEY_STRAIN,
 	KEY_SLACK,
+	KEY_JIG,
+	KEY_JIG_HOLD,
+	KEY_JIG_IN,
+	KEY_JIG_RECAST,
 ]
 ## English stand-ins when a key has no translation (headless tests without ctx.strings).
 const FALLBACK := {
@@ -81,6 +91,10 @@ const FALLBACK := {
 	KEY_NOW: "now",
 	KEY_STRAIN: "strain",
 	KEY_SLACK: "slack",
+	KEY_JIG: "Jig it home",
+	KEY_JIG_HOLD: "Hold",
+	KEY_JIG_IN: "In: bites come sooner",
+	KEY_JIG_RECAST: "Recasts at the boat",
 }
 
 static var _flat_cache: Vector3 = Vector3(-1, -1, 0)
@@ -210,6 +224,16 @@ static func time_text(game: FishingGame) -> String:
 	return clock(st.time_left_s())
 
 
+## The species' short name for the crew strips ("Grouper", "Tuna"; "" for none): its
+## FISHING_SPECIES_<ID>_SHORT string, else species_name().
+static func species_short(game: FishingGame, sp: int) -> String:
+	if sp < 0 or sp >= FishingConst.SPECIES.size():
+		return ""
+	var key := "FISHING_SPECIES_" + str(FishingConst.SPECIES[sp]).to_upper() + "_SHORT"
+	var tx := strings_of(game)
+	return tx.t(key) if tx.has(key) else species_name(game, sp)
+
+
 ## The species' display name ("" for none).
 static func species_name(game: FishingGame, sp: int) -> String:
 	if sp < 0 or sp >= FishingConst.SPECIES.size():
@@ -239,6 +263,77 @@ static func fish_row(game: FishingGame, r: FishingRiderState) -> Dictionary:
 ## Landing and a lost fish keep the cruise box, so raw W and %FTP always show).
 static func fight_panel_up(game: FishingGame, r: FishingRiderState) -> bool:
 	return r != null and r.action == FishingConst.A_FIGHT and bool(fish_row(game, r)["visible"])
+
+
+## True while the jig panel is up: Free Roam, the lure out (the cast and the wait).
+static func jig_up(game: FishingGame, r: FishingRiderState) -> bool:
+	if r == null or game == null or game.state == null or not game.state.roam:
+		return false
+	return r.action == FishingConst.A_CAST or r.action == FishingConst.A_WAIT
+
+
+## The cast's dx the lure is jigged home from: `prev` (0 when none) or the lure's distance now,
+## whichever is more while the jig panel is up (a recast puts the lure back out at the same
+## spot), 0 once it is not. Clients do not get the cast's dx, so the panel follows the lure.
+static func jig_dx0(game: FishingGame, r: FishingRiderState, prev: float) -> float:
+	if not jig_up(game, r):
+		return 0.0
+	return maxf(prev, absf(r.lure_dx))
+
+
+## The jig panel's row for the local rider `r`: {"visible", "d_m" (line out to the lure), "fill"
+## (0..1 of the way home from `dx0`), "hold_w" (JIG_FTP_FRAC of FTP, rounded up), "ready" (in the
+## lure band at `power` W, `cadence` rpm and the power at hold_w or more: false without an FTP) and
+## "on" (ready, and the fish bite: not in the drive-out)}.
+static func jig_row(
+	game: FishingGame, r: FishingRiderState, dx0: float, power: float, cadence: float
+) -> Dictionary:
+	if not jig_up(game, r):
+		return {"visible": false, "d_m": 0, "fill": 0.0, "hold_w": 0, "ready": false, "on": false}
+	var hold := ceili(FishingConst.JIG_FTP_FRAC * r.ftp - 1e-6) if r.ftp > 0.0 else 0
+	var in_band := r.pub_hi > r.pub_lo and cadence >= r.pub_lo and cadence <= r.pub_hi
+	var ready := r.ftp > 0.0 and in_band and roundi(power) >= hold
+	return {
+		"visible": true,
+		"d_m": roundi(r.line_m()),
+		"fill": clampf(1.0 - absf(r.lure_dx) / maxf(dx0, 1e-6), 0.0, 1.0) if dx0 > 0.0 else 0.0,
+		"hold_w": hold,
+		"ready": ready,
+		"on": ready and r.phase_kind != Wl.WARMUP,
+	}
+
+
+## The crew strips: one per other rider with a fish on in a fight, in slot order (so the strips
+## never swap while the leaderboard re-ranks), at most CREW_MAX: [{"slot", "name", "species" (the
+## short name), "d_m", "reel", "target_w", "now_w", "off"}] (off: the watts now are more than
+## NOW_BAND off the target).
+static func crew(game: FishingGame) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if game == null or game.state == null:
+		return out
+	var me := own_rider(game)
+	for r in game.state.riders:
+		if (me != null and r.slot == me.slot) or not fight_panel_up(game, r):
+			continue
+		var f := fish_row(game, r)
+		(
+			out
+			. append(
+				{
+					"slot": r.slot,
+					"name": name_of(game, r.slot),
+					"species": species_short(game, r.fish.sp),
+					"d_m": int(f["d_m"]),
+					"reel": float(f["reel"]),
+					"target_w": roundi(r.applied_target_w),
+					"now_w": roundi(r.power_w),
+					"off": FishingPanelRows.off_target(r.power_w, r.applied_target_w),
+				}
+			)
+		)
+		if out.size() >= CREW_MAX:
+			break
+	return out
 
 
 ## The boat's speed in knots, one decimal ("18.4").

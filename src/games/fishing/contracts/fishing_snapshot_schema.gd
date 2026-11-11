@@ -62,6 +62,8 @@ extends RefCounted
 ##  R_REEL          reel-in progress 0..255 in a fight or landing: 1 - line / full line, where the
 ##                  line is R_LINE_DM (hypot(d, depth), the distance number) and the full line
 ##                  hypot(d_max, hook depth); 0 else. Runs pull it down, the landing ends at 255
+##  R_TARGET_W      the ERG target the rider rides now (W, FishingRiderState.applied_target_w, 0 in
+##                  SIM): the other riders' crew strips show it during a fight
 ##
 ## T columns: T_MODE (0 Free Roam, 1 workout), T_TIME_LEFT_S (seconds of play left, ceil; 0 in
 ## overtime), T_OVER (1 once time is up: no new bites, fights may finish), T_POINTS, T_FISH (team
@@ -111,7 +113,8 @@ const R_PLANE := 33
 const R_TOW := 34
 const R_PROP_CM := 35
 const R_REEL := 36
-const R_COLUMNS := 37
+const R_TARGET_W := 37
+const R_COLUMNS := 38
 ## The rider row columns that hold a list, not a number.
 const LIST_COLUMNS: Array[int] = [R_MENU, R_COSMETICS, R_HINTS]
 

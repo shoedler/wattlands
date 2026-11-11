@@ -331,3 +331,14 @@ func test_no_narrow_slot_sinks_between_higher_floor_pieces() -> void:
 		var body := FishingFloor.body_band(shown)
 		for e in shown:
 			assert_lte(int(e["band"]), body, "one body fill under every cap")
+
+
+func test_plants_stay_out_from_under_a_fish_on_the_line() -> void:
+	var f := FishingFloor.new()
+	f.fish_x = [Vector2(100.0, 160.0)] as Array[Vector2]
+	assert_true(f.plant_under_fish("kelp", 120.0), "a stalk under the belly is culled")
+	assert_true(f.plant_under_fish("kelp_short", 80.0), "its 40 px spread counts")
+	assert_false(f.plant_under_fish("rock", 120.0), "rocks stay")
+	assert_false(f.plant_under_fish("kelp", 400.0), "away from the fish")
+	f.fish_x = [] as Array[Vector2]
+	assert_false(f.plant_under_fish("kelp", 120.0))

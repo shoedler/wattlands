@@ -12,6 +12,7 @@
 #   r4   roam_10, 1 rider at erg:compliance=1.0 (no band: the zero-input default), Autopilot
 #   r5   roam_30, 2 band-trackers, --ftp=300,200 --unverified --haptics-off=1
 #   r6   roam_30, 2 band-trackers, slot 1 stops pedaling at 900 s for 60 s (paused or AFK)
+#   r7   big_game_30, 2 band-trackers + 2 bots: only tuna and grouper bite, everyone fishes
 #   w1   threshold, 2 band-trackers
 #   w2   base_60, 2 band-trackers
 #   w3   e2e_2min, 3 band-trackers
@@ -38,7 +39,7 @@ for a in "$@"; do
   case "$a" in
     --quick) mode=quick ;;
     -h | --help)
-      sed -n '2,27p' "$0"
+      sed -n '2,28p' "$0"
       exit 0
       ;;
     -*)
@@ -48,7 +49,7 @@ for a in "$@"; do
     *) wanted="$wanted $a" ;;
   esac
 done
-order="r1 r2 r3 r4 r5 r6 w1 w2 w3 d fit"
+order="r1 r2 r3 r4 r5 r6 r7 w1 w2 w3 d fit"
 if [ -z "${wanted// /}" ]; then
   if [ "$mode" = quick ]; then
     wanted="w3 d fit"
@@ -102,6 +103,9 @@ scenario_r5() {
 scenario_r6() {
   run r6_roam30_paused --content=roam_30 --players=2 "--rider=$band" \
     "--rider=erg+band+cadence_drop:rpm=0,at_s=900,for_s=60" --seed=4
+}
+scenario_r7() {
+  run r7_biggame --content=big_game_30 --players=2 --bots=2 "--rider=$band" --seed=5
 }
 scenario_w1() { run w1_threshold --content=threshold --players=2 "--rider=$band" --seed=1; }
 scenario_w2() { run w2_base60 --content=base_60 --players=2 "--rider=$band" --seed=1; }

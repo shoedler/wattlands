@@ -40,15 +40,11 @@ func _draw() -> void:
 	var pad := PAD_ROWS * u
 	var gap := GAP_COLS * u
 	var pitch := PITCH_ROWS * u
-	var name_w := 0.0
-	for row in rows:
-		name_w = maxf(name_w, FishingHudDraw.text_w(str(row["name"]), s))
-	var pts_w := FishingHudDraw.text_w("000", s)
+	var name_w := name_col_w(rows, s)
 	var name_x := pad + (ICON_COLS + 2.0) * u
 	var status_x := name_x + name_w + gap
-	var w := status_x + status_w(s) + gap + pts_w + pad
-	w = maxf(w, pad + FishingHudDraw.text_w(time_text, s) + pad)
-	var h := 2.0 * pad + pitch * float(rows.size()) + float(FishingHudDraw.LINE_ROWS) * u
+	var w := width_px(game, rows, time_text, s)
+	var h := height_px(rows.size(), s)
 	var x0 := floorf((size.x - w) / u) * u
 	FishingHudDraw.panel(self, Rect2(x0, 0.0, size.x - x0, h), u)
 	FishingHudDraw.text_line(self, x0 + pad, pad, time_text, s, FishingPalette.HUD_TEXT)
@@ -69,9 +65,38 @@ func _draw() -> void:
 		y += pitch
 
 
+## The board's width (HUD px) at draw scale `s`: the longest name, the widest action word, three
+## digits of points, or the clock when that is wider. The crew strips under the board are as wide.
+static func width_px(
+	game: FishingGame, rows: Array[Dictionary], time_text: String, s: float
+) -> float:
+	var u := float(FishingHudDraw.unit(s))
+	var pad := PAD_ROWS * u
+	var gap := GAP_COLS * u
+	var pts_w := FishingHudDraw.text_w("000", s)
+	var name_x := pad + (ICON_COLS + 2.0) * u
+	var status_x := name_x + name_col_w(rows, s) + gap
+	var w := status_x + status_w(game, s) + gap + pts_w + pad
+	return maxf(w, pad + FishingHudDraw.text_w(time_text, s) + pad)
+
+
+## The board's height (HUD px) with `n` rider rows at draw scale `s`.
+static func height_px(n: int, s: float) -> float:
+	var u := float(FishingHudDraw.unit(s))
+	return 2.0 * PAD_ROWS * u + PITCH_ROWS * u * float(n) + float(FishingHudDraw.LINE_ROWS) * u
+
+
+## The widest rider name (HUD px).
+static func name_col_w(rows: Array[Dictionary], s: float) -> float:
+	var out := 0.0
+	for row in rows:
+		out = maxf(out, FishingHudDraw.text_w(str(row["name"]), s))
+	return out
+
+
 ## The widest action word the board can show at draw scale `s` (the status column's width, so
 ## the board keeps its size as riders change what they do).
-func status_w(s: float) -> float:
+static func status_w(game: FishingGame, s: float) -> float:
 	var out := 0.0
 	for a in FishingConst.ACTION_NAMES.size():
 		out = maxf(out, FishingHudDraw.text_w(FishingHudModel.action_text(game, a), s))

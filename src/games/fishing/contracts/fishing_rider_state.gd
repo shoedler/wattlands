@@ -87,6 +87,11 @@ var cast_s: float = 0.0
 ## Seconds at depth waiting (Free Roam) or in the current Reel phase (workouts; R_min counts
 ## from its start).
 var wait_t: float = 0.0
+## The jig (Free Roam): the cast hint's signed dx the lure is retrieved from, seconds into the
+## retrieve, and the recast flag (a recast keeps wait_t).
+var jig_dx0: float = 0.0
+var jig_t: float = 0.0
+var recasting: bool = false
 var r_min_s: float = FishingConst.R_MIN_S
 
 # --- Fights (both modes) ---------------------------------------------------------------------

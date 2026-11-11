@@ -96,11 +96,11 @@ static func build(
 	return res
 
 
-## "Free Roam <n> min" or the workout's name.
+## "Free Roam <n> min", or the workout's (or the trip on its own map) name.
 static func ride_tag(st: FishingState, content: FishingContent, strings: GameStrings) -> String:
 	if content == null or content.trip == null:
 		return ""
-	if st.roam:
+	if st.roam and content.trip.map == FishingTripDef.DEFAULT_MAP:
 		return _t(strings, RIDE_TAG_ROAM, {"min": roundi(content.trip.minutes)})
 	return _t(strings, content.trip.label, [])
 

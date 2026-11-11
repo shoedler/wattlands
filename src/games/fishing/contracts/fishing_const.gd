@@ -141,6 +141,11 @@ const CAST_MAX_S := 8.0
 const ROAM_BITE_MEAN_S := 25.0  ## hazard 1 / 25 s in the lure band, a quarter outside
 const ROAM_BITE_MIN_S := 5.0  ## no bite in the first 5 s at depth
 const ROAM_FORCED_BITE_S := 90.0  ## a bite is forced after 90 s at depth
+## The jig: the lure is retrieved to the boat over JIG_HOME_S and recast there; in the lure band at
+## JIG_FTP_FRAC of FTP or more (SIM, nothing asked of the trainer) the hazard is 1 / JIG_BITE_MEAN_S.
+const JIG_HOME_S := 40.0
+const JIG_BITE_MEAN_S := 10.0  ## after the 5 s minimum: the whole wait averages 15 s
+const JIG_FTP_FRAC := 0.4
 
 # --- Plan (workouts and the fights) ---------------------------------------------------------
 const RIDE_OUT_S := 300.0

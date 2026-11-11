@@ -2,7 +2,7 @@
 	"id": "fishing",
 	"title": "Turbo Reel",
 	"summary": "Sport fishing on one shared ocean: drive your pedal boat out, cast at the fish you see, and fight them on the trainer. Most points wins.",
-	"version": "0.3.0",
+	"version": "0.4.0",
 	"min_players": 1,
 	"max_players": 4,
 	"bots": true,
@@ -24,6 +24,7 @@
 		"roam_20",
 		"roam_45",
 		"roam_60",
+		"big_game_30",
 		"base_60",
 		"threshold",
 		"e2e_2min"
@@ -74,6 +75,11 @@
 		"roam_60": {
 			"image": "res://assets/fishing/sprites/card_roam.png",
 			"detail": "FISHING_CARD_ROAM",
+			"featured": true
+		},
+		"big_game_30": {
+			"image": "res://assets/fishing/sprites/card_roam.png",
+			"detail": "FISHING_CARD_BIG_GAME",
 			"featured": true
 		},
 		"base_60": {

@@ -154,3 +154,14 @@ func test_endless_landmarks_follow_the_segments_from_the_seed() -> void:
 	var win := w.landmarks(20000.0, 30000.0)
 	for lm in win:
 		assert_between(float(lm["x_m"]), 20000.0, 30000.0)
+
+
+func test_the_floor_runs_on_to_the_edges_wall_and_ends_just_past_it() -> void:
+	var w := _roam()
+	var m := _map().duplicate(true)
+	m["floor_m"] = [[0, 3], [600, 6], [18000, 300]]
+	var f := FishingWorld.from_map(m, 1)
+	assert_true(f.has_floor(f.length_m() - 1.0))
+	assert_true(f.has_floor(f.length_m() + FishingWorld.FLOOR_PAST_EDGE_M - 1.0), "under the wall")
+	assert_true(is_inf(f.floor_depth_m(f.length_m() + FishingWorld.FLOOR_PAST_EDGE_M + 1.0)))
+	assert_true(is_inf(w.floor_depth_m(17900.0)), "the open sea map still ends in the abyss")

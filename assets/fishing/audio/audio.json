@@ -1544,6 +1544,12 @@
         {"sound": "plop", "db": -3.7, "bus": "Sfx", "priority": 6, "db_var": "far_db", "delay_s": 0.2}
       ]
     },
+    "recast": {
+      "hits": [
+        {"sound": "cast_whip", "db": -17.7, "bus": "Sfx", "priority": 4, "db_var": "far_db", "pitch": 1.12},
+        {"sound": "plop", "db": -15.7, "bus": "Sfx", "priority": 4, "db_var": "far_db", "delay_s": 0.2}
+      ]
+    },
     "bite": {"hits": [{"sound": "bite_bell", "db": -2.7, "bus": "Sfx", "priority": 7, "db_var": "far_db"}]},
     "hookup": {
       "hits": [

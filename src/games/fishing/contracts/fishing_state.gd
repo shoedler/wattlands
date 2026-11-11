@@ -9,6 +9,9 @@ var tick: int = 0
 var t: float = 0.0
 var trip_id: String = ""
 var trip_kind: String = ""
+## Free Roam: seconds at depth before a bite can come (the trip's bite_min_s, default
+## FishingConst.ROAM_BITE_MIN_S). Not serialized.
+var bite_min_s: float = FishingConst.ROAM_BITE_MIN_S
 ## Free Roam (true) or a workout.
 var roam: bool = false
 ## The ocean: the roam map or the endless workout map. Not serialized.
