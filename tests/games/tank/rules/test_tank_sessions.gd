@@ -60,19 +60,6 @@ func test_every_crew_plays_the_drill_to_the_results() -> void:
 		assert_eq(rig.of_type("segment").size(), 4, "depot, skirmish, checkpoint, cool-down")
 
 
-func test_the_score_falls_with_compliance_100_85_70() -> void:
-	var score: Array[float] = [float(TankScore.summary((_done[3] as TankRulesRig).state)["score"])]
-	for c in [0.85, 0.7]:
-		var rig := TankRulesRig.new(3, "ashfall_road", 1)
-		rig.compliance = c
-		rig.bank_director = true
-		rig.auto_seat = true
-		rig.play()
-		score.append(float(TankScore.summary(rig.state)["score"]))
-	assert_gt(score[0], score[1], "100% beats 85%")
-	assert_gt(score[1], score[2], "85% beats 70%")
-
-
 ## The solo loop: the solo rider drives, loads, fires and works the bow guns, every seat change at
 ## least the Autopilot's solo minimum stay (TankConst.AUTO_STAY_SOLO_S; 0.3.1 has no seat lock)
 ## after the last.

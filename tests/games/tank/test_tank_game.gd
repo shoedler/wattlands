@@ -7,6 +7,16 @@ const F := preload("res://tests/games/tank/tank_fakes.gd")
 ## Well under a tick (0.05 s).
 const TIME_EPS := 1e-6
 
+## Whole Ashfall Road sessions by crew size, played once for the script (_session): the tests read
+## the game, its clock, its sinks and the signals it sent.
+var _sessions: Dictionary = {}
+
+
+func after_all() -> void:
+	for s: Dictionary in _sessions.values():
+		(s["game"] as TankGame).free()
+	_sessions.clear()
+
 
 func _game(ctx: GameContext) -> TankGame:
 	return autofree(F.make_game(ctx))
@@ -18,6 +28,27 @@ func _dirs(ctx: GameContext) -> F.Directives:
 
 func _hud(ctx: GameContext) -> F.Hud:
 	return ctx.hud as F.Hud
+
+
+## A crew of `crew` that played the whole of Ashfall Road under the platform's phase rules and 2 s of
+## its cool-down, the solo rider with 420 kJ: {game, clock, phases (the phase_changed indexes),
+## finished (the finished reasons)}. Played once per crew size; tests only read it.
+func _session(crew: int) -> Dictionary:
+	if _sessions.has(crew):
+		return _sessions[crew]
+	var ctx := F.make_ctx(crew)
+	if crew == 1:
+		(ctx.stats as F.Stats).rows = {1: {"kj": 420.0}}
+	var g := F.make_game(ctx)
+	var clock := F.clock_of(g)
+	var phases: Array = []
+	var ends: Array = []
+	g.phase_changed.connect(func(i: int) -> void: phases.append(i))
+	g.finished.connect(func(why: String) -> void: ends.append(why))
+	var out := {"game": g, "clock": clock, "phases": phases, "finished": ends}
+	F.run_session(g, clock, 2.0)
+	_sessions[crew] = out
+	return out
 
 
 ## v3: every crew size rides the landship with its five seats; slot s starts on start seat s
@@ -125,11 +156,9 @@ func test_rotation_off_keeps_every_rider_on_its_start_engine() -> void:
 ## ended at most once, and finished comes exactly once with a mission outcome. Winning (T1) is a
 ## G2 balance gate, not checked here.
 func test_a_full_session_ends_open_phases_together_and_finishes_once() -> void:
-	var ctx := F.make_ctx(3)
-	var g := _game(ctx)
-	var clock := F.clock_of(g)
-	watch_signals(g)
-	F.run_session(g, clock, 2.0)
+	var played := _session(3)
+	var g: TankGame = played["game"]
+	var clock: F.PhaseClock = played["clock"]
 	assert_true(clock.all_in_cooldown(), "every rider reached the cool-down")
 	var seen := {}
 	for b: Dictionary in clock.batches:
@@ -144,9 +173,9 @@ func test_a_full_session_ends_open_phases_together_and_finishes_once() -> void:
 		if str(c["ended_by"]) == Wl.ENDED_END_PHASE or str(c["ended_by"]) == Wl.ENDED_MAX_S:
 			var ph := (clock.plans[c["peer"]] as EffortPlan).phase(int(c["index"]) - 1)
 			assert_true(ph.open_ended, "only open-ended phases end early or at max_s")
-	assert_signal_emit_count(g, "phase_changed", 13, "every segment and the cool-down")
-	assert_signal_emit_count(g, "finished", 1)
-	var reason: Variant = get_signal_parameters(g, "finished")[0]
+	assert_eq((played["phases"] as Array).size(), 13, "every segment and the cool-down")
+	assert_eq((played["finished"] as Array).size(), 1)
+	var reason: Variant = played["finished"][0]
 	assert_has([TankIds.OUTCOME_VICTORY, TankIds.OUTCOME_WITHDRAWN], reason)
 
 
@@ -171,10 +200,10 @@ func test_nothing_is_sent_in_the_cooldown() -> void:
 ## segment (effort may re-send, for example after a rescue).
 func test_bands_at_each_segment_start() -> void:
 	for crew in [1, 3]:
-		var ctx := F.make_ctx(crew)
-		var g := _game(ctx)
-		var clock := F.clock_of(g)
-		F.run_session(g, clock, 1.0)
+		var played := _session(crew)
+		var g: TankGame = played["game"]
+		var ctx := g.ctx
+		var clock: F.PhaseClock = played["clock"]
 		var cad := _dirs(ctx).cadence_at
 		var pb := _hud(ctx).power_band_at
 		for p in ctx.players:
@@ -285,10 +314,7 @@ func test_make_view_returns_a_node2d_that_reads_the_state() -> void:
 
 
 func test_results_grade_xp_and_unlocks_after_a_full_session() -> void:
-	var ctx := F.make_ctx(1)
-	(ctx.stats as F.Stats).rows = {1: {"kj": 420.0}}
-	var g := _game(ctx)
-	F.run_session(g, F.clock_of(g), 2.0)
+	var g: TankGame = _session(1)["game"]
 	var res := g.results()
 	assert_eq(res.rows.size(), 1)
 	assert_has(["S", "A", "B", "C", "D"], res.grade)

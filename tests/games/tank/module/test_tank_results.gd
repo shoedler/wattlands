@@ -32,6 +32,16 @@ const TEAM_KEYS: Array[String] = [
 	"TANK_TEAM_BOW_HITS",
 ]
 
+## Whole Ashfall Road sessions by crew size, each played once for the script (_played); the tests
+## read their results.
+var _sessions: Dictionary = {}
+
+
+func after_all() -> void:
+	for g: TankGame in _sessions.values():
+		g.free()
+	_sessions.clear()
+
 
 ## The text on the results: the kill label names what tank_game.gd joins, in that order, a loss line that
 ## reads for one tank, no key or word left of the dug-in gun, and no "gun line" where the mission now says
@@ -67,14 +77,20 @@ func test_the_results_text_matches_what_the_game_writes() -> void:
 		assert_false(low.contains("dugin"), key)
 
 
-func _played(crew: int, kj: float = 300.0) -> TankGame:
+## A crew that played the whole of Ashfall Road, every rider with 300 kJ plus 10 per slot. Played
+## once per crew size for the script: a test only reads it (results() reads the state and the
+## stats), and the one that applies progress uses the crew no other test reads it from.
+func _played(crew: int) -> TankGame:
+	if _sessions.has(crew):
+		return _sessions[crew]
 	var ctx := F.make_ctx(crew)
 	var rows := {}
 	for p in ctx.players:
-		rows[p.peer_id] = {"kj": kj + 10.0 * p.slot_index}
+		rows[p.peer_id] = {"kj": 300.0 + 10.0 * p.slot_index}
 	(ctx.stats as F.Stats).rows = rows
-	var g: TankGame = autofree(F.make_game(ctx))
+	var g := F.make_game(ctx)
 	F.run_session(g, F.clock_of(g), 2.0)
+	_sessions[crew] = g
 	return g
 
 
@@ -127,7 +143,7 @@ func test_results_survive_json_and_keep_their_order() -> void:
 
 
 func test_xp_is_kj_over_ten_plus_the_grade_bonus_per_rider() -> void:
-	var g := _played(3, 420.0)
+	var g := _played(3)
 	var res := g.results()
 	for row in res.rows:
 		var kj := float(row["kj"])
@@ -233,7 +249,7 @@ func test_the_remembered_session_ids_are_capped() -> void:
 
 
 func test_results_from_the_real_session_feed_apply_progress() -> void:
-	var g := _played(1, 420.0)
+	var g := _played(1)
 	var res := g.results()
 	res.session_id = "tank/ashfall_road/1/real"
 	var ctx := g.ctx
