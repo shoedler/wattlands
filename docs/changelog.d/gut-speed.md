@@ -1,0 +1,1 @@
+- For contributors: the test suite takes less time. Tests that read the same whole session now play it once, and a few tests that only repeated another check are gone.
