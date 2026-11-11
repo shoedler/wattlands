@@ -2,6 +2,30 @@
 
 Releases, newest first. Modules and games write fragments in `docs/changelog.d/<module or game id>.md`; they are merged here at each release and the fragments are emptied.
 
+## v1.1.0 (2026-11-11)
+
+From a two-rider playtest. Everyone in a room needs this release: v1.1.0 and v1.0.0 can't ride together, and the lobby says so with both versions.
+
+### For riders
+
+- **Castellum Rotae has a shared receipt.** In a break, picking an item from the Quartermaster no longer spends your gold on the spot. It goes on a receipt everyone in the room sees, with its cost, who picked it and the votes on it, and your gold for it is held ("40 YOURS HELD" under your gold). Pick your own item again to take it back. Pick someone else's to vote no, and again to vote yes. If more riders vote no than yes, or the votes tie, the item comes off at once, the gold goes back to whoever picked it and everyone sees "Voted off". The row you light in the shop says what a surge will do: take back, vote no or undo your no. Upgrades stack as before: with level 1 on the receipt, level 2 shows as its own row with its own vote, and it goes if level 1 does. When the break ends, everything left on the receipt is bought, in the order it was added.
+- **Pedalling alone no longer buys anything in Castellum Rotae.** The shop's automatic pick in ERG is gone: the Autopilot still adds picks for a rider who does nothing, and they go on the receipt like anyone's, but a rider who only pedals can still scan the list and surge to pick. A rider who drops out changes nothing on the receipt: their items and votes stay until the break ends, and the break's end tells the team what the receipt cost.
+- **Torque Company opens in a hangar.** For the first 3 minutes the tank sits on a mechanic's stand under white ceiling lights, its tracks spinning in the air as you pedal. Every seat works, and the drive, aim and fire drills happen here. In the last 10 seconds the lights go dark, red beacons turn, a soft klaxon sounds, the tank comes down off the stand and the door opens.
+- **Then a 2 minute roll-out through the door.** It never stops. Both parts are warm-up, at 65% of your FTP or less, so your first 5 minutes are still an easy warm-up. The Drive seat rides flat in the Hangar and gets the gentle terrain (0 to 2%) on the roll-out. Your ride's laps read Hangar and Roll-out.
+- **Torque Company's far wrecks close in as you drive.** They no longer hang at one distance: they slide toward you with the road and drop out of the far view when you pass them.
+- **Torque Company's Loader builds a little under the band.** Below the power band it now builds shells at a fifth of its normal speed instead of not at all. Staying in band is still much faster, and only that counts for the score and the glow.
+- **Both Behemoths are a little easier to bring down.** Their bogies and turret have less armour: in Ambush two shells break a bogie and five the turret, in Ashfall Road two and four, where it took three and six. The Ambush holding action before it meets two lights and a medium for a crew of three (the far heavy only for four riders).
+- **Turbo Reel: the jig.** While your lure is out in Free Roam, a panel under the boat ("Jig it home") shows the lure coming back to you over about 40 seconds and recasting by itself at the boat. Hold your lure band at 40% of your FTP or more and bites come sooner: the wait averages about 15 seconds, against about 30 otherwise. It all stays in SIM, so your trainer never changes load while you wait.
+- **Turbo Reel: your crew's fights on screen.** Under the leaderboard, a slim strip for every other rider who is fighting a fish shows the fish and the line out, a reel bar, their target watts and the watts they ride now (in the accent when more than 5% off). It stays up during your own fight.
+- **Turbo Reel: the big game trip.** A new 30 minute Free Roam on its own map: the harbour, then bluewater where nothing lives but yellowfin tuna and giant grouper, and both bite from the first cast. It's a hard ride, and its card says so.
+- Turbo Reel's fight panel now shows the cadence band on a joined rider's screen too.
+- Rides now record the real app version (they said 0.3.0) in the ride file and the FIT file Strava reads.
+
+### For contributors
+
+- `TeamVote` in the Game SDK: a small, deterministic team vote (everyone starts at yes; more no than yes, or a tie, rejects). Castellum Rotae's receipt uses it. See `docs/GAME_SDK.md` 12.2.
+- `Wl.app_version()` reads the project's version; `Wl.BUILD` stays the network tag.
+
 ## v1.0.0 (2026-11-03)
 
 The first release. It's v1.0.0-rc.4 with the version changed, so everything listed under rc.4 and before is in it. Everyone in a room needs this release: v1.0.0 and rc.4 can't ride together.

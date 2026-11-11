@@ -1,1 +1,0 @@
-- Rides now record the real app version (it said 0.3.0) in the ride file and the FIT file Strava reads.
