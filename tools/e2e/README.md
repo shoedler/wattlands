@@ -80,7 +80,7 @@ Each scenario takes one lease of the machine-wide Godot lock (2 slots, 3 for `la
 
 Error lines are matched like `run.mjs` does (`SCRIPT ERROR`, `Parse Error`, `ERROR:` push_error, `Debugger Break`, `Ignoring script`) over each peer's stdout, stderr and Godot log; a scenario may allow named patterns (`EXPECTED_ERRORS` in `lib/fault_scenarios.mjs`, empty today) and the report says how many lines were ignored. Desync warnings and `rate_limited` fail a scenario too.
 
-`relay_dies`, `relay_restarts`, `host_killed_relay` and `host_killed_builtin` play the whole 2 minute workout and ride out the 120 s reconnect window and the 180 s cool-down: expect 5 to 6 minutes each. One after another the whole set takes over half an hour; with `--jobs=4` it takes about as long as the longest scenario plus the short ones beside it. Without `--jobs`, run them one by one with `--scenarios=` when a shell call is limited to 10 minutes.
+`relay_dies`, `relay_restarts`, `host_killed_relay` and `host_killed_builtin` play the whole 2 minute workout and ride out the 120 s reconnect window and the 180 s cool-down: expect 5 to 6 minutes each. One after another the whole set takes about half an hour (27 minutes of scenarios on 2026-11-12); with `--jobs=6` it takes about as long as the longest scenario (under 8 minutes on a busy 20-core machine). Without `--jobs`, run them one by one with `--scenarios=` when a shell call is limited to 10 minutes.
 
 ## report.json
 
