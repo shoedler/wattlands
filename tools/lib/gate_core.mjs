@@ -102,24 +102,42 @@ export function readWeights(junitXml) {
   return out;
 }
 
-/** The content of tools/lib/gate_weights.json: {group: seconds}, sorted, for stable diffs. */
+/**
+ * May this group's files run in different processes? A game's test groups may: none of them writes a
+ * shared res://build/<dir> (the platform's scenarios, rides and core stack tests do), and their temp dirs
+ * carry the pid. A pinned group never splits.
+ */
+export function splittableGroup(group) {
+  return group.startsWith('tests/games/');
+}
+
+/**
+ * The content of tools/lib/gate_weights.json: {group: seconds} and, for the files of splittable groups,
+ * {file: seconds}, sorted, for stable diffs. A file key ends in .gd, a group key never does.
+ */
 export function weightsByGroup(fileWeights) {
   const sum = new Map();
-  for (const [file, seconds] of fileWeights) {
-    const g = groupKey(file);
+  const perFile = new Map();
+  for (const [suite, seconds] of fileWeights) {
+    const g = groupKey(suite);
     sum.set(g, (sum.get(g) ?? 0) + seconds);
+    const file = suite.replace(/(\.gd)\..*$/, '$1');
+    if (splittableGroup(g)) perFile.set(file, (perFile.get(file) ?? 0) + seconds);
   }
+  const all = new Map([...sum, ...perFile]);
   const out = {};
-  for (const g of [...sum.keys()].sort()) out[g] = Math.round(sum.get(g) * 10) / 10;
+  for (const k of [...all.keys()].sort()) out[k] = Math.round(all.get(k) * 10) / 10;
   return out;
 }
 
 const NO_DATA_S_PER_FILE = 2;
 
 /**
- * Longest group first into the lightest shard, ties by name. A group never splits, so every writer
- * of one res://build/<dir> stays in one process. `pins` (arrays of groups) forces groups together.
- * Files matching `quiet` (globs) come back apart. Empty shards are dropped.
+ * Longest bundle first into the lightest shard, ties by name. A bundle is a group, or one file of a
+ * splittable group heavier than half a shard's share (its weight from the file's own entry, else an even
+ * part of the group's): so a long game group no longer sets the wall time on its own. Other groups never
+ * split, so every writer of one res://build/<dir> stays in one process. `pins` (arrays of groups) forces
+ * groups together. Files matching `quiet` (globs) come back apart. Empty shards are dropped.
  * Returns { shards: string[][], quiet: string[] }; throws unless they partition `files` exactly.
  */
 export function planShards(files, groupWeights, { shards = 8, quiet = [], pins = [] } = {}) {
@@ -149,8 +167,20 @@ export function planShards(files, groupWeights, { shards = 8, quiet = [], pins =
       weight: present.reduce((s, g) => s + weightOf(g), 0),
     });
   }
+  const total = [...groups.keys()].reduce((s, g) => s + weightOf(g), 0);
+  const splitAbove = total / shards / 2;
   for (const g of groups.keys()) {
-    if (!taken.has(g)) bundles.push({ name: g, files: groups.get(g), weight: weightOf(g) });
+    if (taken.has(g)) continue;
+    const members = groups.get(g);
+    if (!splittableGroup(g) || members.length < 2 || weightOf(g) <= splitAbove) {
+      bundles.push({ name: g, files: members, weight: weightOf(g) });
+      continue;
+    }
+    const share = weightOf(g) / members.length;
+    for (const f of members) {
+      const w = known(f);
+      bundles.push({ name: f, files: [f], weight: Number.isFinite(w) ? w : share });
+    }
   }
   bundles.sort((a, b) => b.weight - a.weight || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const bins = Array.from({ length: shards }, () => ({ files: [], weight: 0 }));
@@ -190,6 +220,65 @@ export function touchedGames(changedPaths, registeredIds) {
     else platform = true;
   }
   return { games: platform ? [...ids].sort() : [...games].sort(), platform };
+}
+
+/** The game a path belongs to by its own paths (code, content, art, tests, its workflow, its doc fragments and brief), or null. */
+function gameOfPath(p) {
+  const m =
+    /^(?:src\/games|content|assets|tests\/games)\/([^/]+)\//.exec(p) ??
+    /^\.github\/workflows\/game-([^/]+)\.ya?ml$/.exec(p) ??
+    /^docs\/(?:decisions|changelog\.d|credits\.d|games)\/([^/]+)\.md$/.exec(p);
+  return m ? m[1] : null;
+}
+
+/**
+ * Which games' GUT files a `fast` runs for a change set. Stricter than touchedGames: a doc outside a
+ * game's own fragments counts as platform here. Only when every changed path is a registered game's own
+ * path do the other games' tests/games/<id>/ files stay out; any other path, _template's included, and
+ * an empty change set run everything. Platform files and unregistered dirs under tests/games always run.
+ * Returns { all, games, reason }.
+ */
+export function gutSelection(changedPaths, registeredIds) {
+  const ids = [...new Set(registeredIds)].sort();
+  if (changedPaths.length === 0) return { all: true, games: ids, reason: 'no change against the base' };
+  const games = new Set();
+  for (const p of changedPaths) {
+    const id = gameOfPath(p);
+    if (id === null || !ids.includes(id)) return { all: true, games: ids, reason: `${p} is outside the games' own paths` };
+    games.add(id);
+  }
+  const picked = [...games].sort();
+  if (picked.length === ids.length) return { all: true, games: ids, reason: 'the change touches every game' };
+  return { all: false, games: picked, reason: `the change touches only the own paths of ${picked.join(', ')}` };
+}
+
+/** Splits GUT files by a gutSelection: { run, skipped, skippedGames }. Only registered games' dirs are ever skipped. */
+export function selectGutFiles(files, selection, registeredIds) {
+  if (selection.all) return { run: [...files], skipped: [], skippedGames: [] };
+  const ids = new Set(registeredIds);
+  const run = [];
+  const skipped = [];
+  const skippedGames = new Set();
+  for (const f of files) {
+    const id = /^tests\/games\/([^/]+)\//.exec(f)?.[1];
+    if (id !== undefined && ids.has(id) && !selection.games.includes(id)) {
+      skipped.push(f);
+      skippedGames.add(id);
+    } else run.push(f);
+  }
+  return { run, skipped, skippedGames: [...skippedGames].sort() };
+}
+
+/**
+ * Does a stamp's GUT selection cover what this tree needs? `stamped`: the stamp's gut_selection; `need`:
+ * gutSelection of this tree against main. Returns null, or why not.
+ */
+export function selectionGap(stamped, need) {
+  if (!stamped || typeof stamped.all !== 'boolean' || !Array.isArray(stamped.games)) return 'it records no GUT selection';
+  if (stamped.all) return null;
+  if (need.all) return `it left out the GUT files of ${(stamped.skipped_games ?? []).join(', ') || 'some games'}, and this tree needs every file (${need.reason})`;
+  const lost = need.games.filter((id) => !stamped.games.includes(id));
+  return lost.length ? `its GUT run left out ${lost.join(', ')}, which this tree touches` : null;
 }
 
 // ---------------------------------------------------------------- GUT verdicts
@@ -386,6 +475,19 @@ export function checkerEvidence({ code, text, partial = false, required = [] }) 
 }
 
 /**
+ * The order a matrix pool takes its runs in: indices of `stems`, the runs with no time in `previousMs`
+ * ({stem: ms} from the last matrix) first, since any of them may be long, then the longest first. Ties keep
+ * the plan's order. Order changes only when a run starts, never what runs.
+ */
+export function longestFirst(stems, previousMs = {}) {
+  const ms = (i) => {
+    const v = previousMs?.[stems[i]];
+    return Number.isFinite(v) ? v : Infinity;
+  };
+  return stems.map((_, i) => i).sort((a, b) => ms(b) - ms(a) || a - b);
+}
+
+/**
  * What the manifest asks of a game's full matrix, or null when it asks nothing: `rows` its checker must
  * pass, `minRuns` the runs its plan must hold. Both are floors: a matrix may grow, and a game's script
  * can't narrow itself (a hard-coded --only, fewer seeds or crews), since nothing else compares it.
@@ -412,6 +514,34 @@ export function fastNarrowing({ lanes = null, baseSha, mainSha, base = 'main', w
   const missing = requiredGames.filter((g) => !games.includes(g));
   if (missing.length > 0) out.push(`--games leaves out ${missing.join(',')}`);
   return out;
+}
+
+const sameSet = (a, b) => {
+  const x = [...new Set(a)].sort();
+  const y = [...new Set(b)].sort();
+  return x.length === y.length && x.every((v, i) => v === y[i]);
+};
+
+/**
+ * stamp-ok with --allow/--allow-pin: a `fast` stamp stands only when its exceptions are exactly the ones the
+ * caller names and they are its only narrowing. An exception reaches the check lane alone; every test lane
+ * ran in full. Returns null, or why not.
+ */
+export function allowGap(stamp, allow = [], allowPin = []) {
+  const globs = stamp.allow_globs;
+  const pins = stamp.allow_pins;
+  if (!Array.isArray(globs) || !Array.isArray(pins)) return 'it records no --allow and --allow-pin lists';
+  if (!sameSet(globs, allow) || !sameSet(pins, allowPin)) {
+    return `it ran with --allow=${globs.join(',') || 'none'} --allow-pin=${pins.join(',') || 'none'}, not the exceptions stamp-ok was given`;
+  }
+  if (!sameSet(stamp.allow ?? [], [...globs, ...pins])) return 'its allow list does not match its --allow and --allow-pin lists';
+  const expected = fastNarrowing({ baseSha: 'base', mainSha: 'base', allow: globs, allowPin: pins });
+  const reasons = Array.isArray(stamp.partial_reasons) ? stamp.partial_reasons : [];
+  if (stamp.partial !== true || !sameSet(reasons, expected)) {
+    const other = reasons.filter((r) => !expected.includes(r));
+    return `it is partial for more than its exceptions${other.length ? ` (${other.join('; ')})` : ''}`;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------- source scans

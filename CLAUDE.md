@@ -54,15 +54,16 @@ Before building something for one game, ask whether the other games need it too.
 
 ## Gates
 
-`tools/gate` (`tools/gate.ps1`) runs `tools/run_tests`' verdict code in concurrent lanes. Exit 0 pass, 1 fail, 2 usage, 3 refused, 75 lock timeout. Run these with `. tools/env.sh` sourced:
+`tools/gate` (`tools/gate.ps1`) runs `tools/run_tests`' verdict code in concurrent lanes. Exit 0 pass, 1 fail, 2 usage, 3 refused, 75 lock timeout, 124 `wait` timed out. Run these with `. tools/env.sh` sourced. The machine-wide Godot slot cap defaults to three quarters of the CPUs, bounded by free RAM (`node tools/lib/godot_lock.mjs cap` shows it):
 
 - `check [--base=main] [--ws=<id>] [--contributor]`: seconds, before every report. Ownership per `tools/lib/gate_manifest.json` (the branch name picks the workstream), safety pins, test counts, added text. A branch name that matches no workstream gets the ownership rules for maintainer-only and never-edit paths only. `--contributor` turns maintainer-only files, pins and the stash rule into "maintainer review" notes; pull requests get that run in CI.
-- `fast`: about 8-13 min. The owner's gate before reporting, and the queue's. All of GUT in 8 shards, static, node, and sim and e2e of the games the branch touches.
-- `matrix --game=<id>`: 1-7 min. The checker rows of `tests/games/<id>/sim/run_sims.sh`, which hold the BRIEF 4.6 sim assertions; `fast` and `strict` never run them. Before reporting a branch of such a game, and for all of them at every checkpoint.
+- `fast`: the owner's gate before reporting, and the queue's. GUT in one shard per slot, static, node, and sim and e2e of the games the branch touches. A branch that touches only some games' own paths leaves the other games' `tests/games/<id>/` out of GUT; any other path runs all of it. The `gut:total` row says what was left out, and `stamp-ok` checks that the merged tree needs no more.
+- `matrix --game=<id>`: the checker rows of `tests/games/<id>/sim/run_sims.sh`, which hold the BRIEF 4.6 sim assertions; `fast` and `strict` never run them. One worker per slot. Before reporting a branch of such a game, and for all of them at every checkpoint.
+- `wait [--timeout=540]`: blocks until the gate running in this checkout ends, shows its lanes as they finish, then prints its stamp and exits with its verdict. With no gate running, it prints the newest stamp. `fmt` loads only the files it formatted, in seconds.
 - `strict`: about 20 min, on a clean tree, at checkpoints. One GUT process, the only run that catches cross-file state leaks, plus every other step.
 - `floor --label=<text>`: lead, after `strict` passes on HEAD. Raises `tests/green_count_floor.txt`, refreshes the shard weights, commits. `pin-safety --reason=<text>`: lead, after a deliberate change to a pinned file. Commit `tools/lib/safety_pins.json` alone, with an ADR.
 - `wt-add <name> <branch> [--from=main]` makes an imported worktree under `wt/` beside the main checkout. `wt-gc [--apply]` lists worktrees; `--apply` removes the merged, clean ones and their branches.
-- The literal `tools/run_tests`: about 48 min, serial, for CI and the final release. Run `node tools/lib/godot_lock.mjs set-cap 0` first: `set-cap <n>` sets the machine-wide Godot slot cap, and 0 returns it to the default.
+- The literal `tools/run_tests`: about 48 min, serial, for CI and the final release. Run `node tools/lib/godot_lock.mjs set-cap 4` first, as BRIEF 2 states the cap, and `set-cap 0` after: `set-cap <n>` sets the machine-wide Godot slot cap, and 0 returns it to the computed default.
 - `fast --lanes=<names>` runs part of a gate: `gut`, `static`, `node`, `e2e`, `sim`, `fit`, or one lane such as `gut:3` or `e2e:tank`; check and import always run. `matrix --scenarios=<ids>` does the same. A part is stamped partial, so `stamp-ok` refuses it and the queue reruns the whole gate.
 
 ## Merge queue
@@ -70,7 +71,7 @@ Before building something for one game, ask whether the other games need it too.
 Only the lead lands on main: merge, never rebase, one branch at a time, through the `queue` worktree (`wt/queue`, branch `queue`).
 
 - Owner, before reporting: `git merge main`, resolve its own conflicts, run `tools/gate fast` (and `matrix`), report the tip, the stamp and `gut_total`. After a red in the queue, which leaves main untouched, the owner fixes it on the branch, merges main and requeues at the back.
-- Lead, per branch: `git checkout -B queue main`; `git merge --no-ff <branch>`; `tools/gate check --base=main --ws=<ws>`; `tools/gate stamp-ok <worktree> || tools/gate fast --base=main` (`stamp-ok` accepts the owner's stamp for the same tree; the same with `--matrix=<id>` and `matrix --game=<id>`); `git -C <main checkout> merge --ff-only queue`.
+- Lead, per branch: `git checkout -B queue main`; `git merge --no-ff <branch>`; `tools/gate check --base=main --ws=<ws>`; `tools/gate stamp-ok <worktree> || tools/gate fast --base=main` (`stamp-ok` accepts the owner's stamp for the same tree; the same with `--matrix=<id>` and `matrix --game=<id>`; give `stamp-ok` the same `--allow` and `--allow-pin` as the check, and it accepts a stamp whose only narrowing was exactly those); `git -C <main checkout> merge --ff-only queue`.
 - Checkpoint, in the queue: `matrix` for each game with a `run_sims.sh`, `strict`, `floor`, fast-forward main, then version, changelog, export, tag, `wt-gc`.
 - Push main only at release checkpoints: a push to main runs every workflow (a tag push and other branches run none), and `lead` takes about two hours. Pull requests run them too, with a run per ref, and a newer push cancels the older run.
 
@@ -86,7 +87,7 @@ The lead triages and fixes; an agent working for the lead follows this.
 
 ## Agent rules
 
-- Gates run in the foreground. An agent that ends its turn waiting on a background job is forced to report, and the job dies. One foreground shell call is limited to about 10 minutes, so split a long gate by `--lanes=` into several calls. `strict` and the literal suite have no such split: only the lead runs them, in a session that stays alive for them.
+- An agent that ends its turn waiting on a background job is forced to report, and the job dies. One foreground shell call is limited to about 10 minutes. So start a gate as a background command and, in the same turn, call `tools/gate wait` in the foreground until it exits with something other than 124; never poll with sleep and tail. `--lanes=` still splits a gate into parts, but a part is partial. `strict` and the literal suite are for the lead, in a session that stays alive for them.
 - Never `git stash` in a worktree: the stash list is shared. To show a test fails before a fix, commit the test first or use `git diff > file` and `git apply -R`.
 - Never SendMessage to an agent running inside a Workflow: it can resume a duplicate in the same worktree. Builders put questions in their report.
 - A shell command that reads stdin hangs a background run, so never leave a bare `cat >`.

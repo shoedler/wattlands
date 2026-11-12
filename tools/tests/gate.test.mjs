@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { BASH, GIT, TOOLS, REPO, IS_WIN, godotBin, makeScratchProject, powershellExe, rmQuiet, runProc } from './helpers.mjs';
 import { checkAddedText } from '../lib/gate_core.mjs';
 import { parseArgs } from '../lib/run_tests.mjs';
@@ -730,6 +730,75 @@ describe('6.5 other invariants, through git', { concurrency: 4 }, () => {
   });
 });
 
+describe('wait', { concurrency: 4 }, () => {
+  const stampJson = (extra = {}) => JSON.stringify({ mode: 'fast', pass: true, exit_code: 0, ended: 'now', gut_total: 7, lanes: [{ name: 'gut:1', status: 'PASS', ms: 3000, log: 'build/gate/fast/gut_1.log' }], ...extra });
+
+  /** A stand-in gate: holds the mutex as a live pid, writes a progress row, then its stamp after `ms`, and exits. */
+  function holder(dir, { ms, stamp }) {
+    const gateDir = path.join(dir, 'build', 'gate');
+    fs.mkdirSync(path.join(gateDir, 'fast'), { recursive: true });
+    const src = `const fs=require('fs');const p=require('path');const d=${JSON.stringify(gateDir)};
+fs.writeFileSync(p.join(d,'run.lock'),String(process.pid));
+fs.writeFileSync(p.join(d,'current.json'),JSON.stringify({pid:process.pid,cmd:'fast',stamp:'fast',started:'then'}));
+fs.appendFileSync(p.join(d,'fast','progress.txt'),'PASS check 1s build/gate/fast/check.log\\n');
+setTimeout(()=>{fs.writeFileSync(p.join(d,'fast.json'),${JSON.stringify(stamp)});fs.rmSync(p.join(d,'run.lock'));process.exit(0);},${ms});`;
+    const child = spawn(process.execPath, ['-e', src], { stdio: 'ignore', windowsHide: true });
+    return child;
+  }
+
+  test('no gate and no stamp: says so and exits 1, after the grace for a gate just started', async () => {
+    const dir = repo();
+    const r = await gate(dir, ['wait']);
+    assert.equal(r.code, 1, r.stdout + r.stderr);
+    assert.match(r.stdout, /no gate runs in this checkout and there is no stamp/);
+    assert.ok(r.ms >= 4000, `waited ${r.ms} ms for a gate to appear`);
+  });
+
+  test("no gate: the newest stamp's lanes and verdict, with the tail of a lane that failed", async () => {
+    const dir = repo();
+    write(dir, { 'build/gate/fast.json': stampJson(), 'build/gate/matrix_tank.json': '{}' });
+    fs.utimesSync(path.join(dir, 'build/gate/matrix_tank.json'), new Date(0), new Date(0));
+    const ok = await gate(dir, ['wait']);
+    assert.equal(ok.code, 0, ok.stdout);
+    assert.match(ok.stdout, /the newest stamp is fast/);
+    assert.match(ok.stdout, /gut:1 +PASS +3s/);
+    assert.match(ok.stdout, /gate fast: PASS \(exit 0\)/);
+    write(dir, {
+      'build/gate/fast.json': stampJson({ pass: false, exit_code: 75, lanes: [{ name: 'e2e:tank', status: 'FAIL', ms: 1, log: 'build/gate/fast/e2e_tank.log' }] }),
+      'build/gate/fast/e2e_tank.log': 'line one\ngodot lock wait timeout\n',
+    });
+    const bad = await gate(dir, ['wait']);
+    assert.equal(bad.code, 75, bad.stdout);
+    assert.match(bad.stdout, /--- e2e:tank \(last 30 lines of build\/gate\/fast\/e2e_tank\.log\)\nline one\ngodot lock wait timeout/);
+  });
+
+  test('a running gate: its rows as they come, then its stamp and its exit code', async () => {
+    const dir = repo();
+    const child = holder(dir, { ms: 2500, stamp: stampJson({ pass: false, exit_code: 1 }) });
+    try {
+      const r = await gate(dir, ['wait']);
+      assert.equal(r.code, 1, r.stdout + r.stderr);
+      assert.match(r.stdout, /gate wait: fast \(pid \d+\) runs since then/);
+      assert.match(r.stdout, / {2}PASS check 1s/);
+      assert.match(r.stdout, /gate fast: FAIL \(exit 1\)/);
+    } finally {
+      child.kill();
+    }
+  });
+
+  test('--timeout: exit 124 while the gate still runs', async () => {
+    const dir = repo();
+    const child = holder(dir, { ms: 60_000, stamp: stampJson() });
+    try {
+      const r = await gate(dir, ['wait', '--timeout=1']);
+      assert.equal(r.code, 124, r.stdout + r.stderr);
+      assert.match(r.stdout, /still runs after 1 s .*run tools\/gate wait again/);
+    } finally {
+      child.kill();
+    }
+  });
+});
+
 describe('usage and refusals', { concurrency: 4 }, () => {
   test('usage errors exit 2', async () => {
     const dir = repo();
@@ -779,7 +848,7 @@ describe('stamp-ok', { concurrency: 4 }, () => {
   function stamped(extra = {}) {
     const dir = repo();
     const tree = sh(dir, 'rev-parse', 'HEAD^{tree}');
-    const stamp = { mode: 'fast', tree, pass: true, partial: false, dirty: false, gut_total: 5, runs: 3, checker_rows: 2, allow: [], ...extra };
+    const stamp = { mode: 'fast', tree, pass: true, partial: false, dirty: false, gut_total: 5, runs: 3, checker_rows: 2, allow: [], games: [], gut_selection: { all: true, games: [] }, ...extra };
     write(dir, { 'build/gate/fast.json': JSON.stringify(stamp), 'build/gate/matrix_tank.json': JSON.stringify(stamp) });
     return dir;
   }
@@ -838,6 +907,57 @@ describe('stamp-ok', { concurrency: 4 }, () => {
     const v = await gate(dir, ['stamp-ok', dir]);
     assert.equal(v.code, 1);
     assert.match(v.stdout, /this checkout is dirty/);
+  });
+
+  test("a GUT selection stands only for a tree that needs no more of it; so do the stamp's sim and e2e games", async () => {
+    const games = { 'src/games/tank/game.json': '{"id":"tank"}\n', 'src/games/siege/game.json': '{"id":"siege"}\n', 'src/games/fishing/game.json': '{"id":"fishing"}\n' };
+    const tankOnly = { all: false, games: ['tank'], skipped_games: ['fishing', 'siege'], skipped_files: 3, reason: 'the change touches only the own paths of tank' };
+    const branch = (files) => {
+      const dir = repo(games);
+      onBranch(dir, 'game/tank-x', files);
+      return dir;
+    };
+    const stampIn = (dir, extra) => {
+      const stamp = { mode: 'fast', tree: sh(dir, 'rev-parse', 'HEAD^{tree}'), pass: true, partial: false, dirty: false, gut_total: 5, allow: [], games: ['tank'], gut_selection: tankOnly, ...extra };
+      write(dir, { 'build/gate/fast.json': JSON.stringify(stamp) });
+    };
+    const tank = branch({ 'src/games/tank/a.gd': 'x\n' });
+    stampIn(tank);
+    const ok = await gate(tank, ['stamp-ok', tank]);
+    assert.equal(ok.code, 0, ok.stdout);
+    assert.match(ok.stdout, /note: its GUT run left out fishing, siege/);
+
+    const platform = branch({ 'src/games/tank/a.gd': 'x\n', 'addons/wattlands/core/x.gd': 'y\n' });
+    stampIn(platform, { games: ['fishing', 'siege', 'tank'] });
+    const r = await gate(platform, ['stamp-ok', platform]);
+    assert.equal(r.code, 1, r.stdout);
+    assert.match(r.stdout, /left out the GUT files of fishing, siege, and this tree needs every file \(addons\/wattlands\/core\/x\.gd is outside/);
+
+    const both = branch({ 'src/games/tank/a.gd': 'x\n', 'content/siege/b.json': '{}\n' });
+    stampIn(both, { games: ['siege', 'tank'] });
+    assert.match((await gate(both, ['stamp-ok', both])).stdout, /its GUT run left out siege, which this tree touches/);
+    stampIn(both, { games: ['tank'], gut_selection: { all: true, games: ['fishing', 'siege', 'tank'] } });
+    assert.match((await gate(both, ['stamp-ok', both])).stdout, /ran no sim or e2e of siege/);
+
+    stampIn(tank, { gut_selection: undefined });
+    assert.match((await gate(tank, ['stamp-ok', tank])).stdout, /records no GUT selection/);
+  });
+
+  test('--allow and --allow-pin: the same exceptions stand, others and a matrix do not', async () => {
+    const extra = { partial: true, partial_reasons: ['--allow=docs/games/**'], allow: ['docs/games/**'], allow_globs: ['docs/games/**'], allow_pins: [] };
+    const dir = stamped(extra);
+    const plain = await gate(dir, ['stamp-ok', dir]);
+    assert.equal(plain.code, 1);
+    assert.match(plain.stdout, /partial \(--allow=docs\/games\/\*\*\)/);
+    const same = await gate(dir, ['stamp-ok', dir, '--allow=docs/games/**']);
+    assert.equal(same.code, 0, same.stdout);
+    assert.match(same.stdout, /note: it ran with docs\/games\/\*\*, as stamp-ok was told/);
+    assert.match((await gate(dir, ['stamp-ok', dir, '--allow=docs/**'])).stdout, /not the exceptions stamp-ok was given/);
+    assert.match((await gate(dir, ['stamp-ok', dir, '--allow=docs/games/**', '--allow-pin=a.mjs:f'])).stdout, /not the exceptions/);
+    const lanes = stamped({ ...extra, partial_reasons: ['--lanes=gut', '--allow=docs/games/**'] });
+    assert.match((await gate(lanes, ['stamp-ok', lanes, '--allow=docs/games/**'])).stdout, /more than its exceptions \(--lanes=gut\)/);
+    const matrix = stamped({ ...extra, runs: 3, checker_rows: 2 });
+    assert.match((await gate(matrix, ['stamp-ok', matrix, '--matrix=tank', '--allow=docs/games/**'])).stdout, /partial/, 'a matrix takes no exceptions');
   });
 
   test('a quiet rerun stands, and is shown', async () => {
@@ -1102,6 +1222,39 @@ describe('fast --lanes=gut on a scratch project', { skip: skipNoGodot }, () => {
     assert.equal(stamp.partial, false);
   });
 
+  test("a branch on one game's paths leaves out the other games' GUT files, honestly: not partial, the floor less what was left out", async () => {
+    const games = {
+      'src/games/tank/game.json': '{"id":"tank"}\n',
+      'src/games/siege/game.json': '{"id":"siege"}\n',
+      'src/games/fishing/game.json': '{"id":"fishing"}\n',
+      'tests/games/siege/x/test_s.gd': `${TEST_SRC}\nfunc test_b():\n\tassert_eq(a, b)\n`,
+      'tests/games/tank/x/test_t.gd': TEST_SRC,
+      'tests/games/_template/test_m.gd': TEST_SRC,
+    };
+    const run = async (floor) => {
+      const dir = scratch({}, { ...games, 'tests/green_count_floor.txt': `${floor}\n` });
+      onBranch(dir, 'game/tank-x', { 'content/tank/a.json': '{}\n' });
+      // No --games: the gate's own rule picks. --lanes keeps sim and e2e out of a scratch project.
+      const r = await gate(dir, ['fast', '--lanes=gut', '--shards=2'], { env: lockEnv, timeoutMs: 400_000 });
+      return { dir, r, stamp: stampOf(dir) };
+    };
+    // 9 tests in the source: 2 of them in siege's file, left out; 7 run, so a floor of 9 holds and 10 does not.
+    const at = await run(9);
+    assert.equal(at.r.code, 0, at.r.stdout + at.r.stderr);
+    assert.match(at.r.stdout, /GUT leaves out 1 files of siege: the change touches only the own paths of tank/);
+    assert.match(at.r.stdout, /PASS gut:total 0s 7 tests, floor 9 less 2 in 1 files left out \(siege\)/);
+    assert.equal(at.stamp.gut_total, 7);
+    assert.deepEqual(at.stamp.gut_selection, { all: false, games: ['tank'], skipped_games: ['siege'], skipped_files: 1, reason: 'the change touches only the own paths of tank' });
+    assert.deepEqual(at.stamp.partial_reasons, ['--lanes=gut'], 'the selection itself narrows nothing');
+    const ran = fs.readdirSync(path.join(at.dir, 'build', 'gate', 'fast')).filter((d) => d.startsWith('shard_'))
+      .flatMap((d) => [...fs.readFileSync(path.join(at.dir, 'build', 'gate', 'fast', d, 'junit.xml'), 'utf8').matchAll(/<testsuite name="([^"]+)"/g)].map((m) => m[1]));
+    assert.ok(ran.includes('tests/games/_template/test_m.gd') && ran.includes('tests/games/tank/x/test_t.gd'));
+    assert.ok(!ran.includes('tests/games/siege/x/test_s.gd'));
+    const above = await run(10);
+    assert.equal(above.r.code, 1, above.r.stdout);
+    assert.match(above.r.stdout, /the shards ran 7 tests, fewer than the floor 8/);
+  });
+
   test('a failing check fails the stamp, and the lanes still run', async () => {
     const dir = scratch();
     sh(dir, 'checkout', '-q', '-b', 'game/tank-x');
@@ -1201,6 +1354,20 @@ describe('matrix', { skip: !BASH && 'bash not found' }, () => {
     assert.equal(checked.match(/checked/g).length, 1, 'the checker runs once, in phase 3');
     assert.match(checked, /a\.json/);
     assert.equal((await gate(dir, ['stamp-ok', dir, '--matrix=mygame'])).code, 0);
+  });
+
+  test("the stamp keeps each run's time, and the next matrix starts the longest first; the default is a worker per slot", async () => {
+    const dir = matrixRepo(simsScript('run a --seed=1\nrun b --seed=2\nrun c --seed=3'));
+    const first = await matrix(dir);
+    assert.equal(first.code, 0, first.stdout + first.stderr);
+    const stamp = stampOf(dir);
+    assert.equal(stamp.jobs, 3, 'cap 4, 3 runs: one worker per run');
+    assert.deepEqual(Object.keys(stamp.run_ms).sort(), ['a', 'b', 'c']);
+    // Pretend c was the long one and b the short one last time.
+    write(dir, { 'build/gate/matrix_mygame.json': JSON.stringify({ ...stamp, run_ms: { a: 2000, b: 1000, c: 9000 } }), 'build/pool_runs.txt': null });
+    const second = await matrix(dir, '--jobs=1');
+    assert.equal(second.code, 0, second.stdout + second.stderr);
+    assert.deepEqual(poolRuns(dir).map((l) => path.basename(l.split(' ')[0], '.json')), ['c', 'a', 'b']);
   });
 
   test('a run exiting 5 fails the verdict though the checker passes; the others still run', async () => {
@@ -1336,6 +1503,32 @@ describe('fmt', () => {
     const r = await gate(dir, ['fmt']);
     assert.equal(r.code, 0, r.stdout + r.stderr);
     assert.match(r.stdout, /no changed \.gd/);
+  });
+
+  const noUv = spawnSync('uv', ['--version'], { windowsHide: true }).status !== 0 && 'uv not found';
+  test('loads only the files it formatted, in its own lock dir, and fails on one Godot will not load', { skip: skipNoGodot || noUv }, async () => {
+    const dir = makeScratchProject('gate-fmt', {
+      'tools/check_scripts.gd': fs.readFileSync(path.join(TOOLS, 'check_scripts.gd'), 'utf8'),
+      'src/old_broken.gd': 'extends Node\n\n\nfunc f() -> int:\n\treturn undeclared_name\n',
+      'src/good.gd': 'extends Node\n',
+    });
+    temps.push(dir);
+    initRepo(dir, {}, NO_PINS_MANIFEST);
+    // Were fmt to use the caller's lock dir, it would queue here instead of on the machine's.
+    const env = { WATTLANDS_GODOT_LOCK_DIR: path.join(dir, 'no_such_lock'), WATTLANDS_GODOT_LOCK_CAP: '1' };
+    onBranch(dir, 'feature/x', { 'src/good.gd': 'extends Node\n\n\nfunc g() -> int:\n\treturn 1\n' });
+    const ok = await gate(dir, ['fmt'], { env, timeoutMs: 300_000 });
+    assert.equal(ok.code, 0, ok.stdout + ok.stderr);
+    assert.match(ok.stdout, /gate fmt: 1 files, 1 loaded, clean in/, 'the broken file it did not touch is not loaded');
+    const log = fs.readFileSync(path.join(dir, 'build', 'check_scripts.log'), 'utf8');
+    assert.match(log, /check_scripts: 1 named scripts, 0 failures/);
+    assert.doesNotMatch(log, /check_scripts: \d+ scripts, \d+ failures/, "the static gate's own summary never comes from a named run");
+    assert.ok(fs.existsSync(path.join(dir, 'build', 'gate', 'fmt_lock')), 'its own lock dir');
+    write(dir, { 'src/bad.gd': 'extends Node\n\n\nfunc f() -> int:\n\treturn also_undeclared\n' });
+    const bad = await gate(dir, ['fmt'], { env, timeoutMs: 300_000 });
+    assert.equal(bad.code, 1, bad.stdout + bad.stderr);
+    assert.match(bad.stdout, /check_scripts failed .*\n.*FAIL res:\/\/src\/bad\.gd/);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'build', 'gate', 'fmt.json'), 'utf8')).exit_code, 1);
   });
 });
 

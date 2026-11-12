@@ -1,0 +1,1 @@
+- Contributors: `tools/gate fast` uses more of your machine, runs only the GUT tests a game-only change can reach, and `tools/gate wait` follows a gate you started in the background. `tools/gate fmt` takes seconds.

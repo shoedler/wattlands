@@ -40,7 +40,7 @@ To try multiplayer on one PC, open two copies. With no relay set they find each 
    tools/gate fast --contributor
    ```
 
-   `check` takes seconds. `fast` takes 10 minutes or so on a good machine and runs every GUT test, the linter, the Node suites, and the simulation and end-to-end runs of the games you touched. If your change touches a game with `tests/games/<id>/sim/run_sims.sh`, also run `tools/gate matrix --game=<id>`.
+   `check` and `fmt` take seconds. `fast` takes several minutes on a good machine, using about three quarters of its cores. It runs the linter, the Node suites, the simulation and end-to-end runs of the games you touched, and the GUT tests: all of them, or, when you changed only a game's own files, the platform's and that game's. If your change touches a game with `tests/games/<id>/sim/run_sims.sh`, also run `tools/gate matrix --game=<id>`. If you start a gate in the background, `tools/gate wait` shows its lanes as they finish and exits with its verdict.
 
    Too slow for your machine? Test what you touched and let CI run the rest:
 
