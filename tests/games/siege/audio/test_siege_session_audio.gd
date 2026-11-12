@@ -27,6 +27,19 @@ const ARROW_FILES := ["arrow_flesh", "arrow_wood", "arrow_shield", "arrow_dirt",
 var _game: SiegeGame = null
 var _view: SiegeView = null
 var _shots: Array[Dictionary] = []
+## The real wave the tests of a real wave read (_real_wave), ridden once for the script.
+var _wave: Dictionary = {}
+var _wave_game: SiegeGame = null
+var _wave_view: SiegeView = null
+
+
+func after_all() -> void:
+	if _wave_view != null:
+		_wave_view.free()
+	F.free_game(_wave_game)
+	_wave_view = null
+	_wave_game = null
+	_wave.clear()
 
 
 func after_each() -> void:
@@ -67,20 +80,73 @@ func _collect(seen: Dictionary) -> void:
 	kit.clear_played()
 
 
-func _shots_of(kind: int) -> int:
+func _shots_of(kind: int, shots: Array[Dictionary]) -> int:
 	var n := 0
-	for s in _shots:
+	for s in shots:
 		if int(s.get("kind", -1)) == kind:
 			n += 1
 	return n
 
 
-func test_every_shot_of_a_real_wave_starts_a_flight_sound() -> void:
+## _ride()'s session, ridden once for the script to 300 s, the tests only reading it: at FIX_SECONDS
+## what the kit heard ("seen"), the shots, the arrows landed and struck by ear ("landed", "struck")
+## and the host's arrow hits ("arrow_hits"); the kills of its first 120 s and how many found their
+## body ("kills", "found"); "game" and "view" as they stand at 300 s.
+func _real_wave() -> Dictionary:
+	if not _wave.is_empty():
+		return _wave
+	var ctx := F.make_ctx(1, 3, "short", Wl.SOLO, 1, 3)
+	_wave_game = F.make_game(ctx)
+	var plans := _wave_game.build_effort_plans()
+	var final := {}
+	for peer: int in plans:
+		final[peer] = PlanValidator.finalize(plans[peer])
+	_wave_view = _wave_game.make_view() as SiegeView
+	add_child(_wave_view)
+	var shots: Array[Dictionary] = []
+	var kills := [0, 0]
+	var kill_ticks := roundi(120.0 / Wl.SIM_DT)
+	var now := [0]
+	var view := _wave_view
+	var on_cue := func(kind: String, data: Dictionary) -> void:
+		if kind == SiegeIds.EV_SHOT:
+			shots.append(data)
+		elif kind == SiegeIds.EV_KILL and now[0] < kill_ticks:
+			kills[0] += 1
+			if view.audio._shots.last_seen(int(data["id"])) is Vector3:
+				kills[1] += 1
+	_wave_game.cue.connect(on_cue)
 	var seen := {}
-	_ride(FIX_SECONDS, seen)
-	var bolts := _shots_of(SiegeIds.SHOT_BOLT) + _shots_of(SiegeIds.SHOT_SCORPION)
-	var arrows := _shots_of(SiegeIds.SHOT_ARROW)
-	var stones := _shots_of(SiegeIds.SHOT_STONE)
+	var fix_ticks := roundi(FIX_SECONDS / Wl.SIM_DT)
+	for tick in roundi(300.0 / Wl.SIM_DT):
+		now[0] = tick
+		_wave_game.sim_step(Wl.SIM_DT, F.frame(ctx, final, tick))
+		_wave_view.update(Wl.SIM_DT)
+		var kit := _wave_view.audio.kit
+		for i in kit.played.size():
+			seen[kit.played[i]] = int(seen.get(kit.played[i], 0)) + 1
+		kit.clear_played()
+		if tick == fix_ticks - 1:
+			var sounds: SiegeShotSounds = _wave_view.audio._shots
+			_wave["seen"] = seen.duplicate()
+			_wave["shots"] = shots.duplicate(true)
+			_wave["landed"] = sounds.landed_count.duplicate()
+			_wave["struck"] = sounds.struck_count.duplicate()
+			_wave["arrow_hits"] = _wave_game.state.station(SiegeIds.STATION_ARROWS).hits
+	_wave["kills"] = kills[0]
+	_wave["found"] = kills[1]
+	_wave["game"] = _wave_game
+	_wave["view"] = _wave_view
+	return _wave
+
+
+func test_every_shot_of_a_real_wave_starts_a_flight_sound() -> void:
+	var wave := _real_wave()
+	var seen: Dictionary = wave["seen"]
+	var shots: Array[Dictionary] = wave["shots"]
+	var bolts := _shots_of(SiegeIds.SHOT_BOLT, shots) + _shots_of(SiegeIds.SHOT_SCORPION, shots)
+	var arrows := _shots_of(SiegeIds.SHOT_ARROW, shots)
+	var stones := _shots_of(SiegeIds.SHOT_STONE, shots)
 	assert_gt(arrows, 10, "the organ fires in the first %d s" % FIX_SECONDS)
 	assert_gt(bolts, 5, "the bolt throwers fire")
 	assert_gt(stones, 2, "the onager fires")
@@ -110,8 +176,7 @@ func test_every_flight_is_given_the_real_time_the_shot_flies() -> void:
 
 
 func test_a_real_wave_lands_on_the_ground_and_on_every_kind_of_target() -> void:
-	var seen := {}
-	_ride(FIX_SECONDS, seen)
+	var seen: Dictionary = _real_wave()["seen"]
 	for surface: String in SURFACE_SOUNDS:
 		var n := 0
 		for id: String in SURFACE_SOUNDS[surface]:
@@ -128,17 +193,16 @@ func _sum(seen: Dictionary, ids: Array) -> int:
 
 ## The owner: "arrow hits still make no sound. they should individually make a sound."
 func test_every_arrow_that_lands_in_a_real_wave_makes_one_sound() -> void:
-	var seen := {}
-	_ride(FIX_SECONDS, seen)
-	var sounds: SiegeShotSounds = _view.audio._shots
-	var landed := int(sounds.landed_count.get("arrow", 0))
-	var struck := int(sounds.struck_count.get("arrow", 0))
+	var wave := _real_wave()
+	var seen: Dictionary = wave["seen"]
+	var landed := int(wave["landed"].get("arrow", 0))
+	var struck := int(wave["struck"].get("arrow", 0))
 	assert_gt(landed, 500, "a real wave lands hundreds of arrows")
 	assert_gt(struck, 20, "and strikes bodies")
 	assert_eq(_sum(seen, ARROW_FILES), landed, "one sound per arrow: %s" % [seen])
 	assert_eq(_sum(seen, ARROW_BODY), struck, "one body sound per arrow that struck")
 	assert_eq(_sum(seen, ARROW_OTHER), landed - struck, "and the rest by what they fell on")
-	var hits := _game.state.station(SiegeIds.STATION_ARROWS).hits
+	var hits: int = wave["arrow_hits"]
 	assert_lte(absi(struck - hits), maxi(5, roundi(hits * 0.25)), "%d, host %d" % [struck, hits])
 
 
@@ -437,10 +501,9 @@ func test_nothing_there_is_the_ground() -> void:
 
 
 func test_a_real_wave_hears_what_the_host_hit() -> void:
-	var seen := {}
-	_ride(300.0, seen)
-	var st := _game.state
-	var sounds: SiegeShotSounds = _view.audio._shots
+	var wave := _real_wave()
+	var st := (wave["game"] as SiegeGame).state
+	var sounds: SiegeShotSounds = (wave["view"] as SiegeView).audio._shots
 	var near := func(got: int, truth: int, label: String) -> void:
 		var slack := maxi(2, roundi(truth * 0.1))
 		assert_gt(truth, 0, "%s: the host hit something in %d s" % [label, 300])
@@ -527,27 +590,8 @@ func test_an_upgraded_onager_reaches_further_with_its_splash() -> void:
 
 
 func test_every_kill_of_a_real_wave_knows_its_side() -> void:
-	var seen := {}
-	var ctx := F.make_ctx(1, 3, "short", Wl.SOLO, 1, 3)
-	_game = F.make_game(ctx)
-	var plans := _game.build_effort_plans()
-	var final := {}
-	for peer: int in plans:
-		final[peer] = PlanValidator.finalize(plans[peer])
-	_view = _game.make_view() as SiegeView
-	add_child_autofree(_view)
-	var kills := [0, 0]
-	var on_kill := func(kind: String, data: Dictionary) -> void:
-		if kind != SiegeIds.EV_KILL:
-			return
-		kills[0] += 1
-		if _view.audio._shots.last_seen(int(data["id"])) is Vector3:
-			kills[1] += 1
-	_game.cue.connect(on_kill)
-	for tick in roundi(120.0 / Wl.SIM_DT):
-		_game.sim_step(Wl.SIM_DT, F.frame(ctx, final, tick))
-		_view.update(Wl.SIM_DT)
-		_collect(seen)
+	var wave := _real_wave()
+	var kills := [int(wave["kills"]), int(wave["found"])]
 	assert_gt(kills[0], 5, "the first wave kills")
 	assert_gte(kills[1], kills[0] - 2, "the host's kills found their bodies: %s" % [kills])
 
