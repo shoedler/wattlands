@@ -326,7 +326,7 @@ func test_offline_upload() -> void:
 	var dead_port := probe.get_local_port()
 	probe.stop()
 	c.api_base = "http://127.0.0.1:%d/api/v3" % dead_port
-	c.request_timeout_s = 1.5
+	c.request_timeout_s = 0.25
 	var ride := _ride()
 	var res: Dictionary = await c.upload_fit(str(ride[1]["ride_id"]), str(ride[0]), "n", "d")
 	assert_eq(res["state"], "offline")
@@ -523,7 +523,7 @@ func test_disconnect_revokes_and_deletes() -> void:
 func test_disconnect_offline_still_deletes_locally() -> void:
 	var c: StravaClient = await _connected_client()
 	c.oauth_base = "http://127.0.0.1:1/oauth"
-	c.request_timeout_s = 1.5
+	c.request_timeout_s = 0.25
 	var details: Array = []
 	c.state_changed.connect(func(_s: String, d: String) -> void: details.append(d))
 	assert_false(await c.disconnect_account())
@@ -564,7 +564,7 @@ func test_secrets_never_reach_a_log() -> void:
 func test_an_expired_token_while_offline_is_offline_not_disconnected() -> void:
 	var c: StravaClient = await _connected_client()
 	c.oauth_base = "http://127.0.0.1:1/oauth"
-	c.request_timeout_s = 1.5
+	c.request_timeout_s = 0.25
 	_now = NOW + 30000
 	var ride := _ride()
 	var res: Dictionary = await c.upload_fit(str(ride[1]["ride_id"]), str(ride[0]), "n", "d")

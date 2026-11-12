@@ -4,18 +4,24 @@
 // The logic lives in gate_core.mjs; this file is git, processes and printing. Zero dependencies.
 // docs/decisions/gate.md says why; tools/run_tests stays the literal, serial gate.
 //
-// Exit: 0 pass, 1 fail, 2 usage, 3 refused (dirty tree, another gate in this checkout), 75 lock timeout.
+// Exit: 0 pass, 1 fail, 2 usage, 3 refused (dirty tree, another gate in this checkout), 4 `wait` has no
+// verdict to give (none written, another gate's, or for another tree), 75 lock timeout, 124 `wait` timed
+// out while the gate still runs.
 
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { acquire, killTree, LEASE_TOKEN_ENV, LOCK_TIMEOUT_MESSAGE, machineCap, pidAlive } from './godot_lock.mjs';
+import { Worker } from 'node:worker_threads';
+import { acquire, killTree, LEASE_TOKEN_ENV, LOCK_TIMEOUT_MESSAGE, lockDir, machineCap, pidAlive, readTickets, WHOLE_MACHINE_LEASE } from './godot_lock.mjs';
 import { evaluateGut, junitCounts, readGreenCount, readPendingAllowlist } from './gut_gate.mjs';
 import { ensureBuildDir, ensureNpm, GDTOOLKIT_VERSION, greenFloor, GREEN_FLOOR_FILE, NODE_SUITES, registeredGames, run, TEST_FILE_RE, wrapperCommand } from './run_tests.mjs';
 import {
   aggregateGut,
+  allowGap,
+  buildDirGroups,
   checkAddedText,
   checkClassNames,
   checkerEvidence,
@@ -24,15 +30,21 @@ import {
   checkPinContent,
   checkPinCoverage,
   checkPins,
+  crossGameRefs,
+  CROSS_SCAN_ROOTS,
+  formatCrossRef,
+  gateAlive,
   checkSidecars,
   checkTestCounts,
   computePins,
   fastNarrowing,
   inferWs,
+  isScannedFile,
   isGutFile,
   junitCountProblems,
   junitCoverage,
   laneVerdict,
+  longestFirst,
   listGutFiles,
   manifestPins,
   matrixRule,
@@ -41,12 +53,19 @@ import {
   parseTestRemovals,
   pinSpecOf,
   planShards,
+  poolSizes,
   globToRegExp,
+  gutSelection,
+  selectGutFiles,
+  selectionGap,
   quietRetryPlan,
   readWeights,
   revertedSha,
   sourceTestCounts,
   touchedGames,
+  WAIT_FOR_RE,
+  WAIT_NO_VERDICT_EXIT,
+  waitVerdict,
   weightsByGroup,
   isMaintainerReview,
   contributorWords,
@@ -65,6 +84,7 @@ const E2E_STAGGER_MS = 2000;
 const NPM_DIRS = ['server/relay', 'tools/fit_check'];
 const LINT_DIRS = ['addons/wattlands/', 'src/', 'tests/', 'tools/'];
 const FMT_BATCH = 100;
+const FMT_NAMED_MAX = 150; // above this, one command line gets long: fmt loads every script instead
 const LARGE_FILE_BYTES = 5 * 1024 * 1024;
 const AUDIO_BUDGET_BYTES = 40 * 1024 * 1024;
 const TEMP_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -72,17 +92,21 @@ const COAUTHOR = 'Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>';
 
 const USAGE = `usage: tools/gate <command> [options]      (tools/gate.ps1 in PowerShell)
   check  [--base=main] [--ws=<id>] [--contributor] [--allow=<glob>]... [--allow-pin=<file>:<function>]...
-  fast   [--base=main] [--ws=<id>] [--contributor] [--allow=..]... [--allow-pin=..]... [--games=<ids>|all] [--shards=8] [--lanes=<names>]
+  fast   [--base=main] [--ws=<id>] [--contributor] [--allow=..]... [--allow-pin=..]... [--games=<ids>|all] [--shards=<n>] [--lanes=<names>]
   strict [--ws=<id>] [--allow=..]... [--allow-pin=..]... [--serial-gut]
-  matrix --game=<id> [--jobs=8] [--scenarios=s1,s4]
-  stamp-ok <worktree> [--matrix=<id>]
+  matrix --game=<id> [--jobs=<n>] [--scenarios=s1,s4]
+  stamp-ok <worktree> [--matrix=<id>] [--allow=..]... [--allow-pin=..]...
   floor  --label="<text>"
   fmt    [--base=main]
+  wait   [--for=fast|strict|matrix_<id>] [--timeout=540]
   wt-add <name> <branch> [--from=main] [--wt-root=<dir>]
   wt-gc  [--apply] [--base=main]
   pin-safety --reason="<text>"
 Every command also takes --project=<dir> (default: this checkout).
-Exit: 0 pass, 1 fail, 2 usage, 3 refused, 75 lock timeout.`;
+Exit: 0 pass, 1 fail, 2 usage, 3 refused, 4 wait has no verdict (none written, another gate's, another tree),
+75 lock timeout, 124 wait timed out (the gate still runs: wait again).
+fast narrows GUT and the Node suites to what the change since --base reaches, and keeps audio verdicts in
+build/test_cache: --games=all (or deleting that folder) runs and scores everything.`;
 
 const CHECK_FLAGS = ['base', 'ws', 'allow', 'allowPin', 'contributor'];
 const COMMANDS = {
@@ -90,9 +114,10 @@ const COMMANDS = {
   fast: { flags: [...CHECK_FLAGS, 'games', 'shards', 'lanes'], positional: 0 },
   strict: { flags: ['ws', 'allow', 'allowPin', 'serialGut'], positional: 0 },
   matrix: { flags: ['game', 'jobs', 'scenarios'], positional: 0 },
-  'stamp-ok': { flags: ['matrix'], positional: 1 },
+  'stamp-ok': { flags: ['matrix', 'allow', 'allowPin'], positional: 1 },
   floor: { flags: ['label'], positional: 0 },
   fmt: { flags: ['base'], positional: 0 },
+  wait: { flags: ['timeout', 'for'], positional: 0 },
   'wt-add': { flags: ['from', 'wtRoot'], positional: 2 },
   'wt-gc': { flags: ['apply', 'base'], positional: 0 },
   'pin-safety': { flags: ['reason'], positional: 0 },
@@ -116,6 +141,8 @@ const FLAG_KEYS = {
   '--wt-root': 'wtRoot',
   '--apply': 'apply',
   '--reason': 'reason',
+  '--timeout': 'timeout',
+  '--for': 'for',
 };
 const BARE_FLAGS = new Set(['serialGut', 'apply', 'contributor']);
 
@@ -142,11 +169,11 @@ export function parseCli(argv) {
     allow: [],
     allowPin: [],
     games: null,
-    shards: 8,
+    shards: null,
     lanes: null,
     serialGut: false,
     game: null,
-    jobs: 8,
+    jobs: null,
     scenarios: [],
     matrix: null,
     label: null,
@@ -154,6 +181,8 @@ export function parseCli(argv) {
     wtRoot: null,
     apply: false,
     reason: null,
+    timeout: null,
+    for: null,
   };
   const given = [];
   const list = (v) => v.split(',').map((s) => s.trim()).filter(Boolean);
@@ -186,7 +215,7 @@ export function parseCli(argv) {
     given.push(key);
     if (key === 'allow' || key === 'allowPin') o[key].push(val);
     else if (BARE_FLAGS.has(key)) o[key] = true;
-    else if (key === 'shards' || key === 'jobs') o[key] = positiveInt(flag, val);
+    else if (key === 'shards' || key === 'jobs' || key === 'timeout') o[key] = positiveInt(flag, val);
     else if (key === 'games' || key === 'lanes' || key === 'scenarios') o[key] = list(val);
     else o[key] = val;
   }
@@ -200,6 +229,7 @@ export function parseCli(argv) {
   if (o.cmd === 'matrix' && !o.game) throw usageError('matrix needs --game=<id>');
   if (o.cmd === 'floor' && !o.label) throw usageError('floor needs --label=<text>');
   if (o.cmd === 'pin-safety' && !o.reason) throw usageError('pin-safety needs --reason=<text>');
+  if (o.for !== null && !WAIT_FOR_RE.test(o.for)) throw usageError(`--for takes fast, strict or matrix_<id>, got "${o.for}"`);
   return o;
 }
 
@@ -299,12 +329,14 @@ function readAt(cwd, rev, file) {
   return b ? b.toString('utf8') : null;
 }
 
-function gdSourcesAt(cwd, rev) {
-  const files = zList(git(cwd, ['ls-tree', '-r', '--name-only', '-z', rev, '--', 'tests'])).filter(isGutFile);
-  const blobs = catBlobs(cwd, files.map((f) => `${rev}:${f}`));
-  const srcs = {};
-  for (const f of files) srcs[f] = blobs.get(`${rev}:${f}`)?.toString('utf8') ?? '';
-  return srcs;
+/** The sources the test-count rules read at a rev, GUT and Node: {gd, node}, each {path: source}. One ls-tree, one cat-file. */
+function testSourcesAt(cwd, rev) {
+  const files = zList(git(cwd, ['ls-tree', '-r', '--name-only', '-z', rev, '--', 'tests', ...NODE_SUITES]));
+  const gd = files.filter(isGutFile);
+  const node = files.filter(isNodeTestFile);
+  const blobs = catBlobs(cwd, [...new Set([...gd, ...node])].map((f) => `${rev}:${f}`));
+  const read = (list) => Object.fromEntries(list.map((f) => [f, blobs.get(`${rev}:${f}`)?.toString('utf8') ?? '']));
+  return { gd: read(gd), node: read(node) };
 }
 
 /** The suite `node --test` runs a file in, or null: NODE_SUITES, then tests/games/<id>. */
@@ -314,19 +346,12 @@ function nodeSuiteOf(file) {
   return /^tests\/games\/[^/]+(?=\/)/.exec(file)?.[0] ?? null;
 }
 
-/** The test files of the Node suites at a rev, as run_tests finds them: {path: source}. */
-function nodeSourcesAt(cwd, rev) {
-  const roots = [...NODE_SUITES, 'tests/games'];
-  const isTestFile = (f) => {
-    const parts = f.split('/');
-    if (parts.some((p) => p.startsWith('.') || p === 'node_modules')) return false;
-    return TEST_FILE_RE.test(parts.at(-1)) || (parts.slice(0, -1).includes('test') && /\.[cm]?js$/.test(f));
-  };
-  const files = zList(git(cwd, ['ls-tree', '-r', '--name-only', '-z', rev, '--', ...roots])).filter((f) => nodeSuiteOf(f) !== null && isTestFile(f));
-  const blobs = catBlobs(cwd, files.map((f) => `${rev}:${f}`));
-  const srcs = {};
-  for (const f of files) srcs[f] = blobs.get(`${rev}:${f}`)?.toString('utf8') ?? '';
-  return srcs;
+/** Is `f` a test file of a Node suite, as run_tests finds them (NODE_SUITES and tests/games/<id>)? */
+function isNodeTestFile(f) {
+  if (nodeSuiteOf(f) === null) return false;
+  const parts = f.split('/');
+  if (parts.some((p) => p.startsWith('.') || p === 'node_modules')) return false;
+  return TEST_FILE_RE.test(parts.at(-1)) || (parts.slice(0, -1).includes('test') && /\.[cm]?js$/.test(f));
 }
 
 function parseNameStatus(text) {
@@ -445,6 +470,61 @@ function highestFloor(project) {
 function currentFiles(project) {
   const gone = new Set(zList(git(project, ['ls-files', '-d', '-z'])));
   return new Set(zList(git(project, ['ls-files', '-c', '-o', '--exclude-standard', '-z'])).filter((f) => !gone.has(f)));
+}
+
+function readQuiet(file) {
+  try {
+    return fs.readFileSync(file, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+/** The roots of crossGameRefs for these games: src/games/<id>/, tests/games/<id>/, content/<id>/. */
+const scanRoots = (ids) => ids.flatMap((id) => CROSS_SCAN_ROOTS.map((r) => r.replaceAll('<id>', id)));
+
+/** {path: text} of the files the cross-game scan reads, as the work tree holds them now. */
+function gameSourcesNow(project, ids, files = currentFiles(project)) {
+  const roots = scanRoots(ids);
+  const out = {};
+  for (const f of files) {
+    if (!isScannedFile(f) || !roots.some((r) => f.startsWith(r))) continue;
+    try {
+      out[f] = fs.readFileSync(path.join(project, f), 'utf8');
+    } catch {
+      // deleted in the work tree
+    }
+  }
+  return out;
+}
+
+/** The same files at a commit. */
+function gameSourcesAt(project, rev, ids) {
+  const roots = scanRoots(ids);
+  const files = zList(git(project, ['ls-tree', '-r', '--name-only', '-z', rev, '--', ...roots])).filter(isScannedFile);
+  const blobs = catBlobs(project, files.map((f) => `${rev}:${f}`));
+  return Object.fromEntries(files.map((f) => [f, blobs.get(`${rev}:${f}`)?.toString('utf8') ?? '']));
+}
+
+/** crossGameRefs over this checkout's work tree, for the registered games. */
+function crossRefsNow(o, ids) {
+  return crossGameRefs(gameSourcesNow(o.project, ids), ids);
+}
+
+/**
+ * A cross-game reference the branch adds is a failure: fast's GUT selection leaves other games' tests
+ * out on the ground that there is none. One the base already held is a note (fast then runs everything).
+ */
+function crossGameProblems(o, mb, files, problems, notes) {
+  const ids = registeredGames(o).map((r) => r.id);
+  const refs = crossGameRefs(gameSourcesNow(o.project, ids, files), ids);
+  if (refs.length === 0) return;
+  const key = (r) => `${r.file}\0${r.game}\0${r.text}`;
+  const before = new Set(crossGameRefs(gameSourcesAt(o.project, mb, ids), ids).map(key));
+  for (const r of refs) {
+    if (before.has(key(r))) notes.push(`cross-game: ${formatCrossRef(r)} (already at the base; fast runs every GUT file while any is left)`);
+    else problems.push(`cross-game: ${formatCrossRef(r)}: a game's own code, tests and content may not name another game's paths, classes or string keys`);
+  }
 }
 
 function sizeNotes(project, added) {
@@ -575,10 +655,12 @@ export function runCheck(o, { base = o.base } = {}) {
   // 6.4: test counts at the merge base and at HEAD.
   const trailers = commits.flatMap((c) => parseTestRemovals(c.message));
   const revertOnly = commits.length > 0 && commits.every((c) => isMergeRevert(project, c));
-  const counts = checkTestCounts({ baseFiles: gdSourcesAt(project, mb), headFiles: gdSourcesAt(project, 'HEAD'), trailers, revertOnly });
+  const atBase = testSourcesAt(project, mb);
+  const atHead = testSourcesAt(project, 'HEAD');
+  const counts = checkTestCounts({ baseFiles: atBase.gd, headFiles: atHead.gd, trailers, revertOnly });
   problems.push(...counts.problems);
   notes.push(...counts.notes);
-  const nodeCounts = checkNodeTestCounts({ baseFiles: nodeSourcesAt(project, mb), headFiles: nodeSourcesAt(project, 'HEAD'), suiteOf: nodeSuiteOf, trailers, revertOnly });
+  const nodeCounts = checkNodeTestCounts({ baseFiles: atBase.node, headFiles: atHead.node, suiteOf: nodeSuiteOf, trailers, revertOnly });
   problems.push(...nodeCounts.problems);
   notes.push(...nodeCounts.notes);
 
@@ -601,6 +683,7 @@ export function runCheck(o, { base = o.base } = {}) {
   if (topFloor !== null && (headFloor === null || headFloor < topFloor)) problems.push(`floor: ${GREEN_FLOOR_FILE} fell ${topFloor} -> ${headFloor}`);
 
   const now = currentFiles(project);
+  crossGameProblems(o, mb, now, problems, notes);
   // GUT loads res://.gutconfig.json unless told not to. Every gate passes -gconfig=, and none may exist: it could
   // narrow a run or stop errors failing a test. fs too, for an ignored one. Not excused by --allow.
   const gutConfigs = [...now].filter((f) => f.split('/').at(-1) === GUT_CONFIG);
@@ -636,13 +719,61 @@ function formatCheck(c, contributor = false) {
 
 function stampBase(o, mode) {
   const sha = gitLine(o.project, ['rev-parse', 'HEAD']);
-  return { mode, sha, tree: treeOf(o.project), dirty: statusLines(o.project).length > 0, started: new Date().toISOString() };
+  const dirty = statusLines(o.project).length > 0;
+  // The hash of the uncommitted changes is for `wait`, which never reports a check.
+  const hash = dirty && mode !== 'check' ? dirtyHash(o.project) : null;
+  return { mode, sha, tree: treeOf(o.project), dirty, dirty_hash: hash, started: new Date().toISOString() };
 }
 
+/** Writes a file whole or not at all: a reader (`tools/gate wait`) never sees half of it. */
+function writeAtomic(file, text) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
+  fs.writeFileSync(tmp, text);
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      fs.renameSync(tmp, file);
+      return;
+    } catch (err) {
+      // Windows refuses a rename over a file another process has open for a moment.
+      if (attempt >= 20 || (err.code !== 'EPERM' && err.code !== 'EBUSY' && err.code !== 'EACCES')) {
+        fs.rmSync(tmp, { force: true });
+        throw err;
+      }
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+    }
+  }
+}
+
+/** A stamp, with the run token of the gate that holds the mutex (what `wait` matches it by). */
 function writeStamp(o, name, stamp) {
   const file = path.join(o.project, 'build', 'gate', `${name}.json`);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify(stamp, null, 2)}\n`);
+  writeAtomic(file, `${JSON.stringify(o.runToken ? { ...stamp, run: o.runToken } : stamp, null, 2)}\n`);
+}
+
+/**
+ * A hash of what is uncommitted: the diff against HEAD and every untracked file, so a stamp of a dirty
+ * tree is matched only by the same changes. null on a clean tree.
+ */
+function dirtyHash(project) {
+  if (statusLines(project).length === 0) return null;
+  const h = crypto.createHash('sha256');
+  h.update(gitRaw(project, ['diff', 'HEAD', '--binary', '--no-ext-diff', '--no-textconv', '--no-color']).stdout);
+  for (const f of zList(git(project, ['ls-files', '-o', '--exclude-standard', '-z'])).sort()) {
+    h.update(`\0${f}\0`);
+    try {
+      h.update(crypto.createHash('sha256').update(fs.readFileSync(path.join(project, f))).digest('hex'));
+    } catch {
+      h.update('unreadable');
+    }
+  }
+  return h.digest('hex');
+}
+
+/** This checkout now, as `wait` compares it with a stamp. */
+function checkoutState(project) {
+  const dirty = statusLines(project).length > 0;
+  return { tree: treeOf(project), dirty, dirtyHash: dirty ? dirtyHash(project) : null };
 }
 
 function cmdCheck(o) {
@@ -657,40 +788,168 @@ function cmdCheck(o) {
 
 // ---------------------------------------------------------------- the mutex and the lanes
 
-function takeMutex(o) {
-  const file = path.join(o.project, 'build', 'gate', 'run.lock');
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+const CURRENT_FILE = 'current.json';
+const PROGRESS_FILE = 'progress.txt';
+const WAIT_DEFAULT_S = 540;
+const WAIT_GRACE_MS = 5000;
+const WAIT_TIMEOUT_EXIT = 124;
+
+/** The stamp a mutex-holding command writes under build/gate/, or null. */
+function stampNameOf(o) {
+  if (o.cmd === 'matrix') return `matrix_${o.game}`;
+  return ['fast', 'strict', 'fmt'].includes(o.cmd) ? o.cmd : null;
+}
+
+const RUN_LOCK = 'run.lock';
+const BEAT_MS = 5000;
+// The heartbeat runs in a worker thread, so it keeps beating while the gate's own thread is in a sync call.
+const BEAT_SRC = `
+const { workerData, parentPort } = require('node:worker_threads');
+const fs = require('node:fs');
+const beat = () => { const now = new Date(); try { fs.utimesSync(workerData.file, now, now); } catch {} };
+const timer = setInterval(beat, workerData.ms);
+parentPort.on('message', () => { clearInterval(timer); parentPort.close(); });
+`;
+
+/** The mutex file: {record, mtimeMs}, or null when there is none. A pre-record lock held a bare pid. */
+function readRunLock(file) {
+  let text;
+  let mtimeMs;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+    mtimeMs = fs.statSync(file).mtimeMs;
+  } catch {
+    return null;
+  }
+  let record = null;
+  try {
+    record = JSON.parse(text);
+  } catch {
+    // half a record, or none: the caller judges it by age
+  }
+  if (record === null || typeof record !== 'object') {
+    const pid = Number(text.trim());
+    record = Number.isInteger(pid) && pid > 0 ? { pid, cmd: '?', stamp: null, started: null, token: null } : null;
+  }
+  return { record, mtimeMs };
+}
+
+/** Is the mutex in `gateDir` held by a live gate? Its record, or null. */
+function liveGate(gateDir) {
+  const held = readRunLock(path.join(gateDir, RUN_LOCK));
+  if (!held?.record) return null;
+  return gateAlive(held.record, { mtimeMs: held.mtimeMs, now: Date.now(), pidAlive }) ? held.record : null;
+}
+
+/** Creates `file` holding `text` only if it does not exist, whole: a reader never sees it half written. */
+function createExclusive(file, text) {
+  const tmp = `${file}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
+  fs.writeFileSync(tmp, text);
+  try {
+    fs.linkSync(tmp, file);
+    return true;
+  } catch (err) {
+    if (err.code === 'EEXIST') return false;
+    // No hard links on this file system: exclusive create, written at once.
     try {
-      fs.writeFileSync(file, String(process.pid), { flag: 'wx' });
+      fs.writeFileSync(file, text, { flag: 'wx' });
+      return true;
+    } catch (err2) {
+      if (err2.code === 'EEXIST') return false;
+      throw err2;
+    }
+  } finally {
+    fs.rmSync(tmp, { force: true });
+  }
+}
+
+/**
+ * Takes build/gate/run.lock, the one-gate-per-checkout mutex. The lock holds the run's record (pid, cmd,
+ * stamp, started, a random token), created whole, and a worker beats its mtime: a holder whose pid is gone,
+ * or whose heartbeat stopped for GATE_STALE_MS (a hard kill, the pid reused), is reaped. current.json gets
+ * the same record, atomically, after the lock is ours: it names the last gate that started, which is what
+ * `tools/gate wait` reports on. A refused start writes neither.
+ */
+function takeMutex(o) {
+  const dir = path.join(o.project, 'build', 'gate');
+  const file = path.join(dir, RUN_LOCK);
+  fs.mkdirSync(dir, { recursive: true });
+  const token = `${process.pid}-${Date.now().toString(36)}-${crypto.randomBytes(6).toString('hex')}`;
+  const record = { pid: process.pid, cmd: o.cmd, stamp: stampNameOf(o), started: new Date().toISOString(), token };
+  const text = `${JSON.stringify(record)}\n`;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (createExclusive(file, text)) {
+      o.runToken = token;
+      writeAtomic(path.join(dir, CURRENT_FILE), text);
+      let worker = null;
+      try {
+        worker = new Worker(BEAT_SRC, { eval: true, workerData: { file, ms: BEAT_MS } });
+        worker.unref();
+        worker.on('error', () => {});
+      } catch {
+        const timer = setInterval(() => {
+          const now = new Date();
+          try {
+            fs.utimesSync(file, now, now);
+          } catch {
+            // gone
+          }
+        }, BEAT_MS);
+        timer.unref();
+      }
       process.on('exit', () => {
         try {
-          if (fs.readFileSync(file, 'utf8').trim() === String(process.pid)) fs.rmSync(file);
+          worker?.postMessage('stop');
         } catch {
           // already gone
         }
+        if (readRunLock(file)?.record?.token === token) fs.rmSync(file, { force: true });
       });
       return;
-    } catch (err) {
-      if (err.code !== 'EEXIST') throw err;
     }
-    let held = '';
-    let age = Infinity;
+    const held = readRunLock(file);
+    if (!held) continue; // released between the two calls
+    const young = Date.now() - held.mtimeMs < 10_000;
+    const alive = held.record ? gateAlive(held.record, { mtimeMs: held.mtimeMs, now: Date.now(), pidAlive }) : young;
+    if (alive) throw new Exit(3, `gate: another gate runs in this checkout (${held.record?.cmd ?? '?'}, pid ${held.record?.pid ?? '?'}, ${path.relative(o.project, file)})`);
+    // Aside first, then gone: a reaper that lost the race moves a fresh lock, sees its token and puts it back.
+    const aside = `${file}.stale-${process.pid}-${crypto.randomBytes(4).toString('hex')}`;
     try {
-      held = fs.readFileSync(file, 'utf8').trim();
-      age = Date.now() - fs.statSync(file).mtimeMs;
+      fs.renameSync(file, aside);
     } catch {
       continue;
     }
-    const pid = Number(held);
-    const alive = Number.isInteger(pid) && pid > 0 ? pidAlive(pid) : age < 10_000;
-    if (alive) throw new Exit(3, `gate: another gate runs in this checkout (pid ${held || '?'}, ${path.relative(o.project, file)})`);
-    fs.rmSync(file, { force: true });
+    const moved = readRunLock(aside);
+    if (moved?.record?.token && moved.record.token !== held.record?.token) {
+      try {
+        fs.linkSync(aside, file);
+      } catch {
+        // someone else holds it now
+      }
+    }
+    fs.rmSync(aside, { force: true });
   }
   throw new Exit(3, 'gate: could not take build/gate/run.lock');
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** The Godot slot cap now, with the slots held right now counted back in (as acquire counts them). */
+function currentCap() {
+  const dir = lockDir();
+  let held = 0;
+  try {
+    for (const t of readTickets(dir).tickets) if (t.held && (t.pid === null || pidAlive(t.pid))) held += t.lease ?? 1;
+  } catch {
+    // no lock dir yet
+  }
+  return machineCap(dir, { heldSlots: held });
+}
+
+/** The pools of this run: GUT shards and matrix workers per slot, the rest per CPU (poolSizes). */
+function pools() {
+  return poolSizes({ cpus: typeof os.availableParallelism === 'function' ? os.availableParallelism() : os.cpus().length, cap: currentCap() });
+}
 
 /** One gate run: its lane rows, its live children (for SIGINT), its log dir. */
 class Run {
@@ -704,9 +963,12 @@ class Run {
     this.lockTimeout = false;
     this.live = new Set();
     this.started = Date.now();
+    this.pools = pools();
     fs.rmSync(path.join(o.project, 'build', 'gate', `${mode}.json`), { force: true });
     fs.rmSync(this.dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
     fs.mkdirSync(this.dir, { recursive: true });
+    // The run's token heads its progress, so `wait` never shows rows of an earlier run of this dir.
+    fs.writeFileSync(path.join(this.dir, PROGRESS_FILE), `# run ${o.runToken ?? '-'}\n`);
     const stop = () => {
       for (const child of this.live) killTree(child.pid);
       process.exit(130);
@@ -720,7 +982,13 @@ class Run {
     const at = this.rows.findIndex((r) => r.name === name);
     if (at >= 0) this.rows[at] = row;
     else this.rows.push(row);
-    out(`${status} ${name} ${Math.round(ms / 1000)}s ${log}`);
+    const line = `${status} ${name} ${Math.round(ms / 1000)}s ${log}`;
+    out(line);
+    try {
+      fs.appendFileSync(path.join(this.dir, PROGRESS_FILE), `${line}\n`); // what `tools/gate wait` shows while it runs
+    } catch {
+      // the log dir went away: the row is on stdout anyway
+    }
     if (status !== 'PASS' && tail) this.tails.push({ name, tail });
     return row;
   }
@@ -750,10 +1018,17 @@ class Run {
     return this.lane(name, process.execPath, args, { env, judge: (r) => laneVerdict({ code: r.code, text: r.text, steps }) });
   }
 
-  /** The node lane: its own lock dir and a cap of 2, since its short test timers can't wait in the machine FIFO. */
-  nodeLane() {
-    const env = childEnv({ WATTLANDS_GODOT_LOCK_DIR: path.join(this.dir, 'node_lock'), WATTLANDS_GODOT_LOCK_CAP: '2' });
-    return this.runTests('node', ['node'], { env });
+  /**
+   * The node lane: its own lock dir, since its short test timers can't wait in the machine FIFO, with its
+   * own small cap (poolSizes: a fifth of the CPUs, 2 to 4): its suites run several at once, and the Godot
+   * runs of some (tools/tests, pixelate) overlap.
+   * `since` narrows the suites to what changed since that rev and lets them keep verdict caches (fast only:
+   * strict and the literal run run every suite in full).
+   */
+  nodeLane({ since = null } = {}) {
+    const env = childEnv({ WATTLANDS_GODOT_LOCK_DIR: path.join(this.dir, 'node_lock'), WATTLANDS_GODOT_LOCK_CAP: String(this.pools.nodeLockCap) });
+    const extra = [`--node-jobs=${this.pools.nodeJobs}`, ...(since ? [`--node-since=${since}`, '--node-cache'] : [])];
+    return this.runTests('node', ['node'], { env, extra });
   }
 
   pass() {
@@ -768,7 +1043,7 @@ class Run {
     out(`\ngate ${this.mode}`);
     for (const l of lanes) out(`  ${l.name.padEnd(w)}  ${l.status.padEnd(4)}  ${`${Math.round(l.ms / 1000)}s`.padEnd(6)}  ${l.log}`);
     out(`gate ${this.mode}: ${pass ? 'PASS' : 'FAIL'} in ${Math.round((Date.now() - this.started) / 1000)} s`);
-    return { ...stamp, pass, lanes, ended: new Date().toISOString() };
+    return { ...stamp, pass, exit_code: this.exitCode(), lanes, ended: new Date().toISOString() };
   }
 
   exitCode() {
@@ -779,7 +1054,11 @@ class Run {
 
 function endState(o, start) {
   const dirty = start.dirty || statusLines(o.project).length > 0 || treeOf(o.project) !== start.tree;
-  return { dirty };
+  // What `wait` matches a dirty stamp by: the same uncommitted changes, not only the same HEAD. Changes
+  // that moved while it ran match nothing: the run saw neither the first set nor the last whole.
+  const hash = dirty ? dirtyHash(o.project) : null;
+  const moved = start.dirty && hash !== start.dirty_hash;
+  return { dirty, dirty_hash: moved ? `moved during the run (${hash})` : hash };
 }
 
 /** The check as a lane: the rules are in-process, so its row and log are written here. */
@@ -832,6 +1111,18 @@ function pickGames(o, registered) {
   if (o.games.length === 1 && o.games[0] === 'all') return ids;
   for (const id of o.games) if (!ids.includes(id)) throw usageError(`--games: "${id}" is not a registered game`);
   return [...o.games].sort();
+}
+
+/**
+ * The GUT selection of a `fast`: by the change against --base (gutSelection), all with --games=all, and
+ * widened by an explicit --games. The queue's stamp-ok recomputes it against main for the merged tree.
+ */
+export function fastGutSelection(o, ids, { changed = null, crossRefs = null } = {}) {
+  if (o.games !== null && o.games.length === 1 && o.games[0] === 'all') return { all: true, games: ids, reason: '--games=all' };
+  const sel = gutSelection(changed ?? changedSince(o, o.base), ids, { crossRefs: crossRefs ?? crossRefsNow(o, ids) });
+  if (sel.all || o.games === null) return sel;
+  const games = [...new Set([...sel.games, ...o.games])].sort();
+  return games.length === ids.length ? { all: true, games: ids, reason: `--games=${o.games.join(',')}` } : { ...sel, games };
 }
 
 /** One GUT process over `files`, with its own user dir and JUnit file. Returns the evaluateGut verdict. */
@@ -890,7 +1181,7 @@ async function quietLane(g, files, pendingAllowlist) {
   g.tails = g.tails.filter((t) => t.name !== 'gut:quiet');
   let lease;
   try {
-    lease = await acquire({ lease: machineCap(), label: 'tools/gate quiet rerun' });
+    lease = await acquire({ lease: WHOLE_MACHINE_LEASE, label: 'tools/gate quiet rerun' });
   } catch (err) {
     if (err.code !== 'ELOCKTIMEOUT') throw err;
     g.lockTimeout = true;
@@ -912,15 +1203,25 @@ async function cmdFast(o) {
   const someLanes = o.lanes !== null;
   const want = (name) => !someLanes || o.lanes.includes(name) || o.lanes.includes(name.split(':')[0]);
   checkLane(g, o, o.base);
+  // What the branch touches, read before the import: a sidecar it writes must not pick the selection.
+  const registered = registeredGames(o);
+  const games = pickGames(o, registered);
+  const ids = registered.map((r) => r.id);
+  const selection = fastGutSelection(o, ids);
+  const requiredGames = revOf(o, 'main') ? touchedGames(changedSince(o, 'main'), ids).games : ids;
   await installNode(o);
   await g.runTests('import', ['import']);
 
-  const registered = registeredGames(o);
-  const games = pickGames(o, registered);
   const manifest = loadManifest(o.project);
   const weights = loadJson(path.join(o.project, WEIGHTS_FILE)) ?? {};
-  const files = listGutFiles(o.project);
-  const plan = planShards(files, weights, { shards: o.shards, quiet: manifest.quiet_tests, pins: manifest.shard_pins });
+  const { run: files, skipped, skippedGames } = selectGutFiles(listGutFiles(o.project), selection, ids);
+  const shards = o.shards ?? g.pools.shards;
+  // A game group whose files share a res://build dir stays in one process (buildDirGroups).
+  const gdUnderGames = Object.fromEntries([...currentFiles(o.project)].filter((f) => f.startsWith('tests/games/') && f.endsWith('.gd')).map((f) => [f, readQuiet(path.join(o.project, f))]));
+  const noSplit = buildDirGroups(gdUnderGames, files);
+  if (noSplit.length > 0) out(`gate fast: these game groups name res://build and stay whole: ${noSplit.join(', ')}`);
+  const plan = planShards(files, weights, { shards, quiet: manifest.quiet_tests, pins: manifest.shard_pins, noSplit });
+  if (skipped.length > 0) out(`gate fast: GUT leaves out ${skipped.length} files of ${skippedGames.join(', ')}: ${selection.reason}`);
   const pendingAllowlist = readPendingAllowlist(path.join(o.project, 'tests', 'pending_allowlist.txt'));
 
   const tasks = [];
@@ -939,12 +1240,14 @@ async function cmdFast(o) {
     tasks.push(gutLane(g, name, plan.shards[n], `shard_${n + 1}`, { pendingAllowlist }).then((v) => gutResults.push(v)));
     await sleep(50);
   }
-  if (want('static')) tasks.push(g.runTests('static', ['static']));
-  if (want('node')) tasks.push(g.nodeLane());
+  if (want('static')) tasks.push(g.runTests('static', ['static'], { extra: [`--static-jobs=${g.pools.staticJobs}`] }));
+  // --games=all asks for everything, so the node lane is not narrowed either.
+  const allGames = o.games !== null && o.games.length === 1 && o.games[0] === 'all';
+  if (want('node')) tasks.push(g.nodeLane({ since: allGames ? null : o.base }));
   for (const id of games) {
     if (!want(`sim:${id}`)) continue;
     const env = childEnv({ WATTLANDS_USERDATA_DIR: path.join(g.dir, `sim_${id}`, 'userdata') });
-    tasks.push(g.runTests(`sim:${id}`, ['sim'], { extra: [`--games=${id}`, `--sim-outer-timeout=${SIM_OUTER_TIMEOUT_S}`], env }));
+    tasks.push(g.runTests(`sim:${id}`, ['sim'], { extra: [`--games=${id}`, `--sim-outer-timeout=${SIM_OUTER_TIMEOUT_S}`, `--sim-jobs=${g.pools.simJobs}`], env }));
   }
   await Promise.all(tasks);
 
@@ -964,12 +1267,17 @@ async function cmdFast(o) {
   // Without --lanes the verdict always runs: no shard at all means no test ran, never a pass.
   if (!someLanes || gutResults.length > 0) {
     const everyShard = gutFiles.length === files.length;
-    const v = aggregateGut(gutResults, { floor: everyShard ? floor : null, expectedFiles: gutFiles, sourceCounts: sourceTestCounts(o.project, gutFiles) });
+    // Files left out by the selection count by their source toward the floor: the rest must make up the difference.
+    const skippedTests = Object.values(sourceTestCounts(o.project, skipped)).reduce((s, n) => s + n, 0);
+    const gutFloor = everyShard && Number.isInteger(floor) ? floor - skippedTests : null;
+    const v = aggregateGut(gutResults, { floor: gutFloor, expectedFiles: gutFiles, sourceCounts: sourceTestCounts(o.project, gutFiles) });
     gutTotal = v.total;
-    g.row('gut:total', v.pass ? 'PASS' : 'FAIL', 0, `${v.total} tests, floor ${everyShard ? (floor ?? 'none') : 'partial'}`, v.reasons.join('\n'));
+    const floorText = !everyShard ? 'partial' : floor === null ? 'none' : skipped.length ? `${floor} less ${skippedTests} in ${skipped.length} files left out (${skippedGames.join(', ')})` : floor;
+    // Say why every file ran when the change alone did not ask for it (a cross-game reference: fail closed).
+    const why = selection.all && /cross-game/.test(selection.reason) ? `; every file: ${selection.reason}` : '';
+    g.row('gut:total', v.pass ? 'PASS' : 'FAIL', 0, `${v.total} tests, floor ${floorText}${why}`, v.reasons.join('\n'));
   }
   const end = endState(o, start);
-  const ids = registered.map((r) => r.id);
   const partialReasons = fastNarrowing({
     lanes: o.lanes,
     base: o.base,
@@ -981,7 +1289,7 @@ async function cmdFast(o) {
     allowPin: o.allowPin,
     contributor: o.contributor,
     games,
-    requiredGames: revOf(o, 'main') ? touchedGames(changedSince(o, 'main'), ids).games : ids,
+    requiredGames,
   });
   const stamp = g.finish({
     ...start,
@@ -991,11 +1299,15 @@ async function cmdFast(o) {
     base: o.base,
     ws: o.ws,
     games,
+    gut_selection: { all: selection.all, games: selection.games, skipped_games: skippedGames, skipped_files: skipped.length, reason: selection.reason },
+    shards: plan.shards.length,
     gut_total: gutTotal,
     floor,
     quiet_retried: quietRetried,
     quiet_retried_tests: quietTests,
     allow: [...o.allow, ...o.allowPin],
+    allow_globs: o.allow,
+    allow_pins: o.allowPin,
   });
   writeStamp(o, 'fast', stamp);
   return g.exitCode();
@@ -1031,8 +1343,8 @@ async function cmdStrict(o) {
       tasks.push(g.runTests(`e2e:${id}`, ['e2e'], { extra: [`--games=${id}`] }));
       await sleep(E2E_STAGGER_MS);
     }
-    tasks.push(g.runTests('static', ['static']));
-    tasks.push(g.runTests('sim', ['sim'], { extra: [`--sim-outer-timeout=${SIM_OUTER_TIMEOUT_S}`] }));
+    tasks.push(g.runTests('static', ['static'], { extra: [`--static-jobs=${g.pools.staticJobs}`] }));
+    tasks.push(g.runTests('sim', ['sim'], { extra: [`--sim-outer-timeout=${SIM_OUTER_TIMEOUT_S}`, `--sim-jobs=${g.pools.simJobs}`] }));
     tasks.push(g.nodeLane());
     await Promise.all(tasks);
   };
@@ -1098,6 +1410,8 @@ async function cmdMatrix(o) {
   ensureBuildDir(o.project);
   const name = `matrix_${id}`;
   const start = stampBase(o, 'matrix');
+  // Read before Run deletes it: the last matrix's run times order this one's pool.
+  const previousMs = loadJson(path.join(o.project, 'build', 'gate', `${name}.json`))?.run_ms ?? {};
   const g = new Run(o, name);
   const bash = findBash();
   const upper = id.toUpperCase();
@@ -1139,13 +1453,17 @@ async function cmdMatrix(o) {
   let next = 0;
   const logDir = path.join(g.dir, 'runs');
   fs.mkdirSync(logDir, { recursive: true });
+  const runMs = {};
+  // Longest first, by the last matrix's times, so no long run starts last and sets the wall time alone.
+  const order = longestFirst(lines.map((args, i) => reportStem(args, i)), previousMs);
   const worker = async (k) => {
     const env = withBashPath(withoutGameVars(childEnv({ WATTLANDS_BASH: bash, WATTLANDS_USERDATA_DIR: path.join(g.dir, `w${k}`, 'userdata') }), upper), bash);
     while (next < lines.length) {
-      const i = next;
+      const i = order[next];
       next += 1;
       const args = lines[i];
       const stem = reportStem(args, i);
+      const t = Date.now();
       const report = args.find((a) => a.startsWith('--report='));
       if (report) fs.mkdirSync(path.dirname(path.resolve(o.project, report.slice('--report='.length))), { recursive: true });
       const r = await run(bash, [tool, ...args], {
@@ -1156,6 +1474,7 @@ async function cmdMatrix(o) {
         quiet: true,
         onSpawn: (child) => g.live.add(child),
       });
+      runMs[stem] = Date.now() - t;
       if (r.code !== 0) {
         failed.push(`${stem}: exit ${r.code}`);
         if (r.code === 75) g.lockTimeout = true;
@@ -1163,9 +1482,11 @@ async function cmdMatrix(o) {
     }
   };
   const t1 = Date.now();
-  await Promise.all(Array.from({ length: o.jobs }, (_, k) => worker(k)));
+  // One worker per slot: more would only wait in the lock, fewer would leave slots idle.
+  const jobs = Math.min(o.jobs ?? g.pools.matrixJobs, Math.max(1, lines.length));
+  await Promise.all(Array.from({ length: jobs }, (_, k) => worker(k)));
   // A run that exits non-zero fails the verdict even when it left a report the checker accepts.
-  g.row('pool', failed.length ? 'FAIL' : 'PASS', Date.now() - t1, `${g.dirRel}/runs/ (${lines.length} runs, ${o.jobs} workers)`, failed.join('\n'));
+  g.row('pool', failed.length ? 'FAIL' : 'PASS', Date.now() - t1, `${g.dirRel}/runs/ (${lines.length} runs, ${jobs} workers)`, failed.join('\n'));
 
   // Phase 3: the same script again, still recording only, now with its checker over the reports.
   const t2 = Date.now();
@@ -1177,17 +1498,26 @@ async function cmdMatrix(o) {
   const evidence = checkerEvidence({ code: checked.code, text: checked.text, partial, required: rule?.rows ?? [] });
   g.row('check_sims', evidence.pass ? 'PASS' : 'FAIL', Date.now() - t2, `${g.dirRel}/check.log`, [...evidence.reasons, ...checked.text.split(/\r?\n/).slice(-40)].join('\n'));
 
-  const stamp = g.finish({ ...start, ...endState(o, start), game: id, partial, runs: lines.length, failed_runs: failed, checker_rows: evidence.rows, checker_passed: evidence.passed });
+  const stamp = g.finish({ ...start, ...endState(o, start), game: id, partial, runs: lines.length, failed_runs: failed, checker_rows: evidence.rows, checker_passed: evidence.passed, jobs, run_ms: runMs });
   writeStamp(o, name, stamp);
   return g.exitCode();
 }
 
 // ---------------------------------------------------------------- stamp-ok
 
-function stampRefusal(stamp, matrix, tree, rule = null) {
+/**
+ * Why a stamp does not stand for this tree, or null. `need` (fast only): { gut, games } that this tree
+ * needs against main. `allow`/`allowPin`: the exceptions the caller names; a stamp whose only narrowing
+ * was exactly those stands, since they reach the check lane alone.
+ */
+function stampRefusal(stamp, matrix, tree, rule = null, { need = null, allow = [], allowPin = [] } = {}) {
   if (!stamp) return 'no stamp';
   if (stamp.pass !== true) return 'it did not pass';
-  if (stamp.partial !== false) return `it is partial${stamp.partial_reasons?.length ? ` (${stamp.partial_reasons.join('; ')})` : ''}`;
+  const excused = !matrix && (allow.length > 0 || allowPin.length > 0);
+  if (excused) {
+    const gap = allowGap(stamp, allow, allowPin);
+    if (gap) return gap;
+  } else if (stamp.partial !== false) return `it is partial${stamp.partial_reasons?.length ? ` (${stamp.partial_reasons.join('; ')})` : ''}`;
   if (stamp.dirty !== false) return 'it was dirty';
   if (stamp.tree !== tree) return `tree ${stamp.tree} is not ${tree}`;
   if (matrix) {
@@ -1199,8 +1529,22 @@ function stampRefusal(stamp, matrix, tree, rule = null) {
     return null;
   }
   if (!Number.isInteger(stamp.gut_total) || stamp.gut_total <= 0) return `it counted ${stamp.gut_total ?? 'no'} GUT tests`;
-  if ((stamp.allow ?? []).length > 0) return `it ran with ${stamp.allow.join(', ')}`;
+  if (!excused && (stamp.allow ?? []).length > 0) return `it ran with ${stamp.allow.join(', ')}`;
+  if (need) {
+    const gap = selectionGap(stamp.gut_selection, need.gut);
+    if (gap) return gap;
+    const lost = need.games.filter((id) => !(stamp.games ?? []).includes(id));
+    if (lost.length > 0) return `it ran no sim or e2e of ${lost.join(', ')}, which this tree touches`;
+  }
   return null;
+}
+
+/** What a `fast` of this checkout's tree must cover, against main: the GUT selection and the games for sim and e2e. */
+function fastNeed(o) {
+  const ids = registeredGames(o).map((r) => r.id);
+  if (!revOf(o, 'main')) return { gut: { all: true, games: ids, reason: 'no main' }, games: ids };
+  const changed = changedSince(o, 'main');
+  return { gut: gutSelection(changed, ids, { crossRefs: crossRefsNow(o, ids) }), games: touchedGames(changed, ids).games };
 }
 
 function cmdStampOk(o) {
@@ -1212,11 +1556,18 @@ function cmdStampOk(o) {
     out(`gate stamp-ok: ${name} in ${worktree}: refused: this checkout is dirty (${dirtyHere.length} paths), so its tree is not HEAD's`);
     return 1;
   }
-  const why = stampRefusal(stamp, o.matrix !== null, treeOf(o.project), o.matrix ? matrixRule(loadManifest(o.project), o.matrix) : null);
+  const matrix = o.matrix !== null;
+  const why = stampRefusal(stamp, matrix, treeOf(o.project), matrix ? matrixRule(loadManifest(o.project), o.matrix) : null, {
+    need: matrix ? null : fastNeed(o),
+    allow: o.allow,
+    allowPin: o.allowPin,
+  });
   if (why) {
     out(`gate stamp-ok: ${name} in ${worktree}: refused: ${why}`);
     return 1;
   }
+  if (!matrix && stamp.allow?.length) out(`note: it ran with ${stamp.allow.join(', ')}, as stamp-ok was told`);
+  if (!matrix && stamp.gut_selection && !stamp.gut_selection.all) out(`note: its GUT run left out ${(stamp.gut_selection.skipped_games ?? []).join(', ')} (${stamp.gut_selection.reason}), which this tree does not need`);
   if (stamp.quiet_retried) out(`note: gut:quiet passed only on its rerun under a whole-machine lease: ${(stamp.quiet_retried_tests ?? []).join(', ') || 'budget tests'}`);
   out(`gate stamp-ok: ${name} in ${worktree} stands for this tree`);
   return 0;
@@ -1286,40 +1637,167 @@ function uvModule(o, module, files) {
   });
 }
 
+/** uvModule without blocking the event loop, so gdlint runs beside check_scripts. */
+function uvModuleAsync(o, module, files) {
+  return new Promise((resolve) => {
+    const child = spawn('uv', ['run', '--no-project', '--with', `gdtoolkit==${GDTOOLKIT_VERSION}`, 'python', '-m', module, ...files], { cwd: o.project, windowsHide: true, env: childEnv() });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => (stdout += d));
+    child.stderr.on('data', (d) => (stderr += d));
+    child.on('error', (error) => resolve({ status: null, error, stdout, stderr }));
+    child.on('close', (status) => resolve({ status, stdout, stderr }));
+  });
+}
+
+/** Is a file under a folder with a .gdignore? Godot imports none of those, and check_scripts skips them. */
+function gdignored(project, file) {
+  const parts = file.split('/').slice(0, -1);
+  for (let i = 1; i <= parts.length; i += 1) {
+    if (fs.existsSync(path.join(project, ...parts.slice(0, i), '.gdignore'))) return true;
+  }
+  return false;
+}
+
 async function cmdFmt(o) {
+  const t0 = Date.now();
   takeMutex(o);
   ensureBuildDir(o.project);
+  fs.rmSync(path.join(o.project, 'build', 'gate', 'fmt.json'), { force: true });
+  const r = await fmtSteps(o);
+  if (r === null) return 0;
+  out(`gate fmt: ${r.note}, ${r.failed ? 'FAIL' : 'clean'} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+  writeStamp(o, 'fmt', { mode: 'fmt', pass: !r.failed, exit_code: r.failed ? 1 : 0, files: r.files, ended: new Date().toISOString() });
+  return r.failed ? 1 : 0;
+}
+
+/** gdformat, then gdlint beside check_scripts on the formatted files. Returns null with nothing to do, else {failed, files, note}. */
+async function fmtSteps(o) {
   const changed = zList(git(o.project, ['diff', '--name-only', '--diff-filter=d', '-z', o.base]));
   const untracked = zList(git(o.project, ['ls-files', '-o', '--exclude-standard', '-z']));
   const files = [...new Set([...changed, ...untracked])].filter((f) => f.endsWith('.gd') && LINT_DIRS.some((d) => f.startsWith(d))).sort();
   if (files.length === 0) {
     out('gate fmt: no changed .gd files');
-    return 0;
+    return null;
   }
   let failed = false;
-  for (const module of ['gdtoolkit.formatter', 'gdtoolkit.linter']) {
-    for (let i = 0; i < files.length; i += FMT_BATCH) {
-      const r = uvModule(o, module, files.slice(i, i + FMT_BATCH));
-      if (r.status !== 0) {
-        failed = true;
-        out(`gate fmt: ${module} exit ${r.status ?? r.error?.code}\n${`${r.stdout ?? ''}${r.stderr ?? ''}`.split(/\r?\n/).slice(-40).join('\n')}`);
-      }
-    }
-  }
+  const report = (module, r) => {
+    if (r.status === 0) return;
+    failed = true;
+    out(`gate fmt: ${module} exit ${r.status ?? r.error?.code}\n${`${r.stdout ?? ''}${r.stderr ?? ''}`.split(/\r?\n/).slice(-40).join('\n')}`);
+  };
+  for (let i = 0; i < files.length; i += FMT_BATCH) report('gdtoolkit.formatter', uvModule(o, 'gdtoolkit.formatter', files.slice(i, i + FMT_BATCH)));
   for (const f of files) {
     const abs = path.join(o.project, f);
     const text = fs.readFileSync(abs);
     if (text.includes(13)) fs.writeFileSync(abs, text.toString('utf8').replaceAll('\r\n', '\n').replaceAll('\r', ''));
   }
-  const [exe, argv] = wrapperCommand(o, ['--headless', '--path', '.', '-s', 'tools/check_scripts.gd']);
-  const r = await run(exe, argv, { cwd: o.project, log: path.join(o.project, 'build', 'check_scripts.log'), env: childEnv(), quiet: true, timeoutS: 1800 });
-  const summary = /check_scripts: (\d+) scripts, (\d+) failures/.exec(r.text);
-  if (r.code !== 0 || !summary || summary[2] !== '0') {
-    failed = true;
-    out(`gate fmt: check_scripts failed (exit ${r.code}, build/check_scripts.log)\n${r.text.split(/\r?\n/).filter((l) => /FAIL/.test(l)).slice(-40).join('\n')}`);
+  // The formatted files only, which is where gdformat can break a script; the static lane of fast loads them
+  // all. Its own lock dir, like the node lane: one short Godot run must not queue behind every gate.
+  const loadable = files.filter((f) => !gdignored(o.project, f));
+  const named = loadable.length <= FMT_NAMED_MAX;
+  const check = async () => {
+    if (loadable.length === 0) return;
+    const userArgs = named ? ['--', `--files=${loadable.map((f) => `res://${f}`).join(',')}`] : [];
+    const [exe, argv] = wrapperCommand(o, ['--headless', '--path', '.', '-s', 'tools/check_scripts.gd', ...userArgs]);
+    const env = childEnv({ WATTLANDS_GODOT_LOCK_DIR: path.join(o.project, 'build', 'gate', 'fmt_lock'), WATTLANDS_GODOT_LOCK_CAP: '1' });
+    const r = await run(exe, argv, { cwd: o.project, log: path.join(o.project, 'build', 'check_scripts.log'), env, quiet: true, timeoutS: 1800 });
+    const summary = (named ? /check_scripts: (\d+) named scripts, (\d+) failures/ : /check_scripts: (\d+) scripts, (\d+) failures/).exec(r.text);
+    if (r.code !== 0 || !summary || summary[2] !== '0') {
+      failed = true;
+      out(`gate fmt: check_scripts failed (exit ${r.code}, build/check_scripts.log)\n${r.text.split(/\r?\n/).filter((l) => /FAIL/.test(l)).slice(-40).join('\n')}`);
+    }
+  };
+  const lint = async () => {
+    for (let i = 0; i < files.length; i += FMT_BATCH) report('gdtoolkit.linter', await uvModuleAsync(o, 'gdtoolkit.linter', files.slice(i, i + FMT_BATCH)));
+  };
+  await Promise.all([check(), lint()]);
+  const loaded = loadable.length === 0 ? 'none loaded (all under a .gdignore)' : named ? `${loadable.length} loaded` : 'every script loaded';
+  return { failed, files: files.length, note: `${files.length} files, ${loaded}` };
+}
+
+// ---------------------------------------------------------------- wait
+
+/** Prints a stamp's lanes, its partial reasons and the tail of each lane that did not pass; returns its exit code. */
+function printStamp(o, name, stamp) {
+  const lanes = Array.isArray(stamp.lanes) ? stamp.lanes : [];
+  for (const l of lanes) {
+    if (l.status === 'PASS' || !l.log) continue;
+    const log = path.join(o.project, l.log.split(' ')[0]);
+    if (!fs.existsSync(log) || !fs.statSync(log).isFile()) continue;
+    out(`\n--- ${l.name} (last 30 lines of ${l.log.split(' ')[0]})\n${fs.readFileSync(log, 'utf8').split(/\r?\n/).slice(-30).join('\n')}`);
   }
-  out(`gate fmt: ${files.length} files, ${failed ? 'FAIL' : 'clean'}`);
-  return failed ? 1 : 0;
+  const w = Math.max(4, ...lanes.map((l) => l.name.length));
+  out(`\ngate ${name} (stamp build/gate/${name}.json, started ${stamp.started ?? '?'}, ended ${stamp.ended ?? '?'})`);
+  out(`sha ${stamp.sha ?? '?'}, tree ${stamp.tree ?? '?'}${stamp.dirty ? ', dirty' : ''}`);
+  for (const l of lanes) out(`  ${l.name.padEnd(w)}  ${String(l.status).padEnd(4)}  ${`${Math.round((l.ms ?? 0) / 1000)}s`.padEnd(6)}  ${l.log}`);
+  if (stamp.partial) out(`partial: ${(stamp.partial_reasons ?? []).join('; ') || 'yes'}`);
+  if (stamp.gut_selection && !stamp.gut_selection.all) out(`GUT left out: ${(stamp.gut_selection.skipped_games ?? []).join(', ')} (${stamp.gut_selection.reason})`);
+  if (Number.isInteger(stamp.gut_total)) out(`gut_total: ${stamp.gut_total}`);
+  const code = Number.isInteger(stamp.exit_code) ? stamp.exit_code : stamp.pass === true ? 0 : 1;
+  out(`gate ${name}: ${stamp.pass === true ? 'PASS' : 'FAIL'} (exit ${code})`);
+  return code;
+}
+
+/**
+ * Blocks until the gate running in this checkout ends, or --timeout seconds pass (exit 124: it still runs,
+ * wait again), printing its lane rows as they finish; then prints its stamp and exits with its verdict.
+ * With no gate running (after a short grace for one just started in the background) it reports on the
+ * last gate that started here (current.json). Only that run's own stamp, for this tree and these changes,
+ * is a verdict; anything else exits WAIT_NO_VERDICT_EXIT and says why (waitVerdict). `--for` names the
+ * gate the caller started, so a refused start never reads as another gate's verdict.
+ */
+async function cmdWait(o) {
+  const timeoutS = o.timeout ?? WAIT_DEFAULT_S;
+  const deadline = Date.now() + timeoutS * 1000;
+  const dir = path.join(o.project, 'build', 'gate');
+  const noVerdict = (why) => {
+    out(`gate wait: no verdict: ${why}`);
+    return WAIT_NO_VERDICT_EXIT;
+  };
+  let cur = liveGate(dir);
+  for (const graceEnd = Date.now() + WAIT_GRACE_MS; !cur && Date.now() < graceEnd; ) {
+    await sleep(250);
+    cur = liveGate(dir);
+  }
+  if (cur) {
+    if (o.for && cur.stamp !== o.for) return noVerdict(`${cur.stamp ?? cur.cmd} runs in this checkout (pid ${cur.pid}), not ${o.for}: a ${o.for} started beside it was refused (exit 3)`);
+    out(`gate wait: ${cur.cmd} (pid ${cur.pid}) runs since ${cur.started ?? '?'}; waiting up to ${timeoutS} s`);
+    const progress = cur.stamp ? path.join(dir, cur.stamp, PROGRESS_FILE) : null;
+    const header = `# run ${cur.token ?? '-'}`;
+    let shown = 0;
+    const show = () => {
+      let lines;
+      try {
+        lines = fs.readFileSync(progress, 'utf8').split('\n').filter(Boolean);
+      } catch {
+        return;
+      }
+      // Rows of an earlier run in this dir, before this one wiped it, are not this run's.
+      if (lines[0] !== header) {
+        shown = 0;
+        return;
+      }
+      for (const l of lines.slice(1 + shown)) out(`  ${l}`);
+      shown = lines.length - 1;
+    };
+    // Until its lock goes or changes hands, its pid dies or its heartbeat stops (a hard kill, a reused pid).
+    while (liveGate(dir)?.token === cur.token) {
+      if (progress) show();
+      if (Date.now() >= deadline) {
+        out(`gate wait: ${cur.cmd} still runs after ${timeoutS} s (pid ${cur.pid}); run tools/gate wait again`);
+        return WAIT_TIMEOUT_EXIT;
+      }
+      await sleep(1000);
+    }
+    if (progress) show();
+  }
+  const record = cur ?? loadJson(path.join(dir, CURRENT_FILE));
+  const stamp = record?.stamp && WAIT_FOR_RE.test(record.stamp) ? loadJson(path.join(dir, `${record.stamp}.json`)) : null;
+  const v = waitVerdict({ record, stamp, here: checkoutState(o.project), want: o.for });
+  if (v.code !== null) return noVerdict(v.why);
+  if (!cur) out(`gate wait: no gate runs in this checkout; the last one to start was ${record.stamp} (pid ${record.pid}, ${record.started ?? '?'})`);
+  return printStamp(o, record.stamp, stamp);
 }
 
 // ---------------------------------------------------------------- pin-safety
@@ -1435,12 +1913,7 @@ function dirSizeMb(dir) {
 }
 
 function gateRunning(worktree) {
-  try {
-    const pid = Number(fs.readFileSync(path.join(worktree, 'build', 'gate', 'run.lock'), 'utf8').trim());
-    return Number.isInteger(pid) && pid > 0 && pidAlive(pid);
-  } catch {
-    return false;
-  }
+  return liveGate(path.join(worktree, 'build', 'gate')) !== null;
 }
 
 function cmdWtGc(o) {
@@ -1558,6 +2031,8 @@ export async function main(argv) {
       return cmdFloor(o);
     case 'fmt':
       return cmdFmt(o);
+    case 'wait':
+      return cmdWait(o);
     case 'wt-add':
       return cmdWtAdd(o);
     case 'wt-gc':

@@ -15,6 +15,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { killTree } from './godot_lock.mjs';
 import { evaluateGut, readGreenCount, writeGreenCount, readPendingAllowlist, FORBIDDEN } from './gut_gate.mjs';
+import { GAME_PATHS, globToRegExp, pathOwner } from './gate_core.mjs';
 
 const LIB = path.dirname(fileURLToPath(import.meta.url));
 const TOOLS = path.dirname(LIB);
@@ -52,7 +53,15 @@ const USAGE = `usage: tools/run_tests [options]      (tools/run_tests.ps1 in Pow
   --strict-lint        no-op, kept for compatibility (lint is always fatal)
   --project=<dir>      project root (default: this checkout)
   --games=<id,...>     sim and e2e: only these registered games
-  --sim-outer-timeout=<s>  sim: the timer on one run, lock wait included (default ${SIM_TIMEOUT_S})`;
+  --sim-outer-timeout=<s>  sim: the timer on one run, lock wait included (default ${SIM_TIMEOUT_S})
+  --sim-jobs=<n>       sim: run up to n tools/run_game_sim runs at once, each still through the
+                       machine-wide Godot lock (default 1, one after another)
+  --node-jobs=<n>      node: run up to n suites at once, each quiet with its own log (default 1)
+  --node-since=<rev>   node: only the suites a change since <rev> can affect (NODE_SUITE_GAME_INPUTS);
+                       a path outside one game's own folders runs them all (default: all)
+  --node-cache         node: let suites keep verdict caches under build/test_cache (default off)
+  --static-jobs=<n>    static: check_scripts, gdlint, gdformat and the workflow check at once, with
+                       gdlint and gdformat each split over n processes (default 1, one after another)`;
 
 // ---------------------------------------------------------------- options
 
@@ -73,6 +82,16 @@ export function parseArgs(argv) {
     shell: process.platform === 'win32' ? 'ps' : 'bash',
     games: null,
     simOuterS: SIM_TIMEOUT_S,
+    simJobs: 1,
+    nodeJobs: 1,
+    nodeSince: null,
+    nodeCache: false,
+    staticJobs: 1,
+  };
+  const jobs = (key, val) => {
+    const n = Number(val);
+    if (!Number.isInteger(n) || n < 1 || n > 64) fail(`${key} needs an integer 1..64, got "${val}"`);
+    return n;
   };
   const list = (v) => v.split(',').map((s) => s.trim()).filter(Boolean);
   for (const a of argv) {
@@ -102,6 +121,15 @@ export function parseArgs(argv) {
       if (!(Number.isFinite(n) && n > 0)) fail(`--sim-outer-timeout needs a number of seconds, got "${val}"`);
       o.simOuterS = n;
     }
+    else if (key === '--sim-jobs' && val) o.simJobs = jobs(key, val);
+    else if (key === '--node-jobs' && val) o.nodeJobs = jobs(key, val);
+    else if (key === '--static-jobs' && val) o.staticJobs = jobs(key, val);
+    else if (key === '--node-since' && val) {
+      // It reaches git as a revision: never an option.
+      if (!/^[^-\s]\S*$/.test(val)) fail(`--node-since needs a revision, got "${val}"`);
+      o.nodeSince = val;
+    }
+    else if (key === '--node-cache' && val === null) o.nodeCache = true;
     else fail(`unknown option "${a}"`);
   }
   for (const name of [...(o.only ?? []), ...o.skip]) {
@@ -213,6 +241,27 @@ function godot(o, args, opts = {}) {
 
 function rel(o, file) {
   return path.relative(o.project, file).replaceAll('\\', '/');
+}
+
+/** fn(item, index) over items, at most `jobs` at once; the results in item order. jobs 1 is a plain loop. */
+export async function runPool(items, jobs, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next;
+      next += 1;
+      results[i] = await fn(items[i], i);
+    }
+  };
+  const n = Math.max(1, Math.min(jobs, items.length));
+  await Promise.all(Array.from({ length: n }, worker));
+  return results;
+}
+
+/** The last `n` lines of a text, for a quiet run that failed. */
+function tailOf(text, n = 60) {
+  return text.split(/\r?\n/).slice(-n).join('\n');
 }
 
 // ---------------------------------------------------------------- steps
@@ -338,34 +387,34 @@ async function stepScaffold(o) {
   return { status: 'PASS', note: `${notes.join(', ')}; demo conforms (tests ${v.tests}); copy deleted` };
 }
 
-/** static: tools/check_scripts.gd, then gdlint and gdformat --check when gdtoolkit is available. */
+/**
+ * static: tools/check_scripts.gd, then gdlint and gdformat --check when gdtoolkit is available, then
+ * the workflow YAML check. With --static-jobs above 1 the parts run at once and gdlint and gdformat
+ * are each split over that many processes; the verdict is the same: any finding anywhere fails.
+ */
 async function stepStatic(o) {
-  const notes = [];
-  let failed = false;
   if (!fs.existsSync(path.join(o.project, 'tools', 'check_scripts.gd'))) {
     return { status: 'FAIL', note: 'tools/check_scripts.gd is missing' };
   }
+  const parts = [
+    () => checkScriptsStep(o),
+    () => (o.noLint ? { fail: false, note: 'lint skipped (--no-lint)' } : lintStep(o)),
+    () => workflowStep(o),
+  ];
+  const results = o.staticJobs > 1 ? await Promise.all(parts.map((p) => p())) : await runPool(parts, 1, (p) => p());
+  const failed = results.some((r) => r.fail);
+  return { status: failed ? 'FAIL' : 'PASS', note: results.map((r) => r.note).join('; ') };
+}
+
+async function checkScriptsStep(o) {
   const log = path.join(o.project, 'build', 'check_scripts.log');
-  const r = await godot(o, ['--headless', '--path', '.', '-s', 'tools/check_scripts.gd'], { log });
+  const r = await godot(o, ['--headless', '--path', '.', '-s', 'tools/check_scripts.gd'], { log, quiet: o.staticJobs > 1 });
   const summary = /check_scripts: (\d+) scripts, (\d+) failures/.exec(r.text);
   if (r.code !== 0 || !summary || summary[2] !== '0') {
-    failed = true;
-    notes.push(`check_scripts FAIL (exit ${r.code}${summary ? `, ${summary[2]} of ${summary[1]} scripts` : ', no summary line'})`);
-  } else {
-    notes.push(`check_scripts ${summary[1]} scripts ok`);
+    if (o.staticJobs > 1) process.stdout.write(`${tailOf(r.text)}\n`);
+    return { fail: true, note: `check_scripts FAIL (exit ${r.code}${summary ? `, ${summary[2]} of ${summary[1]} scripts` : ', no summary line'})` };
   }
-
-  if (o.noLint) {
-    notes.push('lint skipped (--no-lint)');
-  } else {
-    const lint = await lintStep(o);
-    notes.push(lint.note);
-    if (lint.fail) failed = true;
-  }
-  const wf = await workflowStep(o);
-  notes.push(wf.note);
-  if (wf.fail) failed = true;
-  return { status: failed ? 'FAIL' : 'PASS', note: notes.join('; ') };
+  return { fail: false, note: `check_scripts ${summary[1]} scripts ok` };
 }
 
 // BRIEF 7.9: every CI workflow parses as YAML. tools/lib/check_workflows.py runs with a pinned
@@ -456,11 +505,106 @@ async function lintStep(o) {
   if (dirs.length === 0) return { fail: false, note: 'lint: nothing to check' };
   const lintLog = path.join(o.project, 'build', 'gdlint.log');
   const fmtLog = path.join(o.project, 'build', 'gdformat.log');
-  const lint = await run(tk.lint[0], [...tk.lint.slice(1), ...dirs], { cwd: o.project, log: lintLog, quiet: true });
-  const fmt = await run(tk.format[0], [...tk.format.slice(1), '--check', ...dirs], { cwd: o.project, log: fmtLog, quiet: true });
+  let lint;
+  let fmt;
+  if (o.staticJobs > 1) {
+    const chunks = lintChunks(o.project, dirs, o.staticJobs);
+    const each = (cmd, extra) => Promise.all(chunks.map((c) => run(cmd[0], [...cmd.slice(1), ...extra, ...c], { cwd: o.project, quiet: true })));
+    const [lints, fmts] = await Promise.all([each(tk.lint, []), each(tk.format, ['--check'])]);
+    lint = mergeLintRuns(lints, /(\d+) problems? found/, (n) => `Failure: ${n} problems found`);
+    fmt = mergeLintRuns(fmts, /(\d+) files? would be reformatted/, (n) => `${n} files would be reformatted`);
+    fs.writeFileSync(lintLog, lint.text);
+    fs.writeFileSync(fmtLog, fmt.text);
+  } else {
+    lint = await run(tk.lint[0], [...tk.lint.slice(1), ...dirs], { cwd: o.project, log: lintLog, quiet: true });
+    fmt = await run(tk.format[0], [...tk.format.slice(1), '--check', ...dirs], { cwd: o.project, log: fmtLog, quiet: true });
+  }
   const v = evaluateLint(lint, fmt);
   process.stdout.write(`run_tests: ${v.note}\n`);
   return v;
+}
+
+// gdtoolkit's own walk (gdtoolkit.common.utils.find_gd_files_from_paths): every *.gd under a directory,
+// skipping directories by these names. A directory's children, passed instead of it, give the same files.
+const GDTOOLKIT_SKIPPED_DIRS = new Set(['.git']);
+
+function countGd(dir) {
+  let n = 0;
+  let entries = [];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  for (const e of entries) {
+    if (e.isDirectory()) {
+      if (!GDTOOLKIT_SKIPPED_DIRS.has(e.name)) n += countGd(path.join(dir, e.name));
+    } else if (e.name.endsWith('.gd')) n += 1;
+  }
+  return n;
+}
+
+/** A directory's children as lint items: subdirectories holding *.gd (weighted by count) and its own *.gd files. */
+function lintChildren(project, d) {
+  const out = [];
+  let entries = [];
+  try {
+    entries = fs.readdirSync(path.join(project, d), { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    const relPath = `${d}/${e.name}`;
+    if (e.isDirectory()) {
+      if (GDTOOLKIT_SKIPPED_DIRS.has(e.name)) continue;
+      const weight = countGd(path.join(project, relPath));
+      if (weight > 0) out.push({ path: relPath, weight, dir: true });
+    } else if (e.name.endsWith('.gd')) out.push({ path: relPath, weight: 1, dir: false });
+  }
+  return out;
+}
+
+/**
+ * The lint targets (`dirs`, project paths) split into at most `jobs` lists of about the same *.gd
+ * count: each directory becomes its children (subdirectories and its own *.gd files), a child heavier
+ * than a share is split the same way, and the items go heaviest first onto the lightest list.
+ * Together the lists name exactly the files `dirs` would.
+ */
+export function lintChunks(project, dirs, jobs) {
+  let items = dirs.flatMap((d) => lintChildren(project, d));
+  const share = items.reduce((n, it) => n + it.weight, 0) / Math.max(1, jobs) / 2;
+  for (let heavy = items.find((it) => it.dir && it.weight > share); heavy; heavy = items.find((it) => it.dir && it.weight > share)) {
+    // Its children hold all its weight, so this always ends at files.
+    const kids = lintChildren(project, heavy.path);
+    items = items.flatMap((it) => (it === heavy ? kids : [it]));
+  }
+  items.sort((a, b) => b.weight - a.weight || a.path.localeCompare(b.path));
+  const bins = Array.from({ length: Math.max(1, jobs) }, () => ({ paths: [], weight: 0 }));
+  for (const it of items) {
+    let best = bins[0];
+    for (const b of bins) if (b.weight < best.weight) best = b;
+    best.paths.push(it.path);
+    best.weight += it.weight;
+  }
+  return bins.filter((b) => b.paths.length > 0).map((b) => b.paths.sort());
+}
+
+/**
+ * One {code, text} from the runs of one tool over the chunks: the first non-zero exit, every output,
+ * and the summed count of `countRe` first (evaluateLint reads the first count) when every failing run
+ * printed one.
+ */
+export function mergeLintRuns(runs, countRe, summary) {
+  const bad = runs.find((r) => r.code !== 0);
+  const text = runs.map((r) => r.text).join('\n');
+  if (!bad) return { code: 0, text };
+  const failing = runs.filter((r) => r.code !== 0);
+  const counts = failing.map((r) => countRe.exec(r.text));
+  if (counts.every(Boolean)) {
+    const total = counts.reduce((sum, m) => sum + Number(m[1]), 0);
+    return { code: bad.code, text: `${summary(total)}\n${text}` };
+  }
+  return { code: failing.find((r, i) => !counts[i]).code, text };
 }
 
 /** sim: BRIEF 7.4 simulation gates. Extension point for the lead (tools/run_game_sim). */
@@ -483,8 +627,11 @@ async function stepSim(o) {
     const hostBots = g.bots ? Math.min(1, Math.max(0, g.max_players - 2)) : 0;
     if (g.max_players >= 2) runs.push({ game: g.id, content: g.e2e_content, players: 2, bots: hostBots, tag: 'host' });
   }
-  const bad = [];
-  for (const sim of runs) {
+  // --sim-jobs runs several at once; each run still queues on the machine-wide Godot lock.
+  const simUserBase = process.env.WATTLANDS_USERDATA_DIR
+    ? path.join(process.env.WATTLANDS_USERDATA_DIR, 'sim_runs')
+    : path.join(o.project, 'build', 'sim_userdata');
+  const results = await runPool(runs, o.simJobs, async (sim) => {
     const bots = games.find((g) => g.id === sim.game).bots ? sim.bots : 0;
     const stem = `${sim.game}_${sim.content}${sim.tag ? `_${sim.tag}` : ''}`.replace(/[^A-Za-z0-9_.-]/g, '_');
     const report = path.join(out, `${stem}.json`);
@@ -497,15 +644,21 @@ async function stepSim(o) {
       ? [powershellExe(), ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(TOOLS, 'run_game_sim.ps1'), ...args]]
       : [process.env.WATTLANDS_BASH || 'bash', [path.join(TOOLS, 'run_game_sim').replaceAll('\\', '/'), ...args]];
     process.stdout.write(`run_tests: sim ${stem}\n`);
-    const r = await run(tool[0], tool[1], { cwd: o.project, log: path.join(out, `${stem}.log`), timeoutS: o.simOuterS, quiet: true });
+    const t0 = Date.now();
+    // Godot processes at once must not share a user dir (CLAUDE.md): each pooled run gets its own.
+    const env = o.simJobs > 1 ? { ...process.env, WATTLANDS_USERDATA_DIR: path.join(simUserBase, stem) } : process.env;
+    const r = await run(tool[0], tool[1], { cwd: o.project, log: path.join(out, `${stem}.log`), timeoutS: o.simOuterS, quiet: true, env });
     let endReason = '';
     try {
       endReason = JSON.parse(fs.readFileSync(report, 'utf8')).end_reason ?? '';
     } catch {
       endReason = '(no report)';
     }
-    if (r.code !== 0 || endReason !== 'complete') bad.push(`${stem}: exit ${r.code}, end_reason ${endReason}`);
-  }
+    const ok = r.code === 0 && endReason === 'complete';
+    if (o.simJobs > 1) process.stdout.write(`run_tests: sim ${stem} ${ok ? 'ok' : 'FAIL'} ${((Date.now() - t0) / 1000).toFixed(1)}s\n`);
+    return ok ? null : `${stem}: exit ${r.code}, end_reason ${endReason}`;
+  });
+  const bad = results.filter(Boolean);
   const note = `${runs.length - bad.length}/${runs.length} run_game_sim runs complete (build/sims)`;
   if (bad.length) return { status: 'FAIL', note: `${note}; ${bad.join('; ')}` };
   return { status: 'PASS', note };
@@ -646,62 +799,252 @@ function hasNodeTests(dir) {
   return walk(dir, false);
 }
 
-/** node: `node --test` in every Node suite directory that has tests. */
+// ---------------------------------------------------------------- node suites a change can affect
+//
+// --node-since=<rev> runs only the suites (and the NODE_EXTRA commands) that the paths changed since
+// <rev> can affect. A changed path that is neither one registered game's own (GAME_OWN_PATHS) nor a
+// docs Markdown file selects everything, so this table only answers for game paths: per suite, the
+// game paths (`<id>` is any game) that can change its result. A suite or command with no row, and a
+// test file with no row inside a row that has per-file entries ('*' is the rest), reads every game
+// path. A game's own suite, tests/games/<id>, runs when that game changed. --node-since never
+// narrows strict or the literal run: neither passes it.
+const GAME_OWN_PATHS = GAME_PATHS.own;
+export const NODE_SUITE_GAME_INPUTS = {
+  'tools/tests': {
+    // run_game_sim.test.mjs, pixelate and the screenshot dry runs start Godot on the real project,
+    // whose GameRegistry loads every game's game.json and entry script.
+    '*': GAME_OWN_PATHS,
+    // The real run_sims.sh plans and check_sims.mjs checkers; the other gate files run on scratch repos
+    // (gate_scan.test.mjs reads every game's own paths, so it has no row).
+    'gate_matrix.test.mjs': ['tests/games/<id>/sim/**'],
+    'gate.test.mjs': [],
+    'gate_ownership.test.mjs': [],
+    'gate_pins.test.mjs': [],
+    'gate_counts.test.mjs': [],
+    'gate_invariants.test.mjs': [],
+    'gate_wait.test.mjs': [],
+    'gate_stamps.test.mjs': [],
+    'gate_fast.test.mjs': [],
+    // listGutFiles over the real tests/ and the pins of the real manifest.
+    'gate_core.test.mjs': ['tests/games/<id>/**'],
+    // gameNodeSuites over the real tests/games/; Godot runs on scratch projects.
+    'run_tests.test.mjs': ['tests/games/<id>/**'],
+    'godot_lock.test.mjs': [],
+    'gut_gate.test.mjs': [],
+    'wrappers.test.mjs': [],
+    'run_tests_steps.test.mjs': [],
+  },
+  'server/relay': [],
+  'server/mock_strava': [],
+  'tools/art': [],
+  // findBanks over assets/<id>/audio, and the real-wave reports a bank names under tests/games/<id>/.
+  'tools/audio': ['assets/<id>/audio/**', 'tests/games/<id>/audio/**'],
+  'tools/fit_check': [],
+  'tools/e2e': [],
+};
+
+function gameGlobs(patterns, id) {
+  return patterns.map((p) => globToRegExp(p.replaceAll('<id>', id)));
+}
+
+/** Which registered game owns `p` as its own code, content, art, tests or workflow (pathOwner), or null. */
+export function gameOfPath(p, gameIds) {
+  const owner = pathOwner(p, gameIds);
+  return owner?.kind === 'own' ? owner.game : null;
+}
+
+/**
+ * Does a test file's source name a registered game's path (`src/games/tank`, `content/siege/`,
+ * `tests/games/fishing`, `game-workout.yml`, or path.join's `'games', 'tank'`)? A row that says a suite or
+ * a file reads no game path ([]) is a hand-written claim; a file that names one runs anyway.
+ */
+export function namesGamePath(src, gameIds) {
+  if (typeof src !== 'string' || gameIds.length === 0) return false;
+  const ids = gameIds.map((id) => id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const re = new RegExp(`(?:src/games|content|assets|tests/games)/(?:${ids})(?![\\w-])|game-(?:${ids})\\.yml|['"]games['"]\\s*,\\s*['"](?:${ids})['"]`);
+  return re.test(src);
+}
+
+/**
+ * The node step's plan for a change set. units: [{name, kind: 'suite'|'extra', files}] in the order
+ * given; `files` null means the whole suite, else the test files (suite-relative) to pass to
+ * `node --test`. suiteFiles(suite) lists a suite's test files (suite-relative); readFile(path) reads
+ * one (project-relative), for the guard on [] rows (namesGamePath: a hit runs it). An empty
+ * change set runs everything, as the GUT selection does. Returns {all, units, skipped: [{name, why}], why}.
+ */
+export function planNodeSuites({ changed, units, gameIds, suiteFiles = () => [], readFile = () => null }) {
+  const games = new Set();
+  const platform = [];
+  for (const p of changed) {
+    if (/^docs\/.*\.md$/.test(p)) continue;
+    const id = gameOfPath(p, gameIds);
+    if (id === null) platform.push(p);
+    else games.add(id);
+  }
+  const whole = (u) => ({ ...u, files: null });
+  if (changed.length === 0) return { all: true, units: units.map(whole), skipped: [], why: 'no change against the base' };
+  if (platform.length > 0) {
+    return { all: true, units: units.map(whole), skipped: [], why: `${platform[0]} is not one game's own path` };
+  }
+  const hit = (patterns) => changed.some((p) => [...games].some((id) => gameGlobs(patterns, id).some((re) => re.test(p))));
+  // A [] claim fails closed: a test file that names a game path reads one, whatever the row says.
+  const claimHolds = (rels) => !rels.some((r) => namesGamePath(readFile(r), gameIds));
+  const reads = (patterns, rels) => hit(patterns.length === 0 && !claimHolds(rels) ? GAME_OWN_PATHS : patterns);
+  const out = [];
+  const skipped = [];
+  for (const u of units) {
+    const own = /^tests\/games\/([^/]+)$/.exec(u.name);
+    if (own && u.kind === 'suite') {
+      if (games.has(own[1])) out.push(whole(u));
+      else skipped.push({ name: u.name, why: 'another game' });
+      continue;
+    }
+    const row = Object.hasOwn(NODE_SUITE_GAME_INPUTS, u.name) ? NODE_SUITE_GAME_INPUTS[u.name] : GAME_OWN_PATHS;
+    if (Array.isArray(row)) {
+      const rels = u.kind === 'suite' ? suiteFiles(u.name).map((f) => `${u.name}/${f}`) : [u.name];
+      if (reads(row, rels)) out.push(whole(u));
+      else skipped.push({ name: u.name, why: 'reads no changed game path' });
+      continue;
+    }
+    const files = suiteFiles(u.name);
+    const picked = files.filter((f) => reads(Object.hasOwn(row, f) ? row[f] : (row['*'] ?? GAME_OWN_PATHS), [`${u.name}/${f}`]));
+    if (picked.length === files.length) out.push(whole(u));
+    else if (picked.length > 0) out.push({ ...u, files: picked });
+    else skipped.push({ name: u.name, why: 'reads no changed game path' });
+  }
+  const why = games.size ? `game paths of ${[...games].sort().join(', ')}` : 'no path any suite reads';
+  return { all: false, units: out, skipped, why };
+}
+
+/**
+ * The test files `node --test` finds in a suite (TEST_FILE_RE, or any script under a test/ folder),
+ * suite-relative with forward slashes, sorted.
+ */
+export function suiteTestFiles(dir) {
+  const out = [];
+  const walk = (d, relDir, inTestDir) => {
+    let entries = [];
+    try {
+      entries = fs.readdirSync(d, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (e.name.startsWith('.') || e.name === 'node_modules') continue;
+      const relPath = relDir ? `${relDir}/${e.name}` : e.name;
+      if (e.isDirectory()) walk(path.join(d, e.name), relPath, inTestDir || e.name === 'test');
+      else if (TEST_FILE_RE.test(e.name) || (inTestDir && /\.[cm]?js$/.test(e.name))) out.push(relPath);
+    }
+  };
+  walk(dir, '', false);
+  return out.sort();
+}
+
+/** The paths changed since `base`: committed (base...HEAD), staged, unstaged and untracked. {paths} or {error}. */
+export function changedPaths(project, base) {
+  const git = (args) => spawnSync('git', ['-C', project, ...args], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true });
+  const committed = git(['diff', '--name-only', '--no-renames', '-z', `${base}...HEAD`]);
+  const first = (stderr) => (stderr || '').trim().split(/\r?\n/)[0];
+  if (committed.status !== 0) return { error: `git diff ${base}...HEAD failed: ${first(committed.stderr)}` };
+  const status = git(['status', '--porcelain', '-z', '--untracked-files=all', '--no-renames']);
+  if (status.status !== 0) return { error: `git status failed: ${first(status.stderr)}` };
+  const paths = new Set(committed.stdout.split('\0').filter(Boolean));
+  for (const entry of status.stdout.split('\0').filter(Boolean)) paths.add(entry.slice(3));
+  return { paths: [...paths].sort() };
+}
+
+/** node: `node --test` in every Node suite directory that has tests, then NODE_EXTRA. */
 async function stepNode(o) {
   if (process.env[NESTED_ENV]) return { status: 'SKIP', note: 'nested run_tests (started from a Node suite)' };
   const results = [];
-  let ran = 0;
-  let failed = 0;
+  const units = [];
   for (const suite of [...NODE_SUITES, ...gameNodeSuites(o.project)]) {
     const dir = path.join(o.project, suite);
-    if (!fs.existsSync(dir)) {
-      results.push(`${suite} SKIP (missing)`);
-      continue;
-    }
-    if (!hasNodeTests(dir)) {
-      results.push(`${suite} SKIP (no tests)`);
-      continue;
-    }
-    if (NPM_DIRS.includes(suite)) {
-      const npm = await ensureNpm(o, suite);
-      if (npm !== 'ok') process.stdout.write(`run_tests: ${suite}: ${npm}\n`);
-    }
-    process.stdout.write(`run_tests: node --test in ${suite}\n`);
-    const log = path.join(o.project, 'build', `node_${suite.replaceAll('/', '_')}.log`);
-    // Node 22.12-22.17 strips TypeScript types only with the flag (the relay's suite imports .ts).
-    const [maj, min] = process.versions.node.split('.').map(Number);
-    const strip = maj === 22 && min < 18 ? ['--experimental-strip-types'] : [];
-    const r = await run(process.execPath, [...strip, '--test'], {
-      cwd: dir,
-      log,
-      timeoutS: NODE_SUITE_TIMEOUT_S,
-      env: { ...process.env, [NESTED_ENV]: '1' },
-    });
-    ran += 1;
-    if (r.code === 0) results.push(`${suite} PASS`);
-    else {
-      failed += 1;
-      results.push(`${suite} FAIL (exit ${r.code})`);
-    }
+    if (!fs.existsSync(dir)) results.push(`${suite} SKIP (missing)`);
+    else if (!hasNodeTests(dir)) results.push(`${suite} SKIP (no tests)`);
+    else units.push({ name: suite, kind: 'suite', files: null });
   }
   for (const extra of NODE_EXTRA) {
-    if (!fs.existsSync(path.join(o.project, extra[0]))) continue;
-    process.stdout.write(`run_tests: node ${extra.join(' ')}\n`);
-    const log = path.join(o.project, 'build', `node_${path.basename(extra[0])}.log`);
-    const r = await run(process.execPath, extra, {
-      cwd: o.project, log, timeoutS: NODE_SUITE_TIMEOUT_S, env: { ...process.env, [NESTED_ENV]: '1' },
-    });
-    ran += 1;
-    if (r.code === 0) results.push(`${extra[0]} PASS`);
-    else {
-      failed += 1;
-      results.push(`${extra[0]} FAIL (exit ${r.code})`);
+    if (fs.existsSync(path.join(o.project, extra[0]))) units.push({ name: extra[0], kind: 'extra', files: null, argv: extra });
+  }
+  let selected = units;
+  if (o.nodeSince) {
+    const ch = changedPaths(o.project, o.nodeSince);
+    if (ch.error) {
+      process.stdout.write(`run_tests: --node-since=${o.nodeSince}: ${ch.error}; every suite runs\n`);
+    } else {
+      const ids = registeredGames(o).map((g) => g.id);
+      const readFile = (rel) => {
+        try {
+          return fs.readFileSync(path.join(o.project, rel), 'utf8');
+        } catch {
+          return null;
+        }
+      };
+      const plan = planNodeSuites({ changed: ch.paths, units, gameIds: ids, suiteFiles: (s) => suiteTestFiles(path.join(o.project, s)), readFile });
+      selected = plan.units;
+      process.stdout.write(`run_tests: --node-since=${o.nodeSince}: ${ch.paths.length} changed paths, ${plan.all ? 'every suite' : `${plan.units.length} of ${units.length}`} (${plan.why})\n`);
+      for (const s of plan.skipped) results.push(`${s.name} SKIP (${s.why})`);
     }
   }
+  for (const u of selected) {
+    if (u.kind === 'suite' && NPM_DIRS.includes(u.name)) {
+      const npm = await ensureNpm(o, u.name);
+      if (npm !== 'ok') process.stdout.write(`run_tests: ${u.name}: ${npm}\n`);
+    }
+  }
+  const parallel = o.nodeJobs > 1;
+  const env = { ...process.env, [NESTED_ENV]: '1' };
+  // A `node --test` that inherits the test runner's child marker reports to a parent that is not
+  // there and exits 0 whatever its tests did (run_tests started from inside a Node test).
+  delete env.NODE_TEST_CONTEXT;
+  if (o.nodeCache) env.WATTLANDS_TEST_CACHE_DIR = path.join(o.project, 'build', 'test_cache');
+  else delete env.WATTLANDS_TEST_CACHE_DIR;
+  // Node 22.12-22.17 strips TypeScript types only with the flag (the relay's suite imports .ts).
+  const [maj, min] = process.versions.node.split('.').map(Number);
+  const strip = maj === 22 && min < 18 ? ['--experimental-strip-types'] : [];
+  // The longest suites first, so a pool never ends on one of them.
+  const order = parallel ? [...selected].sort((a, b) => nodeRank(a.name) - nodeRank(b.name)) : selected;
+  const outcomes = await runPool(order, o.nodeJobs, async (u) => {
+    const t0 = Date.now();
+    let r;
+    if (u.kind === 'suite') {
+      const label = u.files ? `${u.name} (${u.files.length} files)` : u.name;
+      process.stdout.write(`run_tests: node --test in ${label}\n`);
+      const log = path.join(o.project, 'build', `node_${u.name.replaceAll('/', '_')}.log`);
+      r = await run(process.execPath, [...strip, '--test', ...(u.files ?? [])], {
+        cwd: path.join(o.project, u.name), log, timeoutS: NODE_SUITE_TIMEOUT_S, env, quiet: parallel,
+      });
+    } else {
+      process.stdout.write(`run_tests: node ${u.argv.join(' ')}\n`);
+      const log = path.join(o.project, 'build', `node_${path.basename(u.argv[0])}.log`);
+      r = await run(process.execPath, u.argv, { cwd: o.project, log, timeoutS: NODE_SUITE_TIMEOUT_S, env, quiet: parallel });
+    }
+    const s = ((Date.now() - t0) / 1000).toFixed(1);
+    const ok = r.code === 0;
+    if (parallel) {
+      process.stdout.write(`run_tests: node ${u.name} ${ok ? 'PASS' : 'FAIL'} ${s}s\n`);
+      if (!ok) process.stdout.write(`--- ${u.name} (last 60 lines)\n${tailOf(r.text)}\n`);
+    }
+    const part = u.files ? ` (${u.files.length} files)` : '';
+    return { name: u.name, ok, text: ok ? `${u.name}${part} PASS ${s}s` : `${u.name}${part} FAIL (exit ${r.code})` };
+  });
+  const byName = new Map(outcomes.map((x) => [x.name, x]));
+  results.push(...selected.map((u) => byName.get(u.name).text));
+  const failed = outcomes.filter((x) => !x.ok).length;
   process.stdout.write(`run_tests: node suites: ${results.join(', ')}\n`);
   if (failed > 0) return { status: 'FAIL', note: results.join(', ') };
-  if (ran === 0) return { status: 'SKIP', note: results.join(', ') };
+  // --node-since that selects nothing is a verdict (no suite reads what changed); otherwise no suite is a SKIP.
+  if (outcomes.length === 0 && units.length > 0 && selected !== units) return { status: 'PASS', note: `no suite reads the changed paths: ${results.join(', ')}` };
+  if (outcomes.length === 0) return { status: 'SKIP', note: results.join(', ') || 'no suite' };
   return { status: 'PASS', note: results.join(', ') };
+}
+
+// Pool order of the node step: these first (the longest, from the v1.1.0 literal run), the rest as listed.
+const NODE_SLOW = ['tools/tests', 'tools/audio', 'tools/art/pixelate_e2e.mjs', 'tools/e2e', 'tests/games/tank', 'tests/games/workout'];
+function nodeRank(name) {
+  const i = NODE_SLOW.indexOf(name);
+  return i < 0 ? NODE_SLOW.length : i;
 }
 
 /** e2e: BRIEF 7.7, node tools/e2e/run.mjs --games=<registered games>. Extension point. */

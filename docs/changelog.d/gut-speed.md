@@ -1,0 +1,1 @@
+- For contributors: the test suite takes less time. Tests that read the same whole session now play it once and leave it as it was, and a few tests that only repeated another check are gone. The audio scorecard test says for each bank whether it scored it or reused a pass from `build/test_cache`; delete that folder to score every bank afresh.

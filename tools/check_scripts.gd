@@ -7,6 +7,10 @@ extends SceneTree
 ##
 ## Skips dot-folders and folders with a .gdignore (Godot never imports those). Prints one line
 ## per failure and a summary "check_scripts: <n> scripts, <f> failures"; exits 1 on any failure.
+##
+## `-- --files=res://a.gd,res://b.gd` loads only those (tools/gate fmt, after formatting them) and
+## says so in a different summary, "check_scripts: <n> named scripts, <f> failures", which the
+## static gate does not accept as its own.
 
 const ROOTS: Array[String] = [
 	"res://addons/wattlands/",
@@ -56,10 +60,12 @@ var _catcher: ErrorCatcher = ErrorCatcher.new()
 
 
 func _initialize() -> void:
-	var files: Array[String] = []
+	var files: Array[String] = _named_files()
+	var named: bool = not files.is_empty()
 	var skipped: Array[String] = []
-	for root: String in ROOTS:
-		_collect(root, files, skipped)
+	if not named:
+		for root: String in ROOTS:
+			_collect(root, files, skipped)
 	files.sort()
 	for dir_path: String in skipped:
 		print("check_scripts: skipped %s (.gdignore)" % dir_path)
@@ -71,8 +77,19 @@ func _initialize() -> void:
 			failures += 1
 			print("check_scripts: FAIL %s: %s" % [path, reason])
 	OS.remove_logger(_catcher)
-	print("check_scripts: %d scripts, %d failures" % [files.size(), failures])
+	var what: String = "named scripts" if named else "scripts"
+	print("check_scripts: %d %s, %d failures" % [files.size(), what, failures])
 	quit(1 if failures > 0 else 0)
+
+
+## The res:// paths of `--files=`, or none.
+func _named_files() -> Array[String]:
+	var out: Array[String] = []
+	for arg: String in OS.get_cmdline_user_args():
+		if arg.begins_with("--files="):
+			for p: String in arg.trim_prefix("--files=").split(",", false):
+				out.append(p)
+	return out
 
 
 func _collect(dir_path: String, files: Array[String], skipped: Array[String]) -> void:

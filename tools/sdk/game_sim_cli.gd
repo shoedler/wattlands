@@ -293,6 +293,25 @@ func _template_registry(parent: Node) -> WlGameRegistry:
 	return reg
 
 
+## Fills a registry that skipped its start-up scan (scan_on_ready false) for a run with these
+## raw flags: only the --game it names when that game is valid, else every game, so an unknown
+## or broken game fails setup with the same message as before (it lists the registered games).
+## A registry that scanned on ready, or no registry, is left alone. `root` is for tests.
+static func scan_registry(
+	reg: WlGameRegistry, raw: PackedStringArray, root: String = WlGameRegistry.GAMES_ROOT
+) -> void:
+	if reg == null or reg.scan_on_ready:
+		return
+	var game := ""
+	for a in raw:
+		if a.begins_with("--game="):
+			game = a.substr(7)
+	if game != "" and game != WlGameRegistry.TEMPLATE_ID:
+		reg.scan_only([game] as Array[String], root)
+	if game == "" or not reg.has_game(game):
+		reg.scan(root)
+
+
 ## Problems with the flag names and syntax ([] when fine). Values that need the game's
 ## manifest (option ranges, content ids) are GameSimRunner.parse_args's and setup's job.
 func _check(flags: Array) -> Array[String]:

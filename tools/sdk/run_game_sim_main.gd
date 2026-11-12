@@ -10,8 +10,18 @@ extends SceneTree
 var _started: bool = false
 
 
+## Runs before the autoloads' _ready: the GameRegistry autoload skips its scan of every game, and
+## the first frame scans only the game this run asks for (GameSimCli.scan_registry).
+func _initialize() -> void:
+	var reg := root.get_node_or_null(^"GameRegistry") as WlGameRegistry
+	if reg != null:
+		reg.scan_on_ready = false
+
+
 func _process(_delta: float) -> bool:
 	if not _started:
 		_started = true
+		var reg := root.get_node_or_null(^"GameRegistry") as WlGameRegistry
+		GameSimCli.scan_registry(reg, OS.get_cmdline_user_args())
 		quit(GameSimCli.new().main(OS.get_cmdline_user_args(), root))
 	return false

@@ -1,0 +1,1 @@
+- Simulation runs (`tools/run_game_sim`) start about two seconds sooner: a run now compiles only the game it rides.

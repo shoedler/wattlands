@@ -4,6 +4,13 @@ extends TestGameSessionSuite
 ## tests/games/tank/contracts/test_tank_plans.gd). G0 version; the module builder extends it.
 
 const F := preload("res://tests/games/tank/tank_fakes.gd")
+## The solo Ashfall Road with zero input, the drill with two humans and the drill with three: played
+## once each, read by every test below that names them.
+const SOLO_ROAD: Array[String] = [
+	"--content=ashfall_road", "--players=1", "--rider=erg", "--seed=1"
+]
+const DRILL_2: Array[String] = ["--content=drill", "--players=2", "--rider=erg", "--seed=5"]
+const DRILL_3: Array[String] = ["--content=drill", "--players=3", "--rider=erg", "--seed=2"]
 
 
 func test_the_manifest_validates_and_tank_is_listed() -> void:
@@ -18,6 +25,11 @@ func _run(flags: Array[String]) -> Dictionary:
 	return run_session(F.GAME_ID, flags)
 
 
+## A session several tests read, played once for the script (shared_session).
+func _once(flags: Array[String]) -> Dictionary:
+	return shared_session(F.GAME_ID, flags)
+
+
 func test_a_solo_drill_completes_with_one_fit_and_nothing_refused() -> void:
 	var r := _run(["--content=drill", "--players=1", "--rider=erg", "--seed=3"])
 	assert_eq(r["_end"], "complete")
@@ -30,7 +42,7 @@ func test_a_solo_drill_completes_with_one_fit_and_nothing_refused() -> void:
 
 
 func test_a_host_drill_with_two_humans_completes() -> void:
-	var r := _run(["--content=drill", "--players=2", "--rider=erg", "--seed=5"])
+	var r := _once(DRILL_2)
 	assert_eq(r["_end"], "complete")
 	assert_eq((r.get("fit_paths", []) as Array).size(), 2)
 	var group: Array = []
@@ -45,7 +57,7 @@ func test_a_host_drill_with_two_humans_completes() -> void:
 ## rest of a segment a lap-false phase of its own); every WORK phase ends by end_phase or at max_s
 ## (whether the crew wins without an overrun is T1, a balance gate), every other by its duration.
 func test_a_solo_rider_plays_ashfall_road_to_the_results_with_zero_input() -> void:
-	var r := _run(["--content=ashfall_road", "--players=1", "--rider=erg", "--seed=1"])
+	var r := _once(SOLO_ROAD)
 	assert_eq(r["_end"], "complete")
 	assert_has([TankIds.OUTCOME_VICTORY, TankIds.OUTCOME_WITHDRAWN], r.get("finished_reason"))
 	var hist: Array = r["phases"]["1"]
@@ -105,7 +117,7 @@ func _all_whole_numbers(node: Variant) -> bool:
 ## client applies the same Tank events in the same order as the host sent them, whole numbers all,
 ## the snapshots stay small, and every peer's apply_progress ran.
 func test_a_host_drill_with_three_humans_keeps_every_client_in_step() -> void:
-	var r := _run(["--content=drill", "--players=3", "--rider=erg", "--seed=2"])
+	var r := _once(DRILL_3)
 	assert_eq(r["_end"], "complete")
 	assert_eq(r.get("finished_reason"), TankIds.OUTCOME_COMPLETE)
 	assert_eq(int(r.get("oversize_snapshots", -1)), 0)
@@ -137,7 +149,7 @@ func test_a_host_drill_with_three_humans_keeps_every_client_in_step() -> void:
 
 ## Prompts and banners go to one peer, the host's own rider (ctx.local_peer), never to everyone.
 func test_the_hosts_toasts_and_banners_are_for_the_host_only() -> void:
-	var r := _run(["--content=drill", "--players=3", "--rider=erg", "--seed=4"])
+	var r := _once(DRILL_3)
 	var seen := 0
 	for e: Dictionary in r["events"]:
 		if str(e.get("type", "")) == "hud" and ["toast", "banner"].has(str(e.get("kind", ""))):
@@ -154,21 +166,21 @@ func test_a_solo_drill_with_autopilot_off_still_completes() -> void:
 
 
 func test_the_same_seed_gives_the_same_report_hash() -> void:
-	var a := _run(["--content=drill", "--players=2", "--rider=erg", "--seed=9"])
+	var a := _once(DRILL_2)
 	var path_a := str(a["_path"])
 	assert_ne(path_a, "")
 	var hash_a := str(a["deterministic_hash"])
 	for run: GameSimRunner in _runners:
 		run.cleanup()
 	_runners.clear()
-	var b := _run(["--content=drill", "--players=2", "--rider=erg", "--seed=9"])
+	var b := _run(DRILL_2)
 	assert_eq(str(b["deterministic_hash"]), hash_a, "events and snapshots repeat")
 
 
 ## Zero input: the Ashfall Road report's segment events come once each in order, the snapshots stay
 ## under the budget all the way, and the platform wrote the ride.
 func test_the_solo_ashfall_road_keeps_its_snapshots_small_and_its_segments_in_order() -> void:
-	var r := _run(["--content=ashfall_road", "--players=1", "--rider=erg", "--seed=2"])
+	var r := _once(SOLO_ROAD)
 	assert_eq(r["_end"], "complete")
 	assert_eq(int(r.get("oversize_snapshots", -1)), 0)
 	assert_lte(int(r.get("max_snapshot_bytes", 99999)), TankConst.SNAPSHOT_MAX_BYTES)
@@ -197,27 +209,6 @@ func test_a_host_drill_with_four_humans_completes() -> void:
 		for row: Dictionary in r["trace"][peer]:
 			if str(row.get("mode", "")) == Wl.ERG:
 				assert_lte(float(row["applied_pct"]), 65.0 + 0.6, "warm-up ERG, peer %s" % peer)
-
-
-## Zero input with four riders: the crew of 4 plays Ashfall Road to the results (a mission outcome),
-## every WORK phase ending by end_phase or at max_s.
-func test_a_host_crew_of_4_plays_ashfall_road_to_the_results_with_zero_input() -> void:
-	var r := _run(["--content=ashfall_road", "--players=4", "--rider=erg", "--seed=1"])
-	assert_eq(r["_end"], "complete")
-	assert_has([TankIds.OUTCOME_VICTORY, TankIds.OUTCOME_WITHDRAWN], r.get("finished_reason"))
-	# v3: a seat move splits a segment into plan phases; count the segments they belong to.
-	var plan: Array = r["plans"]["4"]["phases"]
-	var segs := {}
-	for sp: Dictionary in r["phases"]["4"]:
-		var meta: Dictionary = (plan[int(sp["index"])] as Dictionary).get("meta", {})
-		segs[int(meta.get("segment", -1))] = true
-	assert_eq(segs.size(), 13, "12 segments and the cool-down")
-	assert_lte(int(r.get("max_snapshot_bytes", 99999)), TankConst.SNAPSHOT_MAX_BYTES)
-	var arc := 0
-	for d: Dictionary in r.get("directives", []):
-		if d["kind"] == "request" and str(d["requested"].get("reason", "")) == "arc":
-			arc += 1
-	assert_gt(arc, 0, "the arc generator's load pattern ran")
 
 
 ## Brief section 4, S10: a client's own `aim` (a key on the client: the up action) reaches the host

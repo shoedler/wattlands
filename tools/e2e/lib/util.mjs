@@ -1,4 +1,5 @@
 // tools/e2e/lib/util.mjs: small helpers for the end-to-end harness (zero dependencies).
+import dgram from 'node:dgram';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
@@ -101,8 +102,11 @@ export function childEnv(base = process.env, extra = {}) {
   return env;
 }
 
-/** A free TCP port on 127.0.0.1 (released before returning; the caller binds it soon after). */
-export function getFreePort() {
+// Ports this process already handed out: concurrent scenarios (faults.mjs --jobs) each pick theirs
+// before binding, and a relay restarted on its own port leaves it free for a moment.
+const handedOut = new Set();
+
+function pickPort() {
   return new Promise((resolve, reject) => {
     const srv = net.createServer();
     srv.unref();
@@ -112,6 +116,72 @@ export function getFreePort() {
       srv.close(() => resolve(port));
     });
   });
+}
+
+/**
+ * A free TCP port on 127.0.0.1 (released before returning; the caller binds it soon after), never one
+ * this process handed out before.
+ */
+export async function getFreePort() {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const port = await pickPort();
+    if (!handedOut.has(port)) {
+      handedOut.add(port);
+      return port;
+    }
+  }
+  throw new Error('getFreePort: the system kept offering ports this run already uses');
+}
+
+/**
+ * The band the built-in relay's ports come from: below every OS's ephemeral range (Linux hands out from
+ * 32768, Windows and macOS from 49152). A port from getFreePort is ephemeral, so a socket that sends
+ * before it binds (a host's beacon is one) can be given that number by the OS between the probe and the
+ * bind: with several built-in scenarios at once, a client's discovery listener then failed with "can't
+ * listen". Nothing is handed a port in this band unless it asks for that number.
+ */
+export const BAND_LOW = 20000;
+export const BAND_HIGH = 32000;
+
+function probeTcp(port) {
+  return new Promise((resolve) => {
+    const srv = net.createServer();
+    srv.unref();
+    srv.once('error', () => resolve(false));
+    srv.listen({ port, host: '127.0.0.1', exclusive: true }, () => srv.close(() => resolve(true)));
+  });
+}
+
+function probeUdp(port) {
+  return new Promise((resolve) => {
+    const sock = dgram.createSocket({ type: 'udp4', reuseAddr: false });
+    sock.once('error', () => {
+      try {
+        sock.close();
+      } catch {
+        // never bound
+      }
+      resolve(false);
+    });
+    sock.bind({ port, address: '127.0.0.1', exclusive: true }, () => sock.close(() => resolve(true)));
+  });
+}
+
+/**
+ * A port in [BAND_LOW, BAND_HIGH] that is free on 127.0.0.1 for TCP and for UDP alike (probed as each,
+ * then released; the caller binds it soon after), never one this process handed out before. Loopback
+ * only, so no probe reaches the LAN or raises a firewall prompt. `start` picks where the search begins
+ * (default: random, so two processes rarely try the same numbers).
+ */
+export async function getBandPort({ start = null } = {}) {
+  const span = BAND_HIGH - BAND_LOW + 1;
+  let at = start ?? BAND_LOW + Math.floor(Math.random() * span);
+  for (let tried = 0; tried < 400; tried += 1, at = at >= BAND_HIGH ? BAND_LOW : at + 1) {
+    if (handedOut.has(at)) continue;
+    handedOut.add(at); // claimed before the probes, so a concurrent call in this process skips it
+    if ((await probeTcp(at)) && (await probeUdp(at))) return at;
+  }
+  throw new Error(`getBandPort: no port free for TCP and UDP in ${BAND_LOW}-${BAND_HIGH} after 400 tries`);
 }
 
 function which(name) {

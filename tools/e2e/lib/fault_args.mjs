@@ -55,6 +55,8 @@ options:
   --relay-cmd=<cmd>      relay command; {port} is replaced and PORT is set (default as run.mjs)
   --service-timeout=<s>  wait this long for the relay (default 30)
   --lock-timeout=<s>     wait this long for the Godot slots (default 2700): exit 75
+  --jobs=<n>             run up to n scenarios at once, each with its own lease, ports, relay and
+                         folder (default 1); the report lists them in run order either way
   --peer-cmd=<cmd>       start peers with this instead of tools/godot.sh (harness tests only)
   --repo=<dir>           the checkout to run (default: this harness's checkout)
   --verbose              echo every peer's output
@@ -72,6 +74,7 @@ const NUMERIC = {
   '--long-timeout': ['longTimeoutS', { min: 1 }],
   '--service-timeout': ['serviceTimeoutS', { min: 1 }],
   '--lock-timeout': ['lockTimeoutS', { min: 0 }],
+  '--jobs': ['jobs', { integer: true, min: 1 }],
 };
 const STRINGS = { '--out': 'out', '--relay-cmd': 'relayCmd', '--peer-cmd': 'peerCmd', '--repo': 'repo' };
 
@@ -90,6 +93,7 @@ export const FAULT_DEFAULTS = Object.freeze({
   longTimeoutS: 900,
   serviceTimeoutS: 30,
   lockTimeoutS: 2700,
+  jobs: 1,
   mockTrainer: 'erg:compliance=1.0',
   out: null,
   relayCmd: null,

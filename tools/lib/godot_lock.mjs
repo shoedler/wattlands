@@ -13,9 +13,10 @@
 //   node tools/lib/godot_lock.mjs set-cap <n>     (0 deletes the cap file)
 //
 // Lock directory: $WATTLANDS_GODOT_LOCK_DIR, else os.tmpdir()/wattlands-godot.
-// Cap: $WATTLANDS_GODOT_LOCK_CAP, else the cap file in the lock directory, else 4 slots with >= 8 CPUs
-// and >= 16 GiB free RAM, else 2. The cap file holds for every shell on the machine, whichever
-// checkout it runs from, and waiters re-read it on every poll, so a change applies at once.
+// Cap: $WATTLANDS_GODOT_LOCK_CAP, else the cap file in the lock directory, else defaultCap(): three
+// quarters of the logical CPUs, bounded by free RAM (1 GiB per slot above an 8 GiB reserve, counting
+// the held slots' memory back in), never below 2. The cap file holds for every shell on the machine,
+// whichever checkout it runs from, and waiters re-read it on every poll, so a change applies at once.
 //
 // Files in the lock directory:
 //   cap             optional machine-wide cap: one positive integer (set-cap writes it; anything else is ignored)
@@ -96,18 +97,40 @@ function readCapFile(dir) {
   return null;
 }
 
+export const CAP_FLOOR = 2;
+export const CAP_CPU_SHARE = 0.75;
+export const CAP_RAM_RESERVE_GIB = 8;
+export const CAP_GIB_PER_SLOT = 1;
+/** A lease above any cap: granted only while nothing else is held, and it holds back every other grant. */
+export const WHOLE_MACHINE_LEASE = 1024;
+
 /**
- * The slot cap: WATTLANDS_GODOT_LOCK_CAP if set, else the cap file in `dir`, else 4 with >= 8 CPUs and
- * >= 16 GiB free RAM, else 2.
+ * The cap with no override: min(3/4 of the logical CPUs, the slots free RAM can feed), never below
+ * CAP_FLOOR. A slot is budgeted CAP_GIB_PER_SLOT above a CAP_RAM_RESERVE_GIB reserve for the desktop, the
+ * editor and Node. `heldSlots` adds the held slots' budget back, since their processes already ate into
+ * free RAM: without it the cap would fall as its own slots fill.
+ * Measured 2026-11-12 on 20 CPUs with 34 GiB free: 15. A headless GUT shard or sim uses 0.3 to 0.7 GiB.
  */
-export function machineCap(dir = lockDir()) {
+export function defaultCap({ cpus = CPU_COUNT, freeBytes = os.freemem(), heldSlots = 0 } = {}) {
+  const byCpu = Math.floor(cpus * CAP_CPU_SHARE);
+  const held = Number.isInteger(heldSlots) && heldSlots > 0 && heldSlots < WHOLE_MACHINE_LEASE ? heldSlots : 0;
+  const byRam = Math.floor((freeBytes / GIB + held * CAP_GIB_PER_SLOT - CAP_RAM_RESERVE_GIB) / CAP_GIB_PER_SLOT);
+  return Math.max(CAP_FLOOR, Math.min(byCpu, byRam));
+}
+
+/**
+ * The slot cap: WATTLANDS_GODOT_LOCK_CAP if set, else the cap file in `dir`, else defaultCap().
+ * `heldSlots` (what acquire sees held) only reaches the default, and so does `freeBytes` (a test knob:
+ * one reading of free RAM, so two calls can be compared).
+ */
+export function machineCap(dir = lockDir(), { heldSlots = 0, freeBytes = undefined } = {}) {
   const env = process.env.WATTLANDS_GODOT_LOCK_CAP;
   if (env !== undefined && env !== '') {
     const n = Number(env);
     if (Number.isInteger(n) && n >= 1) return n;
     throw new Error(`WATTLANDS_GODOT_LOCK_CAP must be a positive integer, got "${env}"`);
   }
-  return readCapFile(dir) ?? (CPU_COUNT >= 8 && os.freemem() >= 16 * GIB ? 4 : 2);
+  return readCapFile(dir) ?? defaultCap({ heldSlots, ...(freeBytes === undefined ? {} : { freeBytes }) });
 }
 
 /** Writes the cap file, or deletes it for n = 0. The write is atomic: a waiter never reads half a number. */
@@ -384,6 +407,7 @@ function lockTimeoutError() {
  * @param {number} [opts.pollMs=200]
  * @param {number} [opts.staleMs=60000] a live pid's ticket without a heartbeat for this long is stale
  * @param {number} [opts.staleConfirmMs=10000] ...and is reaped after looking stale for this long (test knobs)
+ * @param {number} [opts.freeBytes] free RAM for the computed default cap (test knob; default os.freemem())
  */
 export async function acquire(opts = {}) {
   const lease = opts.lease ?? 1;
@@ -398,7 +422,7 @@ export async function acquire(opts = {}) {
   const pollMs = opts.pollMs ?? POLL_MS;
   const staleMs = opts.staleMs ?? STALE_MS;
   const staleConfirmMs = opts.staleConfirmMs ?? 2 * HEARTBEAT_MS;
-  const capOf = () => opts.cap ?? machineCap(dir);
+  const capOf = (heldSlots = 0) => opts.cap ?? machineCap(dir, { heldSlots, freeBytes: opts.freeBytes });
   capOf(); // validate the env override before taking a ticket
   ensureDir(dir);
   installExitHook();
@@ -487,13 +511,13 @@ export async function acquire(opts = {}) {
         continue;
       }
 
-      const cap = capOf();
       let held = 0;
       let ahead = 0;
       for (const t of live) {
         if (t.held) held += t.lease ?? 1;
         else if (t.seq < entry.seq) ahead += 1;
       }
+      const cap = capOf(held);
       const fits = lease <= cap ? held + lease <= cap : held === 0;
       if (ahead === 0 && fits) {
         try {
@@ -730,12 +754,12 @@ function cmdStatus(argv) {
     created: t.created,
     label: t.label,
   }));
-  const cap = machineCap();
+  const held = rows.filter((r) => r.state === 'held').reduce((s, r) => s + (r.lease ?? 1), 0);
+  const cap = machineCap(dir, { heldSlots: held });
   if (argv.includes('--json')) {
     process.stdout.write(`${JSON.stringify({ dir, cap, tickets: rows }, null, 2)}\n`);
     return;
   }
-  const held = rows.filter((r) => r.state === 'held').reduce((s, r) => s + (r.lease ?? 1), 0);
   process.stdout.write(`lock dir ${dir}\ncap ${cap}, held ${held}, tickets ${rows.length}\n`);
   for (const r of rows) {
     process.stdout.write(
@@ -781,7 +805,8 @@ if (isMain()) {
   } else if (command === 'status') {
     cmdStatus(rest);
   } else if (command === 'cap') {
-    process.stdout.write(`${machineCap()}\n`);
+    const held = readTickets().tickets.filter((t) => t.held && t.pid !== null && pidAlive(t.pid)).reduce((s, t) => s + (t.lease ?? 1), 0);
+    process.stdout.write(`${machineCap(lockDir(), { heldSlots: held })}\n`);
   } else if (command === 'set-cap') {
     cmdSetCap(rest);
   } else {
