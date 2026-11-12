@@ -69,8 +69,10 @@ test('a victim that finishes before the kill fails the run clearly', async () =>
     assert.equal(r.code, 1, r.out);
     const detail = check(s.report(), 'run').details[0];
     assert.match(detail, /client2 exited .* before it could be killed/);
-    // Where each peer had got to, for debugging a stuck session.
-    assert.match(detail, /last states: host \w+; client1 \w+; client2 \w+, exited 0\)/);
+    // Where each peer had got to, for debugging a stuck session. On a busy machine the host's or
+    // client1's short fake session can end before the harness sees the victim's exit, so either
+    // may carry its own exit code.
+    assert.match(detail, /last states: host \w+(?:, exited \d+)?; client1 \w+(?:, exited \d+)?; client2 \w+, exited 0\)/);
   } finally {
     s.cleanup();
   }
