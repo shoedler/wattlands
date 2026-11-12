@@ -757,12 +757,13 @@ class Run {
   }
 
   /**
-   * The node lane: its own lock dir and a cap of 2, since its short test timers can't wait in the machine FIFO.
-   * Its suites run NODE_JOBS at once; `since` narrows them to what changed since that rev and lets them keep
-   * verdict caches (fast only: strict and the literal run run every suite in full).
+   * The node lane: its own lock dir, since its short test timers can't wait in the machine FIFO, with a cap of
+   * 4: its suites run NODE_JOBS at once, and the Godot runs of several (tools/tests, pixelate) overlap.
+   * `since` narrows the suites to what changed since that rev and lets them keep verdict caches (fast only:
+   * strict and the literal run run every suite in full).
    */
   nodeLane({ since = null } = {}) {
-    const env = childEnv({ WATTLANDS_GODOT_LOCK_DIR: path.join(this.dir, 'node_lock'), WATTLANDS_GODOT_LOCK_CAP: '2' });
+    const env = childEnv({ WATTLANDS_GODOT_LOCK_DIR: path.join(this.dir, 'node_lock'), WATTLANDS_GODOT_LOCK_CAP: '4' });
     const extra = [`--node-jobs=${NODE_JOBS}`, ...(since ? [`--node-since=${since}`, '--node-cache'] : [])];
     return this.runTests('node', ['node'], { env, extra });
   }
