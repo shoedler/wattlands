@@ -136,11 +136,12 @@ const NO_DATA_S_PER_FILE = 2;
  * Longest bundle first into the lightest shard, ties by name. A bundle is a group, or one file of a
  * splittable group heavier than half a shard's share (its weight from the file's own entry, else an even
  * part of the group's): so a long game group no longer sets the wall time on its own. Other groups never
- * split, so every writer of one res://build/<dir> stays in one process. `pins` (arrays of groups) forces
+ * split, so every writer of one res://build/<dir> stays in one process; nor does a game group in
+ * `noSplit` (buildDirGroups: one of its files names res://build). `pins` (arrays of groups) forces
  * groups together. Files matching `quiet` (globs) come back apart. Empty shards are dropped.
  * Returns { shards: string[][], quiet: string[] }; throws unless they partition `files` exactly.
  */
-export function planShards(files, groupWeights, { shards = 8, quiet = [], pins = [] } = {}) {
+export function planShards(files, groupWeights, { shards = 8, quiet = [], pins = [], noSplit = [] } = {}) {
   if (!Number.isInteger(shards) || shards < 1) throw new RangeError(`shards must be a positive integer, got ${shards}`);
   const known = (g) => (groupWeights instanceof Map ? groupWeights.get(g) : groupWeights?.[g]);
   const quietFiles = files.filter((f) => matchesAny(f, quiet));
@@ -172,7 +173,7 @@ export function planShards(files, groupWeights, { shards = 8, quiet = [], pins =
   for (const g of groups.keys()) {
     if (taken.has(g)) continue;
     const members = groups.get(g);
-    if (!splittableGroup(g) || members.length < 2 || weightOf(g) <= splitAbove) {
+    if (!splittableGroup(g) || noSplit.includes(g) || members.length < 2 || weightOf(g) <= splitAbove) {
       bundles.push({ name: g, files: members, weight: weightOf(g) });
       continue;
     }
@@ -199,36 +200,62 @@ export function planShards(files, groupWeights, { shards = 8, quiet = [], pins =
   return { shards: planned, quiet: quietFiles };
 }
 
-// ---------------------------------------------------------------- touched games
+// ---------------------------------------------------------------- which game owns a path
 
 /**
- * Which games a change set touches. docs/**, *.md and workflows other than game-<id>.yml touch
- * nothing, checked first; a game's own paths touch that game; anything else, _template included,
- * sets `platform` and selects every registered game. Returns { games, platform }.
+ * The one table of a game's own paths, `<id>` for the game. Every selection reads it through
+ * pathOwner: the GUT selection of `fast`, the Node suites of `--node-since`, the sim and e2e games
+ * (touchedGames), and the ownership rule of `check` (gamePaths). `own` is what the game builds and
+ * runs; `docs` is its text beside the platform's, which runs nothing. A workflow is `.yml` only: the
+ * static step parses `.github/workflows/*.yml`, so a `.yaml` is no game's and selects everything.
+ */
+export const GAME_PATHS = {
+  own: ['src/games/<id>/**', 'content/<id>/**', 'assets/<id>/**', 'tests/games/<id>/**', '.github/workflows/game-<id>.yml'],
+  docs: ['docs/decisions/<id>.md', 'docs/changelog.d/<id>.md', 'docs/credits.d/<id>.md', 'docs/games/<id>.md'],
+};
+
+/** GAME_PATHS for one game, as globs. */
+export function gamePathGlobs(id, kinds = ['own', 'docs']) {
+  return kinds.flatMap((k) => GAME_PATHS[k].map((p) => p.replaceAll('<id>', id)));
+}
+
+/**
+ * The registered game that owns `p` by GAME_PATHS, and how: { game, kind: 'own'|'docs' }, or null
+ * (the platform, _template, an unregistered game, any other doc).
+ */
+export function pathOwner(p, registeredIds) {
+  for (const id of registeredIds) {
+    for (const kind of ['own', 'docs']) {
+      if (matchesAny(p, gamePathGlobs(id, [kind]))) return { game: id, kind };
+    }
+  }
+  return null;
+}
+
+/**
+ * Text that selects no sim and no e2e: docs, any Markdown, workflows other than game-*. A game-*
+ * workflow that is no registered game's own (game-nope.yml, game-tank.yaml) is not text: it selects all.
+ */
+function isPlainText(p) {
+  return p.startsWith('docs/') || p.endsWith('.md') || /^\.github\/workflows\/(?!game-)[^/]+$/.test(p);
+}
+
+/**
+ * Which games a change set touches, for sim and e2e. A game's own path (pathOwner) touches that game,
+ * unless it is text (its README); docs, *.md and other workflows touch nothing; anything else,
+ * _template included, sets `platform` and selects every registered game. Returns { games, platform }.
  */
 export function touchedGames(changedPaths, registeredIds) {
-  const ids = new Set(registeredIds);
+  const ids = [...new Set(registeredIds)];
   const games = new Set();
   let platform = false;
   for (const p of changedPaths) {
-    const wf = /^\.github\/workflows\/([^/]+)$/.exec(p);
-    const gameWf = wf && /^game-(.+)\.ya?ml$/.exec(wf[1]);
-    if (p.startsWith('docs/') || p.endsWith('.md') || (wf && !gameWf)) continue;
-    const own = /^(?:src\/games|content|assets|tests\/games)\/([^/]+)\//.exec(p);
-    const id = gameWf ? gameWf[1] : own ? own[1] : null;
-    if (id !== null && ids.has(id)) games.add(id);
+    if (isPlainText(p)) continue;
+    const owner = pathOwner(p, ids);
+    if (owner) games.add(owner.game);
     else platform = true;
   }
   return { games: platform ? [...ids].sort() : [...games].sort(), platform };
-}
-
-/** The game a path belongs to by its own paths (code, content, art, tests, its workflow, its doc fragments and brief), or null. */
-function gameOfPath(p) {
-  const m =
-    /^(?:src\/games|content|assets|tests\/games)\/([^/]+)\//.exec(p) ??
-    /^\.github\/workflows\/game-([^/]+)\.ya?ml$/.exec(p) ??
-    /^docs\/(?:decisions|changelog\.d|credits\.d|games)\/([^/]+)\.md$/.exec(p);
-  return m ? m[1] : null;
 }
 
 /**
@@ -236,16 +263,21 @@ function gameOfPath(p) {
  * game's own fragments counts as platform here. Only when every changed path is a registered game's own
  * path do the other games' tests/games/<id>/ files stay out; any other path, _template's included, and
  * an empty change set run everything. Platform files and unregistered dirs under tests/games always run.
- * Returns { all, games, reason }.
+ * Leaving a game out rests on no game referencing another: `crossRefs` (crossGameRefs over the tree)
+ * holding anything runs everything, so the selection fails closed. Returns { all, games, reason }.
  */
-export function gutSelection(changedPaths, registeredIds) {
+export function gutSelection(changedPaths, registeredIds, { crossRefs = [] } = {}) {
   const ids = [...new Set(registeredIds)].sort();
   if (changedPaths.length === 0) return { all: true, games: ids, reason: 'no change against the base' };
+  if (crossRefs.length > 0) {
+    const first = crossRefs[0];
+    return { all: true, games: ids, reason: `${crossRefs.length} cross-game references in the games' own paths (first: ${first.file}:${first.line} names ${first.game}: ${first.text})` };
+  }
   const games = new Set();
   for (const p of changedPaths) {
-    const id = gameOfPath(p);
-    if (id === null || !ids.includes(id)) return { all: true, games: ids, reason: `${p} is outside the games' own paths` };
-    games.add(id);
+    const owner = pathOwner(p, ids);
+    if (owner === null) return { all: true, games: ids, reason: `${p} is outside the games' own paths` };
+    games.add(owner.game);
   }
   const picked = [...games].sort();
   if (picked.length === ids.length) return { all: true, games: ids, reason: 'the change touches every game' };
@@ -281,7 +313,208 @@ export function selectionGap(stamped, need) {
   return lost.length ? `its GUT run left out ${lost.join(', ')}, which this tree touches` : null;
 }
 
-// ---------------------------------------------------------------- GUT verdicts
+// ---------------------------------------------------------------- what the selection and the shards assume
+
+/** The roots a game's code, tests and content live under: what crossGameRefs reads. */
+export const CROSS_SCAN_ROOTS = ['src/games/<id>/', 'tests/games/<id>/', 'content/<id>/'];
+const SCAN_HASH_COMMENTS = /\.(gd|sh|cfg|tscn|tres|py|ya?ml)$/;
+const SCAN_SLASH_COMMENTS = /\.([cm]?js|ts|gdshader|gdshaderinc)$/;
+const SCAN_DATA = /\.(json|csv|txt|tsv)$/;
+
+/** Is `file` text the scans read: code, scenes and data, never Markdown or binaries. */
+export function isScannedFile(file) {
+  return SCAN_HASH_COMMENTS.test(file) || SCAN_SLASH_COMMENTS.test(file) || SCAN_DATA.test(file);
+}
+
+/**
+ * `src` with its comments blanked out (line breaks kept, so line numbers hold). Strings stay: a path in
+ * one is a reference. `#` comments for GDScript, shell, scenes and config; `//` and block comments for
+ * JavaScript and shaders; none for data. A quote inside a comment, or a `#` inside a string, is read right.
+ */
+export function stripComments(file, src) {
+  const hash = SCAN_HASH_COMMENTS.test(file);
+  const slash = SCAN_SLASH_COMMENTS.test(file);
+  if (!hash && !slash) return src;
+  const quotes = hash ? ['"""', "'''", '"', "'"] : ['`', '"', "'"];
+  let out = '';
+  let i = 0;
+  const blank = (text) => text.replace(/[^\n]/g, ' ');
+  while (i < src.length) {
+    const c = src[i];
+    if ((hash && c === '#') || (slash && src.startsWith('//', i))) {
+      const end = src.indexOf('\n', i);
+      const stop = end < 0 ? src.length : end;
+      out += blank(src.slice(i, stop));
+      i = stop;
+      continue;
+    }
+    if (slash && src.startsWith('/*', i)) {
+      const end = src.indexOf('*/', i + 2);
+      const stop = end < 0 ? src.length : end + 2;
+      out += blank(src.slice(i, stop));
+      i = stop;
+      continue;
+    }
+    const q = quotes.find((x) => src.startsWith(x, i));
+    if (q) {
+      let j = i + q.length;
+      while (j < src.length && !src.startsWith(q, j)) {
+        if (src[j] === '\\') j += 1;
+        else if (q.length === 1 && q !== '`' && src[j] === '\n') break; // an unclosed one-line string ends at the line
+        j += 1;
+      }
+      const stop = Math.min(src.length, j + (src.startsWith(q, j) ? q.length : 0));
+      out += src.slice(i, stop);
+      i = stop;
+      continue;
+    }
+    out += c;
+    i += 1;
+  }
+  return out;
+}
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** A game id's class prefix and string-key prefix: tank -> Tank, TANK_; big_game -> BigGame, BIG_GAME_. */
+export function gamePrefixes(id) {
+  const pascal = id.split(/[_-]+/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join('');
+  return { pascal, upper: `${id.toUpperCase().replace(/-/g, '_')}_` };
+}
+
+function crossPatterns(id) {
+  const { pascal, upper } = gamePrefixes(id);
+  const e = escapeRe(id);
+  return [
+    new RegExp(`(?:res://)?(?:src/games|content|assets|tests/games)/${e}(?![\\w-])`, 'g'),
+    new RegExp(`\\.\\./(?:\\.\\./)*(?:games/)?${e}/`, 'g'),
+    new RegExp(`\\b${escapeRe(pascal)}[A-Z][A-Za-z0-9_]*`, 'g'),
+    new RegExp(`\\b${escapeRe(upper)}[A-Z0-9][A-Z0-9_]*\\b`, 'g'),
+  ];
+}
+
+/** The registered game whose own scanned root holds `file`, or null. */
+function scanOwner(file, ids) {
+  const m = /^(?:src\/games|tests\/games|content)\/([^/]+)\//.exec(file);
+  return m && ids.includes(m[1]) ? m[1] : null;
+}
+
+/**
+ * References from one game's own paths (CROSS_SCAN_ROOTS) to another registered game: its paths
+ * (`res://src/games/siege/...`, `content/siege`, `../siege/`), its class names (`SiegeHud`) and its
+ * string keys (`SIEGE_TITLE`). Comments are ignored; a plain id in a string (`"workout"`,
+ * `game_id: 'siege'`) names no path, class or key, so it is no reference. `sources`: {path: text} or a
+ * Map; files outside the roots or not isScannedFile are skipped. Returns [{file, line, game, text}].
+ */
+export function crossGameRefs(sources, registeredIds) {
+  const ids = [...new Set(registeredIds)].sort();
+  const patterns = new Map(ids.map((id) => [id, crossPatterns(id)]));
+  const refs = [];
+  const entries = sources instanceof Map ? [...sources] : Object.entries(sources ?? {});
+  for (const [file, src] of entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+    const owner = scanOwner(file, ids);
+    if (!owner || !isScannedFile(file) || typeof src !== 'string') continue;
+    const lines = stripComments(file, src).split('\n');
+    lines.forEach((text, n) => {
+      for (const id of ids) {
+        if (id === owner) continue;
+        for (const re of patterns.get(id)) {
+          re.lastIndex = 0;
+          const m = re.exec(text);
+          if (m) {
+            refs.push({ file, line: n + 1, game: id, text: m[0] });
+            break;
+          }
+        }
+      }
+    });
+  }
+  return refs;
+}
+
+/** A cross-game reference for a report line. */
+export const formatCrossRef = (r) => `${r.file}:${r.line} names ${r.game} (${r.text})`;
+
+/**
+ * The game test groups that must stay in one process: planShards splits a game's group into files on
+ * the ground that none of them shares a res://build/<dir>. A .gd under tests/games/<id>/ that names
+ * res://build (comments aside) pins its group; one outside every test group (a helper folder) pins all
+ * of that game's groups, since any test may call it. `sources`: {path: text} of the .gd files under
+ * tests/games; `gutFiles`: the GUT files. Returns the group keys, sorted.
+ */
+export function buildDirGroups(sources, gutFiles) {
+  const groups = new Set(gutFiles.map(groupKey));
+  const out = new Set();
+  const entries = sources instanceof Map ? [...sources] : Object.entries(sources ?? {});
+  for (const [file, src] of entries) {
+    const id = /^tests\/games\/([^/]+)\//.exec(file)?.[1];
+    if (!id || !file.endsWith('.gd') || typeof src !== 'string') continue;
+    if (!/res:\/\/build\b/.test(stripComments(file, src))) continue;
+    const g = groupKey(file);
+    if (groups.has(g)) out.add(g);
+    else for (const other of groups) if (other.startsWith(`tests/games/${id}/`)) out.add(other);
+  }
+  return [...out].sort();
+}
+
+// ---------------------------------------------------------------- pool sizes
+
+/**
+ * How many parts of each lane run at once, from the CPU count and the Godot slot cap (machineCap with
+ * the held slots counted back). Godot work follows the cap: GUT shards and matrix workers, one per slot;
+ * pooled sims, at most 8 (each still takes its slot). The rest follows the CPUs, with floors so a small
+ * machine still overlaps a little: Node suites (one per 2.5 CPUs, 2 to 8), static (lint and format, two
+ * Python processes per part: 0.3 per CPU, 1 to 6) and the node lane's private Godot cap (a fifth, 2 to 4).
+ */
+export function poolSizes({ cpus, cap }) {
+  const c = Number.isInteger(cpus) && cpus > 0 ? cpus : 1;
+  const k = Number.isInteger(cap) && cap > 0 ? cap : 2;
+  const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+  return {
+    shards: Math.max(2, k),
+    matrixJobs: Math.max(2, k),
+    simJobs: clamp(k, 1, 8),
+    nodeJobs: clamp(Math.floor(c / 2.5), 2, 8),
+    staticJobs: clamp(Math.round(c * 0.3), 1, 6),
+    nodeLockCap: clamp(Math.floor(c / 5), 2, 4),
+  };
+}
+
+// ---------------------------------------------------------------- tools/gate wait
+
+/** Exit of `tools/gate wait` with no verdict to give: none written, another gate's, or for another tree. */
+export const WAIT_NO_VERDICT_EXIT = 4;
+/** A gate's run.lock is beaten every few seconds; older than this, its pid is no proof of life (reused). */
+export const GATE_STALE_MS = 60_000;
+/** The stamps `wait --for` may name: what a gate that holds the mutex writes, check and fmt aside. */
+export const WAIT_FOR_RE = /^(?:fast|strict|matrix_[a-z0-9][a-z0-9_-]*)$/;
+
+/** Is a mutex record a live gate? Its pid runs and its heartbeat (the lock file's mtime) is fresh. */
+export function gateAlive(record, { mtimeMs, now, pidAlive }) {
+  if (!record || !Number.isInteger(record.pid) || record.pid <= 0) return false;
+  if (!pidAlive(record.pid)) return false;
+  return Number.isFinite(mtimeMs) && now - mtimeMs < GATE_STALE_MS;
+}
+
+/**
+ * The verdict `tools/gate wait` may report, or why there is none. `record`: the last gate that took the
+ * mutex here (current.json); `stamp`: build/gate/<record.stamp>.json, or null; `here`: the checkout now
+ * ({tree, dirty, dirtyHash}); `want`: --for, or null. Only that gate's own stamp counts (its run token),
+ * never check's or fmt's, never another gate's, never one for another tree or another set of changes.
+ * Returns { code, why } with code null when the stamp stands (its exit_code is the verdict).
+ */
+export function waitVerdict({ record, stamp, here, want = null }) {
+  const none = (why) => ({ code: WAIT_NO_VERDICT_EXIT, why });
+  if (!record) return none(want ? `no ${want} has started in this checkout` : 'no gate has started in this checkout');
+  if (!record.stamp || !WAIT_FOR_RE.test(record.stamp)) return none(`the last gate here was ${record.cmd ?? '?'}, which has no verdict to wait for${want ? ` (you asked for ${want})` : ''}`);
+  if (want && record.stamp !== want) return none(`the last gate to start here was ${record.stamp}, not ${want}: a ${want} that was refused or never started has no verdict`);
+  if (!stamp) return none(`${record.stamp} (pid ${record.pid}, started ${record.started ?? '?'}) ended without a stamp: refused, killed or crashed; its output is where it ran`);
+  if (!record.token || stamp.run !== record.token) return none(`build/gate/${record.stamp}.json is from another run (${stamp.run ?? 'no run token'}), not the one that started ${record.started ?? '?'}`);
+  if (stamp.tree !== here.tree) return none(`the stamp is for tree ${stamp.tree ?? '?'}, and this checkout's is ${here.tree}: commit or check out what it ran, or run it again`);
+  if (Boolean(stamp.dirty) !== Boolean(here.dirty)) return none(`the stamp ran on a ${stamp.dirty ? 'dirty' : 'clean'} tree, and this checkout is ${here.dirty ? 'dirty' : 'clean'} now`);
+  if (here.dirty && stamp.dirty_hash !== here.dirtyHash) return none('the uncommitted changes are not the ones the gate ran on');
+  return { code: null, why: null };
+}
 
 function junitSuiteNames(xml) {
   const out = [];
@@ -651,17 +884,9 @@ export function wsPaths(manifest, ws) {
   return [...own, ...(w.paths ?? [])];
 }
 
+/** A game workstream's paths: GAME_PATHS without docs/games/<id>.md, the brief, which is never_edit. */
 function gamePaths(id) {
-  return [
-    `src/games/${id}/**`,
-    `content/${id}/**`,
-    `assets/${id}/**`,
-    `tests/games/${id}/**`,
-    `.github/workflows/game-${id}.yml`,
-    `docs/decisions/${id}.md`,
-    `docs/credits.d/${id}.md`,
-    `docs/changelog.d/${id}.md`,
-  ];
+  return gamePathGlobs(id).filter((g) => g !== `docs/games/${id}.md`);
 }
 
 /**
