@@ -15,6 +15,7 @@ These describe what `main` does. If one is wrong, that is a bug: fix the doc.
 - `HARDWARE_TEST_PLAN.md`: the checklist for a pass with a real trainer and a real Strava account. Each game also has a `HARDWARE_TEST.md` in `src/games/<id>/`.
 - `DEPENDENCIES.md`: every third-party dependency, with version, license and hashes. The records are in `deps.d/`; `THIRD_PARTY_NOTICES.txt` ships with the Windows build.
 - `BACKLOG.md`: ideas not built and known gaps.
+- `PERFORMANCE.md`: where gate and sim time goes, what a gate should cost, and the hot spots that were found and left alone. Read it when runs get slow.
 - `DESIGN.md`: the rider's view of the platform: profile, scaling, input, safety, and the numbers behind them.
 
 ## Original briefs (frozen)
