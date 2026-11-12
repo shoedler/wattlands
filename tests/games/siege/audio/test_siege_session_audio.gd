@@ -650,3 +650,34 @@ func test_an_hour_of_arrows_does_not_repeat_itself() -> void:
 			closest = mini(closest, n - int(last[key]))
 		last[key] = n
 	assert_gte(closest, 100, "the same arrow again after %d arrows" % closest)
+
+
+## Last in the script on purpose: GUT yields frames between tests, and what the tests of the shared
+## wave read must not move in them. A view left processing would go on on wall time: its clock runs up
+## to a tick past the wave and its shots land, so by the last test it has already moved, and only a
+## test run alone sees it move; hence the check that nothing in the record still processes.
+func test_the_shared_wave_stands_still_between_tests() -> void:
+	var wave := _real_wave()
+	for k: String in wave:
+		var v: Variant = wave[k]
+		if v is Node:
+			var n := v as Node
+			assert_false(n.is_inside_tree() and n.can_process(), "%s still processes" % k)
+	var before := _wave_print(wave)
+	await wait_process_frames(5)
+	assert_eq(_wave_print(wave), before, "nothing the tests read moved in 5 frames")
+
+
+## Everything _real_wave() hands the tests, as JSON; a game or view in it by what the tests read of it.
+func _wave_print(wave: Dictionary) -> String:
+	var out := []
+	for k: String in wave:
+		var v: Variant = wave[k]
+		if v is SiegeView:
+			var sounds: SiegeShotSounds = (v as SiegeView).audio._shots
+			out.append([k, (v as SiegeView).clock_s, sounds.struck_count, sounds.landed_count])
+		elif v is SiegeGame:
+			out.append([k, (v as SiegeGame).state.tick])
+		else:
+			out.append([k, v])
+	return JSON.stringify(out)
