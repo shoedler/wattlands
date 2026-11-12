@@ -692,6 +692,12 @@ function takeMutex(o) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// How many parts of the node, sim and static lanes run at once (run_tests --node-jobs, --sim-jobs,
+// --static-jobs). Each sim run still takes its slot of the machine-wide Godot lock.
+const NODE_JOBS = 8;
+const SIM_JOBS = 8;
+const STATIC_JOBS = 4;
+
 /** One gate run: its lane rows, its live children (for SIGINT), its log dir. */
 class Run {
   constructor(o, mode) {
@@ -750,10 +756,15 @@ class Run {
     return this.lane(name, process.execPath, args, { env, judge: (r) => laneVerdict({ code: r.code, text: r.text, steps }) });
   }
 
-  /** The node lane: its own lock dir and a cap of 2, since its short test timers can't wait in the machine FIFO. */
-  nodeLane() {
+  /**
+   * The node lane: its own lock dir and a cap of 2, since its short test timers can't wait in the machine FIFO.
+   * Its suites run NODE_JOBS at once; `since` narrows them to what changed since that rev and lets them keep
+   * verdict caches (fast only: strict and the literal run run every suite in full).
+   */
+  nodeLane({ since = null } = {}) {
     const env = childEnv({ WATTLANDS_GODOT_LOCK_DIR: path.join(this.dir, 'node_lock'), WATTLANDS_GODOT_LOCK_CAP: '2' });
-    return this.runTests('node', ['node'], { env });
+    const extra = [`--node-jobs=${NODE_JOBS}`, ...(since ? [`--node-since=${since}`, '--node-cache'] : [])];
+    return this.runTests('node', ['node'], { env, extra });
   }
 
   pass() {
@@ -939,12 +950,14 @@ async function cmdFast(o) {
     tasks.push(gutLane(g, name, plan.shards[n], `shard_${n + 1}`, { pendingAllowlist }).then((v) => gutResults.push(v)));
     await sleep(50);
   }
-  if (want('static')) tasks.push(g.runTests('static', ['static']));
-  if (want('node')) tasks.push(g.nodeLane());
+  if (want('static')) tasks.push(g.runTests('static', ['static'], { extra: [`--static-jobs=${STATIC_JOBS}`] }));
+  // --games=all asks for everything, so the node lane is not narrowed either.
+  const allGames = o.games !== null && o.games.length === 1 && o.games[0] === 'all';
+  if (want('node')) tasks.push(g.nodeLane({ since: allGames ? null : o.base }));
   for (const id of games) {
     if (!want(`sim:${id}`)) continue;
     const env = childEnv({ WATTLANDS_USERDATA_DIR: path.join(g.dir, `sim_${id}`, 'userdata') });
-    tasks.push(g.runTests(`sim:${id}`, ['sim'], { extra: [`--games=${id}`, `--sim-outer-timeout=${SIM_OUTER_TIMEOUT_S}`], env }));
+    tasks.push(g.runTests(`sim:${id}`, ['sim'], { extra: [`--games=${id}`, `--sim-outer-timeout=${SIM_OUTER_TIMEOUT_S}`, `--sim-jobs=${SIM_JOBS}`], env }));
   }
   await Promise.all(tasks);
 
@@ -1031,8 +1044,8 @@ async function cmdStrict(o) {
       tasks.push(g.runTests(`e2e:${id}`, ['e2e'], { extra: [`--games=${id}`] }));
       await sleep(E2E_STAGGER_MS);
     }
-    tasks.push(g.runTests('static', ['static']));
-    tasks.push(g.runTests('sim', ['sim'], { extra: [`--sim-outer-timeout=${SIM_OUTER_TIMEOUT_S}`] }));
+    tasks.push(g.runTests('static', ['static'], { extra: [`--static-jobs=${STATIC_JOBS}`] }));
+    tasks.push(g.runTests('sim', ['sim'], { extra: [`--sim-outer-timeout=${SIM_OUTER_TIMEOUT_S}`, `--sim-jobs=${SIM_JOBS}`] }));
     tasks.push(g.nodeLane());
     await Promise.all(tasks);
   };

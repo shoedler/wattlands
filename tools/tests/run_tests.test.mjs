@@ -22,13 +22,18 @@ import {
 const GODOT = godotBin();
 const skipNoGodot = (!GODOT && 'no Godot binary') || (!BASH && 'bash not found');
 
-// The runner's own detection order: gdlint on PATH at the pinned version, else uvx.
+// The runner's own detection order: gdlint on PATH at the pinned version, else uvx, else the same
+// release as Python modules through uv run.
 function hasGdtoolkit() {
   const ok = (exe, args) => {
     const r = spawnSync(exe, args, { encoding: 'utf8', timeout: 90_000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     return r.status === 0 && `${r.stdout ?? ''}`.includes(GDTOOLKIT_VERSION);
   };
-  return ok('gdlint', ['--version']) || ok('uvx', ['--from', `gdtoolkit==${GDTOOLKIT_VERSION}`, 'gdlint', '--version']);
+  return (
+    ok('gdlint', ['--version']) ||
+    ok('uvx', ['--from', `gdtoolkit==${GDTOOLKIT_VERSION}`, 'gdlint', '--version']) ||
+    ok('uv', ['run', '--no-project', '--with', `gdtoolkit==${GDTOOLKIT_VERSION}`, 'python', '-m', 'gdtoolkit.linter', '--version'])
+  );
 }
 const skipNoGdtoolkit = skipNoGodot || (!hasGdtoolkit() && `gdtoolkit ${GDTOOLKIT_VERSION} unavailable`);
 
@@ -268,29 +273,36 @@ describe('tools/run_tests (bash)', { skip: skipNoGodot }, () => {
     }
   });
 
-  test('static: gdlint and gdformat findings fail the step', { skip: skipNoGdtoolkit }, async () => {
-    const ok = await runTests(['--only=static'], { lint: true });
+  // --static-jobs=3 runs the parts at once and splits gdlint and gdformat over three processes: the same verdicts.
+  for (const jobs of ['1', '3']) test(`static: gdlint and gdformat findings fail the step (--static-jobs=${jobs})`, { skip: skipNoGdtoolkit }, async () => {
+    fs.mkdirSync(path.join(project, 'src', 'deep', 'er'), { recursive: true });
+    fs.writeFileSync(path.join(project, 'src', 'deep', 'er', 'fine.gd'), 'extends RefCounted\n\n\nfunc f() -> int:\n\treturn 1\n');
+    const ok = await runTests(['--only=static', `--static-jobs=${jobs}`], { lint: true });
     assert.equal(ok.code, 0, ok.stdout);
     assert.match(row(ok.stdout, 'static').rest, /check_scripts \d+ scripts ok; gdlint clean, gdformat clean/);
+    const badName = (fn) => `extends RefCounted\n\n\nfunc ${fn}() -> int:\n\treturn 1\n`;
     const cases = [
       // gdformat wants two blank lines before a function; gdlint has nothing to say.
-      ['unformatted.gd', 'extends RefCounted\nfunc f() -> int:\n\treturn 1\n', /gdlint clean, gdformat 1 files to reformat/],
+      [{ 'unformatted.gd': 'extends RefCounted\nfunc f() -> int:\n\treturn 1\n' }, /gdlint clean, gdformat 1 files to reformat/],
       // gdformat leaves it alone; gdlint's function-name rule (kept by ./gdlintrc) rejects it.
-      ['bad_name.gd', 'extends RefCounted\n\n\nfunc BadName() -> int:\n\treturn 1\n', /gdlint 1 problems, gdformat clean/],
+      [{ 'bad_name.gd': badName('BadName') }, /gdlint 1 problems, gdformat clean/],
+      // Findings at the top and two folders down (other chunks under --static-jobs=3): the counts add up.
+      [{ 'bad_name.gd': badName('BadName'), 'deep/er/also_bad.gd': badName('AlsoBad') }, /gdlint 2 problems, gdformat clean/],
     ];
-    for (const [name, source, note] of cases) {
-      const file = path.join(project, 'src', name);
-      fs.writeFileSync(file, source);
+    for (const [files, note] of cases) {
+      const name = Object.keys(files).join(', ');
+      for (const [f, source] of Object.entries(files)) fs.writeFileSync(path.join(project, 'src', f), source);
       try {
-        const bad = await runTests(['--only=static'], { lint: true });
+        const bad = await runTests(['--only=static', `--static-jobs=${jobs}`], { lint: true });
         assert.equal(bad.code, 1, `${name}: ${bad.stdout}`);
         assert.equal(row(bad.stdout, 'static').status, 'FAIL', name);
         assert.match(row(bad.stdout, 'static').rest, note, name);
         assert.match(row(bad.stdout, 'static').rest, /check_scripts \d+ scripts ok/, name);
       } finally {
-        fs.rmSync(file);
+        for (const f of Object.keys(files)) fs.rmSync(path.join(project, 'src', f));
       }
     }
+    fs.rmSync(path.join(project, 'src', 'deep'), { recursive: true });
   });
 
   test('static: without gdtoolkit the lint part is skipped, not failed', async () => {
