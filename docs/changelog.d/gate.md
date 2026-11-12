@@ -1,0 +1,1 @@
+- For contributors: `tools/gate fast` now runs the Node suites, the simulations and the static checks side by side, and runs only the Node suites your change can reach. `node tools/e2e/faults.mjs --jobs=4` plays the multiplayer fault scenarios four at a time.
