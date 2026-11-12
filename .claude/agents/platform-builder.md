@@ -19,7 +19,7 @@ The caller names them. The branch name picks what `tools/gate check` allows: `cl
 - A player-facing failure gets words a rider can act on, in `content/strings/`, never a raw reason code.
 - Changing network, lobby or `GameHost` net code: run `node tools/e2e/faults.mjs` for what it reaches, and `tests/net`, `tests/app`, `tests/sdk`.
 - Changing what a player or contributor reads: follow the voice rule in `CLAUDE.md` Conventions.
-- Gates run in the foreground and one shell call lasts about 10 minutes, so split `tools/gate fast` with `--lanes=`. Run `tools/gate fmt` before committing, then read the diff around comments.
+- Run a gate whole: `--lanes=` makes the stamp partial, and the queue then reruns all of it. `fast` can pass what one shell call allows, so start it in the background and follow it in the foreground with `tools/gate wait --for=fast --timeout=170` (a foreground call can be moved to the background after about 180 s), again while it exits 124. Never end your turn while a gate runs. Exit 4 means no verdict: read why. Run `tools/gate fmt` before committing, then read the diff around comments.
 - Never message anyone. Questions go in your report.
 
 ## Before you report

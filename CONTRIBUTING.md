@@ -40,7 +40,7 @@ To try multiplayer on one PC, open two copies. With no relay set they find each 
    tools/gate fast --contributor
    ```
 
-   `check` and `fmt` take seconds. `fast` takes several minutes on a good machine, using about three quarters of its cores. It runs the linter, the Node suites, the simulation and end-to-end runs of the games you touched, and the GUT tests: all of them, or, when you changed only a game's own files, the platform's and that game's. If your change touches a game with `tests/games/<id>/sim/run_sims.sh`, also run `tools/gate matrix --game=<id>`. If you start a gate in the background, `tools/gate wait` shows its lanes as they finish and exits with its verdict.
+   `check` and `fmt` take seconds. `fast` takes several minutes on a good machine, using about three quarters of its cores. It runs the linter, the Node suites, the simulation and end-to-end runs of the games you touched, and the GUT tests: all of them, or, when you changed only a game's own files, the platform's and that game's. The Node suites are narrowed the same way, to the ones your change can reach, and the audio checks remember banks nobody touched in `build/test_cache`. To run and score everything anyway, delete that folder or pass `--games=all`. If your change touches a game with `tests/games/<id>/sim/run_sims.sh`, also run `tools/gate matrix --game=<id>`. If you start a gate in the background, `tools/gate wait --for=fast` (or `--for=matrix_<id>`) shows its lanes as they finish and exits with its verdict. It exits 4 when there is no verdict for the tree you have now, for example because the gate was refused, stopped, or you committed since; it says which.
 
    Too slow for your machine? Test what you touched and let CI run the rest:
 
