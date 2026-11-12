@@ -60,11 +60,11 @@ A game's `e2e_check.mjs` reads `events_by_peer` (or `peers.<role>.events`) to as
 
 # tools/e2e/faults.mjs: the multiplayer failure paths
 
-`node tools/e2e/faults.mjs [--games=a,b] [--scenarios=x,y]` proves what happens when a room goes wrong, with real headless peers (`tools/godot.sh`, `--mock-trainer=erg:compliance=1.0 --autopilot --sim-speed=1 --e2e --wait-peers=2`, a fresh `--profile-dir` per peer under `build/e2e_faults/<scenario>/`). `run.mjs` plays one good session and kills one client inside the hold window; `faults.mjs` kills and refuses things on purpose, on the built-in relay and on `server/relay`. Zero npm dependencies. `--help` lists the options (`--run-seconds`, `--kill-after`, `--end-timeout`, `--long-timeout`, `--relay-cmd`, `--lock-timeout`, `--peer-cmd`, `--verbose`).
+`node tools/e2e/faults.mjs [--games=a,b] [--scenarios=x,y]` proves what happens when a room goes wrong, with real headless peers (`tools/godot.sh`, `--mock-trainer=erg:compliance=1.0 --autopilot --sim-speed=1 --e2e --wait-peers=2`, a fresh `--profile-dir` per peer under `build/e2e_faults/<scenario>/`). `run.mjs` plays one good session and kills one client inside the hold window; `faults.mjs` kills and refuses things on purpose, on the built-in relay and on `server/relay`. Zero npm dependencies. `--help` lists the options (`--run-seconds`, `--kill-after`, `--end-timeout`, `--long-timeout`, `--relay-cmd`, `--lock-timeout`, `--jobs`, `--peer-cmd`, `--verbose`).
 
 The built-in relay is what a host without `--relay` uses: `WlNetSession` hosts on the host's own PC through `LanTransport`, and a client finds the room from UDP beacons by its code. While the network lock is set it binds and beacons on 127.0.0.1 only. The harness gives every peer of such a scenario one free TCP port (`--lan-port`, host only) and one free UDP port (`--lan-discovery-port`, every peer), so scenarios never meet. A client stops listening once it found its room, so only one client at a time searches a discovery port: the scenarios start their clients one after another.
 
-Each scenario takes one lease of the machine-wide Godot lock (2 slots, 3 for `late_join`) and its peers run inside it, as in `run.mjs`. Nothing is shared between scenarios.
+Each scenario takes one lease of the machine-wide Godot lock (2 slots, 3 for `late_join`) and its peers run inside it, as in `run.mjs`. Nothing is shared between scenarios, so `--jobs=<n>` runs up to n of them at once: the four long ones start first, each still waits for its own lease, and the report lists the scenarios in run order. `getFreePort` never hands out one port twice in a run, so a relay restarted on its own port keeps it.
 
 ## Scenarios
 
@@ -80,7 +80,7 @@ Each scenario takes one lease of the machine-wide Godot lock (2 slots, 3 for `la
 
 Error lines are matched like `run.mjs` does (`SCRIPT ERROR`, `Parse Error`, `ERROR:` push_error, `Debugger Break`, `Ignoring script`) over each peer's stdout, stderr and Godot log; a scenario may allow named patterns (`EXPECTED_ERRORS` in `lib/fault_scenarios.mjs`, empty today) and the report says how many lines were ignored. Desync warnings and `rate_limited` fail a scenario too.
 
-`relay_dies`, `relay_restarts`, `host_killed_relay` and `host_killed_builtin` play the whole 2 minute workout and ride out the 120 s reconnect window and the 180 s cool-down: expect 5 to 6 minutes each. Run them one by one with `--scenarios=` when a shell call is limited to 10 minutes.
+`relay_dies`, `relay_restarts`, `host_killed_relay` and `host_killed_builtin` play the whole 2 minute workout and ride out the 120 s reconnect window and the 180 s cool-down: expect 5 to 6 minutes each. One after another the whole set takes over half an hour; with `--jobs=4` it takes about as long as the longest scenario plus the short ones beside it. Without `--jobs`, run them one by one with `--scenarios=` when a shell call is limited to 10 minutes.
 
 ## report.json
 
@@ -92,4 +92,4 @@ Error lines are matched like `run.mjs` does (`SCRIPT ERROR`, `Parse Error`, `ERR
 
 ## Tests
 
-`node --test tools/e2e/test` covers the harness's pure logic in `test/fault_scenarios.test.mjs` (the command line, the peer flags, a peer's outcome from fake output, each scenario check and the run verdict). The scenarios themselves need Godot; the lead runs them.
+`node --test tools/e2e/test` covers the harness's pure logic in `test/fault_scenarios.test.mjs` (the command line, the peer flags, a peer's outcome from fake output, each scenario check and the run verdict) and the `--jobs` pool in `test/faults_pool.test.mjs`. The scenarios themselves need Godot; the lead runs them.

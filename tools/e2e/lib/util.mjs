@@ -101,8 +101,11 @@ export function childEnv(base = process.env, extra = {}) {
   return env;
 }
 
-/** A free TCP port on 127.0.0.1 (released before returning; the caller binds it soon after). */
-export function getFreePort() {
+// Ports this process already handed out: concurrent scenarios (faults.mjs --jobs) each pick theirs
+// before binding, and a relay restarted on its own port leaves it free for a moment.
+const handedOut = new Set();
+
+function pickPort() {
   return new Promise((resolve, reject) => {
     const srv = net.createServer();
     srv.unref();
@@ -112,6 +115,21 @@ export function getFreePort() {
       srv.close(() => resolve(port));
     });
   });
+}
+
+/**
+ * A free TCP port on 127.0.0.1 (released before returning; the caller binds it soon after), never one
+ * this process handed out before.
+ */
+export async function getFreePort() {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const port = await pickPort();
+    if (!handedOut.has(port)) {
+      handedOut.add(port);
+      return port;
+    }
+  }
+  throw new Error('getFreePort: the system kept offering ports this run already uses');
 }
 
 function which(name) {
