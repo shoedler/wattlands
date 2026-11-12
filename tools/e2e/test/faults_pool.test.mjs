@@ -4,7 +4,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runScenarios, startOrder } from '../faults.mjs';
 import { parseFaultArgs } from '../lib/fault_args.mjs';
-import { getFreePort } from '../lib/util.mjs';
+import dgram from 'node:dgram';
+import fs from 'node:fs';
+import net from 'node:net';
+import os from 'node:os';
+import path from 'node:path';
+import { FaultEnv } from '../lib/fault_env.mjs';
+import { BAND_HIGH, BAND_LOW, getBandPort, getFreePort } from '../lib/util.mjs';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -83,4 +89,70 @@ test('with --jobs the long scenarios start first; one at a time keeps the run or
   const pooled = startOrder(names, 4);
   assert.deepEqual([...pooled].sort(), [...names].sort());
   assert.deepEqual(pooled.slice(0, 4), ['relay_dies', 'relay_restarts', 'host_killed_relay', 'host_killed_builtin']);
+});
+
+// Two built-in scenarios at once: a client's discovery listener failed with "can't listen" because its
+// UDP port came from a TCP probe in the ephemeral range, where the OS gives numbers to sockets that send
+// before they bind (the other scenario's host beacon is one).
+test('two built-in scenarios started together get four ports of their own, outside the ephemeral range, free for TCP and UDP', async () => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'wattlands-faults-pool-'));
+  try {
+    const envs = ['builtin:siege', 'host_killed_builtin'].map((name) => new FaultEnv({ out }, name, null, () => {}));
+    const lans = await Promise.all(envs.map((e) => e.useBuiltin()));
+    const ports = lans.flatMap((l) => [l.port, l.discoveryPort]);
+    assert.equal(new Set(ports).size, 4, JSON.stringify(lans));
+    for (const p of ports) {
+      assert.ok(p >= BAND_LOW && p <= BAND_HIGH, `${p} is in the band`);
+      const udp = dgram.createSocket('udp4');
+      await new Promise((resolve, reject) => {
+        udp.once('error', reject);
+        udp.bind(p, '127.0.0.1', resolve);
+      });
+      udp.close();
+      const tcp = net.createServer();
+      await new Promise((resolve, reject) => {
+        tcp.once('error', reject);
+        tcp.listen(p, '127.0.0.1', resolve);
+      });
+      await new Promise((resolve) => tcp.close(resolve));
+    }
+  } finally {
+    fs.rmSync(out, { recursive: true, force: true });
+  }
+});
+
+test('a band port taken for UDP alone, or for TCP alone, is skipped', async () => {
+  const udp = dgram.createSocket('udp4');
+  const held = await new Promise((resolve) => udp.bind(0, '127.0.0.1', () => resolve(udp.address().port)));
+  udp.close();
+  // Find a band port, hold it for one protocol, and ask from there.
+  const p = await getBandPort();
+  const sock = dgram.createSocket('udp4');
+  await new Promise((resolve) => sock.bind(p, '127.0.0.1', resolve));
+  try {
+    const next = await getBandPort({ start: p });
+    assert.notEqual(next, p, 'held for UDP: skipped');
+  } finally {
+    sock.close();
+  }
+  const q = await getBandPort();
+  const srv = net.createServer();
+  await new Promise((resolve) => srv.listen(q, '127.0.0.1', resolve));
+  try {
+    assert.notEqual(await getBandPort({ start: q }), q, 'held for TCP: skipped');
+  } finally {
+    await new Promise((resolve) => srv.close(resolve));
+  }
+  assert.ok(held < BAND_LOW || held > BAND_HIGH, `an OS-chosen UDP port (${held}) is never in the band`);
+});
+
+test('sockets that send before they bind never get a band port', async () => {
+  const seen = [];
+  for (let i = 0; i < 20; i += 1) {
+    const s = dgram.createSocket('udp4');
+    await new Promise((resolve) => s.send(Buffer.from('x'), 9, '127.0.0.1', resolve));
+    seen.push(s.address().port);
+    s.close();
+  }
+  for (const p of seen) assert.ok(p < BAND_LOW || p > BAND_HIGH, String(p));
 });
