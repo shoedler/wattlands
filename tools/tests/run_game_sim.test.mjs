@@ -115,6 +115,8 @@ describe('plan capture', () => {
   });
 });
 
+// These run at once, so each Godot run gets a user dir of its own (WATTLANDS_USERDATA_DIR), never the
+// checkout's .userdata that pixelate_e2e.mjs and the other suites use.
 describe('through Godot', { concurrency: true }, () => {
   for (const sh of shells) {
     const skip = (!GODOT && 'no Godot binary (tools/godot_bin.local or GODOT)') || (!sh.ok && `no ${sh.name}`);
@@ -131,7 +133,7 @@ describe('through Godot', { concurrency: true }, () => {
           '--rider=erg:compliance=0.9', '--report=out/r.json', '--override=over.json', `--options=${options}`,
           `--player-options=${players}`, '--seed=3', '--sim-speed=200', '--unverified', '--mock-trainer=false',
           '--caller-cwd=/elsewhere', '--godot-timeout=300'],
-        { env: minimalEnv({ GODOT }), cwd, timeoutMs: 600_000 },
+        { env: minimalEnv({ GODOT, WATTLANDS_USERDATA_DIR: path.join(cwd, 'userdata') }), cwd, timeoutMs: 600_000 },
       );
       assert.equal(r.code, 0, r.stderr + r.stdout);
       const args = echoedArgs(r.stdout);
@@ -147,7 +149,10 @@ describe('through Godot', { concurrency: true }, () => {
     });
 
     test(`${sh.name}: a missing --report, an unknown flag and a bad value exit 2, each named (OWNERSHIP SIM1)`, { skip, timeout: 600_000 }, async () => {
-      const r = await runSim(sh.name, ['--game=_template', '--player=2', '--players=0', '--godot-timeout=300'], { env: minimalEnv({ GODOT }), cwd: os.tmpdir(), timeoutMs: 600_000 });
+      const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'wattlands-run-game-sim-bad-'));
+      temps.push(cwd);
+      const env = minimalEnv({ GODOT, WATTLANDS_USERDATA_DIR: path.join(cwd, 'userdata') });
+      const r = await runSim(sh.name, ['--game=_template', '--player=2', '--players=0', '--godot-timeout=300'], { env, cwd, timeoutMs: 600_000 });
       assert.equal(r.code, 2, r.stdout + r.stderr);
       assert.match(r.stderr, /--report is required/);
       assert.match(r.stderr, /unknown flag --player\b/);
