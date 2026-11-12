@@ -52,7 +52,7 @@ describe('the flags', () => {
   });
 
   test('a bad value is a usage error (exit 2) and names the flag', () => {
-    for (const bad of ['--node-jobs=0', '--sim-jobs=x', '--static-jobs=1.5', '--node-jobs=65', '--node-cache=1', '--node-since=']) {
+    for (const bad of ['--node-jobs=0', '--sim-jobs=x', '--static-jobs=1.5', '--node-jobs=65', '--node-cache=1', '--node-since=', '--node-since=--output=x']) {
       const r = spawnSync(process.execPath, [RUN_TESTS, bad], { encoding: 'utf8' });
       assert.equal(r.status, 2, `${bad}: ${r.stdout}${r.stderr}`);
       assert.match(r.stderr, new RegExp(bad.split('=')[0]), bad);

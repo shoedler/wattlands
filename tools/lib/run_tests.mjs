@@ -124,7 +124,11 @@ export function parseArgs(argv) {
     else if (key === '--sim-jobs' && val) o.simJobs = jobs(key, val);
     else if (key === '--node-jobs' && val) o.nodeJobs = jobs(key, val);
     else if (key === '--static-jobs' && val) o.staticJobs = jobs(key, val);
-    else if (key === '--node-since' && val) o.nodeSince = val;
+    else if (key === '--node-since' && val) {
+      // It reaches git as a revision: never an option.
+      if (!/^[^-\s]\S*$/.test(val)) fail(`--node-since needs a revision, got "${val}"`);
+      o.nodeSince = val;
+    }
     else if (key === '--node-cache' && val === null) o.nodeCache = true;
     else fail(`unknown option "${a}"`);
   }
