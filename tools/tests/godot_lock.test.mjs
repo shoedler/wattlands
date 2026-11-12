@@ -186,10 +186,12 @@ describe('godot lock: grants', () => {
       process.env.WATTLANDS_GODOT_LOCK_CAP = 'lots';
       assert.throws(() => machineCap(), /positive integer/);
       delete process.env.WATTLANDS_GODOT_LOCK_CAP;
-      const cap = machineCap();
+      // One reading of free RAM for every call compared: two os.freemem() reads differ on a busy machine.
+      const freeBytes = os.freemem();
+      const cap = machineCap(undefined, { freeBytes });
       assert.ok(Number.isInteger(cap) && cap >= CAP_FLOOR, `cap ${cap}`);
       assert.ok(cap <= Math.max(CAP_FLOOR, Math.floor(os.cpus().length * 0.75)), `cap ${cap} on ${os.cpus().length} CPUs`);
-      assert.ok(machineCap(undefined, { heldSlots: 6 }) >= cap, 'held slots never lower the cap');
+      assert.ok(machineCap(undefined, { heldSlots: 6, freeBytes }) >= cap, 'held slots never lower the cap');
     } finally {
       restoreEnv('WATTLANDS_GODOT_LOCK_CAP', saved);
       restoreEnv('WATTLANDS_GODOT_LOCK_DIR', savedDir);
@@ -208,6 +210,28 @@ describe('godot lock: grants', () => {
     assert.equal(defaultCap({ cpus: 20, freeBytes: 15 * GiB, heldSlots: 12 }), 15);
     assert.equal(defaultCap({ cpus: 20, freeBytes: 15 * GiB }), 7);
     assert.equal(defaultCap({ cpus: 20, freeBytes: 15 * GiB, heldSlots: WHOLE_MACHINE_LEASE }), 7, 'a whole-machine lease adds no budget');
+  });
+
+  // With free RAM 1 GiB above the reserve, the computed cap is the floor while nothing is held. Two held
+  // slots give their 2 GiB back (their processes ate it), so a third request fits beside them.
+  test('acquire counts the held slots back into the computed cap', { skip: os.cpus().length < 4 && 'needs 4 CPUs for a cap of 3' }, async () => {
+    const saved = process.env.WATTLANDS_GODOT_LOCK_CAP;
+    delete process.env.WATTLANDS_GODOT_LOCK_CAP;
+    const dir = tmpLockDir();
+    const freeBytes = 9 * 1024 ** 3;
+    try {
+      assert.equal(defaultCap({ freeBytes }), CAP_FLOOR, 'nothing held: the floor');
+      assert.equal(defaultCap({ freeBytes, heldSlots: 2 }), 3, 'two held: their budget back');
+      const a = await acquire({ dir, freeBytes, lockTimeoutS: 2 });
+      const b = await acquire({ dir, freeBytes, lockTimeoutS: 2 });
+      // The same request at the bare cap of 2 waits out its timeout: the add-back is what grants it.
+      await assert.rejects(acquire({ dir, cap: CAP_FLOOR, lockTimeoutS: 0.5 }), { code: 'ELOCKTIMEOUT' });
+      const c = await acquire({ dir, freeBytes, lockTimeoutS: 3 });
+      for (const h of [a, b, c]) h.release();
+      assert.equal(readTickets(dir).tickets.length, 0);
+    } finally {
+      restoreEnv('WATTLANDS_GODOT_LOCK_CAP', saved);
+    }
   });
 
   test('a whole-machine lease waits for every held slot, and holds back later grants', async () => {
@@ -285,11 +309,12 @@ describe('godot lock: cap file', () => {
   test('a garbage file is ignored with one stderr note per content', () =>
     withoutEnvCap(() => {
       const dir = tmpLockDir();
-      const none = machineCap(tmpLockDir());
+      const freeBytes = os.freemem();
+      const none = machineCap(tmpLockDir(), { freeBytes });
       for (const garbage of ['lots', '', '0', '-3', '2.5', '1e3', '4 8', '99999999999999999999']) {
         fs.writeFileSync(capFile(dir), garbage);
         const notes = captureStderr(() => {
-          for (let i = 0; i < 5; i++) assert.equal(machineCap(dir), none, JSON.stringify(garbage));
+          for (let i = 0; i < 5; i++) assert.equal(machineCap(dir, { freeBytes }), none, JSON.stringify(garbage));
         });
         assert.equal(notes.length, 1, `one note for ${JSON.stringify(garbage)}: ${notes}`);
         assert.match(notes[0], /ignoring cap file/);
@@ -299,9 +324,10 @@ describe('godot lock: cap file', () => {
   test('a directory in place of the file is ignored too', () =>
     withoutEnvCap(() => {
       const dir = tmpLockDir();
-      const none = machineCap(tmpLockDir());
+      const freeBytes = os.freemem();
+      const none = machineCap(tmpLockDir(), { freeBytes });
       fs.mkdirSync(capFile(dir));
-      const notes = captureStderr(() => assert.equal(machineCap(dir), none));
+      const notes = captureStderr(() => assert.equal(machineCap(dir, { freeBytes }), none));
       assert.equal(notes.length, 1);
     }));
 
@@ -370,7 +396,8 @@ describe('godot lock: cap file', () => {
     assert.equal(del.code, 0, del.stderr);
     assert.match(del.stdout, /deleted/);
     assert.equal(fs.existsSync(capFile(dir)), false);
-    await withoutEnvCap(() => assert.equal(machineCap(dir), defaultCap(), 'back to the computed default'));
+    const freeBytes = os.freemem();
+    await withoutEnvCap(() => assert.equal(machineCap(dir, { freeBytes }), defaultCap({ freeBytes }), 'back to the computed default'));
     const again = await runProc(process.execPath, [LOCK_JS, 'set-cap', '0'], { env });
     assert.equal(again.code, 0, again.stderr);
   });

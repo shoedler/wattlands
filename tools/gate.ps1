@@ -1,8 +1,12 @@
 # tools/gate.ps1: the merge gates in concurrent lanes, the bulletproofing check and the worktree chores
 # (Windows PowerShell 5.1). The twin of tools/gate; both call tools\lib\gate.mjs.
 #
-#   tools\gate.ps1 check|fast|strict|matrix|stamp-ok|floor|fmt|wt-add|wt-gc|pin-safety [options]
+#   tools\gate.ps1 check|fast|strict|matrix|stamp-ok|floor|fmt|wait|wt-add|wt-gc|pin-safety [options]
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\gate.ps1 ...
+#
+# `fast` narrows GUT and the Node suites to what the change since --base reaches (--games=all runs
+# everything). Start a long gate in the background and follow it with `tools\gate.ps1 wait --for=fast`
+# (exit 4: no verdict for this tree).
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'lib\wrapper_common.ps1')

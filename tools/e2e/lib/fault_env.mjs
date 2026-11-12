@@ -5,7 +5,7 @@ import path from 'node:path';
 import { Proc } from './proc.mjs';
 import { serviceLog, startRelay, stopService } from './services.mjs';
 import { runFitCheck, peerCommand } from './game.mjs';
-import { childEnv, getFreePort, quoteForLog, readJson, redact, slash, sleep } from './util.mjs';
+import { childEnv, getBandPort, quoteForLog, readJson, redact, slash, sleep } from './util.mjs';
 import { faultPeerArgs, peerOutcome, ROOM_LINE, PEER_LINE, SESSION_STATES } from './fault_verdicts.mjs';
 
 /** The Godot slots a scenario holds: its most concurrent peers (the host and a client; late_join adds a third). */
@@ -60,11 +60,14 @@ export class FaultEnv {
     this.log(`faults: ${this.name}: ${text}`);
   }
 
-  /** The built-in relay's two ports: the host's relay (TCP) and the beacons (UDP). */
+  /**
+   * The built-in relay's two ports: the host's relay (TCP) and the beacons (UDP), both from the band
+   * below the ephemeral range and probed as TCP and UDP, so the OS can't give either to a socket of a
+   * scenario running beside this one (getBandPort says how that broke the client's discovery listener).
+   */
   async useBuiltin() {
-    const port = await getFreePort();
-    let discoveryPort = await getFreePort();
-    while (discoveryPort === port) discoveryPort = await getFreePort();
+    const port = await getBandPort();
+    const discoveryPort = await getBandPort();
     this.lan = { port, discoveryPort };
     return this.lan;
   }

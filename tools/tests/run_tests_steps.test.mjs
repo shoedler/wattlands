@@ -15,11 +15,13 @@ import {
   gameOfPath,
   lintChunks,
   mergeLintRuns,
+  namesGamePath,
   parseArgs,
   planNodeSuites,
   runPool,
   suiteTestFiles,
 } from '../lib/run_tests.mjs';
+import { gutSelection, pathOwner, touchedGames } from '../lib/gate_core.mjs';
 
 const RUN_TESTS = path.join(TOOLS, 'lib', 'run_tests.mjs');
 const IDS = ['fishing', 'siege', 'tank', 'workout'];
@@ -90,7 +92,7 @@ describe('runPool', () => {
 describe('planNodeSuites', () => {
   const units = [...NODE_SUITES, 'tests/games/fishing', 'tests/games/tank'].map((name) => ({ name, kind: 'suite', files: null }));
   units.push({ name: 'tools/art/pixelate_e2e.mjs', kind: 'extra', files: null });
-  const toolsTests = ['gate.test.mjs', 'gate_core.test.mjs', 'godot_lock.test.mjs', 'run_game_sim.test.mjs', 'run_tests.test.mjs', 'wrappers.test.mjs'];
+  const toolsTests = ['gate.test.mjs', 'gate_core.test.mjs', 'gate_matrix.test.mjs', 'godot_lock.test.mjs', 'run_game_sim.test.mjs', 'run_tests.test.mjs', 'wrappers.test.mjs'];
   const plan = (changed) => planNodeSuites({ changed, units, gameIds: IDS, suiteFiles: (s) => (s === 'tools/tests' ? toolsTests : []) });
   const names = (p) => p.units.map((u) => (u.files ? `${u.name}[${u.files.join(' ')}]` : u.name));
 
@@ -116,9 +118,9 @@ describe('planNodeSuites', () => {
   });
 
   test("Tank's sim scripts reach the gate's own tests; its audio reaches tools/audio", () => {
-    assert.ok(names(plan(['tests/games/tank/sim/check_sims.mjs']))[0].includes('gate.test.mjs'));
+    assert.ok(names(plan(['tests/games/tank/sim/check_sims.mjs']))[0].includes('gate_matrix.test.mjs'));
     assert.ok(names(plan(['tests/games/tank/sim/check_sims.mjs']))[0].includes('gate_core.test.mjs'));
-    assert.ok(!names(plan(['tests/games/tank/rules/test_a.gd']))[0].includes('gate.test.mjs'));
+    assert.ok(!names(plan(['tests/games/tank/rules/test_a.gd']))[0].includes('gate_matrix.test.mjs'));
     assert.ok(names(plan(['assets/tank/audio/a.wav'])).includes('tools/audio'));
     assert.ok(names(plan(['tests/games/tank/audio/real_wave.json'])).includes('tools/audio'));
     assert.ok(!names(plan(['assets/tank/sprites/a.png'])).includes('tools/audio'));
@@ -133,7 +135,7 @@ describe('planNodeSuites', () => {
   });
 
   test('when every file of a per-file row is picked, the suite runs whole', () => {
-    const r = planNodeSuites({ changed: ['tests/games/tank/sim/a.mjs'], units, gameIds: IDS, suiteFiles: () => ['gate.test.mjs', 'run_tests.test.mjs'] });
+    const r = planNodeSuites({ changed: ['tests/games/tank/sim/a.mjs'], units, gameIds: IDS, suiteFiles: () => ['gate_matrix.test.mjs', 'run_tests.test.mjs'] });
     assert.equal(r.units.find((u) => u.name === 'tools/tests').files, null);
   });
 
@@ -148,6 +150,36 @@ describe('planNodeSuites', () => {
     assert.equal(gameOfPath('assets/tank', IDS), null);
   });
 
+  test('no change at all runs everything, whole, as the GUT selection does', () => {
+    const r = plan([]);
+    assert.equal(r.all, true);
+    assert.deepEqual(names(r), units.map((u) => u.name));
+    assert.equal(r.why, 'no change against the base');
+  });
+
+  test('a [] row fails closed: a test file that names a game path runs though its row says it reads none', () => {
+    const sources = {
+      'tools/e2e/test/a.test.mjs': "const x = 'plain words, the id tank alone';\n",
+      'tools/e2e/test/b.test.mjs': "const dir = path.join(REPO, 'content/siege/levels');\n",
+      'tools/tests/godot_lock.test.mjs': '// no game here\n',
+      'tools/tests/wrappers.test.mjs': "const p = path.join(REPO, 'tests', 'games', 'fishing');\n",
+      'server/relay/x.test.mjs': "const yml = '.github/workflows/game-workout.yml';\n",
+    };
+    const suiteFiles = (s) => Object.keys(sources).filter((f) => f.startsWith(`${s}/`)).map((f) => f.slice(s.length + 1));
+    const readFile = (rel) => sources[rel] ?? null;
+    const r = planNodeSuites({ changed: ['src/games/tank/a.gd'], units, gameIds: IDS, suiteFiles, readFile });
+    const n = names(r);
+    assert.ok(n.includes('tools/e2e'), 'b.test.mjs names content/siege: the suite runs');
+    assert.ok(n.includes('server/relay'), 'a game workflow is a game path');
+    assert.ok(n.includes('tools/tests[wrappers.test.mjs]'), "path.join's 'games', 'fishing' counts; godot_lock's file stays out");
+    assert.ok(!n.includes('tools/art'), 'a suite with no such file keeps its claim');
+    const clean = planNodeSuites({ changed: ['src/games/tank/a.gd'], units, gameIds: IDS, suiteFiles, readFile: (rel) => (rel === 'tools/e2e/test/b.test.mjs' ? '' : readFile(rel)) });
+    assert.ok(!names(clean).includes('tools/e2e'), 'a plain id is no game path');
+    assert.equal(namesGamePath("game_id: 'siege'", IDS), false);
+    assert.equal(namesGamePath('res://src/games/tank/x.gd', IDS), true);
+    assert.equal(namesGamePath('src/games/tankx/x.gd', IDS), false);
+  });
+
   test('every NODE_SUITES entry has a row, and every per-file row names a real file', () => {
     for (const s of NODE_SUITES) assert.ok(Object.hasOwn(NODE_SUITE_GAME_INPUTS, s), s);
     for (const [suite, row] of Object.entries(NODE_SUITE_GAME_INPUTS)) {
@@ -156,6 +188,54 @@ describe('planNodeSuites', () => {
       for (const f of Object.keys(row)) if (f !== '*') assert.ok(files.includes(f), `${suite}: ${f}`);
     }
   });
+});
+
+describe('one table for which game owns a path', () => {
+  const units = [...NODE_SUITES, 'tests/games/fishing', 'tests/games/siege', 'tests/games/tank', 'tests/games/workout'].map((name) => ({ name, kind: 'suite', files: null }));
+  const nodeGames = (p) => {
+    const r = planNodeSuites({ changed: [p], units, gameIds: IDS });
+    if (r.all) return 'all';
+    return r.units.filter((u) => u.name.startsWith('tests/games/')).map((u) => u.name.slice('tests/games/'.length));
+  };
+  // [path, owner, GUT, Node, sim and e2e]: what each selection makes of it. 'all' is everything, [] nothing.
+  const SAMPLES = [
+    ['src/games/tank/rules/a.gd', 'tank', ['tank'], ['tank'], ['tank']],
+    ['content/siege/levels/a.json', 'siege', ['siege'], ['siege'], ['siege']],
+    ['assets/fishing/audio/a.wav', 'fishing', ['fishing'], ['fishing'], ['fishing']],
+    ['tests/games/workout/test_a.gd', 'workout', ['workout'], ['workout'], ['workout']],
+    ['.github/workflows/game-tank.yml', 'tank', ['tank'], ['tank'], ['tank']],
+    ['src/games/tank/README.md', 'tank', ['tank'], ['tank'], []],
+    ['docs/changelog.d/tank.md', 'tank', ['tank'], [], []],
+    ['docs/decisions/siege.md', 'siege', ['siege'], [], []],
+    ['docs/credits.d/fishing.md', 'fishing', ['fishing'], [], []],
+    ['docs/games/workout.md', 'workout', ['workout'], [], []],
+    ['.github/workflows/game-tank.yaml', null, 'all', 'all', 'all'],
+    ['.github/workflows/game-nope.yml', null, 'all', 'all', 'all'],
+    ['src/games/_template/a.gd', null, 'all', 'all', 'all'],
+    ['src/games/newgame/a.gd', null, 'all', 'all', 'all'],
+    ['tests/games/_template/test_a.gd', null, 'all', 'all', 'all'],
+    ['addons/wattlands/core/a.gd', null, 'all', 'all', 'all'],
+    ['tools/lib/gate.mjs', null, 'all', 'all', 'all'],
+    ['docs/GAME_SDK.md', null, 'all', [], []],
+    ['docs/decisions/gate.md', null, 'all', [], []],
+    ['.github/workflows/lead.yml', null, 'all', 'all', []],
+    ['README.md', null, 'all', 'all', []],
+  ];
+
+  for (const [p, owner, gut, node, sim] of SAMPLES) {
+    test(`${p}: owned by ${owner ?? 'no game'}; GUT, Node and sim/e2e agree`, () => {
+      assert.equal(pathOwner(p, IDS)?.game ?? null, owner, 'pathOwner');
+      const g = gutSelection([p], IDS);
+      assert.deepEqual(g.all ? 'all' : g.games, gut, 'GUT');
+      assert.deepEqual(nodeGames(p), node, 'Node');
+      const t = touchedGames([p], IDS);
+      assert.deepEqual(t.platform ? 'all' : t.games, sim, 'sim and e2e');
+      // Agreement: no selection picks a game other than the owner, and a path no game owns never narrows
+      // GUT; Node and sim/e2e then run all or, for plain text, nothing.
+      for (const sel of [gut, node, sim]) if (Array.isArray(sel)) assert.ok(sel.every((id) => id === owner), JSON.stringify(sel));
+      if (owner === null) assert.equal(gut, 'all');
+    });
+  }
 });
 
 describe('suiteTestFiles and changedPaths', () => {
@@ -304,9 +384,16 @@ describe('the node step on a scratch project', () => {
       git('init', '-q', '-b', 'main');
       git('add', '.');
       git('commit', '-q', '-m', 'base');
+      // No change at all is no narrowing: every suite runs, as GUT's selection does.
+      const empty = await rt(d, ['--node-since=main', '--node-cache']);
+      assert.equal(empty.code, 0, empty.stdout);
+      assert.match(empty.stdout, /0 changed paths, every suite \(no change against the base\)/);
+      assert.match(empty.stdout, /tools\/audio PASS/);
+      write(d, { 'docs/notes.md': 'words\n' });
       const none = await rt(d, ['--node-since=main', '--node-cache']);
       assert.equal(none.code, 0, none.stdout);
       assert.match(none.stdout, /no suite reads the changed paths/);
+      fs.rmSync(path.join(d, 'docs'), { recursive: true });
       write(d, { 'src/games/tank/rules.gd': 'extends RefCounted\n' });
       const tank = await rt(d, ['--node-since=main', '--node-cache']);
       assert.equal(tank.code, 0, tank.stdout);

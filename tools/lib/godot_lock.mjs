@@ -120,16 +120,17 @@ export function defaultCap({ cpus = CPU_COUNT, freeBytes = os.freemem(), heldSlo
 
 /**
  * The slot cap: WATTLANDS_GODOT_LOCK_CAP if set, else the cap file in `dir`, else defaultCap().
- * `heldSlots` (what acquire sees held) only reaches the default.
+ * `heldSlots` (what acquire sees held) only reaches the default, and so does `freeBytes` (a test knob:
+ * one reading of free RAM, so two calls can be compared).
  */
-export function machineCap(dir = lockDir(), { heldSlots = 0 } = {}) {
+export function machineCap(dir = lockDir(), { heldSlots = 0, freeBytes = undefined } = {}) {
   const env = process.env.WATTLANDS_GODOT_LOCK_CAP;
   if (env !== undefined && env !== '') {
     const n = Number(env);
     if (Number.isInteger(n) && n >= 1) return n;
     throw new Error(`WATTLANDS_GODOT_LOCK_CAP must be a positive integer, got "${env}"`);
   }
-  return readCapFile(dir) ?? defaultCap({ heldSlots });
+  return readCapFile(dir) ?? defaultCap({ heldSlots, ...(freeBytes === undefined ? {} : { freeBytes }) });
 }
 
 /** Writes the cap file, or deletes it for n = 0. The write is atomic: a waiter never reads half a number. */
@@ -406,6 +407,7 @@ function lockTimeoutError() {
  * @param {number} [opts.pollMs=200]
  * @param {number} [opts.staleMs=60000] a live pid's ticket without a heartbeat for this long is stale
  * @param {number} [opts.staleConfirmMs=10000] ...and is reaped after looking stale for this long (test knobs)
+ * @param {number} [opts.freeBytes] free RAM for the computed default cap (test knob; default os.freemem())
  */
 export async function acquire(opts = {}) {
   const lease = opts.lease ?? 1;
@@ -420,7 +422,7 @@ export async function acquire(opts = {}) {
   const pollMs = opts.pollMs ?? POLL_MS;
   const staleMs = opts.staleMs ?? STALE_MS;
   const staleConfirmMs = opts.staleConfirmMs ?? 2 * HEARTBEAT_MS;
-  const capOf = (heldSlots = 0) => opts.cap ?? machineCap(dir, { heldSlots });
+  const capOf = (heldSlots = 0) => opts.cap ?? machineCap(dir, { heldSlots, freeBytes: opts.freeBytes });
   capOf(); // validate the env override before taking a ticket
   ensureDir(dir);
   installExitHook();

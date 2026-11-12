@@ -15,7 +15,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { killTree } from './godot_lock.mjs';
 import { evaluateGut, readGreenCount, writeGreenCount, readPendingAllowlist, FORBIDDEN } from './gut_gate.mjs';
-import { globToRegExp } from './gate_core.mjs';
+import { GAME_PATHS, globToRegExp, pathOwner } from './gate_core.mjs';
 
 const LIB = path.dirname(fileURLToPath(import.meta.url));
 const TOOLS = path.dirname(LIB);
@@ -808,14 +808,23 @@ function hasNodeTests(dir) {
 // test file with no row inside a row that has per-file entries ('*' is the rest), reads every game
 // path. A game's own suite, tests/games/<id>, runs when that game changed. --node-since never
 // narrows strict or the literal run: neither passes it.
-const GAME_OWN_PATHS = ['src/games/<id>/**', 'content/<id>/**', 'assets/<id>/**', 'tests/games/<id>/**', '.github/workflows/game-<id>.yml'];
+const GAME_OWN_PATHS = GAME_PATHS.own;
 export const NODE_SUITE_GAME_INPUTS = {
   'tools/tests': {
     // run_game_sim.test.mjs, pixelate and the screenshot dry runs start Godot on the real project,
     // whose GameRegistry loads every game's game.json and entry script.
     '*': GAME_OWN_PATHS,
-    // The real run_sims.sh plans and check_sims.mjs checkers; the rest runs on scratch repos.
-    'gate.test.mjs': ['tests/games/<id>/sim/**'],
+    // The real run_sims.sh plans and check_sims.mjs checkers; the other gate files run on scratch repos
+    // (gate_scan.test.mjs reads every game's own paths, so it has no row).
+    'gate_matrix.test.mjs': ['tests/games/<id>/sim/**'],
+    'gate.test.mjs': [],
+    'gate_ownership.test.mjs': [],
+    'gate_pins.test.mjs': [],
+    'gate_counts.test.mjs': [],
+    'gate_invariants.test.mjs': [],
+    'gate_wait.test.mjs': [],
+    'gate_stamps.test.mjs': [],
+    'gate_fast.test.mjs': [],
     // listGutFiles over the real tests/ and the pins of the real manifest.
     'gate_core.test.mjs': ['tests/games/<id>/**'],
     // gameNodeSuites over the real tests/games/; Godot runs on scratch projects.
@@ -838,21 +847,32 @@ function gameGlobs(patterns, id) {
   return patterns.map((p) => globToRegExp(p.replaceAll('<id>', id)));
 }
 
-/** Which registered game owns `p` (GAME_OWN_PATHS), or null. */
+/** Which registered game owns `p` as its own code, content, art, tests or workflow (pathOwner), or null. */
 export function gameOfPath(p, gameIds) {
-  for (const id of gameIds) {
-    if (gameGlobs(GAME_OWN_PATHS, id).some((re) => re.test(p))) return id;
-  }
-  return null;
+  const owner = pathOwner(p, gameIds);
+  return owner?.kind === 'own' ? owner.game : null;
+}
+
+/**
+ * Does a test file's source name a registered game's path (`src/games/tank`, `content/siege/`,
+ * `tests/games/fishing`, `game-workout.yml`, or path.join's `'games', 'tank'`)? A row that says a suite or
+ * a file reads no game path ([]) is a hand-written claim; a file that names one runs anyway.
+ */
+export function namesGamePath(src, gameIds) {
+  if (typeof src !== 'string' || gameIds.length === 0) return false;
+  const ids = gameIds.map((id) => id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const re = new RegExp(`(?:src/games|content|assets|tests/games)/(?:${ids})(?![\\w-])|game-(?:${ids})\\.yml|['"]games['"]\\s*,\\s*['"](?:${ids})['"]`);
+  return re.test(src);
 }
 
 /**
  * The node step's plan for a change set. units: [{name, kind: 'suite'|'extra', files}] in the order
  * given; `files` null means the whole suite, else the test files (suite-relative) to pass to
- * `node --test`. suiteFiles(suite) lists a suite's test files (for rows with per-file entries).
- * Returns {all, units, skipped: [{name, why}], why}.
+ * `node --test`. suiteFiles(suite) lists a suite's test files (suite-relative); readFile(path) reads
+ * one (project-relative), for the guard on [] rows (namesGamePath: a hit runs it). An empty
+ * change set runs everything, as the GUT selection does. Returns {all, units, skipped: [{name, why}], why}.
  */
-export function planNodeSuites({ changed, units, gameIds, suiteFiles = () => [] }) {
+export function planNodeSuites({ changed, units, gameIds, suiteFiles = () => [], readFile = () => null }) {
   const games = new Set();
   const platform = [];
   for (const p of changed) {
@@ -862,10 +882,14 @@ export function planNodeSuites({ changed, units, gameIds, suiteFiles = () => [] 
     else games.add(id);
   }
   const whole = (u) => ({ ...u, files: null });
+  if (changed.length === 0) return { all: true, units: units.map(whole), skipped: [], why: 'no change against the base' };
   if (platform.length > 0) {
     return { all: true, units: units.map(whole), skipped: [], why: `${platform[0]} is not one game's own path` };
   }
   const hit = (patterns) => changed.some((p) => [...games].some((id) => gameGlobs(patterns, id).some((re) => re.test(p))));
+  // A [] claim fails closed: a test file that names a game path reads one, whatever the row says.
+  const claimHolds = (rels) => !rels.some((r) => namesGamePath(readFile(r), gameIds));
+  const reads = (patterns, rels) => hit(patterns.length === 0 && !claimHolds(rels) ? GAME_OWN_PATHS : patterns);
   const out = [];
   const skipped = [];
   for (const u of units) {
@@ -877,12 +901,13 @@ export function planNodeSuites({ changed, units, gameIds, suiteFiles = () => [] 
     }
     const row = Object.hasOwn(NODE_SUITE_GAME_INPUTS, u.name) ? NODE_SUITE_GAME_INPUTS[u.name] : GAME_OWN_PATHS;
     if (Array.isArray(row)) {
-      if (hit(row)) out.push(whole(u));
+      const rels = u.kind === 'suite' ? suiteFiles(u.name).map((f) => `${u.name}/${f}`) : [u.name];
+      if (reads(row, rels)) out.push(whole(u));
       else skipped.push({ name: u.name, why: 'reads no changed game path' });
       continue;
     }
     const files = suiteFiles(u.name);
-    const picked = files.filter((f) => hit(Object.hasOwn(row, f) ? row[f] : (row['*'] ?? GAME_OWN_PATHS)));
+    const picked = files.filter((f) => reads(Object.hasOwn(row, f) ? row[f] : (row['*'] ?? GAME_OWN_PATHS), [`${u.name}/${f}`]));
     if (picked.length === files.length) out.push(whole(u));
     else if (picked.length > 0) out.push({ ...u, files: picked });
     else skipped.push({ name: u.name, why: 'reads no changed game path' });
@@ -949,7 +974,14 @@ async function stepNode(o) {
       process.stdout.write(`run_tests: --node-since=${o.nodeSince}: ${ch.error}; every suite runs\n`);
     } else {
       const ids = registeredGames(o).map((g) => g.id);
-      const plan = planNodeSuites({ changed: ch.paths, units, gameIds: ids, suiteFiles: (s) => suiteTestFiles(path.join(o.project, s)) });
+      const readFile = (rel) => {
+        try {
+          return fs.readFileSync(path.join(o.project, rel), 'utf8');
+        } catch {
+          return null;
+        }
+      };
+      const plan = planNodeSuites({ changed: ch.paths, units, gameIds: ids, suiteFiles: (s) => suiteTestFiles(path.join(o.project, s)), readFile });
       selected = plan.units;
       process.stdout.write(`run_tests: --node-since=${o.nodeSince}: ${ch.paths.length} changed paths, ${plan.all ? 'every suite' : `${plan.units.length} of ${units.length}`} (${plan.why})\n`);
       for (const s of plan.skipped) results.push(`${s.name} SKIP (${s.why})`);

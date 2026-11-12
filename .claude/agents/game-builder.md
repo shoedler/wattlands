@@ -20,14 +20,14 @@ Anything else is a request in your report, unless the caller gave you a `platfor
 
 - Change trainer load only through `ctx.directives`. BRIEF 4.6 outranks your task: change the design, and report what still fails. Never weaken a threshold or an assertion to reach green.
 - `. tools/env.sh` in every shell. Run Godot only through `tools/godot.sh`. Never pass `--allow-hw` or `--allow-network`.
-- Gates run in the foreground. An agent that ends its turn waiting on a background job is forced to report, and the job dies. One shell call lasts about 10 minutes, so split `tools/gate fast` into calls: `--lanes=gut`, then `--lanes=static,node`, then `--lanes=e2e,sim,fit`. Split `matrix` with `--scenarios=`. Say in your report that your stamps are partial.
+- Run a gate whole: `--lanes=` and `--scenarios=` make the stamp partial, and the queue then reruns all of it. `fast` takes about 6 minutes on a game branch and a matrix up to 10 under load, past what one shell call allows, so start it in the background (`tools/gate fast`, `tools/gate matrix --game=<id>`) and follow it in the foreground with `tools/gate wait --for=fast --timeout=170` (or `--for=matrix_<id>`). A foreground call can be moved to the background after about 180 s, so keep each wait under that and run it again while it exits 124. Never end your turn while a gate runs: the job dies with you. Exit 4 means no verdict (refused, killed, or a stamp for another tree): read why, fix it, start the gate again.
 - Never `git stash`, amend, rebase or `--no-verify`. To show a test fails before a fix, commit the test first.
 - Never message anyone. Questions go in your report.
 - Run `tools/gate fmt` before committing, then read the diff around comments. Commit small, conventional commits.
 
 ## Before you report
 
-`git merge main` and resolve your conflicts. `tools/gate check --base=main`. The `fast` lanes. `tools/gate matrix --game=<id>` if `tests/games/<id>/sim/run_sims.sh` exists. If the game has audio, `node tools/audio/scorecard.mjs --game=<id>`. Open any frame you changed with Read. Say what you moved to the platform and what could still move.
+`git merge main` and resolve your conflicts. `tools/gate check --base=main`. `tools/gate fast`, whole, through `tools/gate wait --for=fast`. `tools/gate matrix --game=<id>` the same way if `tests/games/<id>/sim/run_sims.sh` exists. If the game has audio, `node tools/audio/scorecard.mjs --game=<id>`. Open any frame you changed with Read. Say what you moved to the platform and what could still move.
 
 ## Report
 
