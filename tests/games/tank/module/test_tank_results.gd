@@ -35,12 +35,15 @@ const TEAM_KEYS: Array[String] = [
 ## Whole Ashfall Road sessions by crew size, each played once for the script (_played); the tests
 ## read their results.
 var _sessions: Dictionary = {}
+## What each shared game looked like right after it was played (_print), checked on every later read.
+var _prints: Dictionary = {}
 
 
 func after_all() -> void:
 	for g: TankGame in _sessions.values():
 		g.free()
 	_sessions.clear()
+	_prints.clear()
 
 
 ## The text on the results: the kill label names what tank_game.gd joins, in that order, a loss line that
@@ -78,10 +81,12 @@ func test_the_results_text_matches_what_the_game_writes() -> void:
 
 
 ## A crew that played the whole of Ashfall Road, every rider with 300 kJ plus 10 per slot. Played
-## once per crew size for the script: a test only reads it (results() reads the state and the
-## stats), and the one that applies progress uses the crew no other test reads it from.
+## once per crew size for the script and read by several tests, so strictly read-only: results()
+## only reads the state and the stats, and a test that writes (apply_progress) writes into a copy.
+## Every later read checks the game is still as it was played.
 func _played(crew: int) -> TankGame:
 	if _sessions.has(crew):
+		assert_eq(_print(_sessions[crew]), _prints[crew], "crew %d is as it was played" % crew)
 		return _sessions[crew]
 	var ctx := F.make_ctx(crew)
 	var rows := {}
@@ -91,7 +96,15 @@ func _played(crew: int) -> TankGame:
 	var g := F.make_game(ctx)
 	F.run_session(g, F.clock_of(g), 2.0)
 	_sessions[crew] = g
+	_prints[crew] = _print(g)
 	return g
+
+
+## What a test could change in a shared game: its state (the snapshot), its results, its stats and
+## its riders' progress.
+func _print(g: TankGame) -> String:
+	var stats := (g.ctx.stats as F.Stats).rows
+	return JSON.stringify([g.snapshot(), g.results().to_dict(), stats, g.ctx.progress.data])
 
 
 func _perfect(crew: int) -> TankGame:
@@ -252,10 +265,13 @@ func test_results_from_the_real_session_feed_apply_progress() -> void:
 	var g := _played(1)
 	var res := g.results()
 	res.session_id = "tank/ashfall_road/1/real"
-	var ctx := g.ctx
-	var fresh := g.apply_progress(res, ctx.progress)
+	# The shared game's own store stays untouched: progress goes into a deep copy of it.
+	var progress := ProgressStore.open(F.GAME_ID, "")
+	progress.data = g.ctx.progress.data.duplicate(true)
+	var fresh := g.apply_progress(res, progress)
 	assert_has(fresh, "soot")
-	assert_eq(float(ctx.progress.get_value("xp", 0)), float(res.row(1)["xp"]))
+	assert_eq(float(progress.get_value("xp", 0)), float(res.row(1)["xp"]))
+	assert_gt(float(progress.get_value("xp", 0)), 0.0)
 
 
 func test_the_first_run_never_picks_tank() -> void:
@@ -349,3 +365,11 @@ func test_the_difficulty_losses_and_repairs_in_the_results() -> void:
 	assert_eq(res.ride_lines[4], "Tanks lost: 2")
 	assert_eq(res.row(2)["stats"]["TANK_STAT_REPAIR_S"], 72)
 	assert_eq(res.row(2)["stats"]["TANK_STAT_REPAIRED"], 33)
+
+
+## Last in the script on purpose: every shared game is still as it was played, whatever the tests
+## above did with it.
+func test_the_shared_sessions_are_left_as_they_were_played() -> void:
+	for crew in [1, 2, 3]:
+		var g := _played(crew)
+		assert_eq(g.ctx.progress.data, {}, "crew %d: no progress applied to it" % crew)

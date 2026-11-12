@@ -6,9 +6,9 @@
 // content hash), every directory listed, every path probed or stat'ed. A passing verdict ({pass: true}) is
 // stored with those records under the hash of `key` and of codeFiles' contents and Node's version. A
 // later call is a hit only when every record still holds; it then returns {pass: true, cached: true}
-// without running compute. It fails closed: a failing verdict is never stored, a read through an API the
-// recorder does not follow (open, streams, callbacks, promises) stores nothing, and an entry that cannot
-// be read or checked counts as a miss.
+// without running compute. It fails closed: a failing verdict is never stored, a call to any fs function
+// outside RECORDED (open, streams, callbacks, promises, glob, realpath, whatever a later edit reaches for)
+// stores nothing, and an entry that cannot be read or checked counts as a miss.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
@@ -20,14 +20,13 @@ const SCHEMA = 2;
 
 const sha = (data) => crypto.createHash('sha256').update(data).digest('hex');
 
+// The only fs functions whose reads are recorded. Every other function of node:fs (and its .native
+// twins), every function of node:fs/promises and the stream classes count as unrecorded.
+export const RECORDED = ['readFileSync', 'existsSync', 'readdirSync', 'statSync', 'lstatSync'];
+const STREAM_CLASSES = ['ReadStream', 'WriteStream', 'FileReadStream', 'FileWriteStream', 'Utf8Stream'];
+
 // The originals, so checking an entry is never itself recorded.
-const real = {
-  readFileSync: fs.readFileSync,
-  existsSync: fs.existsSync,
-  readdirSync: fs.readdirSync,
-  statSync: fs.statSync,
-  lstatSync: fs.lstatSync,
-};
+const real = Object.fromEntries(RECORDED.map((name) => [name, fs[name]]));
 
 function digestOf(kind, p, opts) {
   try {
@@ -48,8 +47,57 @@ function digestOf(kind, p, opts) {
   return 'unknown-kind';
 }
 
-// The fs APIs a compute() may read through without being recorded: using one makes the run uncacheable.
-const UNRECORDED = ['openSync', 'readSync', 'readFile', 'createReadStream', 'opendirSync', 'readdir', 'stat', 'access', 'accessSync', 'readvSync'];
+/**
+ * Swaps every fs entry point outside RECORDED for one that calls mark(name) when it is called at depth 0
+ * (depth() > 0 is a call from inside a recorded one). Returns a function that puts every original back.
+ */
+function markUnrecorded(mark, depth) {
+  const undo = [];
+  const swap = (obj, name, label) => {
+    const orig = obj[name];
+    const w = function (...args) {
+      if (depth() === 0) mark(label);
+      return new.target ? Reflect.construct(orig, args, new.target) : Reflect.apply(orig, this, args);
+    };
+    for (const k of Object.keys(orig)) {
+      if (typeof orig[k] !== 'function') continue;
+      const inner = orig[k];
+      w[k] = (...args) => {
+        if (depth() === 0) mark(`${label}.${k}`);
+        return inner(...args);
+      };
+    }
+    obj[name] = w;
+    undo.push(() => {
+      obj[name] = orig;
+    });
+  };
+  for (const name of Object.getOwnPropertyNames(fs)) {
+    const d = Object.getOwnPropertyDescriptor(fs, name);
+    if (!d || !('value' in d) || typeof d.value !== 'function' || !d.writable) continue;
+    // Upper case: the Dirent, Stats and Dir classes, which open nothing themselves.
+    if (!/^[a-z]/.test(name) || RECORDED.includes(name)) continue;
+    swap(fs, name, name);
+  }
+  const promises = fs.promises;
+  for (const name of Object.keys(promises)) if (typeof promises[name] === 'function') swap(promises, name, `promises.${name}`);
+  for (const name of STREAM_CLASSES) {
+    const d = Object.getOwnPropertyDescriptor(fs, name);
+    if (!d || !d.configurable) continue;
+    Object.defineProperty(fs, name, {
+      configurable: true,
+      enumerable: d.enumerable,
+      get() {
+        if (depth() === 0) mark(name);
+        return d.get ? d.get.call(fs) : d.value;
+      },
+    });
+    undo.push(() => Object.defineProperty(fs, name, d));
+  }
+  return () => {
+    for (const u of undo.reverse()) u();
+  };
+}
 
 /**
  * Runs fn with fs reads recorded, each digest taken when it was read (so a file changed after the read
@@ -99,6 +147,8 @@ export function recordReads(fn) {
       return real.existsSync(p);
     },
     readdirSync: (p, ...rest) => {
+      // A recursive listing reaches folders the one-level digest does not cover.
+      if (rest[0] && typeof rest[0] === 'object' && rest[0].recursive) unrecorded.add('readdirSync(recursive)');
       note('readdir', p);
       return real.readdirSync(p, ...rest);
     },
@@ -126,21 +176,22 @@ export function recordReads(fn) {
       }
     };
   }
-  const saved = {};
-  for (const name of UNRECORDED) {
-    saved[name] = fs[name];
-    fs[name] = (...args) => {
-      if (depth === 0) unrecorded.add(name);
-      return saved[name](...args);
-    };
-  }
+  // Armed only while fn runs: syncBuiltinESMExports() reads every export, the stream getters included.
+  let armed = false;
+  const restore = markUnrecorded(
+    (name) => armed && unrecorded.add(name),
+    () => depth,
+  );
   Object.assign(fs, wrapped);
   syncBuiltinESMExports();
   let value;
   try {
+    armed = true;
     value = fn();
   } finally {
-    Object.assign(fs, real, saved);
+    armed = false;
+    Object.assign(fs, real);
+    restore();
     syncBuiltinESMExports();
   }
   return { value, deps: [...seen.values()], unrecorded: [...unrecorded].sort() };
@@ -164,7 +215,8 @@ export function mjsFiles(dir) {
   return out;
 }
 
-function entryPath(cacheDir, key, code) {
+/** Where the entry for `key` under `code` lives in cacheDir. */
+export function entryPath(cacheDir, key, code) {
   return path.join(cacheDir, `${sha(`${SCHEMA}\n${code}\n${JSON.stringify(key)}`)}.json`);
 }
 
@@ -201,4 +253,29 @@ export function cachedVerdict({ cacheDir, key, code, compute }) {
     }
   }
   return value;
+}
+
+/**
+ * Deletes every file in cacheDir except the entries named in `keep` (entryPath() results): entries of a
+ * bank that is gone, of older code, broken entries and stray temp files. Returns the names removed.
+ */
+export function pruneEntries(cacheDir, keep) {
+  const wanted = new Set(keep.map((f) => path.basename(f)));
+  let names;
+  try {
+    names = real.readdirSync(cacheDir);
+  } catch {
+    return [];
+  }
+  const removed = [];
+  for (const name of names) {
+    if (wanted.has(name)) continue;
+    try {
+      fs.rmSync(path.join(cacheDir, name), { force: true, recursive: true });
+      removed.push(name);
+    } catch {
+      // Another run may hold it; the next prune tries again.
+    }
+  }
+  return removed.sort();
 }

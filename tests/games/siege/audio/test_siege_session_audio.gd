@@ -27,7 +27,8 @@ const ARROW_FILES := ["arrow_flesh", "arrow_wood", "arrow_shield", "arrow_dirt",
 var _game: SiegeGame = null
 var _view: SiegeView = null
 var _shots: Array[Dictionary] = []
-## The real wave the tests of a real wave read (_real_wave), ridden once for the script.
+## The real wave the tests of a real wave read (_real_wave), ridden once for the script: plain values
+## only, copied as the wave was played; its game and view are freed once it is played.
 var _wave: Dictionary = {}
 var _wave_game: SiegeGame = null
 var _wave_view: SiegeView = null
@@ -91,7 +92,9 @@ func _shots_of(kind: int, shots: Array[Dictionary]) -> int:
 ## _ride()'s session, ridden once for the script to 300 s, the tests only reading it: at FIX_SECONDS
 ## what the kit heard ("seen"), the shots, the arrows landed and struck by ear ("landed", "struck")
 ## and the host's arrow hits ("arrow_hits"); the kills of its first 120 s and how many found their
-## body ("kills", "found"); "game" and "view" as they stand at 300 s.
+## body ("kills", "found"); at 300 s what struck by ear and what the host hit, by shot kind
+## ("struck_300", "hits_300"). Only copies: the game and the view are freed at 300 s, so nothing
+## goes on on wall time in the frames GUT yields between tests.
 func _real_wave() -> Dictionary:
 	if not _wave.is_empty():
 		return _wave
@@ -135,8 +138,22 @@ func _real_wave() -> Dictionary:
 			_wave["arrow_hits"] = _wave_game.state.station(SiegeIds.STATION_ARROWS).hits
 	_wave["kills"] = kills[0]
 	_wave["found"] = kills[1]
-	_wave["game"] = _wave_game
-	_wave["view"] = _wave_view
+	var st := _wave_game.state
+	_wave["struck_300"] = (_wave_view.audio._shots as SiegeShotSounds).struck_count.duplicate()
+	var pads := 0
+	for n in range(1, SiegeIds.PAD_COUNT + 1):
+		pads += st.pad(n).hits
+	_wave["hits_300"] = {
+		"stone": st.station(SiegeIds.STATION_ONAGER).hits,
+		"bolt": st.station(SiegeIds.STATION_BALLISTA).hits,
+		"scorpion": pads,
+		"arrow": st.station(SiegeIds.STATION_ARROWS).hits,
+	}
+	remove_child(_wave_view)
+	_wave_view.free()
+	_wave_view = null
+	F.free_game(_wave_game)
+	_wave_game = null
 	return _wave
 
 
@@ -502,27 +519,20 @@ func test_nothing_there_is_the_ground() -> void:
 
 func test_a_real_wave_hears_what_the_host_hit() -> void:
 	var wave := _real_wave()
-	var st := (wave["game"] as SiegeGame).state
-	var sounds: SiegeShotSounds = (wave["view"] as SiegeView).audio._shots
+	var struck: Dictionary = wave["struck_300"]
+	var hits: Dictionary = wave["hits_300"]
 	var near := func(got: int, truth: int, label: String) -> void:
 		var slack := maxi(2, roundi(truth * 0.1))
 		assert_gt(truth, 0, "%s: the host hit something in %d s" % [label, 300])
 		assert_lte(
 			absi(got - truth), slack, "%s: %d struck by ear, %d by the host" % [label, got, truth]
 		)
-	near.call(
-		int(sounds.struck_count.get("stone", 0)), st.station(SiegeIds.STATION_ONAGER).hits, "stones"
-	)
-	near.call(
-		int(sounds.struck_count.get("bolt", 0)), st.station(SiegeIds.STATION_BALLISTA).hits, "bolts"
-	)
-	var pads := 0
-	for n in range(1, SiegeIds.PAD_COUNT + 1):
-		pads += st.pad(n).hits
-	near.call(int(sounds.struck_count.get("scorpion", 0)), pads, "Scorpion bolts")
+	near.call(int(struck.get("stone", 0)), int(hits["stone"]), "stones")
+	near.call(int(struck.get("bolt", 0)), int(hits["bolt"]), "bolts")
+	near.call(int(struck.get("scorpion", 0)), int(hits["scorpion"]), "Scorpion bolts")
 	# Arrows within a quarter: a body killed by the volley's first arrow still counts for RECENT_S.
-	var arrows := st.station(SiegeIds.STATION_ARROWS).hits
-	var heard := int(sounds.struck_count.get("arrow", 0))
+	var arrows := int(hits["arrow"])
+	var heard := int(struck.get("arrow", 0))
 	assert_gt(arrows, 0)
 	assert_lte(
 		absi(heard - arrows),
@@ -650,3 +660,34 @@ func test_an_hour_of_arrows_does_not_repeat_itself() -> void:
 			closest = mini(closest, n - int(last[key]))
 		last[key] = n
 	assert_gte(closest, 100, "the same arrow again after %d arrows" % closest)
+
+
+## Last in the script on purpose: GUT yields frames between tests, and what the tests of the shared
+## wave read must not move in them. A view left processing would go on on wall time: its clock runs up
+## to a tick past the wave and its shots land, so by the last test it has already moved, and only a
+## test run alone sees it move; hence the check that nothing in the record still processes.
+func test_the_shared_wave_stands_still_between_tests() -> void:
+	var wave := _real_wave()
+	for k: String in wave:
+		var v: Variant = wave[k]
+		if v is Node:
+			var n := v as Node
+			assert_false(n.is_inside_tree() and n.can_process(), "%s still processes" % k)
+	var before := _wave_print(wave)
+	await wait_process_frames(5)
+	assert_eq(_wave_print(wave), before, "nothing the tests read moved in 5 frames")
+
+
+## Everything _real_wave() hands the tests, as JSON; a game or view in it by what the tests read of it.
+func _wave_print(wave: Dictionary) -> String:
+	var out := []
+	for k: String in wave:
+		var v: Variant = wave[k]
+		if v is SiegeView:
+			var sounds: SiegeShotSounds = (v as SiegeView).audio._shots
+			out.append([k, (v as SiegeView).clock_s, sounds.struck_count, sounds.landed_count])
+		elif v is SiegeGame:
+			out.append([k, (v as SiegeGame).state.tick])
+		else:
+			out.append([k, v])
+	return JSON.stringify(out)

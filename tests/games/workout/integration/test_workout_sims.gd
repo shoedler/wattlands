@@ -4,10 +4,11 @@ extends GutTest
 ## test command; the full suite runs it.
 ##
 ## Assertions: e2e stays inside the warm-up limits in HOST play; a zwo path content id reaches
-## every client; the same seed gives the same report hash; a 0 W rider grades D; rescue on a
-## cadence collapse only at or above 60% FTP. A compliant rider finishing every built-in session
-## and the sample .zwo with an A or better, inside the warm-up limits and with no duration limit
-## latched, is tests/scenarios/workout (test_workout_sessions.gd, test_zwo_import.gd).
+## every client; the same seed gives the same report hash; the human and the bot both ride e2e
+## in band; a 0 W rider grades D; rescue on a cadence collapse only at or above 60% FTP. A
+## compliant rider finishing every built-in session and the sample .zwo with an A or better, in
+## band, inside the warm-up limits and with no duration limit latched, is tests/scenarios/workout
+## (test_workout_sessions.gd, test_zwo_import.gd), which holds the human row only.
 
 var _tmp: String = ""
 ## Runners made by a test: cleanup() deletes each one's temp root (W3 QT-4).
@@ -153,6 +154,29 @@ func test_same_seed_same_hash() -> void:
 	if a.is_empty() or b.is_empty():
 		return
 	assert_eq(a["deterministic_hash"], b["deterministic_hash"])
+
+
+## A compliant rider and the bot both ride e2e in band. The pinned scenario (test_workout_sessions.gd)
+## holds the human row of every built-in session to 90 %; this keeps a bot's row held too.
+func test_the_bot_rides_e2e_in_band_too() -> void:
+	var report := _run("e2e")
+	if report.is_empty():
+		return
+	assert_eq(report["_end"], "complete")
+	var res: GameResults = report["_results"]
+	assert_not_null(res, "e2e results")
+	if res == null:
+		return
+	var bots := 0
+	for row in res.rows:
+		if bool(row.get("is_bot", false)):
+			bots += 1
+		assert_gte(
+			float(row["time_in_band_pct"]),
+			90.0,
+			"e2e rider %s in band %s%%" % [row["peer_id"], row["time_in_band_pct"]]
+		)
+	assert_eq(bots, 1, "the bot has a row")
 
 
 func test_a_zero_watt_rider_grades_d() -> void:
