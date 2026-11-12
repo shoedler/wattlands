@@ -121,29 +121,31 @@ test('two built-in scenarios started together get four ports of their own, outsi
   }
 });
 
+/** Binds a socket to the first free port of the band from `from` on, outside getBandPort (so not handed out yet). */
+async function holdBandPort(from, kind) {
+  for (let p = from; p <= BAND_HIGH; p += 1) {
+    const sock = kind === 'udp' ? dgram.createSocket('udp4') : net.createServer();
+    const ok = await new Promise((resolve) => {
+      sock.once('error', () => resolve(false));
+      if (kind === 'udp') sock.bind(p, '127.0.0.1', () => resolve(true));
+      else sock.listen(p, '127.0.0.1', () => resolve(true));
+    });
+    if (ok) return { port: p, close: () => new Promise((resolve) => sock.close(() => resolve())) };
+  }
+  throw new Error('no free band port to hold');
+}
+
 test('a band port taken for UDP alone, or for TCP alone, is skipped', async () => {
-  const udp = dgram.createSocket('udp4');
-  const held = await new Promise((resolve) => udp.bind(0, '127.0.0.1', () => resolve(udp.address().port)));
-  udp.close();
-  // Find a band port, hold it for one protocol, and ask from there.
-  const p = await getBandPort();
-  const sock = dgram.createSocket('udp4');
-  await new Promise((resolve) => sock.bind(p, '127.0.0.1', resolve));
-  try {
-    const next = await getBandPort({ start: p });
-    assert.notEqual(next, p, 'held for UDP: skipped');
-  } finally {
-    sock.close();
+  for (const [kind, from] of [['udp', 30000], ['tcp', 30500]]) {
+    const held = await holdBandPort(from, kind);
+    try {
+      const got = await getBandPort({ start: held.port });
+      assert.notEqual(got, held.port, `held for ${kind} only: the probe of the other protocol is not enough`);
+      assert.ok(got > held.port && got <= BAND_HIGH, `${got} comes after it`);
+    } finally {
+      await held.close();
+    }
   }
-  const q = await getBandPort();
-  const srv = net.createServer();
-  await new Promise((resolve) => srv.listen(q, '127.0.0.1', resolve));
-  try {
-    assert.notEqual(await getBandPort({ start: q }), q, 'held for TCP: skipped');
-  } finally {
-    await new Promise((resolve) => srv.close(resolve));
-  }
-  assert.ok(held < BAND_LOW || held > BAND_HIGH, `an OS-chosen UDP port (${held}) is never in the band`);
 });
 
 test('sockets that send before they bind never get a band port', async () => {
