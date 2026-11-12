@@ -10,12 +10,15 @@ const TIME_EPS := 1e-6
 ## Whole Ashfall Road sessions by crew size, played once for the script (_session): the tests read
 ## the game, its clock, its sinks and the signals it sent.
 var _sessions: Dictionary = {}
+## What each shared session looked like right after it was played (_print), checked on every read.
+var _prints: Dictionary = {}
 
 
 func after_all() -> void:
 	for s: Dictionary in _sessions.values():
 		(s["game"] as TankGame).free()
 	_sessions.clear()
+	_prints.clear()
 
 
 func _game(ctx: GameContext) -> TankGame:
@@ -32,9 +35,12 @@ func _hud(ctx: GameContext) -> F.Hud:
 
 ## A crew of `crew` that played the whole of Ashfall Road under the platform's phase rules and 2 s of
 ## its cool-down, the solo rider with 420 kJ: {game, clock, phases (the phase_changed indexes),
-## finished (the finished reasons)}. Played once per crew size; tests only read it.
+## finished (the finished reasons)}. Played once per crew size and read by several tests, so strictly
+## read-only: a test that steps a game further, moves a seat or applies progress plays its own. Every
+## later read checks the session is still as it was played.
 func _session(crew: int) -> Dictionary:
 	if _sessions.has(crew):
+		assert_eq(_print(_sessions[crew]), _prints[crew], "crew %d is as it was played" % crew)
 		return _sessions[crew]
 	var ctx := F.make_ctx(crew)
 	if crew == 1:
@@ -48,7 +54,27 @@ func _session(crew: int) -> Dictionary:
 	var out := {"game": g, "clock": clock, "phases": phases, "finished": ends}
 	F.run_session(g, clock, 2.0)
 	_sessions[crew] = out
+	_prints[crew] = _print(out)
 	return out
+
+
+## What a test could change in a shared session: the game's state (its snapshot), results and
+## progress, the signals seen, and how much the clock and the sinks recorded.
+func _print(played: Dictionary) -> String:
+	var g: TankGame = played["game"]
+	var clock: F.PhaseClock = played["clock"]
+	var d := _dirs(g.ctx)
+	var sinks := [
+		clock.batches.size(),
+		clock.changes.size(),
+		d.requests.size(),
+		d.cadence_at.size(),
+		d.course_grades.size(),
+		d.ended.size(),
+		_hud(g.ctx).power_band_at.size(),
+	]
+	var seen := [played["phases"], played["finished"]]
+	return JSON.stringify([g.snapshot(), g.results().to_dict(), g.ctx.progress.data, seen, sinks])
 
 
 ## v3: every crew size rides the landship with its five seats; slot s starts on start seat s
@@ -367,3 +393,11 @@ func test_plans_are_identical_for_every_difficulty_on_every_content() -> void:
 			if base == "":
 				base = dump
 			assert_eq(dump, base, "%s %s" % [content, level])
+
+
+## Last in the script on purpose: every shared session is still as it was played, whatever the
+## tests above did with it.
+func test_the_shared_sessions_are_left_as_they_were_played() -> void:
+	for crew in [1, 3]:
+		var g: TankGame = _session(crew)["game"]
+		assert_eq(g.ctx.progress.data, {}, "crew %d: no progress applied to it" % crew)

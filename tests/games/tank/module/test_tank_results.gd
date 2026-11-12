@@ -81,8 +81,9 @@ func test_the_results_text_matches_what_the_game_writes() -> void:
 
 
 ## A crew that played the whole of Ashfall Road, every rider with 300 kJ plus 10 per slot. Played
-## once per crew size for the script: a test only reads it (results() reads the state and the
-## stats), and the one that applies progress uses the crew no other test reads it from.
+## once per crew size for the script and read by several tests, so strictly read-only: results()
+## only reads the state and the stats, and a test that writes (apply_progress) writes into a copy.
+## Every later read checks the game is still as it was played.
 func _played(crew: int) -> TankGame:
 	if _sessions.has(crew):
 		assert_eq(_print(_sessions[crew]), _prints[crew], "crew %d is as it was played" % crew)
@@ -264,10 +265,13 @@ func test_results_from_the_real_session_feed_apply_progress() -> void:
 	var g := _played(1)
 	var res := g.results()
 	res.session_id = "tank/ashfall_road/1/real"
-	var ctx := g.ctx
-	var fresh := g.apply_progress(res, ctx.progress)
+	# The shared game's own store stays untouched: progress goes into a deep copy of it.
+	var progress := ProgressStore.open(F.GAME_ID, "")
+	progress.data = g.ctx.progress.data.duplicate(true)
+	var fresh := g.apply_progress(res, progress)
 	assert_has(fresh, "soot")
-	assert_eq(float(ctx.progress.get_value("xp", 0)), float(res.row(1)["xp"]))
+	assert_eq(float(progress.get_value("xp", 0)), float(res.row(1)["xp"]))
+	assert_gt(float(progress.get_value("xp", 0)), 0.0)
 
 
 func test_the_first_run_never_picks_tank() -> void:
