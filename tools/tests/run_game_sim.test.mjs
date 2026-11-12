@@ -115,7 +115,7 @@ describe('plan capture', () => {
   });
 });
 
-describe('through Godot', () => {
+describe('through Godot', { concurrency: true }, () => {
   for (const sh of shells) {
     const skip = (!GODOT && 'no Godot binary (tools/godot_bin.local or GODOT)') || (!sh.ok && `no ${sh.name}`);
 
@@ -158,18 +158,31 @@ describe('through Godot', () => {
   // The CLI end to end (BRIEF 3.6, 7.1): a real _template session, twice with one seed. It needs
   // sdk-runtime's GameSimRunner, so it skips itself while that is still the W0 stub (W1 worktrees).
   const sh = shells.find((s) => s.ok);
+  /** Runs a and b of one flag set at once (out/a.json, out/b.json), each with its own Godot user dir. */
+  const bothRuns = (shell, flags, cwd, timeoutMs) =>
+    Promise.all(
+      ['a', 'b'].map((name) =>
+        runSim(shell, [...flags, `--report=out/${name}.json`], {
+          env: minimalEnv({ GODOT, WATTLANDS_USERDATA_DIR: path.join(cwd, `userdata_${name}`) }),
+          cwd,
+          timeoutMs,
+        }),
+      ),
+    );
   const skipReal = (!GODOT && 'no Godot binary (tools/godot_bin.local or GODOT)') || (!sh && 'no shell');
   test(`${sh ? sh.name : 'bash'}: a real _template session writes its report and FIT, deterministically`, { skip: skipReal, timeout: 1_200_000 }, async (t) => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'wattlands-run-game-sim-real-'));
     temps.push(cwd);
     const flags = ['--game=_template', '--content=short', '--players=1', '--bots=1', '--rider=erg', '--sim-speed=1000', '--seed=4', '--godot-timeout=600'];
     const reports = [];
-    for (const name of ['a', 'b']) {
-      const r = await runSim(sh.name, [...flags, `--report=out/${name}.json`], { env: minimalEnv({ GODOT }), cwd, timeoutMs: 900_000 });
-      if (r.code === 2 && /not implemented/.test(r.stderr)) {
-        t.skip("sdk-runtime's GameSimRunner is still the W0 stub");
-        return;
-      }
+    // The two runs at once, each with its own user dir: the hash must not depend on which ran first.
+    const runs = await bothRuns(sh.name, flags, cwd, 900_000);
+    if (runs.some((r) => r.code === 2 && /not implemented/.test(r.stderr))) {
+      t.skip("sdk-runtime's GameSimRunner is still the W0 stub");
+      return;
+    }
+    for (const [i, name] of ['a', 'b'].entries()) {
+      const r = runs[i];
       assert.equal(r.code, 0, r.stderr + r.stdout);
       assert.match(r.stdout, /run_game_sim: end_reason=complete/);
       const report = JSON.parse(fs.readFileSync(path.join(cwd, 'out', `${name}.json`), 'utf8'));
@@ -189,12 +202,13 @@ describe('through Godot', () => {
     temps.push(cwd);
     const flags = ['--game=workout', '--content=vo2', '--players=2', '--bots=1', '--rider=erg', '--sim-speed=100000', '--seed=42', '--godot-timeout=900'];
     const reports = [];
-    for (const name of ['a', 'b']) {
-      const r = await runSim(sh.name, [...flags, `--report=out/${name}.json`], { env: minimalEnv({ GODOT }), cwd, timeoutMs: 1_000_000 });
-      if (r.code === 2 && /not implemented/.test(r.stderr)) {
-        t.skip("sdk-runtime's GameSimRunner is still the W0 stub");
-        return;
-      }
+    const runs = await bothRuns(sh.name, flags, cwd, 1_000_000);
+    if (runs.some((r) => r.code === 2 && /not implemented/.test(r.stderr))) {
+      t.skip("sdk-runtime's GameSimRunner is still the W0 stub");
+      return;
+    }
+    for (const [i, name] of ['a', 'b'].entries()) {
+      const r = runs[i];
       assert.equal(r.code, 0, r.stderr + r.stdout);
       const report = JSON.parse(fs.readFileSync(path.join(cwd, 'out', `${name}.json`), 'utf8'));
       assert.equal(report.role, 'HOST');
