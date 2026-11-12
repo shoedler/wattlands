@@ -20,6 +20,7 @@ If a gate takes much longer than this, check these first:
 
 - **The slot cap.** `node tools/lib/godot_lock.mjs status` shows it. A checkout on code from before the speed-up computes a cap of 4 and holds up every other gate on the machine when its turn comes. Merge main into it, or set a cap file with `set-cap <n>`. A stale cap file or `WATTLANDS_GODOT_LOCK_CAP` does the same.
 - **How many gates run at once.** Sims are CPU work, and three gates fill 20 cores. A matrix that takes 4 minutes alone takes 10 beside two others.
+- **What else the machine is doing.** The slot lock counts only Wattlands' own Godot runs. With another project's test fleet on the machine (CPU already near 100 percent), a full `fast` took 11 to 17 minutes and went red on tests that measure time: the step budgets of the quiet lane (`tests/games/*/perf/`), which even its whole-machine retry can't protect, and the Node tests with a wall-clock bound (`tools/tests/wrappers.test.mjs`, `tools/e2e/test/run.test.mjs`). Don't raise those limits. Wait for a quiet machine, or lower the cap with `set-cap` so the gate adds less load.
 - **Whether `fast` ran everything.** A change inside one game's own paths runs only that game's tests. Any file outside them, or a reference from one game to another, selects the whole suite. The gate prints a line when it leaves files out.
 - **Each lane's time.** Every gate prints them, and the stamp in `build/gate/<gate>.json` keeps them. A matrix stamp holds each run's `run_ms`.
 
