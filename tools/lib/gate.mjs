@@ -696,7 +696,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // --static-jobs). Each sim run still takes its slot of the machine-wide Godot lock.
 const NODE_JOBS = 8;
 const SIM_JOBS = 8;
-const STATIC_JOBS = 4;
+const STATIC_JOBS = 6;
 
 /** One gate run: its lane rows, its live children (for SIGINT), its log dir. */
 class Run {

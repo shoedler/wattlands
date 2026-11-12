@@ -540,28 +540,39 @@ function countGd(dir) {
   return n;
 }
 
+/** A directory's children as lint items: subdirectories holding *.gd (weighted by count) and its own *.gd files. */
+function lintChildren(project, d) {
+  const out = [];
+  let entries = [];
+  try {
+    entries = fs.readdirSync(path.join(project, d), { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    const relPath = `${d}/${e.name}`;
+    if (e.isDirectory()) {
+      if (GDTOOLKIT_SKIPPED_DIRS.has(e.name)) continue;
+      const weight = countGd(path.join(project, relPath));
+      if (weight > 0) out.push({ path: relPath, weight, dir: true });
+    } else if (e.name.endsWith('.gd')) out.push({ path: relPath, weight: 1, dir: false });
+  }
+  return out;
+}
+
 /**
- * The lint targets (`dirs`, project paths) split into at most `jobs` lists of the same total: each
- * directory becomes its children (subdirectories and its own *.gd files), placed heaviest first on
- * the lightest list by *.gd count. Together the lists name exactly the files `dirs` would.
+ * The lint targets (`dirs`, project paths) split into at most `jobs` lists of about the same *.gd
+ * count: each directory becomes its children (subdirectories and its own *.gd files), a child heavier
+ * than a share is split the same way, and the items go heaviest first onto the lightest list.
+ * Together the lists name exactly the files `dirs` would.
  */
 export function lintChunks(project, dirs, jobs) {
-  const items = [];
-  for (const d of dirs) {
-    let entries = [];
-    try {
-      entries = fs.readdirSync(path.join(project, d), { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-      const relPath = `${d}/${e.name}`;
-      if (e.isDirectory()) {
-        if (GDTOOLKIT_SKIPPED_DIRS.has(e.name)) continue;
-        const weight = countGd(path.join(project, relPath));
-        if (weight > 0) items.push({ path: relPath, weight });
-      } else if (e.name.endsWith('.gd')) items.push({ path: relPath, weight: 1 });
-    }
+  let items = dirs.flatMap((d) => lintChildren(project, d));
+  const share = items.reduce((n, it) => n + it.weight, 0) / Math.max(1, jobs) / 2;
+  for (let heavy = items.find((it) => it.dir && it.weight > share); heavy; heavy = items.find((it) => it.dir && it.weight > share)) {
+    // Its children hold all its weight, so this always ends at files.
+    const kids = lintChildren(project, heavy.path);
+    items = items.flatMap((it) => (it === heavy ? kids : [it]));
   }
   items.sort((a, b) => b.weight - a.weight || a.path.localeCompare(b.path));
   const bins = Array.from({ length: Math.max(1, jobs) }, () => ({ paths: [], weight: 0 }));
