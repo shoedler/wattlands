@@ -329,12 +329,14 @@ function readAt(cwd, rev, file) {
   return b ? b.toString('utf8') : null;
 }
 
-function gdSourcesAt(cwd, rev) {
-  const files = zList(git(cwd, ['ls-tree', '-r', '--name-only', '-z', rev, '--', 'tests'])).filter(isGutFile);
-  const blobs = catBlobs(cwd, files.map((f) => `${rev}:${f}`));
-  const srcs = {};
-  for (const f of files) srcs[f] = blobs.get(`${rev}:${f}`)?.toString('utf8') ?? '';
-  return srcs;
+/** The sources the test-count rules read at a rev, GUT and Node: {gd, node}, each {path: source}. One ls-tree, one cat-file. */
+function testSourcesAt(cwd, rev) {
+  const files = zList(git(cwd, ['ls-tree', '-r', '--name-only', '-z', rev, '--', 'tests', ...NODE_SUITES]));
+  const gd = files.filter(isGutFile);
+  const node = files.filter(isNodeTestFile);
+  const blobs = catBlobs(cwd, [...new Set([...gd, ...node])].map((f) => `${rev}:${f}`));
+  const read = (list) => Object.fromEntries(list.map((f) => [f, blobs.get(`${rev}:${f}`)?.toString('utf8') ?? '']));
+  return { gd: read(gd), node: read(node) };
 }
 
 /** The suite `node --test` runs a file in, or null: NODE_SUITES, then tests/games/<id>. */
@@ -344,19 +346,12 @@ function nodeSuiteOf(file) {
   return /^tests\/games\/[^/]+(?=\/)/.exec(file)?.[0] ?? null;
 }
 
-/** The test files of the Node suites at a rev, as run_tests finds them: {path: source}. */
-function nodeSourcesAt(cwd, rev) {
-  const roots = [...NODE_SUITES, 'tests/games'];
-  const isTestFile = (f) => {
-    const parts = f.split('/');
-    if (parts.some((p) => p.startsWith('.') || p === 'node_modules')) return false;
-    return TEST_FILE_RE.test(parts.at(-1)) || (parts.slice(0, -1).includes('test') && /\.[cm]?js$/.test(f));
-  };
-  const files = zList(git(cwd, ['ls-tree', '-r', '--name-only', '-z', rev, '--', ...roots])).filter((f) => nodeSuiteOf(f) !== null && isTestFile(f));
-  const blobs = catBlobs(cwd, files.map((f) => `${rev}:${f}`));
-  const srcs = {};
-  for (const f of files) srcs[f] = blobs.get(`${rev}:${f}`)?.toString('utf8') ?? '';
-  return srcs;
+/** Is `f` a test file of a Node suite, as run_tests finds them (NODE_SUITES and tests/games/<id>)? */
+function isNodeTestFile(f) {
+  if (nodeSuiteOf(f) === null) return false;
+  const parts = f.split('/');
+  if (parts.some((p) => p.startsWith('.') || p === 'node_modules')) return false;
+  return TEST_FILE_RE.test(parts.at(-1)) || (parts.slice(0, -1).includes('test') && /\.[cm]?js$/.test(f));
 }
 
 function parseNameStatus(text) {
@@ -660,10 +655,12 @@ export function runCheck(o, { base = o.base } = {}) {
   // 6.4: test counts at the merge base and at HEAD.
   const trailers = commits.flatMap((c) => parseTestRemovals(c.message));
   const revertOnly = commits.length > 0 && commits.every((c) => isMergeRevert(project, c));
-  const counts = checkTestCounts({ baseFiles: gdSourcesAt(project, mb), headFiles: gdSourcesAt(project, 'HEAD'), trailers, revertOnly });
+  const atBase = testSourcesAt(project, mb);
+  const atHead = testSourcesAt(project, 'HEAD');
+  const counts = checkTestCounts({ baseFiles: atBase.gd, headFiles: atHead.gd, trailers, revertOnly });
   problems.push(...counts.problems);
   notes.push(...counts.notes);
-  const nodeCounts = checkNodeTestCounts({ baseFiles: nodeSourcesAt(project, mb), headFiles: nodeSourcesAt(project, 'HEAD'), suiteOf: nodeSuiteOf, trailers, revertOnly });
+  const nodeCounts = checkNodeTestCounts({ baseFiles: atBase.node, headFiles: atHead.node, suiteOf: nodeSuiteOf, trailers, revertOnly });
   problems.push(...nodeCounts.problems);
   notes.push(...nodeCounts.notes);
 
