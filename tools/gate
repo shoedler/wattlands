@@ -2,9 +2,11 @@
 # tools/gate: the merge gates in concurrent lanes, the bulletproofing check and the worktree chores.
 # tools/gate.ps1 is the PowerShell twin; both call tools/lib/gate.mjs (tools/gate --help lists commands).
 #
-#   tools/gate check|fast|strict|matrix|stamp-ok|floor|fmt|wt-add|wt-gc|pin-safety [options]
+#   tools/gate check|fast|strict|matrix|stamp-ok|floor|fmt|wait|wt-add|wt-gc|pin-safety [options]
 #
-# Same verdict code as tools/run_tests, which stays the literal serial gate.
+# Same verdict code as tools/run_tests, which stays the literal serial gate. `fast` narrows GUT and the
+# Node suites to what the change since --base reaches (--games=all runs everything). Start a long gate in
+# the background and follow it with `tools/gate wait --for=fast` (exit 4: no verdict for this tree).
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export WATTLANDS_NO_HW_CONTROL=1
