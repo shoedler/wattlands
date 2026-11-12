@@ -108,7 +108,11 @@ for (const sh of shells) {
     });
 
     test('--timeout kills the whole Godot process tree of a run that never quits (exit 124)', { skip: skipNoGodot }, async () => {
-      const env = minimalEnv({ GODOT });
+      // Its own lock dir: the 20 s bound is about the timeout, and a wait for a shared slot (other suites'
+      // Godot runs in the gate's node lane) would count against it.
+      const lockDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wattlands-wrapper-timeout-lock-'));
+      scratch.push(lockDir);
+      const env = minimalEnv({ GODOT, WATTLANDS_GODOT_LOCK_DIR: lockDir, WATTLANDS_GODOT_LOCK_CAP: '2' });
       const pidFile = path.join(project, `never_quit_${sh.id}.pid`);
       const args = ['--timeout=3', '--headless', '--path', project, '-s', 'res://never_quit.gd', '--', `--pid-file=${pidFile}`];
       const r = await runWrapper(sh.id, args, { env, timeoutMs: 60_000 });

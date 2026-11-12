@@ -17,7 +17,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { FAULTS_USAGE, parseFaultArgs } from './lib/fault_args.mjs';
+import { FAULTS_USAGE, familyOf, parseFaultArgs } from './lib/fault_args.mjs';
 import { FaultEnv, leaseFor } from './lib/fault_env.mjs';
 import { scenarioFor } from './lib/fault_scenarios.mjs';
 import { runVerdict, scenarioVerdict } from './lib/fault_verdicts.mjs';
@@ -78,6 +78,41 @@ export async function runScenario(o, name, log = out) {
   return v;
 }
 
+/**
+ * Runs `names` through runOne(name), at most `jobs` at once (--jobs; each scenario holds its own
+ * lease, ports, relay and output folder). onDone(verdict) as each one ends. A lock wait timeout
+ * (runOne throws code ELOCKTIMEOUT) starts nothing more; what already runs finishes. Resolves
+ * {lockTimeout}.
+ */
+export async function runScenarios(names, jobs, runOne, onDone) {
+  let next = 0;
+  let lockTimeout = false;
+  const worker = async () => {
+    while (!lockTimeout && next < names.length) {
+      const name = names[next];
+      next += 1;
+      try {
+        onDone(await runOne(name));
+      } catch (e) {
+        if (e.code !== 'ELOCKTIMEOUT') throw e;
+        lockTimeout = true;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(jobs, names.length)) }, worker));
+  return { lockTimeout };
+}
+
+// The scenarios that ride out the 120 s windows and the cool-down (5 to 6 minutes each, README).
+const LONG_FAMILIES = ['relay_dies', 'relay_restarts', 'host_killed_relay', 'host_killed_builtin'];
+
+/** The order scenarios start in: as given one at a time; with --jobs above 1 the long ones first. */
+export function startOrder(names, jobs) {
+  if (jobs <= 1) return names;
+  const long = (n) => LONG_FAMILIES.includes(familyOf(n));
+  return [...names.filter(long), ...names.filter((n) => !long(n))];
+}
+
 export async function main(argv) {
   const parsed = parseFaultArgs(argv);
   if (parsed.help) {
@@ -113,24 +148,27 @@ export async function main(argv) {
   if (process.platform === 'win32') signals.push('SIGBREAK');
   for (const s of signals) process.on(s, onSignal);
   try {
-    for (const name of names) {
+    const one = async (name) => {
       out(`faults: ${name}: start`);
-      let v;
       try {
-        v = await runScenario(o, name);
+        return await runScenario(o, name);
       } catch (e) {
-        if (e.code === 'ELOCKTIMEOUT') {
-          err(LOCK_TIMEOUT_MESSAGE);
-          lockTimeout = true;
-          break;
-        }
+        if (e.code === 'ELOCKTIMEOUT') throw e;
         err(`faults: ${e.stack || e}`);
-        v = { name, ok: false, failures: [`harness: ${e.message}`], checks: [{ name: 'run', ok: false, details: [e.message] }], evidence: {} };
+        return { name, ok: false, failures: [`harness: ${e.message}`], checks: [{ name: 'run', ok: false, details: [e.message] }], evidence: {} };
       }
+    };
+    const done = (v) => {
       results.push(v);
+      results.sort((a, b) => names.indexOf(a.name) - names.indexOf(b.name));
       write();
-      out(`faults: ${name} ${v.ok ? 'PASS' : 'FAIL'} (${fmtSeconds(v.evidence.duration_s ?? NaN)})`);
+      out(`faults: ${v.name} ${v.ok ? 'PASS' : 'FAIL'} (${fmtSeconds(v.evidence.duration_s ?? NaN)})`);
       for (const f of v.failures) out(`faults:   ${f}`);
+    };
+    const r = await runScenarios(startOrder(names, o.jobs), o.jobs, one, done);
+    if (r.lockTimeout) {
+      err(LOCK_TIMEOUT_MESSAGE);
+      lockTimeout = true;
     }
   } finally {
     killAll();
